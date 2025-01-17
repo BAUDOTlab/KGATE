@@ -4,6 +4,16 @@ KGATE is a knowledge graph embedding library bridging the encoders from [Pytorch
 
 This tool relies heavily on the performances of TorchKGE and its numerous implemented modules for link prediction, negative sampling and model evaluation. The main goal here is to address the lack of encoders in the original library, who is unfortunately not maintained anymore.
 
+## Installation
+
+To join in the development, clone this repository and install Poetry:
+
+```pip install poetry```
+
+Install the dependencies with:
+
+```poetry install```
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](#license) file for details.

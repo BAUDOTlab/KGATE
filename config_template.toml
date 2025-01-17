@@ -1,0 +1,77 @@
+seed = 42
+
+# Path to the KG in CSV format with at least columns named from, to and rel
+kg_csv = "" 
+# Path to the KG in pickle format. If both csv and pkl are set, the pickle will have priority.
+kg_pkl = ""
+
+# Path to the CSV mapping entitiees to their metadata, with at least columns id (must be the same as the KG id) and type
+metadata_csv = ""
+
+# Path to the analysis output directory
+output_directory = ""
+
+verbose = true
+run_kg_preprocess = true
+run_training = false
+run_evaluation = false
+
+[preprocessing]
+
+remove_duplicates_triples = true
+
+# If undirected relations are found, will make them directed by creating a reverse relation
+make_directed = true
+make_directed_relations = []
+
+check_synonymous_antisynonymous = true
+
+# DL stuff, keep ?
+permute_entities = false
+
+clean_train_set = true
+compute_proportions = true
+
+rel_swap = false
+mixed_test = true
+
+[preprocessing.params]
+theta1 = 0.8
+theta2 = 0.8
+
+[model]
+[model.encoder]
+name = "Default" #Lookup table
+gnn_layer_number = 1
+#add other possible hyperparams
+
+[model.decoder]
+name = "TransE"
+emb_dim = 256
+margin = 1 # Models using MarginLoss
+#add other possible hyperparams
+
+[sampler]
+name = "Positional"
+
+[optimizer]
+name = "Adam"
+weight_decay = 0.001
+
+[lr_scheduler]
+type = "CosineAnnealingWarmRestarts"
+T_0 = 10
+T_mult = 2
+
+[training]
+max_epochs = 2000
+patience = 20
+batch_size = 2048
+eval_interval = 10
+eval_batch_size = 32
+
+[evaluation]
+made_directed_relations = []
+# List of relations for which link prediction will be evaluated
+target_relations = [] 
+thresholds = [10]
