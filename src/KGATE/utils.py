@@ -3,7 +3,105 @@ import torch.nn as nn
 from torch_geometric.data import HeteroData
 import pandas as pd 
 import numpy as np
+from pathlib import Path
+import tomllib
+import random
 
+CONFIG_DEFAULTS = {
+    "seed":42,
+    "kg_csv": None,
+    "kg_pkl": None,
+    "metadata_csv": None,
+    "output_directory": None,
+    "verbose": True,
+    "run_kg_preprocess": True,
+    "run_training": False,
+    "run_evaluation": False,
+    "preprocessing": {
+        "remove_duplicate_triples": True,
+        "make_directed": True,
+        "make_directed_relations": [],
+        "flag_near_duplicate_relations": True,
+        "clean_train_set":True
+    },
+    "model": {
+        "encoder": {
+            "name": "Default",
+            "gnn_layer_number": 1
+        },
+        "decoder": {
+            "name": "TransE",
+            "emb_dim": 256,
+            "margin": 1
+        }
+    },
+    "sampler": {
+        "name":"Positional"
+    },
+    "optimizer": {
+        "name": "Adam",
+        "weight_decay": 0.001
+    },
+    "lr_scheduler": {
+        "type": "CosineAnnealingWarmRestarts",
+        "T_0": 10,
+        "T_mult": 2
+    },
+    "training": {
+        "max_epochs": 2000,
+        "patience": 20,
+        "train_batch_size": 2048,
+        "eval_interval": 10,
+        "eval_batch_size": 32
+    },
+    "evaluation": {
+        "made_directed_relations": [],
+        "target_relations": [],
+        "thresholds": []
+    }
+}
+
+def parse_config(config_path: str, config_dict: dict) -> dict:
+    if config_path != "" and not Path(config_path).exists():
+        raise FileNotFoundError(f"Configuration file {config_path} not found.")
+    
+    if Path(config_path).exists():
+        with open(config_path, "rb") as f:
+            config = tomllib.load(f)
+    
+    # Make the final configuration, using priority orders:
+    # 1. Inline configuration (config_dict)
+    # 2. Configuration file (config)
+    # 3. Default configuration (CONFIG_DEFAULTS)
+    # TODO: check for required parameters that aren't set by default
+    config = {key: set_config_key(config, CONFIG_DEFAULTS, config_dict, key) for key in CONFIG_DEFAULTS}
+
+    return config
+
+def set_config_key(config, default, inline, key):
+    if isinstance(default[key], dict):
+        new_value = {}
+        for child_key in default[key]:
+            new_value.update({child_key: set_config_key(config[key], default[key], inline[key], child_key)})
+        return new_value
+    
+    if key not in inline or inline[key] is None:
+        if key not in config or config[key] is None:
+            return default[key]
+        else:
+            return config[key]
+    else:
+        return inline[key]
+
+
+
+
+def set_random_seeds(seed: int) -> None:
+    """Set random seeds for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 def my_init_embedding(num_embeddings, emb_dim):
     """Initialize an embedding layer with a normal distribution."""

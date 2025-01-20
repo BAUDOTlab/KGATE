@@ -5,7 +5,7 @@ kg_csv = ""
 # Path to the KG in pickle format. If both csv and pkl are set, the pickle will have priority.
 kg_pkl = ""
 
-# Path to the CSV mapping entitiees to their metadata, with at least columns id (must be the same as the KG id) and type
+# Path to the CSV mapping entities to their metadata, with at least columns id (must be the same as the KG id) and type
 metadata_csv = ""
 
 # Path to the analysis output directory
@@ -18,24 +18,24 @@ run_evaluation = false
 
 [preprocessing]
 
-remove_duplicates_triples = true
+remove_duplicate_triples = true
 
 # If undirected relations are found, will make them directed by creating a reverse relation
 make_directed = true
 make_directed_relations = []
 
-check_synonymous_antisynonymous = true
+flag_near_duplicate_relations = true
 
 # DL stuff, keep ?
-permute_entities = false
+#permute_entities = false
 
+# Remove all flagged relations from the train set
 clean_train_set = true
-compute_proportions = true
 
-rel_swap = false
-mixed_test = true
+#mixed_test = true
 
 [preprocessing.params]
+theta = 0.8
 theta1 = 0.8
 theta2 = 0.8
 
@@ -66,7 +66,7 @@ T_mult = 2
 [training]
 max_epochs = 2000
 patience = 20
-batch_size = 2048
+train_batch_size = 2048
 eval_interval = 10
 eval_batch_size = 32
 
