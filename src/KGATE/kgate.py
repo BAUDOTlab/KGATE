@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from torchkge import Model
 import torch
-from utils import parse_config
+from .utils import parse_config
 class KGATE(Model):
     def __init__(self, kg, device, config_path: str = "", cudnn_benchmark = True, num_cores = 0, **kwargs):
         
@@ -19,3 +19,11 @@ class KGATE(Model):
         torch.set_num_threads(num_cores)
 
         # Create output folder if it doesn't exist
+        os.makedirs(config["output_directory"], exist_ok=True)
+
+        run_kg_prep =  config["run_kg_preprocess"]
+        run_training = config["run_training"]
+        run_eval = config["run_evaluation"]
+
+        if run_kg_prep:
+            kg_train, kg_val, kg_test = prepare_knowledge_graph(config)

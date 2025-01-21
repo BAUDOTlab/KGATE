@@ -9,9 +9,9 @@ import random
 
 CONFIG_DEFAULTS = {
     "seed":42,
-    "kg_csv": None,
-    "kg_pkl": None,
-    "metadata_csv": None,
+    "kg_csv": "",
+    "kg_pkl": "",
+    "metadata_csv": "",
     "output_directory": None,
     "verbose": True,
     "run_kg_preprocess": True,
