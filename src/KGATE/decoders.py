@@ -4,8 +4,8 @@ import torch
 # Code adapted from torchKGE's implementation
 # https://github.com/torchkge-team/torchkge/blob/3adb9344dec974fc29d158025c014b0dcb48118c/torchkge/models/translation.py#L18
 class TransE(TransEModel):
-    def __init__(self, n_entities, n_relations, **kwargs):
-        super().__init__(n_entities, n_relations, dissimilarity_type=kwargs.get("dissimilarity_type", "L2"))
+    def __init__(self, emb_dim, n_entities, n_relations, dissimilarity_type):
+        super().__init__(emb_dim, n_entities, n_relations, dissimilarity_type=dissimilarity_type)
 
     def score(self, h_norm, r_emb, t_norm):
         return -self.dissimilarity(h_norm + r_emb, t_norm)

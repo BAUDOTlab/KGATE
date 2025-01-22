@@ -40,6 +40,9 @@ theta1 = 0.8
 theta2 = 0.8
 
 [model]
+emb_dim = 256
+rel_emb_dim = 256
+
 [model.encoder]
 name = "Default" #Lookup table
 gnn_layer_number = 1
@@ -47,8 +50,8 @@ gnn_layer_number = 1
 
 [model.decoder]
 name = "TransE"
-emb_dim = 256
 margin = 1 # Models using MarginLoss
+dissimilarity = "L2"
 #add other possible hyperparams
 
 [sampler]

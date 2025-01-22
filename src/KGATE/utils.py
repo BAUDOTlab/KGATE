@@ -7,7 +7,16 @@ import numpy as np
 from pathlib import Path
 import tomllib
 import random
+import logging 
+import pickle
 
+log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
+logging.basicConfig(
+    level=log_level,  
+    format='%(asctime)s - %(levelname)s - %(message)s' 
+)
+
+# TODO : update, or read from the template
 CONFIG_DEFAULTS = {
     "seed":42,
     "kg_csv": "",
@@ -67,6 +76,7 @@ def parse_config(config_path: str, config_dict: dict) -> dict:
         raise FileNotFoundError(f"Configuration file {config_path} not found.")
     
     if Path(config_path).exists():
+        logging.info(f'Loading parameters from {config_path}')
         with open(config_path, "rb") as f:
             config = tomllib.load(f)
     
@@ -94,8 +104,14 @@ def set_config_key(config, default, inline, key):
     else:
         return inline[key]
 
-
-
+def load_knowledge_graph(pickle_filename):
+    """Load the knowledge graph from pickle files."""
+    logging.info(f'Will not run the preparation step. Using KG stored in: {pickle_filename}')
+    with open(pickle_filename, 'rb') as file:
+        kg_train = pickle.load(file)
+        kg_val = pickle.load(file)
+        kg_test = pickle.load(file)
+    return kg_train, kg_val, kg_test
 
 def set_random_seeds(seed: int) -> None:
     """Set random seeds for reproducibility."""
@@ -296,3 +312,4 @@ def count_triplets(kg1, kg2, duplicates, rev_duplicates):
         n_rev_duplicates += len(ht_te.intersection(th_tr))
 
     return n_duplicates, n_rev_duplicates
+

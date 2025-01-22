@@ -337,7 +337,7 @@ class KGATEGraph(KnowledgeGraph):
             self.relations = torch.cat((self.relations, *new_relations), dim=0)
 
         return self.__class__(
-                kg={'heads': self.head_idx, 'tails': self.tail_idx, 'relations': self.relations_idx},
+                kg={'heads': self.head_idx, 'tails': self.tail_idx, 'relations': self.relations},
                 ent2ix=self.ent2ix,
                 rel2ix=self.rel2ix,
                 dict_of_heads=self.dict_of_heads,
