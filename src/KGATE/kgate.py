@@ -3,6 +3,8 @@ from pathlib import Path
 from torchkge import Model
 import torch
 from .utils import parse_config
+
+# Architect
 class KGATE(Model):
     def __init__(self, kg, device, config_path: str = "", cudnn_benchmark = True, num_cores = 0, **kwargs):
         

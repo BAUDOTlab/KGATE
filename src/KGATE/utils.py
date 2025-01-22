@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch_geometric.data import HeteroData
+from torch import cat
 import pandas as pd 
 import numpy as np
 from pathlib import Path
@@ -199,3 +200,99 @@ def create_hetero_data(kg, mapping_csv):
     
     # Return HeteroData object, mappings and node mappings
     return data, kg_to_hetero_mapping, hetero_to_kg_mapping, df_to_kg_mapping, kg_to_node_type
+
+def compute_triplet_proportions(kg_train, kg_test, kg_val):
+    """
+    Computes the proportion of triples for each relation in each of the KnowledgeGraphs
+    (train, test, val) relative to the total number of triples for that relation.
+
+    Parameters
+    ----------
+    kg_train: KnowledgeGraph
+        The training KnowledgeGraph instance.
+    kg_test: KnowledgeGraph
+        The test KnowledgeGraph instance.
+    kg_val: KnowledgeGraph
+        The validation KnowledgeGraph instance.
+
+    Returns
+    -------
+    dict
+        A dictionary where keys are relation identifiers and values are sub-dictionaries
+        with the respective proportions of each relation in kg_train, kg_test, and kg_val.
+    """
+     
+    # Concatenate relations from all KGs
+    all_relations = torch.cat((kg_train.relations, kg_test.relations, kg_val.relations))
+
+    # Compute the number of triples for all relations
+    total_counts = torch.bincount(all_relations)
+
+    # Compute occurences of each relations
+    train_counts = torch.bincount(kg_train.relations, minlength=len(total_counts))
+    test_counts = torch.bincount(kg_test.relations, minlength=len(total_counts))
+    val_counts = torch.bincount(kg_val.relations, minlength=len(total_counts))
+
+    # Compute proportions for each KG
+    proportions = {}
+    for rel_id in range(len(total_counts)):
+        if total_counts[rel_id] > 0:
+            proportions[rel_id] = {
+                'train': train_counts[rel_id].item() / total_counts[rel_id].item(),
+                'test': test_counts[rel_id].item() / total_counts[rel_id].item(),
+                'val': val_counts[rel_id].item() / total_counts[rel_id].item()
+            }
+
+    return proportions
+
+def concat_kgs(kg_tr, kg_val, kg_te):
+    h = cat((kg_tr.head_idx, kg_val.head_idx, kg_te.head_idx))
+    t = cat((kg_tr.tail_idx, kg_val.tail_idx, kg_te.tail_idx))
+    r = cat((kg_tr.relations, kg_val.relations, kg_te.relations))
+    return h, t, r
+
+def count_triplets(kg1, kg2, duplicates, rev_duplicates):
+    """
+    Parameters
+    ----------
+    kg1: torchkge.data_structures.KnowledgeGraph
+    kg2: torchkge.data_structures.KnowledgeGraph
+    duplicates: list
+        List returned by torchkge.utils.data_redundancy.duplicates.
+    rev_duplicates: list
+        List returned by torchkge.utils.data_redundancy.duplicates.
+
+    Returns
+    -------
+    n_duplicates: int
+        Number of triplets in kg2 that have their duplicate triplet
+        in kg1
+    n_rev_duplicates: int
+        Number of triplets in kg2 that have their reverse duplicate
+        triplet in kg1.
+    """
+    n_duplicates = 0
+    for r1, r2 in duplicates:
+        ht_tr = kg1.get_pairs(r2, type='ht')
+        ht_te = kg2.get_pairs(r1, type='ht')
+
+        n_duplicates += len(ht_te.intersection(ht_tr))
+
+        ht_tr = kg1.get_pairs(r1, type='ht')
+        ht_te = kg2.get_pairs(r2, type='ht')
+
+        n_duplicates += len(ht_te.intersection(ht_tr))
+
+    n_rev_duplicates = 0
+    for r1, r2 in rev_duplicates:
+        th_tr = kg1.get_pairs(r2, type='th')
+        ht_te = kg2.get_pairs(r1, type='ht')
+
+        n_rev_duplicates += len(ht_te.intersection(th_tr))
+
+        th_tr = kg1.get_pairs(r1, type='th')
+        ht_te = kg2.get_pairs(r2, type='ht')
+
+        n_rev_duplicates += len(ht_te.intersection(th_tr))
+
+    return n_duplicates, n_rev_duplicates

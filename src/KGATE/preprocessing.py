@@ -2,9 +2,11 @@ import pandas as pd
 import pickle
 from pathlib import Path
 import logging
+import torch
 from torch import cat
 
-from .utils import set_random_seeds
+from .utils import set_random_seeds, compute_triplet_proportions
+from .data_structures import KGATEGraph
 
 def prepare_knowledge_graph(config):
     """Prepare and clean the knowledge graph."""
@@ -15,7 +17,7 @@ def prepare_knowledge_graph(config):
     if config.get("clean_kg", {}).get("smaller_kg", False):
         kg_df = kg_df[kg_df['rel'].isin(config["clean_kg"]['keep_relations'])]
 
-    kg = my_knowledge_graph.KnowledgeGraph(df=kg_df)
+    kg = KGATEGraph(df=kg_df)
 
     # Clean and process knowledge graph
     kg_train, kg_val, kg_test = clean_knowledge_graph(kg, config)
@@ -46,7 +48,7 @@ def load_knowledge_graph(config):
         kg_test = pickle.load(file)
     return kg_train, kg_val, kg_test
 
-def clean_knowledge_graph(kg, config):
+def clean_knowledge_graph(kg: KGATEGraph, config):
     """Clean and prepare the knowledge graph according to the configuration."""
 
     set_random_seeds(config["seed"])
@@ -55,7 +57,7 @@ def clean_knowledge_graph(kg, config):
 
     if config["preprocessing"]['remove_duplicates_triples']:
         logging.info("Removing duplicated triples...")
-        kg = my_data_redundancy.remove_duplicates_triples(kg)
+        kg = kg.remove_duplicates_triples()
 
     duplicated_relations_list = []
 
@@ -63,7 +65,7 @@ def clean_knowledge_graph(kg, config):
         logging.info("Checking for near duplicates relations...")
         theta1 = config['preprocessing']['params']['theta1']
         theta2 = config['preprocessing']['params']['theta2']
-        duplicates_relations, rev_duplicates_relations = my_data_redundancy.duplicates(kg, theta1=theta1, theta2=theta2)
+        duplicates_relations, rev_duplicates_relations = kg.duplicates(theta1=theta1, theta2=theta2)
         if duplicates_relations:
             logging.info(f'Adding {len(duplicates_relations)} synonymous relations ({[id_to_rel_name[rel] for rel in duplicates_relations]}) to the list of known duplicated relations.')
             duplicated_relations_list.extend(duplicates_relations)
@@ -83,7 +85,7 @@ def clean_knowledge_graph(kg, config):
         undirected_relations_names = config['preprocessing']['make_directed_relations']
         relation_names = ", ".join([rel for rel in undirected_relations_names])
         logging.info(f'Adding reverse triplets for relations {relation_names}...')
-        kg, undirected_relations_list = my_data_redundancy.add_inverse_relations(kg, [kg.rel2ix[key] for key in undirected_relations_names])
+        kg, undirected_relations_list = kg.add_inverse_relations([kg.rel2ix[key] for key in undirected_relations_names])
             
         if config['preprocessing']['flag_near_duplicate_relations']:
             logging.info(f'Adding created reverses {[rel for rel in undirected_relations_names]} to the list of known duplicated relations.')
@@ -101,9 +103,9 @@ def clean_knowledge_graph(kg, config):
     if config['preprocessing']['clean_train_set']:
         logging.info("Cleaning the train set to avoid data leakage...")
         logging.info("Step 1: with respect to validation set.")
-        kg_train = my_data_redundancy.clean_datasets(kg_train, kg_val, known_reverses=duplicated_relations_list)
+        kg_train = clean_datasets(kg_train, kg_val, known_reverses=duplicated_relations_list)
         logging.info("Step 2: with respect to test set.")
-        kg_train = my_data_redundancy.clean_datasets(kg_train, kg_test, known_reverses=duplicated_relations_list)
+        kg_train = clean_datasets(kg_train, kg_test, known_reverses=duplicated_relations_list)
 
     kg_train_ok, _ = verify_entity_coverage(kg_train, kg)
     if not kg_train_ok:
@@ -111,7 +113,7 @@ def clean_knowledge_graph(kg, config):
     else:
         logging.info("Entity coverage verified successfully.")
 
-    new_train, new_val, new_test = my_data_redundancy.ensure_entity_coverage(kg_train, kg_val, kg_test)
+    new_train, new_val, new_test = ensure_entity_coverage(kg_train, kg_val, kg_test)
 
 
     kg_train_ok, missing_entities = verify_entity_coverage(new_train, kg)
@@ -123,7 +125,7 @@ def clean_knowledge_graph(kg, config):
         logging.info("Entity coverage verified successfully.")
 
     logging.info("Computing triplet proportions...")
-    logging.info(my_data_redundancy.compute_triplet_proportions(kg_train, kg_test, kg_val))
+    logging.info(compute_triplet_proportions(kg_train, kg_test, kg_val))
 
     return new_train, new_val, new_test
 
@@ -161,3 +163,220 @@ def verify_entity_coverage(train_kg, full_kg):
         return False, missing_entities
     else:
         return True, []
+
+def ensure_entity_coverage(kg_train, kg_val, kg_test):
+    """
+    Ensure that all entities in kg_train.ent2ix are present in kg_train as head or tail.
+    If an entity is missing, move a triplet involving that entity from kg_val or kg_test to kg_train.
+
+    Parameters
+    ----------
+    kg_train : torchkge.data_structures.KnowledgeGraph
+        The training knowledge graph to ensure entity coverage.
+    kg_val : torchkge.data_structures.KnowledgeGraph
+        The validation knowledge graph from which to move triplets if needed.
+    kg_test : torchkge.data_structures.KnowledgeGraph
+        The test knowledge graph from which to move triplets if needed.
+
+    Returns
+    -------
+    kg_train : torchkge.data_structures.KnowledgeGraph
+        The updated training knowledge graph with all entities covered.
+    kg_val : torchkge.data_structures.KnowledgeGraph
+        The updated validation knowledge graph.
+    kg_test : torchkge.data_structures.KnowledgeGraph
+        The updated test knowledge graph.
+    """
+
+    # Obtenir l'ensemble des entités dans kg_train.ent2ix
+    train_entities = set(kg_train.ent2ix.values())
+
+    # Obtenir l'ensemble des entités présentes dans kg_train comme head ou tail
+    present_heads = set(kg_train.head_idx.tolist())
+    present_tails = set(kg_train.tail_idx.tolist())
+    present_entities = present_heads.union(present_tails)
+
+    # Identifier les entités manquantes dans kg_train
+    missing_entities = train_entities - present_entities
+
+    logging.info(f"Total entities in full kg: {len(train_entities)}")
+    logging.info(f"Entities present in kg_train: {len(present_entities)}")
+    logging.info(f"Missing entities in kg_train: {len(missing_entities)}")
+
+    def find_and_move_triplets(source_kg, entities):
+        nonlocal kg_train, kg_val, kg_test
+
+        # Convert `entities` set to a `Tensor` for compatibility with `torch.isin`
+        entities_tensor = torch.tensor(list(entities), dtype=source_kg.head_idx.dtype)
+
+        # Create masks for all triplets where the missing entity is present
+        mask_heads = torch.isin(source_kg.head_idx, entities_tensor)
+        mask_tails = torch.isin(source_kg.tail_idx, entities_tensor)
+        mask = mask_heads | mask_tails
+
+        if mask.any():
+            # Extract the indices and corresponding triplets
+            indices = torch.nonzero(mask, as_tuple=True)[0]
+            triplets = torch.stack([source_kg.head_idx[indices],
+                                    source_kg.tail_idx[indices],
+                                    source_kg.relations[indices]], dim=1)
+
+            # Add the found triplets to kg_train
+            kg_train = kg_train.add_triples(triplets)
+
+            # Remove the triplets from source_kg
+            kg_cleaned = source_kg.remove_triples(indices)
+            if source_kg == kg_val:
+                kg_val = kg_cleaned
+            else:
+                kg_test = kg_cleaned
+
+            # Update the list of missing entities
+            entities_in_triplets = set(triplets[:, 0].tolist() + triplets[:, 1].tolist())
+            remaining_entities = entities - set(entities_in_triplets)
+            return remaining_entities
+        return entities
+
+    # Déplacer les triplets depuis kg_val puis depuis kg_test
+    missing_entities = find_and_move_triplets(kg_val, missing_entities)
+    if len(missing_entities) > 0:
+        missing_entities = find_and_move_triplets(kg_test, missing_entities)
+
+    # Loguer les entités restantes non trouvées
+    if len(missing_entities) > 0:
+        for entity in missing_entities:
+            logging.info(f"Warning: No triplet found involving entity '{entity}' in kg_val or kg_test. Entity remains unconnected in kg_train.")
+
+    return kg_train, kg_val, kg_test
+
+
+def clean_datasets(kg_train, kg2, known_reverses):
+    """
+    Clean the training KG by removing reverse duplicate triples contained in KG2 (test or val KG).
+
+    Parameters
+    ----------
+    kg_train: torchkge.data_structures.KnowledgeGraph
+        The training knowledge graph.
+    kg2: torchkge.data_structures.KnowledgeGraph
+        The second knowledge graph, test or validation.
+    known_reverses: list of tuples
+        Each tuple contains two relations (r1, r2) that are known reverse relations.
+
+    Returns
+    -------
+    torchkge.data_structures.KnowledgeGraph
+        The cleaned train knowledge graph.
+    """
+
+    for r1, r2 in known_reverses:
+
+        logging.info(f"Processing relation pair: ({r1}, {r2})")
+
+        # Get (h, t) pairs in kg2 related by r1
+        kg2_ht_r1 = kg2.get_pairs(kg2, r1, type='ht')
+        # Get indices of (h, t) in kg_train that are related by r2
+        indices_to_remove_kg_train = [i for i, (h, t) in enumerate(zip(kg_train.tail_idx, kg_train.head_idx)) if (h.item(), t.item()) in kg2_ht_r1 and kg_train.relations[i].item() == r2]
+        indices_to_remove_kg_train.extend([i for i, (h, t) in enumerate(zip(kg_train.head_idx, kg_train.tail_idx)) if (h.item(), t.item()) in kg2_ht_r1 and kg_train.relations[i].item() == r2])
+        
+        # Remove those (h, t) pairs from kg_train
+        kg_train = kg_train.remove_triples(torch.tensor(indices_to_remove_kg_train, dtype=torch.long))
+
+        logging.info(f"Found {len(indices_to_remove_kg_train)} triplets to remove for relation {r2} with reverse {r1}.")
+
+        # Get (h, t) pairs in kg2 related by r2
+        kg2_ht_r2 = kg2.get_pairs(kg2, r2, type='ht')
+        # Get indices of (h, t) in kg_train that are related by r1
+        indices_to_remove_kg_train_reverse = [i for i, (h, t) in enumerate(zip(kg_train.tail_idx, kg_train.head_idx)) if (h.item(), t.item()) in kg2_ht_r2 and kg_train.relations[i].item() == r1]
+        indices_to_remove_kg_train_reverse.extend([i for i, (h, t) in enumerate(zip(kg_train.head_idx, kg_train.tail_idx)) if (h.item(), t.item()) in kg2_ht_r2 and kg_train.relations[i].item() == r1])
+
+        # Remove those (h, t) pairs from kg_train
+        kg_train = kg_train.remove_triples(torch.tensor(indices_to_remove_kg_train_reverse, dtype=torch.long))
+
+        logging.info(f"Found {len(indices_to_remove_kg_train_reverse)} reverse triplets to remove for relation {r1} with reverse {r2}.")
+    
+    return kg_train
+
+def clean_cartesians(kg1, kg2, known_cartesian, entity_type='head'):
+    """
+    Transfer cartesian product triplets from training set to test set to prevent data leakage.
+    For each entity (head or tail) involved in a cartesian product relation in the test set,
+    all corresponding triplets in the training set are moved to the test set.
+    
+    Parameters
+    ----------
+    kg1 : KnowledgeGraph
+        Training set knowledge graph to be cleaned.
+        Will be modified by removing cartesian product triplets.
+    kg2 : KnowledgeGraph
+        Test set knowledge graph to be augmented.
+        Will receive the transferred cartesian product triplets.
+    known_cartesian : list
+        List of relation indices that represent cartesian product relationships.
+        These are relations where if (h,r,t1) exists, then (h,r,t2) likely exists
+        for many other tail entities t2 (or vice versa for tail-based cartesian products).
+    entity_type : str, optional
+        Either 'head' or 'tail' to specify which entity type to consider for cartesian products.
+        Default is 'head'.
+    
+    Returns
+    -------
+    tuple (KnowledgeGraph, KnowledgeGraph)
+        A pair of (cleaned_train_kg, augmented_test_kg) where:
+        - cleaned_train_kg: Training KG with cartesian triplets removed
+        - augmented_test_kg: Test KG with the transferred triplets added
+    """
+    assert entity_type in ['head', 'tail'], "entity_type must be either 'head' or 'tail'"
+    
+    for r in known_cartesian:
+        # Find all entities in test set that participate in the cartesian relation
+        mask = (kg2.relations == r)
+        if entity_type == 'head':
+            cartesian_entities = kg2.head_idx[mask].view(-1,1)
+            # Find matching triplets in training set with same head and relation
+            all_indices_to_move = []
+            for entity in cartesian_entities:
+                mask = (kg1.head_idx == entity) & (kg1.relations == r)
+                indices = mask.nonzero().squeeze()
+                if indices.dim() == 0:
+                    indices = indices.unsqueeze(0)
+                all_indices_to_move.extend(indices.tolist())
+        else:  # tail
+            cartesian_entities = kg2.tail_idx[mask].view(-1,1)
+            # Find matching triplets in training set with same tail and relation
+            all_indices_to_move = []
+            for entity in cartesian_entities:
+                mask = (kg1.tail_idx == entity) & (kg1.relations == r)
+                indices = mask.nonzero().squeeze()
+                if indices.dim() == 0:
+                    indices = indices.unsqueeze(0)
+                all_indices_to_move.extend(indices.tolist())
+            
+        if all_indices_to_move:
+            # Extract the triplets to be transferred
+            triplets_to_move = torch.stack([
+                kg1.head_idx[all_indices_to_move],
+                kg1.relations[all_indices_to_move],
+                kg1.tail_idx[all_indices_to_move]
+            ], dim=1)
+            
+            # Remove identified triplets from training set
+            kg1 = kg1.remove_triples(torch.tensor(all_indices_to_move, dtype=torch.long))
+            
+            # Add transferred triplets to test set while preserving KG structure
+            kg2_dict = {
+                'heads': torch.cat([kg2.head_idx, triplets_to_move[:, 0]]),
+                'tails': torch.cat([kg2.tail_idx, triplets_to_move[:, 2]]),
+                'relations': torch.cat([kg2.relations, triplets_to_move[:, 1]]),
+            }
+            
+            kg2 = kg2.__class__(
+                kg=kg2_dict,
+                ent2ix=kg2.ent2ix,
+                rel2ix=kg1.rel2ix,
+                dict_of_heads=kg2.dict_of_heads,
+                dict_of_tails=kg2.dict_of_tails,
+                dict_of_rels=kg2.dict_of_rels
+            )
+            
+    return kg1, kg2
