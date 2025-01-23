@@ -59,10 +59,12 @@ name = "Positional"
 
 [optimizer]
 name = "Adam"
+[optimizer.params]
 weight_decay = 0.001
 
 [lr_scheduler]
 type = "CosineAnnealingWarmRestarts"
+[lr_scheduler.params]
 T_0 = 10
 T_mult = 2
 

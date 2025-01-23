@@ -120,12 +120,6 @@ def set_random_seeds(seed: int) -> None:
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-def my_init_embedding(num_embeddings, emb_dim):
-    """Initialize an embedding layer with a normal distribution."""
-    embedding = nn.Embedding(num_embeddings, emb_dim)
-    nn.init.xavier_uniform_(embedding.weight.data)
-    return embedding
-
 def extract_node_type(node_name):
     """Extracts the node type from the node name, based on the string before the first underscore."""
     return node_name.split('_')[0]
