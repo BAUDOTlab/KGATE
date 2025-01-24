@@ -9,6 +9,8 @@ import tomllib
 import random
 import logging 
 import pickle
+import os
+from importlib.resources import read_binary
 
 log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
 logging.basicConfig(
@@ -16,65 +18,13 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s' 
 )
 
-# TODO : update, or read from the template
-CONFIG_DEFAULTS = {
-    "seed":42,
-    "kg_csv": "",
-    "kg_pkl": "",
-    "metadata_csv": "",
-    "output_directory": None,
-    "verbose": True,
-    "run_kg_preprocess": True,
-    "run_training": False,
-    "run_evaluation": False,
-    "preprocessing": {
-        "remove_duplicate_triples": True,
-        "make_directed": True,
-        "make_directed_relations": [],
-        "flag_near_duplicate_relations": True,
-        "clean_train_set":True
-    },
-    "model": {
-        "encoder": {
-            "name": "Default",
-            "gnn_layer_number": 1
-        },
-        "decoder": {
-            "name": "TransE",
-            "emb_dim": 256,
-            "margin": 1
-        }
-    },
-    "sampler": {
-        "name":"Positional"
-    },
-    "optimizer": {
-        "name": "Adam",
-        "weight_decay": 0.001
-    },
-    "lr_scheduler": {
-        "type": "CosineAnnealingWarmRestarts",
-        "T_0": 10,
-        "T_mult": 2
-    },
-    "training": {
-        "max_epochs": 2000,
-        "patience": 20,
-        "train_batch_size": 2048,
-        "eval_interval": 10,
-        "eval_batch_size": 32
-    },
-    "evaluation": {
-        "made_directed_relations": [],
-        "target_relations": [],
-        "thresholds": []
-    }
-}
-
 def parse_config(config_path: str, config_dict: dict) -> dict:
     if config_path != "" and not Path(config_path).exists():
         raise FileNotFoundError(f"Configuration file {config_path} not found.")
-    
+
+    with read_binary("KGATE", "config_template.toml") as f:
+        default_config = tomllib.load(f)
+
     if Path(config_path).exists():
         logging.info(f'Loading parameters from {config_path}')
         with open(config_path, "rb") as f:
@@ -83,9 +33,9 @@ def parse_config(config_path: str, config_dict: dict) -> dict:
     # Make the final configuration, using priority orders:
     # 1. Inline configuration (config_dict)
     # 2. Configuration file (config)
-    # 3. Default configuration (CONFIG_DEFAULTS)
-    # TODO: check for required parameters that aren't set by default
-    config = {key: set_config_key(config, CONFIG_DEFAULTS, config_dict, key) for key in CONFIG_DEFAULTS}
+    # 3. Default configuration (default_config)
+    # If a default value is None, consider it required and not defaultable
+    config = {key: set_config_key(config, default_config, config_dict, key) for key in CONFIG_DEFAULTS}
 
     return config
 
@@ -98,7 +48,11 @@ def set_config_key(config, default, inline, key):
     
     if key not in inline or inline[key] is None:
         if key not in config or config[key] is None:
-            return default[key]
+            if default[key] is None:
+                raise ValueError(f"Parameter {key} is required but not set without a default value.")
+            else:
+                logging.info(f"No value set for parameter {key}. Defaulting to {default[key]}")
+                return default[key]
         else:
             return config[key]
     else:
@@ -307,3 +261,13 @@ def count_triplets(kg1, kg2, duplicates, rev_duplicates):
 
     return n_duplicates, n_rev_duplicates
 
+def find_best_model(dir):
+    try:
+        best = max(
+            (f for f in os.listdir(dir) if f.startswith('best_model_checkpoint_val_mrr=') and f.endswith('.pt')),
+            key=lambda f: float(f.split('val_mrr=')[1].rstrip('.pt')),
+            default=None
+        )
+        return best
+    except ValueError:
+        return None
