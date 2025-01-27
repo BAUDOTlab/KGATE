@@ -414,7 +414,7 @@ class KGATEGraph(KnowledgeGraph):
         )
 
 
-    def remove_duplicates_triples(self):
+    def remove_duplicate_triples(self):
         """
         Remove duplicate triples from a knowledge graph for each relation and keep only unique triples.
 

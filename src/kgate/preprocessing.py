@@ -52,9 +52,9 @@ def clean_knowledge_graph(kg: KGATEGraph, config):
 
     id_to_rel_name = {v: k for k, v in kg.rel2ix.items()}
 
-    if config["preprocessing"]["remove_duplicates_triples"]:
+    if config["preprocessing"]["remove_duplicate_triples"]:
         logging.info("Removing duplicated triples...")
-        kg = kg.remove_duplicates_triples()
+        kg = kg.remove_duplicate_triples()
 
     duplicated_relations_list = []
 

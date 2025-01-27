@@ -1,9 +1,5 @@
 import torch.nn as nn
-from torch.nn.functional import normalize
 from torch_geometric.nn import HeteroConv, GATv2Conv, SAGEConv
-from torchkge.models import BilinearModel
-import logging
-from utils import create_hetero_data
 
 # Utility?
 class DefaultEncoder(nn.Module):

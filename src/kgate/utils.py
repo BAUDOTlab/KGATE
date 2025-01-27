@@ -10,7 +10,7 @@ import random
 import logging 
 import pickle
 import os
-from importlib.resources import read_binary
+from importlib.resources import open_binary
 
 log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
 logging.basicConfig(
@@ -22,7 +22,7 @@ def parse_config(config_path: str, config_dict: dict) -> dict:
     if config_path != "" and not Path(config_path).exists():
         raise FileNotFoundError(f"Configuration file {config_path} not found.")
 
-    with read_binary("KGATE", "config_template.toml") as f:
+    with open_binary("kgate", "config_template.toml") as f:
         default_config = tomllib.load(f)
 
     if Path(config_path).exists():
@@ -35,18 +35,23 @@ def parse_config(config_path: str, config_dict: dict) -> dict:
     # 2. Configuration file (config)
     # 3. Default configuration (default_config)
     # If a default value is None, consider it required and not defaultable
-    config = {key: set_config_key(config, default_config, config_dict, key) for key in CONFIG_DEFAULTS}
+    config = {key: set_config_key(key, config, default_config, config_dict) for key in default_config}
 
     return config
 
-def set_config_key(config, default, inline, key):
+def set_config_key(key, config, default, inline = None):
+    if inline is not None and key in inline:
+        inline_value = inline[key]
+    else:
+        inline_value = None
+
     if isinstance(default[key], dict):
         new_value = {}
         for child_key in default[key]:
-            new_value.update({child_key: set_config_key(config[key], default[key], inline[key], child_key)})
+            new_value.update({child_key: set_config_key(child_key, config[key], default[key], inline_value)})
         return new_value
     
-    if key not in inline or inline[key] is None:
+    if inline_value is None:
         if key not in config or config[key] is None:
             if default[key] is None:
                 raise ValueError(f"Parameter {key} is required but not set without a default value.")
@@ -56,7 +61,7 @@ def set_config_key(config, default, inline, key):
         else:
             return config[key]
     else:
-        return inline[key]
+        return inline_value
 
 def load_knowledge_graph(pickle_filename):
     """Load the knowledge graph from pickle files."""

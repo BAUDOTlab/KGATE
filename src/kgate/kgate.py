@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from torchkge import Model
+from torchkge.models import Model
 import torchkge.sampling as sampling
 import torch
 from torch import tensor, long, stack
@@ -34,8 +34,8 @@ logging.basicConfig(
 TRANSLATIONAL_MODELS = ['TransE', 'TransH', 'TransR', 'TransD', 'TorusE']
 
 class Architect(Model):
-    def __init__(self, kg, device, config_path: str = "", cudnn_benchmark = True, num_cores = 0, **kwargs):
-        
+    def __init__(self, kg = None, config_path: str = "", cudnn_benchmark = True, num_cores = 0, **kwargs):
+        # kg should be of type KGATEGraph or KnowledgeGraph, if exists use it instead of the one in config
         config = parse_config(config_path, kwargs)
 
         if torch.cuda.is_available():
@@ -69,7 +69,7 @@ class Architect(Model):
             logging.info("Done")
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        logging.info(f'Detected device: {device}')
+        logging.info(f'Detected device: {self.device}')
 
         set_random_seeds(config["seed"])
 
@@ -85,7 +85,7 @@ class Architect(Model):
 
         match encoder_name:
             case "Default":
-                encoder = DefaultEncoder(self.kg_train.n_ent, self.kg_train.n_rel, self.emb_dim)
+                encoder = DefaultEncoder()
 
         return encoder
 
@@ -404,11 +404,11 @@ class Architect(Model):
         remaining_relations = list(remaining_relations)
 
         total_mrr_sum_list_1, fact_count_list_1, individual_mrrs_list_1, group_mrr_list_1 = self.calculate_mrr_for_relations(
-            self.kg_test, self.decoder, self.eval_batch_size, list_rel_1)
+            self.kg_test, list_rel_1)
         total_mrr_sum_list_2, fact_count_list_2, individual_mrrs_list_2, group_mrr_list_2 = self.calculate_mrr_for_relations(
-            self.kg_test, self.decoder, self.eval_batch_size, list_rel_2)
+            self.kg_test, list_rel_2)
         total_mrr_sum_remaining, fact_count_remaining, individual_mrrs_remaining, group_mrr_remaining = self.calculate_mrr_for_relations(
-            self.kg_test, self.decoder, self.eval_batch_size, remaining_relations)
+            self.kg_test, remaining_relations)
 
         global_mrr = (total_mrr_sum_list_1 + total_mrr_sum_list_2 + total_mrr_sum_remaining) / (fact_count_list_1 + fact_count_list_2 + fact_count_remaining)
 
@@ -726,8 +726,8 @@ class Architect(Model):
         kg_infrequent.dict_of_tails = self.kg_test.dict_of_tails
         
         # Compute each category's MRR
-        frequent_mrr = self.link_pred(self.decoder, kg_frequent, self.eval_batch_size) if frequent_indices else 0
-        infrequent_mrr = self.link_pred(self.decoder, kg_infrequent, self.eval_batch_size) if infrequent_indices else 0
+        frequent_mrr = self.link_pred(kg_frequent) if frequent_indices else 0
+        infrequent_mrr = self.link_pred(kg_infrequent) if infrequent_indices else 0
 
         return frequent_mrr, infrequent_mrr
 
