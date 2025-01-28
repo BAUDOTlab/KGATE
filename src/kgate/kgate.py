@@ -1,14 +1,17 @@
 import os
+from inspect import signature
 from pathlib import Path
 from torchkge.models import Model
 import torchkge.sampling as sampling
 import torch
 from torch import tensor, long, stack
-from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model
+from torch.nn.functional import normalize
+from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, create_hetero_data
 from .preprocessing import prepare_knowledge_graph
 from .encoders import *
 from .decoders import *
 from .data_structures import KGATEGraph
+from .samplers import FixedPositionalNegativeSampler
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss, DataLoader
 from torchkge.evaluation import LinkPredictionEvaluator
 import logging
@@ -36,7 +39,7 @@ TRANSLATIONAL_MODELS = ['TransE', 'TransH', 'TransR', 'TransD', 'TorusE']
 class Architect(Model):
     def __init__(self, kg = None, config_path: str = "", cudnn_benchmark = True, num_cores = 0, **kwargs):
         # kg should be of type KGATEGraph or KnowledgeGraph, if exists use it instead of the one in config
-        config = parse_config(config_path, kwargs)
+        self.config = parse_config(config_path, kwargs)
 
         if torch.cuda.is_available():
             # Benchmark convolution algorithms to chose the optimal one.
@@ -50,35 +53,34 @@ class Architect(Model):
         torch.set_num_threads(num_cores)
 
         # Create output folder if it doesn't exist
-        logging.info(f"Output folder: {config["output_directory"]}")
-        Path(config["output_directory"]).mkdir(parents=True, exist_ok=True)
+        logging.info(f"Output folder: {self.config["output_directory"]}")
+        Path(self.config["output_directory"]).mkdir(parents=True, exist_ok=True)
 
-        run_kg_prep =  config["run_kg_preprocess"]
-        run_training = config["run_training"]
-        run_eval = config["run_evaluation"]
-
-        if run_kg_prep:
-            logging.info(f"Preparing KG...")
-            self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(config)
-            if not run_training and not run_eval:
-                logging.info("KG preprocessed.")
-                return
-        else:
-            logging.info("Loading KG...")
-            self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(config["kg_pkl"])
-            logging.info("Done")
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logging.info(f'Detected device: {self.device}')
 
-        set_random_seeds(config["seed"])
+        set_random_seeds(self.config["seed"])
 
         self.emb_dim = self.config["model"]["emb_dim"]
         self.rel_emb_dim = self.config["model"]["rel_emb_dim"]
 
+        run_kg_prep =  self.config["run_kg_preprocess"]
+
+        if run_kg_prep:
+            logging.info(f"Preparing KG...")
+            self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config)
+            logging.info("KG preprocessed.")
+        else:
+            logging.info("Loading KG...")
+            self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(self.config["kg_pkl"])
+            logging.info("Done")
+
+        super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
+
 
     def initialize_encoder(self):
-        mapping_csv = self.config["mapping_csv"]
+        metadata_csv = self.config["metadata_csv"]
         encoder_config = self.config["model"]["encoder"]
         encoder_name = encoder_config["name"]
         gnn_layers = encoder_config["gnn_layer_number"]
@@ -152,7 +154,7 @@ class Architect(Model):
 
         match sampler_name:
             case "Positional":
-                sampler = sampling.PositionalNegativeSampler(self.kg_train, self.kg_val, self.kg_test)
+                sampler = FixedPositionalNegativeSampler(self.kg_train, self.kg_val, self.kg_test)
             case "Uniform":
                 sampler = sampling.UniformNegativeSampler(self.kg_train, self.kg_val, self.kg_test, n_neg)
             case "Bernoulli":
@@ -210,7 +212,7 @@ class Architect(Model):
         return scheduler
 
     def init_embedding(self, num_embeddings, emb_dim):
-        embedding = nn.Embedding(num_embeddings, emb_dim)
+        embedding = nn.Embedding(num_embeddings, emb_dim, device=self.device)
         nn.init.xavier_uniform_(embedding.weight.data)
         return embedding
 
@@ -223,42 +225,75 @@ class Architect(Model):
 
         training_config = self.config["training"]
         self.max_epochs = training_config["max_epochs"]
-        self.batch_size = training_config["batch_size"]
+        self.batch_size = training_config["train_batch_size"]
         self.patience = training_config["patience"]
         self.eval_interval = training_config["eval_interval"]
         self.eval_batch_size = training_config["eval_batch_size"]
-        # If we use a deep learning encoder, then we need to have HeteroData
-        if self.config["model"]["encoder"]["name"] != "Default":
-            self.hetero_data, self.kg2het, self.het2kg, _, self.kg2nodetype = create_hetero_data(kg, self.config["mapping_csv"])
-            self.hetero_data = self.hetero_data.to(self.device)
 
-            self.node_embeddings = nn.ModuleDict()
-            for node_type in self.hetero_data.node_types:
-                num_nodes = self.hetero_data[node_type].num_nodes
-                self.node_embeddings[node_type] = self.init_embedding(num_nodes, self.emb_dim)
+        trainer = Engine(self.process_batch)
+        
+        to_save = {
+            "decoder": self.decoder,
+            "optimizer": self.optimizer,
+            "trainer": trainer
+        }
+        if self.encoder.deep:
+            to_save.update({"encoder":self.encoder})
+        if self.scheduler is not None:
+            to_save.update({"scheduler": self.scheduler})
+        
+
+        if checkpoint_file is not None:
+            if Path(checkpoint_file).is_file():
+                logging.info(f"Resuming training from checkpoint: {checkpoint_file}")
+                checkpoint = torch.load(checkpoint_file)
+                Checkpoint.load_objects(to_load=to_save, checkpoint=checkpoint)
+
+                logging.info("Checkpoint loaded successfully.")
+
+                with open(self.training_metrics_file, mode="a", newline="") as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['CHECKPOINT RESTART', 'CHECKPOINT RESTART', 'CHECKPOINT RESTART', 'CHECKPOINT RESTART'])
+
+                if trainer.state.epoch < self.max_epochs:
+                    logging.info(f"Starting from epoch {trainer.state.epoch}")
+                else:
+                    logging.info(f"Training already completed. Last epoch is {trainer.state.epoch} and max_epochs is set to {self.max_epochs}")
+                    return
+            else:
+                logging.info(f"Checkpoint file {checkpoint_file} does not exist. Starting training from scratch.")
         else:
-            self.node_embeddings = self.init_embedding(self.kg_train.n_ent, self.emb_dim)
-        self.rel_emb = self.init_embedding(self.kg_train.n_rel, self.emb_dim)
+            # If we use a deep learning encoder, then we need to have HeteroData
+            if self.config["model"]["encoder"]["name"] != "Default":
+                self.hetero_data, self.kg2het, self.het2kg, _, self.kg2nodetype = create_hetero_data(self.kg_train, self.config["metadata_csv"])
+                self.hetero_data = self.hetero_data.to(self.device)
 
-        logging.info("Initializing encoder...")
-        self.encoder = self.initialize_encoder()
+                self.node_embeddings = nn.ModuleDict()
+                for node_type in self.hetero_data.node_types:
+                    num_nodes = self.hetero_data[node_type].num_nodes
+                    self.node_embeddings[node_type] = self.init_embedding(num_nodes, self.emb_dim)
+            else:
+                self.node_embeddings = self.init_embedding(self.kg_train.n_ent, self.emb_dim)
+            self.rel_emb = self.init_embedding(self.kg_train.n_rel, self.emb_dim)
 
-        logging.info("Initializing decoder...")
-        self.decoder, self.criterion = self.initialize_decoder()
-        self.decoder.to(self.device)
+            logging.info("Initializing encoder...")
+            self.encoder = self.initialize_encoder()
 
-        logging.info("Initializing optimizer...")
-        self.optimizer = self.initialize_optimizer()
+            logging.info("Initializing decoder...")
+            self.decoder, self.criterion = self.initialize_decoder()
+            self.decoder.to(self.device)
 
-        logging.info("Initializing sampler...")
-        self.sampler = self.initialize_sampler()
+            logging.info("Initializing optimizer...")
+            self.optimizer = self.initialize_optimizer()
 
-        logging.info("Initializing lr scheduler...")
-        self.scheduler = self.initialize_scheduler()
+            logging.info("Initializing sampler...")
+            self.sampler = self.initialize_sampler()
 
-        self.training_metrics_file = Path(self.config["output_directory"], "training_metrics.csv")
+            logging.info("Initializing lr scheduler...")
+            self.scheduler = self.initialize_scheduler()
 
-        if checkpoint_file is None:
+            self.training_metrics_file = Path(self.config["output_directory"], "training_metrics.csv")
+
             with open(self.training_metrics_file, mode="w", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow(["Epoch", "Training Loss", "Validation MRR", "Learning Rate"])
@@ -270,7 +305,6 @@ class Architect(Model):
         train_iterator = DataLoader(self.kg_train, self.batch_size, use_cuda=use_cuda)
         logging.info(f"Number of training batches: {len(train_iterator)}")
 
-        trainer = Engine(self.process_batch)
         RunningAverage(output_transform=lambda x: x).attach(trainer, "loss_ra")
 
         early_stopping = EarlyStopping(
@@ -287,24 +321,6 @@ class Architect(Model):
 
         trainer.add_event_handler(Events.COMPLETED, self.on_training_completed)
 
-        if self.scheduler is not None:
-            to_save = {
-                "architect": self,
-                "encoder": self.encoder,
-                "decoder": self.decoder,
-                "optimizer": self.optimizer,
-                "scheduler": self.scheduler,
-                "trainer": trainer
-            }
-        else:
-            to_save = {
-                "architect": self,
-                "encoder": self.encoder,
-                "decoder": self.decoder,
-                "optimizer": self.optimizer,
-                "trainer": trainer
-            }
-        
         self.checkpoints_dir = Path(self.config["output_directory"], "checkpoints")
 
         checkpoint_handler = Checkpoint(
@@ -316,17 +332,17 @@ class Architect(Model):
 
         # Custom save function to move the model to CPU before saving and back to GPU after
         def save_checkpoint_to_cpu(engine):
-            # Move model to CPU before saving
-            self.to('cpu')
-            self.encoder.to("cpu")
-            self.decoder.to('cpu')
+            # Move models to CPU before saving
+            if self.encoder.deep:
+                self.encoder.to("cpu")
+            self.decoder.to("cpu")
 
             # Save the checkpoint
             checkpoint_handler(engine)
 
-            # Move model back to GPU
-            self.to(self.device)
-            self.encoder.to(self.device)
+            # Move models back to GPU
+            if self.encoder.deep:
+               self.encoder.to(self.device)
             self.decoder.to(self.device)
 
         # Attach checkpoint handler to trainer and call save_checkpoint_to_cpu
@@ -349,30 +365,7 @@ class Architect(Model):
             to_save
         )
 
-        max_epochs = self.config["training"]["max_epochs"]
-        if self.run_training and checkpoint_file is not None:
-            if Path(checkpoint_file).is_file():
-                logging.info(f"Resuming training from checkpoint: {checkpoint_file}")
-                checkpoint = torch.load(checkpoint_file)
-                Checkpoint.load_objects(to_load=to_save, checkpoint=checkpoint)
-
-                logging.info("Checkpoint loaded successfully.")
-
-                with open(self.training_metrics_file, mode="a", newline="") as file:
-                    writer = csv.writer(file)
-                    writer.writerow(['CHECKPOINT RESTART', 'CHECKPOINT RESTART', 'CHECKPOINT RESTART', 'CHECKPOINT RESTART'])
-
-                if trainer.state.epoch < max_epochs:
-                    logging.info(f"Starting from epoch {trainer.state.epoch}")
-                    trainer.run(train_iterator)
-                else:
-                    logging.info(f"Training already completed. Last epoch is {trainer.state.epoch} and max_epochs is set to {max_epochs}")
-            else:
-                logging.info(f"Checkpoint file {checkpoint_file} does not exist. Starting training from scratch.")
-                trainer.run(train_iterator, max_epochs=max_epochs)
-        else:
-            if self.run_training:
-                trainer.run(train_iterator, max_epochs=max_epochs)
+        trainer.run(train_iterator, max_epochs=self.max_epochs)
     
         #################
         # Report metrics
@@ -474,16 +467,12 @@ class Architect(Model):
 
         logging.info(f"Evaluation results stored in {inference_mrr_file}")
 
-
-        
-
-
     def process_batch(self, engine, batch):
         h, t, r = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)
         n_h, n_t = self.sampler.corrupt_batch(h, t, r)
         n_h, n_t = n_h.to(self.device), n_t.to(self.device)
 
-        self.optimizer.zero_gard()
+        self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triples
         pos, neg = self.forward(h, t, r, n_h, n_t)
@@ -522,8 +511,8 @@ class Architect(Model):
                 encoder_output[t_type][t_idx_item] for t_type, t_idx_item in zip(t_node_types, t_het_idx)
             ])
         else:
-            h_embeddings = self.ent_emb(h_idx)
-            t_embeddings = self.ent_emb(t_idx)
+            h_embeddings = self.node_embeddings(h_idx)
+            t_embeddings = self.node_embeddings(t_idx)
 
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 
@@ -537,7 +526,9 @@ class Architect(Model):
         # Some decoders should not normalize parameters or do so in a different way.
         # In this case, they should implement the function themselves and we return it.
         normalize_func = getattr(self.decoder, "normalize_parameters", None)
-        if callable(normalize_func):
+        # If the function only accept one parameter, it is the base torchKGE one,
+        # we don't want that.
+        if callable(normalize_func) and len(signature(normalize_func).parameters) > 1:
             stop_norm = normalize_func(self)
             if stop_norm: return
         
@@ -545,13 +536,14 @@ class Architect(Model):
             for node_type, embedding in self.node_embeddings.items():
                 normalized_embedding = normalize(embedding.weight.data, p=2, dim=1)
                 embedding.weight.data = normalized_embedding
+                logging.debug(f"Normalized embeddings for node type '{node_type}'")
         else:
             self.node_embeddings.weight.data = normalize(self.node_embeddings.weight.data, p=2, dim=1)
-        logging.debug(f"Normalized embeddings for node type '{node_type}'")
+        logging.debug(f"Normalized all embeddings")
 
         # Normaliser les embeddings des relations
-        self.rel_emb.weight.data = normalize(self.rel_emb.weight.data, p=2, dim=1)
-        logging.debug("Normalized relation embeddings")
+        # self.rel_emb.weight.data = normalize(self.rel_emb.weight.data, p=2, dim=1)
+        # logging.debug("Normalized relation embeddings")
 
     ##### Metrics recording in CSV file
     def log_metrics_to_csv(self, engine):
