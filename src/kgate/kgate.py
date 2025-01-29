@@ -242,8 +242,6 @@ class Architect(Model):
             self.node_embeddings = self.init_embedding(self.kg_train.n_ent, self.emb_dim)
         self.rel_emb = self.init_embedding(self.kg_train.n_rel, self.emb_dim)
 
-        t = self.node_embeddings.state_dict()["weight"]
-
         logging.info("Initializing encoder...")
         self.encoder = self.initialize_encoder()
 
@@ -318,6 +316,8 @@ class Architect(Model):
             if self.encoder.deep:
                 self.encoder.to("cpu")
             self.decoder.to("cpu")
+            self.rel_emb.to("cpu")
+            self.node_embeddings.to("cpu")
 
             # Save the checkpoint
             checkpoint_handler(engine)
@@ -326,6 +326,8 @@ class Architect(Model):
             if self.encoder.deep:
                self.encoder.to(self.device)
             self.decoder.to(self.device)
+            self.rel_emb.to(self.device)
+            self.node_embeddings.to(self.device)
 
         # Attach checkpoint handler to trainer and call save_checkpoint_to_cpu
         trainer.add_event_handler(Events.EPOCH_COMPLETED, save_checkpoint_to_cpu)
@@ -355,9 +357,6 @@ class Architect(Model):
                 Checkpoint.load_objects(to_load=to_save, checkpoint=checkpoint)
 
                 logging.info("Checkpoint loaded successfully.")
-                logging.info(torch.equal(t, checkpoint["entities"]["weight"]))
-                logging.info(torch.equal(t, self.node_embeddings.state_dict()["weight"]))
-
                 with open(self.training_metrics_file, mode="a", newline="") as file:
                     writer = csv.writer(file)
                     writer.writerow(['CHECKPOINT RESTART', 'CHECKPOINT RESTART', 'CHECKPOINT RESTART', 'CHECKPOINT RESTART'])
@@ -454,10 +453,10 @@ class Architect(Model):
         inference_mrr_file = Path(self.config["output_directory"], "inference_metrics.yaml")
 
         inference_df = pd.read_csv(inference_kg_path, sep="\t")
-        orpha_kg = KGATEGraph(df = inference_df, ent2ix=self.kg_train.ent2ix, rel2ix=self.kg_train.rel2ix) 
+        inference_kg = KGATEGraph(df = inference_df, ent2ix=self.kg_train.ent2ix, rel2ix=self.kg_train.rel2ix) 
         
         # TODO : use node classification inference
-        evaluator = LinkPredictionEvaluator(self.decoder, orpha_kg)
+        evaluator = LinkPredictionEvaluator(self.decoder, inference_kg)
         evaluator.evaluate(b_size=self.eval_batch_size, verbose=True)
             
         inference_mrr = evaluator.mrr()[1]
