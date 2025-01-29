@@ -10,7 +10,7 @@ class TransE(TransEModel):
     def score(self, h_norm, r_emb, t_norm):
         return -self.dissimilarity(h_norm + r_emb, t_norm)
     
-    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, entities=True):
+    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mapping=None, entities=True):
         """
         Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
@@ -41,16 +41,23 @@ class TransE(TransEModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        h = torch.cat([self.node_embeddings[self.kg2nodetype[h_id.item()]].weight.data[h_id] for h_id in h_idx], dim=0)
-        t = torch.cat([self.node_embeddings[self.kg2nodetype[t_id.item()]].weight.data[t_id] for t_id in t_idx], dim=0)
-        r = self.rel_emb(r_idx)
+        if mapping is not None:
+            h = torch.cat([node_embeddings[mapping[h_id.item()]].weight.data[h_id] for h_id in h_idx], dim=0)
+            t = torch.cat([node_embeddings[mapping[t_id.item()]].weight.data[t_id] for t_id in t_idx], dim=0)
+        else:
+            h = node_embeddings(h_idx)
+            t = node_embeddings(t_idx)
+        r = relation_embeddings(r_idx)
 
         if entities:
             # Prepare candidates for every entities
-            candidates = torch.cat([embedding.weight.data for embedding in self.node_embeddings.values()], dim=0)
-            candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
+            if mapping is not None:
+                candidates = torch.cat([embedding.weight.data for embedding in self.node_embeddings.values()], dim=0)
+                candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
+            else:
+                candidates = node_embeddings.weight.data.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
-            candidates = self.rel_emb.weight.data.unsqueeze(0).expand(b_size, -1, -1)
+            candidates = relation_embeddings.weight.data.unsqueeze(0).expand(b_size, -1, -1)
         
         return h, t, r, candidates

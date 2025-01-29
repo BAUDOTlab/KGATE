@@ -12,6 +12,7 @@ from .encoders import *
 from .decoders import *
 from .data_structures import KGATEGraph
 from .samplers import FixedPositionalNegativeSampler
+from .evaluators import KLinkPredictionEvaluator
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss, DataLoader
 from torchkge.evaluation import LinkPredictionEvaluator
 import logging
@@ -52,9 +53,11 @@ class Architect(Model):
         logging.info(f"Setting number of threads to {num_cores}")
         torch.set_num_threads(num_cores)
 
+        outdir = Path(self.config["output_directory"])
         # Create output folder if it doesn't exist
-        logging.info(f"Output folder: {self.config["output_directory"]}")
-        Path(self.config["output_directory"]).mkdir(parents=True, exist_ok=True)
+        logging.info(f"Output folder: {outdir}")
+        outdir.mkdir(parents=True, exist_ok=True)
+        self.checkpoints_dir = outdir.joinpath("checkpoints")
 
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -301,8 +304,6 @@ class Architect(Model):
         if self.scheduler is not None:
             to_save.update({"scheduler": self.scheduler})
         
-        self.checkpoints_dir = Path(self.config["output_directory"], "checkpoints")
-
         checkpoint_handler = Checkpoint(
             to_save,    # Dict of objects to save
             DiskSaver(dirname=self.checkpoints_dir, require_empty=False, create_dir=True), # Save manager
@@ -377,15 +378,19 @@ class Architect(Model):
         #################
         self.plot_learning_curves(self.training_metrics_file)
 
-    def eval(self):
+    def test(self):
         torch.cuda.empty_cache()
         gc.collect()
 
         logging.info("Loading best model.")
-        best_model = find_best_model(self.checkpoint_dir)
+        best_model = find_best_model(self.checkpoints_dir)
 
-        logging.info(f"Best model is {Path(self.checkpoints_dir, best_model)}")
-        checkpoint = torch.load(Path(self.checkpoints_dir, best_model), map_location=self.device)
+        if not best_model:
+            logging.error(f"No best model was found in {self.checkpoints_dir}. Make sure to run the training first and not rename checkpoint files before running evaluation.")
+            return
+        
+        logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
+        checkpoint = torch.load(self.checkpoints_dir.joinpath(best_model), map_location=self.device)
         self.load_state_dict(checkpoint["architect"])
         self.decoder.load_state_dict(checkpoint["decoder"])
         logging.info("Best model successfully loaded. \nEvaluating on the test set with best model...")
@@ -456,8 +461,11 @@ class Architect(Model):
         inference_kg = KGATEGraph(df = inference_df, ent2ix=self.kg_train.ent2ix, rel2ix=self.kg_train.rel2ix) 
         
         # TODO : use node classification inference
-        evaluator = LinkPredictionEvaluator(self.decoder, inference_kg)
-        evaluator.evaluate(b_size=self.eval_batch_size, verbose=True)
+        evaluator = KLinkPredictionEvaluator()
+        evaluator.evaluate(self.eval_batch_size, 
+                           self.decoder, inference_kg,
+                           self.node_embeddings, self.rel_emb,
+                           self.kg2nodetype, verbose=True)
             
         inference_mrr = evaluator.mrr()[1]
         inference_hit10 = evaluator.hit_at_k(10)[1]
@@ -731,8 +739,11 @@ class Architect(Model):
     def link_pred(self, kg):
         """Link prediction evaluation on test set."""
         # Test MRR measure
-        evaluator = LinkPredictionEvaluator(self.decoder, kg)
-        evaluator.evaluate(b_size=self.batch_size, verbose=True)
+        evaluator = KLinkPredictionEvaluator()
+        evaluator.evaluate(self.batch_size,
+                           self.decoder, kg,
+                           self.node_embeddings, self.rel_emb,
+                           self.kg2nodetype, verbose=True)
         
         test_mrr = evaluator.mrr()[1]
         return test_mrr

@@ -275,4 +275,4 @@ def find_best_model(dir):
         )
         return best
     except ValueError:
-        return None
+        return False
