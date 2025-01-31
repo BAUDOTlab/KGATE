@@ -6,7 +6,7 @@ import torchkge.sampling as sampling
 import torch
 from torch import tensor, long, stack
 from torch.nn.functional import normalize
-from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, create_hetero_data
+from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, create_hetero_data, init_embedding
 from .preprocessing import prepare_knowledge_graph
 from .encoders import *
 from .decoders import *
@@ -14,7 +14,6 @@ from .data_structures import KGATEGraph
 from .samplers import FixedPositionalNegativeSampler
 from .evaluators import KLinkPredictionEvaluator
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss, DataLoader
-from torchkge.evaluation import LinkPredictionEvaluator
 import logging
 import warnings
 import torch.optim as optim
@@ -91,6 +90,10 @@ class Architect(Model):
         match encoder_name:
             case "Default":
                 encoder = DefaultEncoder()
+            case "GCN": 
+                encoder = GCNEncoder(self.node_embeddings, self.hetero_data, self.emb_dim, gnn_layers)
+            case "GAT":
+                encoder = GATEncoder(self.node_embeddings, self.hetero_data, self.emb_dim, gnn_layers)
 
         return encoder
 
@@ -106,6 +109,12 @@ class Architect(Model):
                 decoder = TransE(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel,
                                dissimilarity_type=dissimilarity)
                 criterion = MarginLoss(margin)
+            case "RESCAL":
+                decoder = RESCAL(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
+                criterion = BinaryCrossEntropyLoss()
+            case "DistMult":
+                decoder = DistMult(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
+                criterion = BinaryCrossEntropyLoss()
 
         return decoder, criterion
 
@@ -214,11 +223,6 @@ class Architect(Model):
         logging.info(f"Scheduler '{scheduler_type}' initialized with parameters: {scheduler_params}")
         return scheduler
 
-    def init_embedding(self, num_embeddings, emb_dim):
-        embedding = nn.Embedding(num_embeddings, emb_dim, device=self.device)
-        nn.init.xavier_uniform_(embedding.weight.data)
-        return embedding
-
     def train(self, checkpoint_file=None):
         """Launch the training procedure of the Architect.
         
@@ -240,10 +244,10 @@ class Architect(Model):
             self.node_embeddings = nn.ModuleDict()
             for node_type in self.hetero_data.node_types:
                 num_nodes = self.hetero_data[node_type].num_nodes
-                self.node_embeddings[node_type] = self.init_embedding(num_nodes, self.emb_dim)
+                self.node_embeddings[node_type] = init_embedding(num_nodes, self.emb_dim, self.device)
         else:
-            self.node_embeddings = self.init_embedding(self.kg_train.n_ent, self.emb_dim)
-        self.rel_emb = self.init_embedding(self.kg_train.n_rel, self.emb_dim)
+            self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
+        self.rel_emb = init_embedding(self.kg_train.n_rel, self.emb_dim, self.device)
 
         logging.info("Initializing encoder...")
         self.encoder = self.initialize_encoder()
@@ -542,7 +546,7 @@ class Architect(Model):
         # If the function only accept one parameter, it is the base torchKGE one,
         # we don't want that.
         if callable(normalize_func) and len(signature(normalize_func).parameters) > 1:
-            stop_norm = normalize_func(self)
+            stop_norm = normalize_func(rel_emb = self.rel_emb, ent_emb = self.node_embeddings)
             if stop_norm: return
         
         if self.encoder.deep:

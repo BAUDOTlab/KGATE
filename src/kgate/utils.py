@@ -276,3 +276,8 @@ def find_best_model(dir):
         return best
     except ValueError:
         return False
+    
+def init_embedding(num_embeddings, emb_dim, device="cpu"):
+    embedding = nn.Embedding(num_embeddings, emb_dim, device=device)
+    nn.init.xavier_uniform_(embedding.weight.data)
+    return embedding

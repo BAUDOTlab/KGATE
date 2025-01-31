@@ -7,7 +7,7 @@ class TransE(TransEModel):
     def __init__(self, emb_dim, n_entities, n_relations, dissimilarity_type):
         super().__init__(emb_dim, n_entities, n_relations, dissimilarity_type=dissimilarity_type)
 
-    def score(self, h_norm, r_emb, t_norm):
+    def score(self, h_norm, r_emb, t_norm, **_):
         return -self.dissimilarity(h_norm + r_emb, t_norm)
     
     def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mapping=None, entities=True):
