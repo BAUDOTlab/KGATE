@@ -232,14 +232,17 @@ class Architect(Model):
 
         training_config = self.config["training"]
         self.max_epochs = training_config["max_epochs"]
-        self.batch_size = training_config["train_batch_size"]
+        self.train_batch_size = training_config["train_batch_size"]
         self.patience = training_config["patience"]
         self.eval_interval = training_config["eval_interval"]
         self.eval_batch_size = training_config["eval_batch_size"]
+        self.kg2nodetype = None
         # If we use a deep learning encoder, then we need to have HeteroData
         if self.config["model"]["encoder"]["name"] != "Default":
+            logging.info("Creating Hetero Data from KG...")
             self.hetero_data, self.kg2het, self.het2kg, _, self.kg2nodetype = create_hetero_data(self.kg_train, self.config["metadata_csv"])
             self.hetero_data = self.hetero_data.to(self.device)
+
 
             self.node_embeddings = nn.ModuleDict()
             for node_type in self.hetero_data.node_types:
@@ -276,7 +279,7 @@ class Architect(Model):
         self.val_mrrs = []
         self.learning_rates = []
 
-        train_iterator = DataLoader(self.kg_train, self.batch_size, use_cuda=use_cuda)
+        train_iterator = DataLoader(self.kg_train, self.train_batch_size, use_cuda=use_cuda)
         logging.info(f"Number of training batches: {len(train_iterator)}")
 
         trainer = Engine(self.process_batch)
@@ -744,7 +747,7 @@ class Architect(Model):
         """Link prediction evaluation on test set."""
         # Test MRR measure
         evaluator = KLinkPredictionEvaluator()
-        evaluator.evaluate(self.batch_size,
+        evaluator.evaluate(self.eval_batch_size,
                            self.decoder, kg,
                            self.node_embeddings, self.rel_emb,
                            self.kg2nodetype, verbose=True)
