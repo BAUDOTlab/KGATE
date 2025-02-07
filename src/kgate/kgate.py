@@ -141,7 +141,7 @@ class Architect(Model):
 
         # Check if the specified optimizer is supported
         if optimizer_name not in optimizer_mapping:
-            raise ValueError(f"Optimizer type '{optimizer_name}' is not supported. Please check the configuration. Supported optimizers are :\n{"\n".join(optimizer_mapping.keys())}")
+            raise ValueError(f"Optimizer type '{optimizer_name}' is not supported. Please check the configuration. Supported optimizers are :\n{'\n'.join(optimizer_mapping.keys())}")
 
         optimizer_class = optimizer_mapping[optimizer_name]
         
@@ -611,7 +611,7 @@ class Architect(Model):
 
     ##### Early stopping score function
     def score_function(self, engine):
-        val_mrr = engine.state.metrics.Get("val_mrr", 0)
+        val_mrr = engine.state.metrics.get("val_mrr", 0)
         return val_mrr
     
     ##### Checkpoint best MRR
