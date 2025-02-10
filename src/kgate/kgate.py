@@ -3,6 +3,7 @@ from inspect import signature
 from pathlib import Path
 from torchkge.models import Model
 import torchkge.sampling as sampling
+from torchkge.inference import RelationInference, EntityInference
 import torch
 from torch import tensor, long, stack
 from torch.nn.functional import normalize
@@ -66,6 +67,7 @@ class Architect(Model):
 
         self.emb_dim = self.config["model"]["emb_dim"]
         self.rel_emb_dim = self.config["model"]["rel_emb_dim"]
+        self.eval_batch_size = self.config["training"]["eval_batch_size"]
 
         run_kg_prep =  self.config["run_kg_preprocess"]
 
@@ -107,7 +109,7 @@ class Architect(Model):
         match decoder_name:
             case "TransE":
                 decoder = TransE(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel,
-                               dissimilarity_type=dissimilarity)
+                            dissimilarity_type=dissimilarity)
                 criterion = MarginLoss(margin)
             case "RESCAL":
                 decoder = RESCAL(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
@@ -235,7 +237,6 @@ class Architect(Model):
         self.train_batch_size = training_config["train_batch_size"]
         self.patience = training_config["patience"]
         self.eval_interval = training_config["eval_interval"]
-        self.eval_batch_size = training_config["eval_batch_size"]
         self.kg2nodetype = None
         # If we use a deep learning encoder, then we need to have HeteroData
         if self.config["model"]["encoder"]["name"] != "Default":
@@ -243,14 +244,13 @@ class Architect(Model):
             self.hetero_data, self.kg2het, self.het2kg, _, self.kg2nodetype = create_hetero_data(self.kg_train, self.config["metadata_csv"])
             self.hetero_data = self.hetero_data.to(self.device)
 
-
             self.node_embeddings = nn.ModuleDict()
             for node_type in self.hetero_data.node_types:
                 num_nodes = self.hetero_data[node_type].num_nodes
                 self.node_embeddings[node_type] = init_embedding(num_nodes, self.emb_dim, self.device)
         else:
             self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
-        self.rel_emb = init_embedding(self.kg_train.n_rel, self.emb_dim, self.device)
+        self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
         logging.info("Initializing encoder...")
         self.encoder = self.initialize_encoder()
@@ -332,7 +332,7 @@ class Architect(Model):
 
             # Move models back to GPU
             if self.encoder.deep:
-               self.encoder.to(self.device)
+            self.encoder.to(self.device)
             self.decoder.to(self.device)
             self.rel_emb.to(self.device)
             self.node_embeddings.to(self.device)
@@ -389,6 +389,10 @@ class Architect(Model):
         torch.cuda.empty_cache()
         gc.collect()
 
+        self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
+        self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
+        self.decoder, _ = self.initialize_decoder()
+
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_dir)
 
@@ -398,9 +402,21 @@ class Architect(Model):
         
         logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
         checkpoint = torch.load(self.checkpoints_dir.joinpath(best_model), map_location=self.device)
-        self.load_state_dict(checkpoint["architect"])
+        self.node_embeddings.load_state_dict(checkpoint["entities"])
+        self.rel_emb.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])
+        
+        self.node_embeddings.to(self.device)
+        self.rel_emb.to(self.device)
+        self.decoder.to(self.device)
         logging.info("Best model successfully loaded. \nEvaluating on the test set with best model...")
+
+        self.kg2nodetype = None
+        # If we use a deep learning encoder, then we need to have HeteroData
+        if self.config["model"]["encoder"]["name"] != "Default":
+            logging.info("Creating Hetero Data from KG...")
+            self.hetero_data, self.kg2het, self.het2kg, _, self.kg2nodetype = create_hetero_data(self.kg_test, self.config["metadata_csv"])
+
 
         self.decoder.eval()
 
@@ -461,7 +477,7 @@ class Architect(Model):
 
         logging.info(f"Evaluation results stored in {mrr_file}")
         
-    def infer(self, inference_kg_path):
+    def test_infer(self, inference_kg_path):
         inference_mrr_file = Path(self.config["output_directory"], "inference_metrics.yaml")
 
         inference_df = pd.read_csv(inference_kg_path, sep="\t")
@@ -470,9 +486,9 @@ class Architect(Model):
         # TODO : use node classification inference
         evaluator = KLinkPredictionEvaluator()
         evaluator.evaluate(self.eval_batch_size, 
-                           self.decoder, inference_kg,
-                           self.node_embeddings, self.rel_emb,
-                           self.kg2nodetype, verbose=True)
+                        self.decoder, inference_kg,
+                        self.node_embeddings, self.rel_emb,
+                        self.kg2nodetype, verbose=True)
             
         inference_mrr = evaluator.mrr()[1]
         inference_hit10 = evaluator.hit_at_k(10)[1]
@@ -486,6 +502,21 @@ class Architect(Model):
 
 
         logging.info(f"Evaluation results stored in {inference_mrr_file}")
+
+    def infer(self, heads=[], rels=[], tails=[]):
+        """Infer missing entities or relations, depending on the given parameters"""
+        if not sum([len(arr) > 0 for arr in [heads,rels,tails]]) == 2:
+            raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, relations or tails.")
+
+        infer_heads, infer_rels, infer_tails = len(heads) > 0, len(rels) > 0, len(tails) > 0
+        # TODO : load model and dictionnary.
+        if infer_heads and infer_rels:
+            inference = EntityInference(self.decoder, heads, rels, missing = "tails")
+        elif infer_tails and infer_rels:
+            inference = EntityInference(self.decoder, tails, rels, missing = "heads")
+        elif infer_heads and infer_tails:
+            inference = RelationInference(self.decoder, heads, tails)
+
 
     def process_batch(self, engine, batch):
         h, t, r = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)
@@ -505,9 +536,9 @@ class Architect(Model):
 
         return loss.item()
 
-    def scoring_function(self, h_idx, t_idx, r_idx):
+    def scoring_function(self, h_idx, t_idx, r_idx, train = True):
         encoder_output = None
-        if self.encoder.deep:
+        if self.encoder.deep and train:
             encoder_output = self.encoder.forward() #Check what the encoder needs
         
             h_node_types = [self.kg2nodetype[h.item()] for h in h_idx]
@@ -748,9 +779,9 @@ class Architect(Model):
         # Test MRR measure
         evaluator = KLinkPredictionEvaluator()
         evaluator.evaluate(self.eval_batch_size,
-                           self.decoder, kg,
-                           self.node_embeddings, self.rel_emb,
-                           self.kg2nodetype, verbose=True)
+                        self.decoder, kg,
+                        self.node_embeddings, self.rel_emb,
+                        self.kg2nodetype, verbose=True)
         
         test_mrr = evaluator.mrr()[1]
         return test_mrr
