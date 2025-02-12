@@ -3,7 +3,6 @@ from inspect import signature
 from pathlib import Path
 from torchkge.models import Model
 import torchkge.sampling as sampling
-from torchkge.inference import RelationInference, EntityInference
 import torch
 from torch import tensor, long, stack
 from torch.nn.functional import normalize
@@ -14,6 +13,7 @@ from .decoders import *
 from .data_structures import KGATEGraph
 from .samplers import FixedPositionalNegativeSampler
 from .evaluators import KLinkPredictionEvaluator
+from .inference import KEntityInference, KRelationInference
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss, DataLoader
 import logging
 import warnings
@@ -25,6 +25,7 @@ from ignite.metrics import RunningAverage
 from ignite.engine import Events, Engine
 from ignite.handlers import EarlyStopping, ModelCheckpoint, Checkpoint, DiskSaver
 import pandas as pd
+import numpy as np
 import yaml
 
 # Configure logging
@@ -225,11 +226,13 @@ class Architect(Model):
         logging.info(f"Scheduler '{scheduler_type}' initialized with parameters: {scheduler_params}")
         return scheduler
 
-    def train(self, checkpoint_file=None):
+    def train(self, checkpoint_file=None, attributes={}):
         """Launch the training procedure of the Architect.
         
         Arguments:
-            checkpoint_file: The path to the checkpoint file to load and resume a previous training. If None, the training will start from scratch."""
+            checkpoint_file: The path to the checkpoint file to load and resume a previous training. If None, the training will start from scratch.
+            attributes: dict(node_type, embedding) containing the embedding for each type of node.
+            """
         use_cuda = "all" if self.device.type == "cuda" else None
 
         training_config = self.config["training"]
@@ -247,7 +250,11 @@ class Architect(Model):
             self.node_embeddings = nn.ModuleDict()
             for node_type in self.hetero_data.node_types:
                 num_nodes = self.hetero_data[node_type].num_nodes
-                self.node_embeddings[node_type] = init_embedding(num_nodes, self.emb_dim, self.device)
+                if node_type in attributes and isinstance(attributes[node_type], nn.Embedding):
+                    assert self.emb_dim == attributes[node_type].embedding_dim, f"The embedding dimensions of attribute embeddings must be the same as the model embedding dimensions ({self.emb_dim}, found {attributes[node_type].embedding_dim})"
+                    self.node_embeddings[node_type] = attributes[node_type]
+                else:
+                    self.node_embeddings[node_type] = init_embedding(num_nodes, self.emb_dim, self.device)
         else:
             self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
@@ -332,7 +339,7 @@ class Architect(Model):
 
             # Move models back to GPU
             if self.encoder.deep:
-            self.encoder.to(self.device)
+                self.encoder.to(self.device)
             self.decoder.to(self.device)
             self.rel_emb.to(self.device)
             self.node_embeddings.to(self.device)
@@ -389,34 +396,7 @@ class Architect(Model):
         torch.cuda.empty_cache()
         gc.collect()
 
-        self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
-        self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
-        self.decoder, _ = self.initialize_decoder()
-
-        logging.info("Loading best model.")
-        best_model = find_best_model(self.checkpoints_dir)
-
-        if not best_model:
-            logging.error(f"No best model was found in {self.checkpoints_dir}. Make sure to run the training first and not rename checkpoint files before running evaluation.")
-            return
-        
-        logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
-        checkpoint = torch.load(self.checkpoints_dir.joinpath(best_model), map_location=self.device)
-        self.node_embeddings.load_state_dict(checkpoint["entities"])
-        self.rel_emb.load_state_dict(checkpoint["relations"])
-        self.decoder.load_state_dict(checkpoint["decoder"])
-        
-        self.node_embeddings.to(self.device)
-        self.rel_emb.to(self.device)
-        self.decoder.to(self.device)
-        logging.info("Best model successfully loaded. \nEvaluating on the test set with best model...")
-
-        self.kg2nodetype = None
-        # If we use a deep learning encoder, then we need to have HeteroData
-        if self.config["model"]["encoder"]["name"] != "Default":
-            logging.info("Creating Hetero Data from KG...")
-            self.hetero_data, self.kg2het, self.het2kg, _, self.kg2nodetype = create_hetero_data(self.kg_test, self.config["metadata_csv"])
-
+        self.load_best_model()
 
         self.decoder.eval()
 
@@ -503,20 +483,68 @@ class Architect(Model):
 
         logging.info(f"Evaluation results stored in {inference_mrr_file}")
 
-    def infer(self, heads=[], rels=[], tails=[]):
+    def infer(self, heads=[], rels=[], tails=[], topk=100):
         """Infer missing entities or relations, depending on the given parameters"""
         if not sum([len(arr) > 0 for arr in [heads,rels,tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, relations or tails.")
+        torch.cuda.empty_cache()
+        gc.collect()
+
+        self.load_best_model()
 
         infer_heads, infer_rels, infer_tails = len(heads) > 0, len(rels) > 0, len(tails) > 0
-        # TODO : load model and dictionnary.
-        if infer_heads and infer_rels:
-            inference = EntityInference(self.decoder, heads, rels, missing = "tails")
-        elif infer_tails and infer_rels:
-            inference = EntityInference(self.decoder, tails, rels, missing = "heads")
-        elif infer_heads and infer_tails:
-            inference = RelationInference(self.decoder, heads, tails)
 
+        if infer_heads and infer_rels:
+            heads = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in heads])
+            rels = tensor([idx for rel, idx in self.kg_train.rel2ix.items() if rel in rels])
+            inference = KEntityInference(self.decoder, heads, rels, missing = "tails", dictionary=self.kg_train.dict_of_heads, top_k=topk)
+        elif infer_tails and infer_rels:
+            tails = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in tails])
+            rels = tensor([idx for rel, idx in self.kg_train.rel2ix.items() if rel in rels])
+            inference = KEntityInference(self.decoder, tails, rels, missing = "heads", dictionary=self.kg_train.dict_of_tails, top_k=topk)
+        elif infer_heads and infer_tails:
+            heads = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in heads])
+            tails = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in tails])
+            inference = KRelationInference(self.decoder, heads, tails, dictionary=self.kg_train.dict_of_rels, top_k=topk)
+
+        inference.evaluate(self.eval_batch_size, self.node_embeddings, self.rel_emb)
+
+        ix2ent = {v: k for k, v in self.kg_train.ent2ix.items()}
+        pred_idx = inference.predictions.reshape(-1).T
+        pred_names = np.vectorize(ix2ent.get)(pred_idx)
+
+        scores = inference.scores.reshape(-1).T
+
+        self.predictions = pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
+
+    def load_best_model(self):
+        self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
+        self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
+        self.decoder, _ = self.initialize_decoder()
+
+        logging.info("Loading best model.")
+        best_model = find_best_model(self.checkpoints_dir)
+
+        if not best_model:
+            logging.error(f"No best model was found in {self.checkpoints_dir}. Make sure to run the training first and not rename checkpoint files before running evaluation.")
+            return
+        
+        logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
+        checkpoint = torch.load(self.checkpoints_dir.joinpath(best_model), map_location=self.device)
+        self.node_embeddings.load_state_dict(checkpoint["entities"])
+        self.rel_emb.load_state_dict(checkpoint["relations"])
+        self.decoder.load_state_dict(checkpoint["decoder"])
+        
+        self.node_embeddings.to(self.device)
+        self.rel_emb.to(self.device)
+        self.decoder.to(self.device)
+        logging.info("Best model successfully loaded.")
+
+        self.kg2nodetype = None
+        # If we use a deep learning encoder, then we need to have HeteroData
+        if self.config["model"]["encoder"]["name"] != "Default":
+            logging.info("Creating Hetero Data from KG...")
+            self.hetero_data, self.kg2het, self.het2kg, _, self.kg2nodetype = create_hetero_data(self.kg_test, self.config["metadata_csv"])
 
     def process_batch(self, engine, batch):
         h, t, r = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)

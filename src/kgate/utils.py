@@ -165,7 +165,7 @@ def create_hetero_data(kg, mapping_csv):
                 edge_index = torch.tensor(np.array([src, tgt]), dtype=torch.long)
 
                 edge_type = (src_type, rel, tgt_type)
-                data[(src_type, rel, tgt_type)].edge_index = edge_index
+                data[edge_type].edge_index = edge_index
     
     # Return HeteroData object, mappings and node mappings
     return data, kg_to_hetero_mapping, hetero_to_kg_mapping, df_to_kg_mapping, kg_to_node_type
