@@ -8,8 +8,9 @@ class DefaultEncoder(nn.Module):
 
 class GNN(nn.Module):
     def __init__(self, node_embeddings, aggr='sum'):
+        super().__init__()
         self.deep = True
-
+        self.device = "cuda"
         # Define HeteroConv aggregation
         self.aggr = aggr
         self.convs = nn.ModuleList()
@@ -18,9 +19,11 @@ class GNN(nn.Module):
 
     def forward(self, hetero_data):
         x_dict = self.x_dict
+        x_dict = {key: x.to(self.device) for key, x in self.x_dict.items()}  # Move x_dict to device
+        edge_index_dict = {key: edge_index.to(self.device) for key, edge_index in hetero_data.edge_index_dict.items()}  # Move edges
 
         for _, conv in enumerate(self.convs):
-                x_dict = conv(x_dict, hetero_data.edge_index_dict)
+                x_dict = conv(x_dict, edge_index_dict)
 
         return x_dict
     
@@ -44,5 +47,5 @@ class GCNEncoder(GNN):
             conv = HeteroConv(
                 {edge_type: SAGEConv(emb_dim, emb_dim, aggr="mean") for edge_type in hetero_data.edge_types},
                 aggr=self.aggr
-            )
+            ).to("cuda")
             self.convs.append(conv)

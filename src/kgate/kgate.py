@@ -567,7 +567,7 @@ class Architect(Model):
     def scoring_function(self, h_idx, t_idx, r_idx, train = True):
         encoder_output = None
         if self.encoder.deep and train:
-            encoder_output = self.encoder.forward() #Check what the encoder needs
+            encoder_output = self.encoder.forward(self.hetero_data) #Check what the encoder needs
         
             h_node_types = [self.kg2nodetype[h.item()] for h in h_idx]
             t_node_types = [self.kg2nodetype[t.item()] for t in t_idx]

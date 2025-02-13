@@ -107,8 +107,7 @@ def create_hetero_data(kg, mapping_csv):
 
     kg_to_node_type = {} 
 
-    mapping = pd.read_csv(mapping_csv, sep=",", header=1)
-    type_mapping = mapping[["type","id"]] # Keep only type and id column
+    type_mapping = pd.read_csv(mapping_csv, sep=",", usecols=["type","id"])
 
     # 1. Parse node types and IDs
     df = pd.merge(df, type_mapping.add_prefix("from_"), how="left", left_on="from", right_on="from_id")
