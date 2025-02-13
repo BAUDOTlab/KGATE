@@ -601,6 +601,24 @@ class Architect(Model):
 
         return self.decoder.score(h_normalized, r_embeddings, t_normalized)
 
+    def get_embeddings(self):
+        """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.
+        
+        If the encoder uses heteroData, a dict of {node_type : embedding} is returned for entity embeddings instead of a tensor."""
+        self.normalize_parameters()
+
+        ent_emb = None
+        if self.encoder.deep:
+            ent_emb = {node_type: embedding for node_type, embedding in self.node_embeddings.items()}
+        else:
+            ent_emb = self.node_embeddings.weight.data
+
+        rel_emb = self.rel_emb.weight.data
+
+        decoder_emb = self.decoder.get_embeddings()
+
+        return ent_emb, rel_emb, decoder_emb
+
     def normalize_parameters(self):
         # Some decoders should not normalize parameters or do so in a different way.
         # In this case, they should implement the function themselves and we return it.
