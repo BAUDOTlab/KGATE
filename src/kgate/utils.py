@@ -25,7 +25,9 @@ def parse_config(config_path: str, config_dict: dict) -> dict:
     with open_binary("kgate", "config_template.toml") as f:
         default_config = tomllib.load(f)
 
-    if Path(config_path).exists():
+    config = {}
+
+    if config_path != "":
         logging.info(f'Loading parameters from {config_path}')
         with open(config_path, "rb") as f:
             config = tomllib.load(f)
@@ -35,31 +37,36 @@ def parse_config(config_path: str, config_dict: dict) -> dict:
     # 2. Configuration file (config)
     # 3. Default configuration (default_config)
     # If a default value is None, consider it required and not defaultable
-    config = {key: set_config_key(key, config, default_config, config_dict) for key in default_config}
+    config = {key: set_config_key(key, default_config, config, config_dict) for key in default_config}
 
     return config
 
-def set_config_key(key, config, default, inline = None):
+def set_config_key(key, default, config = None, inline = None):
     if inline is not None and key in inline:
         inline_value = inline[key]
     else:
         inline_value = None
 
+    if config is not None and key in config:
+        config_value = config[key]
+    else: 
+        config_value = None
+
     if isinstance(default[key], dict):
         new_value = {}
         for child_key in default[key]:
-            new_value.update({child_key: set_config_key(child_key, config[key], default[key], inline_value)})
+            new_value.update({child_key: set_config_key(child_key, default[key], config_value,  inline_value)})
         return new_value
     
     if inline_value is None:
-        if key not in config or config[key] is None:
+        if config_value is None:
             if default[key] is None:
                 raise ValueError(f"Parameter {key} is required but not set without a default value.")
             else:
                 logging.info(f"No value set for parameter {key}. Defaulting to {default[key]}")
                 return default[key]
         else:
-            return config[key]
+            return config_value
     else:
         return inline_value
 
