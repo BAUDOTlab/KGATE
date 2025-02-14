@@ -27,6 +27,7 @@ from ignite.handlers import EarlyStopping, ModelCheckpoint, Checkpoint, DiskSave
 import pandas as pd
 import numpy as np
 import yaml
+import platform
 
 # Configure logging
 logging.captureWarnings(True)
@@ -50,7 +51,11 @@ class Architect(Model):
 
         # If given, restrict the parallelisation to user-defined threads.
         # Otherwise, use all the cores the process has access to.
-        num_cores = num_cores if num_cores > 0 else len(os.sched_getaffinity(0))
+            
+        if platform.system() == "Windows":
+            num_cores = num_cores if num_cores > 0 else os.cpu_count()
+        else:
+            num_cores = num_cores if num_cores > 0 else len(os.sched_getaffinity(0))
         logging.info(f"Setting number of threads to {num_cores}")
         torch.set_num_threads(num_cores)
 
