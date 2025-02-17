@@ -1,6 +1,6 @@
 from torchkge.models import TransEModel, TransHModel
 from torch.nn.functional import normalize
-from torch import tensor
+from torch import tensor, split
 from torch.cuda import empty_cache
 import torch
 from tqdm import tqdm
@@ -17,7 +17,7 @@ class TransE(TransEModel):
     def get_embeddigs(self):
         return None
     
-    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, kg2nodetype=None, kg2het=None, entities=True):
+    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings, entities=True):
         """
         Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
@@ -47,23 +47,30 @@ class TransE(TransEModel):
         """
         b_size = h_idx.shape[0]
 
+        h_emb_list = []
+        t_emb_list = []
         # Get head, tail and relation embeddings
-        if kg2nodetype is not None:
-            h = torch.cat([node_embeddings[kg2nodetype[h_id.item()]].weight.data[kg2het[h_id]] for h_id in h_idx], dim=0)
-            t = torch.cat([node_embeddings[kg2nodetype[t_id.item()]].weight.data[kg2het[t_id]] for t_id in t_idx], dim=0)
-        else:
-            h = node_embeddings(h_idx)
-            t = node_embeddings(t_idx)
+        for h_id in h_idx:
+            node_type = mappings.kg_to_node_type[h_id.item()]
+            h_emb  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][h_id.item()]]
+            h_emb_list.append(h_emb)
+        for t_id in t_idx:
+            node_type = mappings.kg_to_node_type[t_id.item()]
+            t_emb  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][t_id.item()]]
+            t_emb_list.append(t_emb)
+
+        
+        h = torch.stack(h_emb_list, dim=0) if len(h_emb_list) != 0 else tensor([]).long()
+        t = torch.stack(t_emb_list, dim=0) if len(t_emb_list) != 0 else tensor([]).long()
+
+
         r = relation_embeddings(r_idx)
 
         if entities:
             # Prepare candidates for every entities
-            if kg2nodetype is not None:
-                # TODO : ensure candidates don't have index issues
-                candidates = torch.cat([embedding.weight.data for embedding in self.node_embeddings.values()], dim=0)
-                candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
-            else:
-                candidates = node_embeddings.weight.data.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
+            # TODO : ensure candidates don't have index issues
+            candidates = torch.cat([emb for embedding in node_embeddings.values() for emb in split(embedding.weight.data, 1)])
+            candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
             candidates = relation_embeddings.weight.data.unsqueeze(0).expand(b_size, -1, -1)
@@ -116,7 +123,7 @@ class TransH(TransHModel):
 
         return proj_h, proj_t, r, candidates
 
-    def evaluate_projections(self, node_embeddings, kg2nodetype=None, kg2het=None):
+    def evaluate_projections(self, node_embeddings, mappings):
         """Link prediction evaluation helper function. Project all entities
         according to each relation. Calling this method at the beginning of
         link prediction makes the process faster by computing projections only
@@ -134,10 +141,7 @@ class TransH(TransHModel):
             if norm_vect.is_cuda:
                 empty_cache()
             
-            if not isinstance(node_embeddings, torch.nn.Embedding):
-                ent = node_embeddings[kg2nodetype[mask.item()]].weight.data[kg2het[mask]]
-            else:
-                ent = node_embeddings(mask)
+            ent = node_embeddings[mappings.kg_to_node_type[mask.item()]].weight.data[mappings.kg_to_hetero[mask]]
 
             norm_components = (ent.view(1, -1) * norm_vect).sum(dim=1)
             self.projected_entities[:, i, :] = (ent.view(1, -1) - norm_components.view(-1, 1) * norm_vect)

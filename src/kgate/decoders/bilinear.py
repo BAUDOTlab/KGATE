@@ -18,7 +18,7 @@ class RESCAL(RESCALModel):
     def get_embeddings(self):
         return self.rel_mat.weight.data.view(-1, self.emb_dim, self.emb_dim)
     
-    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, _, mapping=None,  entities=True):
+    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, _, mappings,  entities=True):
         """Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
         `inference_scoring_function` method. See torchkge.models.interfaces.Models for
@@ -31,20 +31,14 @@ class RESCAL(RESCALModel):
         t = node_embeddings(t_idx)
         r_mat = self.rel_mat(r_idx).view(-1, self.emb_dim, self.emb_dim)
 
-        if mapping is not None:
-            h = torch.cat([node_embeddings[mapping[h_id.item()]].weight.data[h_id] for h_id in h_idx], dim=0)
-            t = torch.cat([node_embeddings[mapping[t_id.item()]].weight.data[t_id] for t_id in t_idx], dim=0)
-        else:
-            h = node_embeddings(h_idx)
-            t = node_embeddings(t_idx)
+        h = torch.cat([node_embeddings[mappings.kg_to_node_type[h_id.item()]].weight.data[mappings.kg_to_hetero[h_id]] for h_id in h_idx], dim=0)
+        t = torch.cat([node_embeddings[mappings.kg_to_node_type[t_id.item()]].weight.data[mappings.kg_to_hetero[t_id]] for t_id in t_idx], dim=0)
+
             
         if entities:
             # Prepare candidates for every entities
-            if mapping is not None:
-                candidates = torch.cat([embedding.weight.data for embedding in self.node_embeddings.values()], dim=0)
-                candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
-            else:
-                candidates = node_embeddings.weight.data.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
+            candidates = torch.cat([embedding.weight.data for embedding in self.node_embeddings.values()], dim=0)
+            candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
             candidates = self.rel_mat.weight.data.unsqueeze(0).expand(b_size, -1, -1, -1)
@@ -64,7 +58,7 @@ class DistMult(DistMultModel):
         return False
     
     # TODO: if possible, factorize this
-    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mapping=None, entities=True):
+    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings=None, entities=True):
         """
         Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
@@ -95,21 +89,15 @@ class DistMult(DistMultModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        if mapping is not None:
-            h = torch.cat([node_embeddings[mapping[h_id.item()]].weight.data[h_id] for h_id in h_idx], dim=0)
-            t = torch.cat([node_embeddings[mapping[t_id.item()]].weight.data[t_id] for t_id in t_idx], dim=0)
-        else:
-            h = node_embeddings(h_idx)
-            t = node_embeddings(t_idx)
+        h = torch.cat([node_embeddings[mappings.kg_to_node_type[h_id.item()]].weight.data[mappings.kg_to_hetero[h_id]] for h_id in h_idx], dim=0)
+        t = torch.cat([node_embeddings[mappings.kg_to_node_type[t_id.item()]].weight.data[mappings.kg_to_hetero[t_id]] for t_id in t_idx], dim=0)
+
         r = relation_embeddings(r_idx)
 
         if entities:
             # Prepare candidates for every entities
-            if mapping is not None:
-                candidates = torch.cat([embedding.weight.data for embedding in self.node_embeddings.values()], dim=0)
-                candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
-            else:
-                candidates = node_embeddings.weight.data.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
+            candidates = torch.cat([embedding.weight.data for embedding in self.node_embeddings.values()], dim=0)
+            candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
             candidates = relation_embeddings.weight.data.unsqueeze(0).expand(b_size, -1, -1)

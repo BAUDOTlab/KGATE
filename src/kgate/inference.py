@@ -121,7 +121,7 @@ class KEntityInference(EntityInference):
     def __init__(self, model, known_entities, known_relations, top_k=1, missing='tails', dictionary=None):
         super().__init__(model, known_entities, known_relations, top_k, missing, dictionary)
 
-    def evaluate(self, b_size, node_embeddings, relation_embeddings, mapping=None, verbose=True):
+    def evaluate(self, b_size, node_embeddings, relation_embeddings, mapping, verbose=True):
         with torch.no_grad():
             use_cuda = next(self.model.parameters()).is_cuda
             device = "cuda" if use_cuda else "cpu"
@@ -153,7 +153,8 @@ class KEntityInference(EntityInference):
                     scores = filter_scores(scores, self.dictionary, known_ents, known_rels, None)
 
                 scores, indices = scores.sort(descending=True)
-
+                b_size = min(b_size, len(scores))
+                
                 self.predictions[i * b_size: (i+1)*b_size] = indices[:, :self.top_k]
                 self.scores[i*b_size, (i+1)*b_size] = scores[:, :self.top_k]
 

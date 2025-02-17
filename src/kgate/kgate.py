@@ -6,7 +6,7 @@ import torchkge.sampling as sampling
 import torch
 from torch import tensor, long, stack
 from torch.nn.functional import normalize
-from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, create_hetero_data, init_embedding
+from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, HeteroMappings, init_embedding, plot_learning_curves
 from .preprocessing import prepare_knowledge_graph
 from .encoders import *
 from .decoders import *
@@ -75,6 +75,11 @@ class Architect(Model):
         self.rel_emb_dim = self.config["model"]["rel_emb_dim"]
         self.eval_batch_size = self.config["training"]["eval_batch_size"]
 
+        if self.config["metadata_csv"] != "" and Path(self.config["metadata_csv"]).exists():
+            self.metadata = pd.read_csv(self.config["metadata_csv"], sep=",", usecols=["type","id"])
+        else:
+            self.metadata = None
+
         run_kg_prep =  self.config["run_kg_preprocess"]
 
         if run_kg_prep:
@@ -99,9 +104,9 @@ class Architect(Model):
             case "Default":
                 encoder = DefaultEncoder()
             case "GCN": 
-                encoder = GCNEncoder(self.node_embeddings, self.hetero_data, self.emb_dim, gnn_layers)
+                encoder = GCNEncoder(self.node_embeddings, self.mappings.data, self.emb_dim, gnn_layers)
             case "GAT":
-                encoder = GATEncoder(self.node_embeddings, self.hetero_data, self.emb_dim, gnn_layers)
+                encoder = GATEncoder(self.node_embeddings, self.mappings.data, self.emb_dim, gnn_layers)
 
         return encoder
 
@@ -245,23 +250,20 @@ class Architect(Model):
         self.train_batch_size = training_config["train_batch_size"]
         self.patience = training_config["patience"]
         self.eval_interval = training_config["eval_interval"]
-        self.kg2nodetype = None
-        # If we use a deep learning encoder, then we need to have HeteroData
-        if self.config["model"]["encoder"]["name"] != "Default":
-            logging.info("Creating Hetero Data from KG...")
-            self.hetero_data, self.kg2het, self.het2kg, _, self.kg2nodetype = create_hetero_data(self.kg_train, self.config["metadata_csv"])
-            self.hetero_data = self.hetero_data.to(self.device)
+        # We make hetero data from our KG. 
+        # If no mapping is provided, there will be only one node type.
+        logging.info("Creating Hetero Data from KG...")
+        self.mappings = HeteroMappings(self.kg_train, self.metadata)
+        self.mappings.data = self.mappings.data.to(self.device)
 
-            self.node_embeddings = nn.ModuleDict()
-            for node_type in self.hetero_data.node_types:
-                num_nodes = self.hetero_data[node_type].num_nodes
-                if node_type in attributes and isinstance(attributes[node_type], nn.Embedding):
-                    assert self.emb_dim == attributes[node_type].embedding_dim, f"The embedding dimensions of attribute embeddings must be the same as the model embedding dimensions ({self.emb_dim}, found {attributes[node_type].embedding_dim})"
-                    self.node_embeddings[node_type] = attributes[node_type]
-                else:
-                    self.node_embeddings[node_type] = init_embedding(num_nodes, self.emb_dim, self.device)
-        else:
-            self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
+        self.node_embeddings = nn.ModuleDict()
+        for node_type in self.mappings.data.node_types:
+            num_nodes = self.mappings.data[node_type].num_nodes
+            if node_type in attributes and isinstance(attributes[node_type], nn.Embedding):
+                assert self.emb_dim == attributes[node_type].embedding_dim, f"The embedding dimensions of attribute embeddings must be the same as the model embedding dimensions ({self.emb_dim}, found {attributes[node_type].embedding_dim})"
+                self.node_embeddings[node_type] = attributes[node_type]
+            else:
+                self.node_embeddings[node_type] = init_embedding(num_nodes, self.emb_dim, self.device)
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
         logging.info("Initializing encoder...")
@@ -395,7 +397,7 @@ class Architect(Model):
         #################
         # Report metrics
         #################
-        self.plot_learning_curves(self.training_metrics_file)
+        plot_learning_curves(self.training_metrics_file, self.config["output_directory"])
 
     def test(self):
         torch.cuda.empty_cache()
@@ -473,7 +475,7 @@ class Architect(Model):
         evaluator.evaluate(self.eval_batch_size, 
                         self.decoder, inference_kg,
                         self.node_embeddings, self.rel_emb,
-                        self.kg2nodetype, verbose=True)
+                        self.mappings, verbose=True)
             
         inference_mrr = evaluator.mrr()[1]
         inference_hit10 = evaluator.hit_at_k(10)[1]
@@ -512,7 +514,7 @@ class Architect(Model):
             tails = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in tails])
             inference = KRelationInference(self.decoder, heads, tails, dictionary=self.kg_train.dict_of_rels, top_k=topk)
 
-        inference.evaluate(self.eval_batch_size, self.node_embeddings, self.rel_emb)
+        inference.evaluate(self.eval_batch_size, self.node_embeddings, self.rel_emb, self.mappings)
 
         ix2ent = {v: k for k, v in self.kg_train.ent2ix.items()}
         pred_idx = inference.predictions.reshape(-1).T
@@ -523,7 +525,14 @@ class Architect(Model):
         self.predictions = pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
 
     def load_best_model(self):
-        self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
+        logging.info("Creating Hetero Data from KG...")
+        self.mappings = HeteroMappings(self.kg_train, self.metadata)
+        self.mappings.data = self.mappings.data.to(self.device)
+
+        self.node_embeddings = nn.ModuleDict()
+        for node_type in self.mappings.data.node_types:
+            num_nodes = self.mappings.data[node_type].num_nodes
+            self.node_embeddings[node_type] = init_embedding(num_nodes, self.emb_dim, self.device)
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
 
@@ -545,11 +554,6 @@ class Architect(Model):
         self.decoder.to(self.device)
         logging.info("Best model successfully loaded.")
 
-        self.kg2nodetype = None
-        # If we use a deep learning encoder, then we need to have HeteroData
-        if self.config["model"]["encoder"]["name"] != "Default":
-            logging.info("Creating Hetero Data from KG...")
-            self.hetero_data, self.kg2het, self.het2kg, _, self.kg2nodetype = create_hetero_data(self.kg_test, self.config["metadata_csv"])
 
     def process_batch(self, engine, batch):
         h, t, r = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)
@@ -571,23 +575,25 @@ class Architect(Model):
 
     def scoring_function(self, h_idx, t_idx, r_idx, train = True):
         encoder_output = None
-        if self.encoder.deep and train:
-            encoder_output = self.encoder.forward(self.hetero_data) #Check what the encoder needs
-        
-            h_node_types = [self.kg2nodetype[h.item()] for h in h_idx]
-            t_node_types = [self.kg2nodetype[t.item()] for t in t_idx]
+
+        h_node_types = [self.mappings.kg_to_node_type[h.item()] for h in h_idx]
+        t_node_types = [self.mappings.kg_to_node_type[t.item()] for t in t_idx]
+
+        try:
+            h_het_idx = tensor([
+                self.mappings.kg_to_hetero[h_type][h.item()] for h, h_type in zip(h_idx, h_node_types)
+            ], dtype=long, device=h_idx.device)
+            t_het_idx = tensor([
+                self.mappings.kg_to_hetero[t_type][t.item()] for t, t_type in zip(t_idx, t_node_types)
+            ], dtype=long, device=t_idx.device)
+        except KeyError as e:
+            logging.error(f"Mapping error on node ID: {e}")
+            raise
+
+
+        if train and self.encoder.deep:
+            encoder_output = self.encoder.forward(self.mappings.data) #Check what the encoder needs
     
-            try:
-                h_het_idx = tensor([
-                    self.kg2het[h_type][h.item()] for h, h_type in zip(h_idx, h_node_types)
-                ], dtype=long, device=h_idx.device)
-                t_het_idx = tensor([
-                    self.kg2het[t_type][t.item()] for t, t_type in zip(t_idx, t_node_types)
-                ], dtype=long, device=t_idx.device)
-            except KeyError as e:
-                logging.error(f"Mapping error on node ID: {e}")
-                raise
-        
             h_embeddings = stack([
                 encoder_output[h_type][h_idx_item] for h_type, h_idx_item in zip(h_node_types, h_het_idx)
             ])
@@ -595,9 +601,12 @@ class Architect(Model):
                 encoder_output[t_type][t_idx_item] for t_type, t_idx_item in zip(t_node_types, t_het_idx)
             ])
         else:
-            h_embeddings = self.node_embeddings(h_idx)
-            t_embeddings = self.node_embeddings(t_idx)
-
+            h_embeddings = stack([
+                self.node_embeddings[h_type](h_idx_item) for h_type, h_idx_item in zip(h_node_types, h_het_idx)
+            ])
+            t_embeddings = stack([
+                self.node_embeddings[t_type](t_idx_item) for t_type, t_idx_item in zip(t_node_types, t_het_idx)
+            ])
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 
         # Normalize entities (heads and tails)
@@ -613,10 +622,8 @@ class Architect(Model):
         self.normalize_parameters()
 
         ent_emb = None
-        if self.encoder.deep:
-            ent_emb = {node_type: embedding for node_type, embedding in self.node_embeddings.items()}
-        else:
-            ent_emb = self.node_embeddings.weight.data
+        
+        ent_emb = {node_type: embedding for node_type, embedding in self.node_embeddings.items()}
 
         rel_emb = self.rel_emb.weight.data
 
@@ -634,13 +641,11 @@ class Architect(Model):
             stop_norm = normalize_func(rel_emb = self.rel_emb, ent_emb = self.node_embeddings)
             if stop_norm: return
         
-        if self.encoder.deep:
-            for node_type, embedding in self.node_embeddings.items():
-                normalized_embedding = normalize(embedding.weight.data, p=2, dim=1)
-                embedding.weight.data = normalized_embedding
-                logging.debug(f"Normalized embeddings for node type '{node_type}'")
-        else:
-            self.node_embeddings.weight.data = normalize(self.node_embeddings.weight.data, p=2, dim=1)
+        for node_type, embedding in self.node_embeddings.items():
+            normalized_embedding = normalize(embedding.weight.data, p=2, dim=1)
+            embedding.weight.data = normalized_embedding
+            logging.debug(f"Normalized embeddings for node type '{node_type}'")
+
         logging.debug(f"Normalized all embeddings")
 
         # Normaliser les embeddings des relations
@@ -832,7 +837,7 @@ class Architect(Model):
         evaluator.evaluate(self.eval_batch_size,
                         self.decoder, kg,
                         self.node_embeddings, self.rel_emb,
-                        self.kg2nodetype, verbose=True)
+                        self.mappings, verbose=True)
         
         test_mrr = evaluator.mrr()[1]
         return test_mrr
