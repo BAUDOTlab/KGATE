@@ -613,7 +613,12 @@ class Architect(Model):
         h_normalized = normalize(h_embeddings, p=2, dim=1)
         t_normalized = normalize(t_embeddings, p=2, dim=1)
 
-        return self.decoder.score(h_normalized, r_embeddings, t_normalized)
+        return self.decoder.score(h_norm = h_normalized,
+                                  rel_emb = r_embeddings, 
+                                  t_norm = t_normalized, 
+                                  h_idx = h_idx, 
+                                  r_idx = r_idx, 
+                                  t_idx = t_idx)
 
     def get_embeddings(self):
         """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.

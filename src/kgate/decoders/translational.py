@@ -11,13 +11,13 @@ class TransE(TransEModel):
     def __init__(self, emb_dim, n_entities, n_relations, dissimilarity_type):
         super().__init__(emb_dim, n_entities, n_relations, dissimilarity_type=dissimilarity_type)
 
-    def score(self, h_norm, r_emb, t_norm, **_):
+    def score(self, *, h_norm, r_emb, t_norm, **_):
         return -self.dissimilarity(h_norm + r_emb, t_norm)
     
     def get_embeddigs(self):
         return None
     
-    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings, entities=True):
+    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings, entities=True):
         """
         Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
@@ -81,7 +81,7 @@ class TransH(TransHModel):
     def __init__(self, emb_dim, n_entities, n_relations):
         super().__init__(emb_dim, n_entities, n_relations)
 
-    def score(self, h_norm, r_emb, t_norm, *, r_idx, **_):
+    def score(self, *, h_norm, r_emb, t_norm, r_idx, **_):
         norm_vect = normalize(self.norm_vect(r_idx, p=2, dim=1))
         return - self.dissimilarity(self.project(h_norm, norm_vect) + r_emb,
                                     self.project(t_norm, norm_vect))
@@ -97,7 +97,7 @@ class TransH(TransHModel):
     def get_embeddings(self):
         return self.norm_vect.weight.data
     
-    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mapping=None, entities=True):
+    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mapping=None, entities=True):
         """Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
         `inference_scoring_function` method. See torchkge.models.interfaces.Models for

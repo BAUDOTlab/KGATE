@@ -95,7 +95,13 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
                              unit='batch', disable=(not verbose),
                              desc='Link prediction evaluation'):
             h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
-            h_emb, t_emb, r_emb, candidates = decoder.inference_prepare_candidates(h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings, entities=True)
+            h_emb, t_emb, r_emb, candidates = decoder.inference_prepare_candidates(h_idx = h_idx, 
+                                                                                   t_idx = t_idx, 
+                                                                                   r_idx = r_idx, 
+                                                                                   node_embeddings = node_embeddings, 
+                                                                                   relation_embeddings = relation_embeddings, 
+                                                                                   mappings = mappings, 
+                                                                                   entities=True)
 
             scores = decoder.inference_scoring_function(h_emb, candidates, r_emb)
             filt_scores = filter_scores(scores, knowledge_graph.dict_of_tails, h_idx, r_idx, t_idx)

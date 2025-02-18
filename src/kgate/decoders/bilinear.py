@@ -1,7 +1,7 @@
 from torchkge.models import DistMultModel, RESCALModel
 from torch.nn.functional import normalize
 import torch
-from torch import matmul
+from torch import matmul, tensor
 from ..utils import init_embedding
 
 class RESCAL(RESCALModel):
@@ -10,7 +10,7 @@ class RESCAL(RESCALModel):
 
         self.rel_mat = init_embedding(self.n_rel, self.emb_dim * self.emb_dim)
 
-    def score(self, h_norm, _, t_norm, r_idx, **__):
+    def score(self, *, h_norm, t_norm, r_idx, **_):
         r = self.rel_mat(r_idx).view(-1, self.emb_dim, self.emb_dim)
         hr = matmul(h_norm.view(-1, 1, self.emb_dim), r)
         return (hr.view(-1, self.emb_dim) * t_norm).sum(dim=1)
@@ -18,7 +18,7 @@ class RESCAL(RESCALModel):
     def get_embeddings(self):
         return self.rel_mat.weight.data.view(-1, self.emb_dim, self.emb_dim)
     
-    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, _, mappings,  entities=True):
+    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, mappings, entities=True):
         """Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
         `inference_scoring_function` method. See torchkge.models.interfaces.Models for
@@ -50,15 +50,15 @@ class DistMult(DistMultModel):
     def __init__(self, emb_dim, n_entities, n_relations):
         super().__init__(emb_dim, n_entities, n_relations)
     
-    def score(self, h_norm, r_emb, t_norm, **_):
+    def score(self, *, h_norm, r_emb, t_norm, **_):
         return (h_norm * r_emb * t_norm).sum(dim=1)
     
-    def normalize_parameters(self, rel_emb, **_):
+    def normalize_parameters(self, *, rel_emb, **_):
         rel_emb.weight.data = normalize(rel_emb.weight.data, p=2, dim=1)
         return False
     
     # TODO: if possible, factorize this
-    def inference_prepare_candidates(self, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings=None, entities=True):
+    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings=None, entities=True):
         """
         Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
@@ -89,8 +89,21 @@ class DistMult(DistMultModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        h = torch.cat([node_embeddings[mappings.kg_to_node_type[h_id.item()]].weight.data[mappings.kg_to_hetero[h_id]] for h_id in h_idx], dim=0)
-        t = torch.cat([node_embeddings[mappings.kg_to_node_type[t_id.item()]].weight.data[mappings.kg_to_hetero[t_id]] for t_id in t_idx], dim=0)
+        h_emb_list = []
+        t_emb_list = []
+        
+        for h_id in h_idx:
+            node_type = mappings.kg_to_node_type[h_id.item()]
+            h_emb  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][h_id.item()]]
+            h_emb_list.append(h_emb)
+        for t_id in t_idx:
+            node_type = mappings.kg_to_node_type[t_id.item()]
+            t_emb  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][t_id.item()]]
+            t_emb_list.append(t_emb)
+
+        
+        h = torch.stack(h_emb_list, dim=0) if len(h_emb_list) != 0 else tensor([]).long()
+        t = torch.stack(t_emb_list, dim=0) if len(t_emb_list) != 0 else tensor([]).long()
 
         r = relation_embeddings(r_idx)
 
