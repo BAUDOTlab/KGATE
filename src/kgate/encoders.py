@@ -29,23 +29,23 @@ class GNN(nn.Module):
     
 
 class GATEncoder(GNN):
-    def __init__(self, node_embeddings, hetero_data, emb_dim, num_gat_layers=2, aggr='sum'):
+    def __init__(self, node_embeddings, hetero_data, emb_dim, num_gat_layers=2, aggr='sum', device="cuda"):
         super().__init__(node_embeddings, aggr)
         
-        # Définition des couches GCN multiples pour chaque type d'arête
         for layer in range(num_gat_layers):
+            # Add_self_loops doesn't work on heterogeneous graphs as per https://github.com/pyg-team/pytorch_geometric/issues/8121#issuecomment-1751129825  
             conv = HeteroConv(
-                {edge_type: GATv2Conv(emb_dim, emb_dim) for edge_type in hetero_data.edge_types},
+                {edge_type: GATv2Conv(emb_dim, emb_dim, add_self_loops=False) for edge_type in hetero_data.edge_types},
                 aggr=self.aggr
-            )
+            ).to(device)
             self.convs.append(conv)
         
 class GCNEncoder(GNN):
-    def __init__(self, node_embeddings, hetero_data, emb_dim, num_gcn_layers=2, aggr="sum"):
+    def __init__(self, node_embeddings, hetero_data, emb_dim, num_gcn_layers=2, aggr="sum", device="cuda"):
         super().__init__(node_embeddings, aggr)
         for layer in range(num_gcn_layers):
             conv = HeteroConv(
                 {edge_type: SAGEConv(emb_dim, emb_dim, aggr="mean") for edge_type in hetero_data.edge_types},
                 aggr=self.aggr
-            ).to("cuda")
+            ).to(device)
             self.convs.append(conv)
