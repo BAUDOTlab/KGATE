@@ -82,7 +82,7 @@ class TransH(TransHModel):
         super().__init__(emb_dim, n_entities, n_relations)
 
     def score(self, *, h_norm, r_emb, t_norm, r_idx, **_):
-        norm_vect = normalize(self.norm_vect(r_idx, p=2, dim=1))
+        norm_vect = normalize(self.norm_vect(r_idx), p=2, dim=1)
         return - self.dissimilarity(self.project(h_norm, norm_vect) + r_emb,
                                     self.project(t_norm, norm_vect))
 
@@ -97,7 +97,7 @@ class TransH(TransHModel):
     def get_embeddings(self):
         return self.norm_vect.weight.data
     
-    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mapping=None, entities=True):
+    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings, entities=True):
         """Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
         `inference_scoring_function` method. See torchkge.models.interfaces.Models for
@@ -107,7 +107,7 @@ class TransH(TransHModel):
         b_size = h_idx.shape[0]
 
         if not self.evaluated_projections:
-            self.evaluate_projections(node_embeddings)
+            self.evaluate_projections(node_embeddings, mappings)
 
         r = relation_embeddings(r_idx)
 
@@ -140,8 +140,9 @@ class TransH(TransHModel):
 
             if norm_vect.is_cuda:
                 empty_cache()
-            
-            ent = node_embeddings[mappings.kg_to_node_type[mask.item()]].weight.data[mappings.kg_to_hetero[mask]]
+
+            node_type = mappings.kg_to_node_type[mask.item()]
+            ent  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][mask.item()]]
 
             norm_components = (ent.view(1, -1) * norm_vect).sum(dim=1)
             self.projected_entities[:, i, :] = (ent.view(1, -1) - norm_components.view(-1, 1) * norm_vect)

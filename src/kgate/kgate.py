@@ -122,12 +122,17 @@ class Architect(Model):
                 decoder = TransE(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel,
                             dissimilarity_type=dissimilarity)
                 criterion = MarginLoss(margin)
+            case "TransH":
+                decoder = TransH(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
+                criterion = MarginLoss(margin)
             case "RESCAL":
                 decoder = RESCAL(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
                 criterion = BinaryCrossEntropyLoss()
             case "DistMult":
                 decoder = DistMult(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
                 criterion = BinaryCrossEntropyLoss()
+            case _:
+                raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
 
         return decoder, criterion
 
@@ -614,7 +619,7 @@ class Architect(Model):
         t_normalized = normalize(t_embeddings, p=2, dim=1)
 
         return self.decoder.score(h_norm = h_normalized,
-                                  rel_emb = r_embeddings, 
+                                  r_emb = r_embeddings, 
                                   t_norm = t_normalized, 
                                   h_idx = h_idx, 
                                   r_idx = r_idx, 
