@@ -1,2 +1,2 @@
-from .translational import TransE, TransH
+from .translational import TransE, TransH, TransR, TransD
 from .bilinear import RESCAL, DistMult

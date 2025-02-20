@@ -125,6 +125,12 @@ class Architect(Model):
             case "TransH":
                 decoder = TransH(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
                 criterion = MarginLoss(margin)
+            case "TransR":
+                decoder = TransR(self.emb_dim, self.rel_emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
+                criterion = MarginLoss(margin)
+            case "TransD":
+                decoder = TransD(self.emb_dim, self.rel_emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
+                criterion = MarginLoss(margin)
             case "RESCAL":
                 decoder = RESCAL(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
                 criterion = BinaryCrossEntropyLoss()
@@ -644,7 +650,7 @@ class Architect(Model):
     def normalize_parameters(self):
         # Some decoders should not normalize parameters or do so in a different way.
         # In this case, they should implement the function themselves and we return it.
-        normalize_func = getattr(self.decoder, "normalize_parameters", None)
+        normalize_func = getattr(self.decoder, "normalize_params", None)
         # If the function only accept one parameter, it is the base torchKGE one,
         # we don't want that.
         if callable(normalize_func) and len(signature(normalize_func).parameters) > 1:

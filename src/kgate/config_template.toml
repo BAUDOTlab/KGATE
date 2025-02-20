@@ -70,7 +70,7 @@ T_0 = 10
 T_mult = 2
 
 [training]
-max_epochs = 2000
+max_epochs = 100
 patience = 20
 train_batch_size = 2048
 eval_interval = 10

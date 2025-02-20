@@ -1,4 +1,4 @@
-from torchkge.models import DistMultModel, RESCALModel
+from torchkge.models import DistMultModel, RESCALModel, AnalogyModel
 from torch.nn.functional import normalize
 import torch
 from torch import matmul, tensor
@@ -124,4 +124,3 @@ class DistMult(DistMultModel):
             candidates = relation_embeddings.weight.data.unsqueeze(0).expand(b_size, -1, -1)
         
         return h, t, r, candidates
-    
