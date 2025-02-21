@@ -1,6 +1,7 @@
 import os
 from inspect import signature
 from pathlib import Path
+from torchkge import KnowledgeGraph
 from torchkge.models import Model
 import torchkge.sampling as sampling
 import torch
@@ -12,7 +13,7 @@ from .encoders import *
 from .decoders import *
 from .data_structures import KGATEGraph
 from .samplers import FixedPositionalNegativeSampler
-from .evaluators import KLinkPredictionEvaluator
+from .evaluators import KLinkPredictionEvaluator, KTripletClassificationEvaluator
 from .inference import KEntityInference, KRelationInference
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss, DataLoader
 import logging
@@ -84,18 +85,24 @@ class Architect(Model):
 
         if run_kg_prep:
             logging.info(f"Preparing KG...")
-            self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config)
+            self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config, kg)
             logging.info("KG preprocessed.")
         else:
-            logging.info("Loading KG...")
-            self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(self.config["kg_pkl"])
-            logging.info("Done")
+            if kg is not None:
+                logging.info("Using given KG...")
+                if isinstance(kg, (KnowledgeGraph,KnowledgeGraph,KnowledgeGraph)):
+                    self.kg_train, self.kg_val, self.kg_test = kg
+                else:
+                    raise ValueError("Given KG needs to be either a tuple of training, validation and test KG if it is not preprocessed.")
+            else:
+                logging.info("Loading KG...")
+                self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(self.config["kg_pkl"])
+                logging.info("Done")
 
         super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
 
 
     def initialize_encoder(self):
-        metadata_csv = self.config["metadata_csv"]
         encoder_config = self.config["model"]["encoder"]
         encoder_name = encoder_config["name"]
         gnn_layers = encoder_config["gnn_layer_number"]
@@ -246,6 +253,17 @@ class Architect(Model):
         
         logging.info(f"Scheduler '{scheduler_type}' initialized with parameters: {scheduler_params}")
         return scheduler
+
+    def initialize_evaluator(self):
+        match self.config["evaluator"]:
+            case "Link Prediction":
+                self.evaluator = KLinkPredictionEvaluator()
+            case "Triplet Classification":
+                self.evaluator = KTripletClassificationEvaluator()
+            case _:
+                raise NotImplementedError(f"The requested evaluator {self.config['evaluator']} is not implemented.")
+            
+        logging.info(f"Using {self.config['evaluator']} evaluator.")
 
     def train(self, checkpoint_file=None, attributes={}):
         """Launch the training procedure of the Architect.
@@ -481,15 +499,13 @@ class Architect(Model):
         inference_df = pd.read_csv(inference_kg_path, sep="\t")
         inference_kg = KGATEGraph(df = inference_df, ent2ix=self.kg_train.ent2ix, rel2ix=self.kg_train.rel2ix) 
         
-        # TODO : use node classification inference
-        evaluator = KLinkPredictionEvaluator()
-        evaluator.evaluate(self.eval_batch_size, 
+        self.evaluator.evaluate(self.eval_batch_size, 
                         self.decoder, inference_kg,
                         self.node_embeddings, self.rel_emb,
                         self.mappings, verbose=True)
             
-        inference_mrr = evaluator.mrr()[1]
-        inference_hit10 = evaluator.hit_at_k(10)[1]
+        inference_mrr = self.evaluator.mrr()[1]
+        inference_hit10 = self.evaluator.hit_at_k(10)[1]
 
         results = {"Inference MRR": inference_mrr, "Inference hit@10:": inference_hit10}
 
@@ -849,11 +865,10 @@ class Architect(Model):
     def link_pred(self, kg):
         """Link prediction evaluation on test set."""
         # Test MRR measure
-        evaluator = KLinkPredictionEvaluator()
-        evaluator.evaluate(self.eval_batch_size,
+        self.evaluator.evaluate(self.eval_batch_size,
                         self.decoder, kg,
                         self.node_embeddings, self.rel_emb,
                         self.mappings, verbose=True)
         
-        test_mrr = evaluator.mrr()[1]
+        test_mrr = self.evaluator.mrr()[1]
         return test_mrr

@@ -7,15 +7,23 @@ from torch import cat
 
 from .utils import set_random_seeds, compute_triplet_proportions
 from .data_structures import KGATEGraph
+from torchkge import KnowledgeGraph
 
-def prepare_knowledge_graph(config):
+def prepare_knowledge_graph(config, kg=None):
     """Prepare and clean the knowledge graph."""
     # Load knowledge graph
-    input_file = config["kg_csv"]
-    kg_df = pd.read_csv(input_file, sep="\t", usecols=["from", "to", "rel"]) # QUESTION : \t or , ?
+    if kg is None:
+        input_file = config["kg_csv"]
+        kg_df = pd.read_csv(input_file, sep="\t", usecols=["from", "to", "rel"]) # QUESTION : \t or , ?
 
-    kg = KGATEGraph(df=kg_df)
-
+        kg = KGATEGraph(df=kg_df)
+    else:
+        if isinstance(kg, KnowledgeGraph):
+            if isinstance(kg, KGATEGraph):
+                kg = kg
+            else:
+                kg = KGATEGraph(kg=kg)
+                
     # Clean and process knowledge graph
     kg_train, kg_val, kg_test = clean_knowledge_graph(kg, config)
 
