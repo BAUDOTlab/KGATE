@@ -14,6 +14,7 @@ from torchkge.evaluation import LinkPredictionEvaluator
 from torchkge.exceptions import NotYetEvaluatedError
 from torchkge.sampling import PositionalNegativeSampler
 from torchkge.utils import DataLoader, get_rank, filter_scores
+from torchkge.data_structures import SmallKG
 
 class KLinkPredictionEvaluator(LinkPredictionEvaluator):
     """Evaluate performance of given embedding using link prediction method.
