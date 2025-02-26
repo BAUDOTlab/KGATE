@@ -13,6 +13,9 @@ import os
 from importlib.resources import open_binary
 import matplotlib.pyplot as plt
 
+from typing import List, Tuple
+from .data_structures import KGATEGraph
+
 log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
 logging.basicConfig(
     level=log_level,  
@@ -42,7 +45,7 @@ def parse_config(config_path: str, config_dict: dict) -> dict:
 
     return config
 
-def set_config_key(key, default, config = None, inline = None):
+def set_config_key(key: str, default: dict, config: dict | None = None, inline: dict | None = None) -> str | int | list | dict:
     if inline is not None and key in inline:
         inline_value = inline[key]
     else:
@@ -71,7 +74,7 @@ def set_config_key(key, default, config = None, inline = None):
     else:
         return inline_value
 
-def load_knowledge_graph(pickle_filename):
+def load_knowledge_graph(pickle_filename: str):
     """Load the knowledge graph from pickle files."""
     logging.info(f'Will not run the preparation step. Using KG stored in: {pickle_filename}')
     with open(pickle_filename, 'rb') as file:
@@ -87,11 +90,11 @@ def set_random_seeds(seed: int) -> None:
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-def extract_node_type(node_name):
+def extract_node_type(node_name: str):
     """Extracts the node type from the node name, based on the string before the first underscore."""
     return node_name.split('_')[0]
 
-def compute_triplet_proportions(kg_train, kg_test, kg_val):
+def compute_triplet_proportions(kg_train: KGATEGraph, kg_test: KGATEGraph, kg_val: KGATEGraph):
     """
     Computes the proportion of triples for each relation in each of the KnowledgeGraphs
     (train, test, val) relative to the total number of triples for that relation.
@@ -135,13 +138,13 @@ def compute_triplet_proportions(kg_train, kg_test, kg_val):
 
     return proportions
 
-def concat_kgs(kg_tr, kg_val, kg_te):
+def concat_kgs(kg_tr: KGATEGraph, kg_val: KGATEGraph, kg_te: KGATEGraph):
     h = cat((kg_tr.head_idx, kg_val.head_idx, kg_te.head_idx))
     t = cat((kg_tr.tail_idx, kg_val.tail_idx, kg_te.tail_idx))
     r = cat((kg_tr.relations, kg_val.relations, kg_te.relations))
     return h, t, r
 
-def count_triplets(kg1, kg2, duplicates, rev_duplicates):
+def count_triplets(kg1: KGATEGraph, kg2: KGATEGraph, duplicates: List[Tuple[int, int]], rev_duplicates: List[Tuple[int, int]]):
     """
     Parameters
     ----------
@@ -187,7 +190,7 @@ def count_triplets(kg1, kg2, duplicates, rev_duplicates):
 
     return n_duplicates, n_rev_duplicates
 
-def find_best_model(dir):
+def find_best_model(dir: Path):
     try:
         best = max(
             (f for f in os.listdir(dir) if f.startswith('best_model_checkpoint_val_mrr=') and f.endswith('.pt')),
@@ -198,12 +201,12 @@ def find_best_model(dir):
     except ValueError:
         return False
     
-def init_embedding(num_embeddings, emb_dim, device="cpu"):
+def init_embedding(num_embeddings: int, emb_dim: int, device:str="cpu"):
     embedding = nn.Embedding(num_embeddings, emb_dim, device=device)
     nn.init.xavier_uniform_(embedding.weight.data)
     return embedding
 
-def read_training_metrics(training_metrics_file):
+def read_training_metrics(training_metrics_file: Path):
     df = pd.read_csv(training_metrics_file)
 
     df = df[~df['Epoch'].astype(str).str.contains('CHECKPOINT RESTART')]
@@ -215,7 +218,7 @@ def read_training_metrics(training_metrics_file):
 
     return df
 
-def plot_learning_curves(training_metrics_file, outdir):
+def plot_learning_curves(training_metrics_file: Path, outdir: Path):
     outdir = Path(outdir)
     df = read_training_metrics(training_metrics_file)
     df['Training Loss'] = pd.to_numeric(df['Training Loss'], errors='coerce')
@@ -242,7 +245,7 @@ def plot_learning_curves(training_metrics_file, outdir):
     plt.savefig(outdir.joinpath('validation_mrr_curve.png'))
 
 class HeteroMappings():
-    def __init__(self, kg, metadata):
+    def __init__(self, kg: KGATEGraph, metadata:pd.DataFrame | None):
         df = kg.get_df()
         
         self.data = HeteroData()

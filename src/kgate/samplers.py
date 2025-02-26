@@ -1,13 +1,15 @@
 from torch import tensor, bernoulli, randint, ones, rand, cat
-
+import torch
 from torchkge.sampling import get_possible_heads_tails, PositionalNegativeSampler
+from .data_structures import KGATEGraph
+from typing import Tuple
 
 class FixedPositionalNegativeSampler(PositionalNegativeSampler):
     """Simple fix of the PositionalNegativeSampler from torchkge, to solve a CPU/GPU device incompatibiltiy."""
-    def __init__(self, kg, kg_val=None, kg_test=None):
+    def __init__(self, kg:KGATEGraph, kg_val:KGATEGraph | None=None, kg_test: KGATEGraph | None=None):
         super().__init__(kg, kg_val, kg_test)
 
-    def corrupt_batch(self, heads, tails, relations, n_neg=None):
+    def corrupt_batch(self, heads: torch.LongTensor, tails: torch.LongTensor, relations: torch.LongTensor) -> Tuple[torch.LongTensor, torch.LongTensor]:
         """For each true triplet, produce a corrupted one not different from
         any other golden triplet. If `heads` and `tails` are cuda objects,
         then the returned tensors are on the GPU.

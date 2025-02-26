@@ -1,24 +1,32 @@
 from torchkge.models import DistMultModel, RESCALModel, AnalogyModel
 from torch.nn.functional import normalize
 import torch
-from torch import matmul, tensor
-from ..utils import init_embedding
+from torch import matmul, tensor, Tensor, nn
+from ..utils import init_embedding, HeteroMappings
+from typing import Tuple
 
 class RESCAL(RESCALModel):
-    def __init__(self, emb_dim, n_entities, n_relations):
+    def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(emb_dim, n_entities, n_relations)
 
         self.rel_mat = init_embedding(self.n_rel, self.emb_dim * self.emb_dim)
 
-    def score(self, *, h_norm, t_norm, r_idx, **_):
+    def score(self, *, h_norm: Tensor, t_norm: Tensor, r_idx: Tensor, **_) -> Tensor:
         r = self.rel_mat(r_idx).view(-1, self.emb_dim, self.emb_dim)
         hr = matmul(h_norm.view(-1, 1, self.emb_dim), r)
         return (hr.view(-1, self.emb_dim) * t_norm).sum(dim=1)
     
-    def get_embeddings(self):
+    def get_embeddings(self) -> Tensor:
         return self.rel_mat.weight.data.view(-1, self.emb_dim, self.emb_dim)
     
-    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, mappings, entities=True, **_):
+    def inference_prepare_candidates(self, *, 
+                                    h_idx: Tensor, 
+                                    t_idx: Tensor, 
+                                    r_idx: Tensor, 
+                                    node_embeddings: nn.ModuleDict, 
+                                    relation_embeddings: nn.Embedding, 
+                                    mappings: HeteroMappings, 
+                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
         `inference_scoring_function` method. See torchkge.models.interfaces.Models for
@@ -59,14 +67,21 @@ class RESCAL(RESCALModel):
 
     
 class DistMult(DistMultModel):
-    def __init__(self, emb_dim, n_entities, n_relations):
+    def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(emb_dim, n_entities, n_relations)
     
-    def score(self, *, h_norm, r_emb, t_norm, **_):
+    def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, **_):
         return (h_norm * r_emb * t_norm).sum(dim=1)
     
     # TODO: if possible, factorize this
-    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings, entities=True):
+    def inference_prepare_candidates(self, *, 
+                                    h_idx: Tensor, 
+                                    t_idx: Tensor, 
+                                    r_idx: Tensor, 
+                                    node_embeddings: nn.ModuleDict, 
+                                    relation_embeddings: nn.Embedding, 
+                                    mappings: HeteroMappings, 
+                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the

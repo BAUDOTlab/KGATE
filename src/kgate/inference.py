@@ -1,8 +1,11 @@
 from torchkge.inference import RelationInference, EntityInference, DataLoader_
 from torchkge.utils import filter_scores
+from torchkge.models import Model
 from tqdm.autonotebook import tqdm
-from torch import tensor
+from torch import tensor, nn
 import torch
+from typing import Dict, Tuple, List
+from .utils import HeteroMappings
 
 class KRelationInference(RelationInference):
     """Use trained embedding model to infer missing relations in triples.
@@ -43,10 +46,10 @@ class KRelationInference(RelationInference):
     """
     # TODO: add the possibility to infer link orientation as well.
 
-    def __init__(self, model, entities1, entities2, top_k=1, dictionary=None):
+    def __init__(self, model: Model, entities1: torch.Tensor, entities2: torch.Tensor, top_k: int=1, dictionary: Dict[Tuple[int, int], List[int]] | None = None):
         super().__init__(model, entities1, entities2, top_k, dictionary)
 
-    def evaluate(self, b_size, node_embeddings, relation_embeddings, mapping=None, verbose=True):
+    def evaluate(self, b_size: int, node_embeddings: nn.ModuleDict, relation_embeddings: nn.Embedding, mapping: HeteroMappings, verbose:bool=True):
         with torch.no_grad():
             use_cuda = next(self.model.parameters()).is_cuda
 
@@ -118,10 +121,10 @@ class KEntityInference(EntityInference):
             List of the scores of resulting triples for each test fact.
 
     """
-    def __init__(self, model, known_entities, known_relations, top_k=1, missing='tails', dictionary=None):
+    def __init__(self, model: Model, known_entities: torch.Tensor, known_relations: torch.Tensor, top_k:int=1, missing:str='tails', dictionary: Dict[Tuple[int, int], List[int]] | None         =None):
         super().__init__(model, known_entities, known_relations, top_k, missing, dictionary)
 
-    def evaluate(self, b_size, node_embeddings, relation_embeddings, mapping, verbose=True):
+    def evaluate(self, b_size: int, node_embeddings: nn.ModuleDict, relation_embeddings: nn.Embedding, mapping: HeteroMappings, verbose:bool=True):
         with torch.no_grad():
             use_cuda = next(self.model.parameters()).is_cuda
             device = "cuda" if use_cuda else "cpu"

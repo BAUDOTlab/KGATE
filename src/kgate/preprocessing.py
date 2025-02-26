@@ -8,8 +8,9 @@ from torch import cat
 from .utils import set_random_seeds, compute_triplet_proportions
 from .data_structures import KGATEGraph
 from torchkge import KnowledgeGraph
+from typing import Tuple, List
 
-def prepare_knowledge_graph(config, kg=None):
+def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None) -> Tuple[KGATEGraph, KGATEGraph, KGATEGraph]:
     """Prepare and clean the knowledge graph."""
     # Load knowledge graph
     if kg is None:
@@ -32,7 +33,7 @@ def prepare_knowledge_graph(config, kg=None):
 
     return kg_train, kg_val, kg_test
 
-def save_knowledge_graph(config, kg_train, kg_val, kg_test):
+def save_knowledge_graph(config: dict, kg_train: KGATEGraph, kg_val: KGATEGraph, kg_test:KGATEGraph):
     """Save the knowledge graph to files."""
     if config["kg_pkl"] == "":
         pickle_filename = Path(config["output_directory"], "kg.pkl")
@@ -44,7 +45,7 @@ def save_knowledge_graph(config, kg_train, kg_val, kg_test):
         pickle.dump(kg_val, file)
         pickle.dump(kg_test, file)
 
-def load_knowledge_graph(config):
+def load_knowledge_graph(config: dict):
     """Load the knowledge graph from pickle files."""
     pickle_filename = config["kg_pkl"]
     with open(pickle_filename, "rb") as file:
@@ -53,7 +54,7 @@ def load_knowledge_graph(config):
         kg_test = pickle.load(file)
     return kg_train, kg_val, kg_test
 
-def clean_knowledge_graph(kg: KGATEGraph, config):
+def clean_knowledge_graph(kg: KGATEGraph, config: dict) -> Tuple[KGATEGraph, KGATEGraph, KGATEGraph]:
     """Clean and prepare the knowledge graph according to the configuration."""
 
     set_random_seeds(config["seed"])
@@ -134,7 +135,7 @@ def clean_knowledge_graph(kg: KGATEGraph, config):
 
     return new_train, new_val, new_test
 
-def verify_entity_coverage(train_kg, full_kg):
+def verify_entity_coverage(train_kg: KGATEGraph, full_kg: KGATEGraph) -> Tuple[bool, List[str]]:
     """
     Verify that all entities in the full knowledge graph are represented in the training set.
 
@@ -169,7 +170,7 @@ def verify_entity_coverage(train_kg, full_kg):
     else:
         return True, []
 
-def ensure_entity_coverage(kg_train, kg_val, kg_test):
+def ensure_entity_coverage(kg_train: KGATEGraph, kg_val: KGATEGraph, kg_test:KGATEGraph) -> Tuple[KGATEGraph,KGATEGraph,KGATEGraph]:
     """
     Ensure that all entities in kg_train.ent2ix are present in kg_train as head or tail.
     If an entity is missing, move a triplet involving that entity from kg_val or kg_test to kg_train.
@@ -255,7 +256,7 @@ def ensure_entity_coverage(kg_train, kg_val, kg_test):
     return kg_train, kg_val, kg_test
 
 
-def clean_datasets(kg_train, kg2, known_reverses):
+def clean_datasets(kg_train: KGATEGraph, kg2: KGATEGraph, known_reverses: List[Tuple[int, int]]) -> KGATEGraph:
     """
     Clean the training KG by removing reverse duplicate triples contained in KG2 (test or val KG).
 
@@ -302,7 +303,7 @@ def clean_datasets(kg_train, kg2, known_reverses):
     
     return kg_train
 
-def clean_cartesians(kg1, kg2, known_cartesian, entity_type="head"):
+def clean_cartesians(kg1: KGATEGraph, kg2: KGATEGraph, known_cartesian: List[int], entity_type: str="head") -> Tuple[KGATEGraph,KGATEGraph]:
     """
     Transfer cartesian product triplets from training set to test set to prevent data leakage.
     For each entity (head or tail) involved in a cartesian product relation in the test set,

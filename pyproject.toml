@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Knowledge Graph Autoencoder Training Environment, bridging PyG encoders and TorchKGE decoders."
 authors = [
     {name = "Benjamin Loire", email = "benjamin.loire@univ-amu.fr"},
-    {name = "Galadriel Brière", email = "galadriel.briere@univ-amu.fr"}
+    {name = "Galadriel Brière", email = "marie-galadriel.briere@univ-amu.fr"}
 ]
 readme = "README.md"
 license = "MIT"

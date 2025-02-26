@@ -1,23 +1,34 @@
 from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel
 from torch.nn.functional import normalize
-from torch import tensor, split, matmul
+from torch import nn, tensor, split, matmul, Tensor
 from torch.cuda import empty_cache
 import torch
 from tqdm import tqdm
 
+from typing import Tuple
+from ..utils import HeteroMappings
+
 # Code adapted from torchKGE's implementation
 # https://github.com/torchkge-team/torchkge/blob/3adb9344dec974fc29d158025c014b0dcb48118c/torchkge/models/translation.py#L18
 class TransE(TransEModel):
-    def __init__(self, emb_dim, n_entities, n_relations, dissimilarity_type):
+    def __init__(self, emb_dim: int, n_entities: int, n_relations: int, dissimilarity_type: str):
         super().__init__(emb_dim, n_entities, n_relations, dissimilarity_type=dissimilarity_type)
 
-    def score(self, *, h_norm, r_emb, t_norm, **_):
+    def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, **_) -> Tensor:
         return -self.dissimilarity(h_norm + r_emb, t_norm)
     
     def get_embeddigs(self):
         return None
     
-    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings, entities=True):
+    def inference_prepare_candidates(self, *, 
+                                    h_idx: Tensor, 
+                                    t_idx: Tensor, 
+                                    r_idx: Tensor, 
+                                    node_embeddings: nn.ModuleDict, 
+                                    relation_embeddings: nn.Embedding, 
+                                    mappings: HeteroMappings, 
+                                    entities: bool=True
+                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
@@ -78,10 +89,10 @@ class TransE(TransEModel):
         return h, t, r, candidates
     
 class TransH(TransHModel):
-    def __init__(self, emb_dim, n_entities, n_relations):
+    def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(emb_dim, n_entities, n_relations)
 
-    def score(self, *, h_norm, r_emb, t_norm, r_idx, **_):
+    def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, r_idx: Tensor, **_) -> Tensor:
         self.evaluated_projections = False
         norm_vect = normalize(self.norm_vect(r_idx), p=2, dim=1)
         return - self.dissimilarity(self.project(h_norm, norm_vect) + r_emb,
@@ -91,10 +102,17 @@ class TransH(TransHModel):
         self.norm_vect.weight.data = normalize(self.norm_vect.weight.data,
                                                p=2, dim=1)
 
-    def get_embeddings(self):
+    def get_embeddings(self) -> Tensor:
         return self.norm_vect.weight.data
     
-    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings, entities=True):
+    def inference_prepare_candidates(self, *, 
+                                    h_idx: Tensor, 
+                                    t_idx: Tensor, 
+                                    r_idx: Tensor, 
+                                    node_embeddings: nn.ModuleDict, 
+                                    relation_embeddings: nn.Embedding,
+                                    mappings: HeteroMappings, 
+                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
         `inference_scoring_function` method. See torchkge.models.interfaces.Models for
@@ -120,7 +138,7 @@ class TransH(TransHModel):
 
         return proj_h, proj_t, r, candidates
 
-    def evaluate_projections(self, node_embeddings, mappings):
+    def evaluate_projections(self, node_embeddings: nn.ModuleDict, mappings: HeteroMappings):
         """Link prediction evaluation helper function. Project all entities
         according to each relation. Calling this method at the beginning of
         link prediction makes the process faster by computing projections only
@@ -149,10 +167,10 @@ class TransH(TransHModel):
         self.evaluated_projections = True
 
 class TransR(TransRModel):
-    def __init__(self, ent_emb_dim, rel_emb_dim, n_entities, n_relations):
+    def __init__(self, ent_emb_dim: int, rel_emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(ent_emb_dim, rel_emb_dim, n_entities, n_relations)
 
-    def score(self, *, h_norm, r_emb, t_norm, r_idx, **_):
+    def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, r_idx: Tensor, **_) -> Tensor:
         self.evaluated_projections = False
         b_size = h_norm.shape[0]
 
@@ -162,16 +180,23 @@ class TransR(TransRModel):
         return - self.dissimilarity(self.project(h_norm, proj_mat) + r_emb,
                                     self.project(t_norm, proj_mat))
     
-    def normalize_params(self, rel_emb, **_):
+    def normalize_params(self, rel_emb: nn.Embedding, **_) -> bool:
         rel_emb.weight.data = normalize(rel_emb.weight.data, p=2, dim=1)
         return False
     
-    def get_embeddings(self):
+    def get_embeddings(self) -> Tensor:
         return self.proj_mat.weight.data.view(-1,
                                               self.rel_emb_dim,
                                               self.ent_emb_dim)
     
-    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings, entities=True):
+    def inference_prepare_candidates(self, *, 
+                                    h_idx: Tensor, 
+                                    t_idx: Tensor, 
+                                    r_idx: Tensor, 
+                                    node_embeddings: nn.ModuleDict, 
+                                    relation_embeddings: nn.Embedding, 
+                                    mappings: HeteroMappings, 
+                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         b_size = h_idx.shape[0]
 
         if not self.evaluated_projections:
@@ -190,7 +215,7 @@ class TransR(TransRModel):
 
         return proj_h, proj_t, r, candidates
     
-    def evaluate_projections(self, node_embeddings, mappings):
+    def evaluate_projections(self, node_embeddings: nn.ModuleDict, mappings: HeteroMappings):
         """Link prediction evaluation helper function. Project all entities
         according to each relation. Calling this method at the beginning of
         link prediction makes the process faster by computing projections only
@@ -221,10 +246,10 @@ class TransR(TransRModel):
         self.evaluated_projections = True
 
 class TransD(TransDModel):
-    def __init__(self, ent_emb_dim, rel_emb_dim, n_entities, n_relations):
+    def __init__(self, ent_emb_dim: int, rel_emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(ent_emb_dim, rel_emb_dim, n_entities, n_relations)
 
-    def score(self, *, h_norm, r_emb, t_norm, h_idx, r_idx, t_idx, **_):
+    def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, h_idx: Tensor, r_idx: Tensor, t_idx: Tensor, **_) -> Tensor:
         r = normalize(r_emb, p=2, dim=1)
 
         h_proj_v = normalize(self.ent_proj_vect(h_idx), p=2, dim=1)
@@ -235,15 +260,22 @@ class TransD(TransDModel):
         proj_t = self.project(t_norm, t_proj_v, r_proj_v)
         return - self.dissimilarity(proj_h + r, proj_t)
     
-    def normalize_params(self, rel_emb, **_):
+    def normalize_params(self, rel_emb: nn.Embedding, **_):
         rel_emb.weight.data = normalize(rel_emb.weight.data, p=2, dim=1)
         self.ent_proj_vect.weight.data = normalize(self.ent_proj_vect.weight.data, p=2, dim=1)
         self.rel_proj_vect.weight.data = normalize(self.rel_proj_vect.weight.data, p=2, dim=1)
 
-    def get_embeddings(self):
+    def get_embeddings(self) -> Tuple[Tensor, Tensor]:
         return self.ent_proj_vect.weight.data, self.rel_proj_vect.weight.data
     
-    def inference_prepare_candidates(self, *, h_idx, t_idx, r_idx, node_embeddings, relation_embeddings, mappings, entities=True):
+    def inference_prepare_candidates(self, *, 
+                                    h_idx: Tensor, 
+                                    t_idx: Tensor, 
+                                    r_idx: Tensor, 
+                                    node_embeddings: nn.ModuleDict, 
+                                    relation_embeddings: nn.Embedding, 
+                                    mappings: HeteroMappings, 
+                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         b_size = h_idx.shape[0]
 
         if not self.evaluated_projections:
@@ -263,7 +295,7 @@ class TransD(TransDModel):
 
         return proj_h, proj_t, r, candidates
 
-    def evaluate_projections(self, node_embeddings, mappings):
+    def evaluate_projections(self, node_embeddings: nn.ModuleDict, mappings: HeteroMappings):
         """Link prediction evaluation helper function. Project all entities
         according to each relation. Calling this method at the beginning of
         link prediction makes the process faster by computing projections only

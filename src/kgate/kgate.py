@@ -29,6 +29,7 @@ import pandas as pd
 import numpy as np
 import yaml
 import platform
+from typing import Tuple, Dict, List, Any
 
 # Configure logging
 logging.captureWarnings(True)
@@ -41,7 +42,7 @@ logging.basicConfig(
 TRANSLATIONAL_MODELS = ['TransE', 'TransH', 'TransR', 'TransD', 'TorusE']
 
 class Architect(Model):
-    def __init__(self, kg = None, config_path: str = "", cudnn_benchmark = True, num_cores = 0, **kwargs):
+    def __init__(self, kg: KGATEGraph | None = None, config_path: str = "", cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
         # kg should be of type KGATEGraph or KnowledgeGraph, if exists use it instead of the one in config
         self.config = parse_config(config_path, kwargs)
 
@@ -102,7 +103,7 @@ class Architect(Model):
         super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
 
 
-    def initialize_encoder(self):
+    def initialize_encoder(self) -> DefaultEncoder | GCNEncoder | GATEncoder:
         encoder_config = self.config["model"]["encoder"]
         encoder_name = encoder_config["name"]
         gnn_layers = encoder_config["gnn_layer_number"]
@@ -117,7 +118,7 @@ class Architect(Model):
 
         return encoder
 
-    def initialize_decoder(self):
+    def initialize_decoder(self) -> Tuple[Model, nn.Module]:
         decoder_config = self.config["model"]["decoder"]
         decoder_name = decoder_config["name"]
         dissimilarity = decoder_config["dissimilarity"]
@@ -149,7 +150,7 @@ class Architect(Model):
 
         return decoder, criterion
 
-    def initialize_optimizer(self):
+    def initialize_optimizer(self) -> optim.Optimizer:
         """
         Initialize the optimizer based on the configuration provided.
         
@@ -185,7 +186,7 @@ class Architect(Model):
         logging.info(f"Optimizer '{optimizer_name}' initialized with parameters: {optimizer_params}")
         return optimizer
 
-    def initialize_sampler(self):
+    def initialize_sampler(self) -> sampling.NegativeSampler:
         """Initialize the sampler according to the configuration.
         
             Returns:
@@ -207,7 +208,7 @@ class Architect(Model):
             
         return sampler
     
-    def initialize_scheduler(self):
+    def initialize_scheduler(self) -> lr_scheduler.LRScheduler | None:
         """
         Initializes the learning rate scheduler based on the provided configuration.
                 
@@ -265,7 +266,7 @@ class Architect(Model):
             
         logging.info(f"Using {self.config['evaluator']} evaluator.")
 
-    def train(self, checkpoint_file=None, attributes={}):
+    def train(self, checkpoint_file: Path | None = None, attributes: Dict[str, nn.Embedding]={}):
         """Launch the training procedure of the Architect.
         
         Arguments:
@@ -285,7 +286,7 @@ class Architect(Model):
         self.mappings = HeteroMappings(self.kg_train, self.metadata)
         self.mappings.data = self.mappings.data.to(self.device)
 
-        self.node_embeddings = nn.ModuleDict()
+        self.node_embeddings: nn.ModuleDict = nn.ModuleDict()
         for node_type in self.mappings.data.node_types:
             num_nodes = self.mappings.data[node_type].num_nodes
             if node_type in attributes and isinstance(attributes[node_type], nn.Embedding):
@@ -362,7 +363,7 @@ class Architect(Model):
         )
 
         # Custom save function to move the model to CPU before saving and back to GPU after
-        def save_checkpoint_to_cpu(engine):
+        def save_checkpoint_to_cpu(engine: Engine):
             # Move models to CPU before saving
             if self.encoder.deep:
                 self.encoder.to("cpu")
@@ -493,7 +494,7 @@ class Architect(Model):
 
         logging.info(f"Evaluation results stored in {mrr_file}")
         
-    def test_infer(self, inference_kg_path):
+    def test_infer(self, inference_kg_path: Path):
         inference_mrr_file = Path(self.config["output_directory"], "inference_metrics.yaml")
 
         inference_df = pd.read_csv(inference_kg_path, sep="\t")
@@ -517,7 +518,7 @@ class Architect(Model):
 
         logging.info(f"Evaluation results stored in {inference_mrr_file}")
 
-    def infer(self, heads=[], rels=[], tails=[], topk=100):
+    def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], topk:int=100):
         """Infer missing entities or relations, depending on the given parameters"""
         if not sum([len(arr) > 0 for arr in [heads,rels,tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, relations or tails.")
@@ -526,20 +527,20 @@ class Architect(Model):
 
         self.load_best_model()
 
-        infer_heads, infer_rels, infer_tails = len(heads) > 0, len(rels) > 0, len(tails) > 0
+        infer_heads, infer_rels, infer_tails = len(heads) == 0, len(rels) == 0, len(tails) == 0
 
-        if infer_heads and infer_rels:
-            heads = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in heads])
-            rels = tensor([idx for rel, idx in self.kg_train.rel2ix.items() if rel in rels])
-            inference = KEntityInference(self.decoder, heads, rels, missing = "tails", dictionary=self.kg_train.dict_of_heads, top_k=topk)
-        elif infer_tails and infer_rels:
-            tails = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in tails])
-            rels = tensor([idx for rel, idx in self.kg_train.rel2ix.items() if rel in rels])
-            inference = KEntityInference(self.decoder, tails, rels, missing = "heads", dictionary=self.kg_train.dict_of_tails, top_k=topk)
-        elif infer_heads and infer_tails:
-            heads = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in heads])
-            tails = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in tails])
-            inference = KRelationInference(self.decoder, heads, tails, dictionary=self.kg_train.dict_of_rels, top_k=topk)
+        if infer_tails:
+            known_heads = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in heads]).long()
+            known_rels = tensor([idx for rel, idx in self.kg_train.rel2ix.items() if rel in rels]).long()
+            inference = KEntityInference(self.decoder, known_heads, known_rels, missing = "tails", dictionary=self.kg_train.dict_of_heads, top_k=topk)
+        elif infer_heads:
+            known_tails = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in tails])
+            known_rels = tensor([idx for rel, idx in self.kg_train.rel2ix.items() if rel in rels])
+            inference = KEntityInference(self.decoder, known_tails, known_rels, missing = "heads", dictionary=self.kg_train.dict_of_tails, top_k=topk)
+        elif infer_rels:
+            known_heads = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in heads])
+            known_tails = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in tails])
+            inference = KRelationInference(self.decoder, known_heads, known_tails, dictionary=self.kg_train.dict_of_rels, top_k=topk)
 
         inference.evaluate(self.eval_batch_size, self.node_embeddings, self.rel_emb, self.mappings)
 
@@ -582,7 +583,7 @@ class Architect(Model):
         logging.info("Best model successfully loaded.")
 
 
-    def process_batch(self, engine, batch):
+    def process_batch(self, engine: Engine, batch) -> torch.types.Number:
         h, t, r = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)
         n_h, n_t = self.sampler.corrupt_batch(h, t, r)
         n_h, n_t = n_h.to(self.device), n_t.to(self.device)
@@ -600,7 +601,7 @@ class Architect(Model):
 
         return loss.item()
 
-    def scoring_function(self, h_idx, t_idx, r_idx, train = True):
+    def scoring_function(self, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor, train: bool = True) -> torch.types.Number:
         encoder_output = None
 
         h_node_types = [self.mappings.kg_to_node_type[h.item()] for h in h_idx]
@@ -647,7 +648,7 @@ class Architect(Model):
                                   r_idx = r_idx, 
                                   t_idx = t_idx)
 
-    def get_embeddings(self):
+    def get_embeddings(self) -> Tuple[Dict[str, nn.Embedding], nn.Embedding, Any | None]:
         """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.
         
         If the encoder uses heteroData, a dict of {node_type : embedding} is returned for entity embeddings instead of a tensor."""
@@ -685,7 +686,7 @@ class Architect(Model):
         # logging.debug("Normalized relation embeddings")
 
     ##### Metrics recording in CSV file
-    def log_metrics_to_csv(self, engine):
+    def log_metrics_to_csv(self, engine: Engine):
         epoch = engine.state.epoch
         train_loss = engine.state.metrics['loss_ra']
         val_mrr = engine.state.metrics.get('val_mrr', 0)
@@ -702,13 +703,13 @@ class Architect(Model):
         logging.info(f"Epoch {epoch} - Train Loss: {train_loss}, Validation MRR: {val_mrr}, Learning Rate: {lr}")
 
     ##### Memory cleaning
-    def clean_memory(self, engine):
+    def clean_memory(self, engine:Engine):
         torch.cuda.empty_cache()
         gc.collect()
         logging.info("Memory cleaned.")
 
     ##### Evaluation on validation set
-    def evaluate(self, engine):
+    def evaluate(self, engine:Engine):
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
         self.decoder.eval()  # Set the decoder to evaluation mode
         with torch.no_grad():
@@ -724,25 +725,25 @@ class Architect(Model):
         self.decoder.train()  # Set the decoder back to training mode
 
     ##### Scheduler update
-    def update_scheduler(self, engine):
+    def update_scheduler(self, engine: Engine):
         if self.scheduler is not None and not isinstance(self.scheduler, lr_scheduler.ReduceLROnPlateau):
             self.scheduler.step()
 
     ##### Early stopping score function
-    def score_function(self, engine):
+    def score_function(self, engine: Engine) -> float:
         val_mrr = engine.state.metrics.get("val_mrr", 0)
         return val_mrr
     
     ##### Checkpoint best MRR
-    def get_val_mrr(self, engine):
+    def get_val_mrr(self, engine: Engine) -> float:
         return engine.state.metrics.get("val_mrr", 0)
     
     ##### Late stopping
-    def on_training_completed(self, engine):
+    def on_training_completed(self, engine: Engine):
         logging.info(f"Training completed after {engine.state.epoch} epochs.")
 
     # TODO : create a script to isolate prediction functions. Maybe a Predictor class?
-    def categorize_test_nodes(self, relation_name, threshold):
+    def categorize_test_nodes(self, relation_name: str, threshold: int) -> Tuple[List[int], List[int]]:
         """
         Categorizes test triples with the specified relation in the test set 
         based on whether their entities have been seen with that relation in the training set,
@@ -794,7 +795,7 @@ class Architect(Model):
 
         return frequent_indices, infrequent_indices
     
-    def calculate_mrr_for_relations(self, kg, relations):
+    def calculate_mrr_for_relations(self, kg: KGATEGraph, relations: List[str]) -> Tuple[float, int, Dict[str, float], float]:
         # MRR computed by ponderating for each relation
         mrr_sum = 0.0
         fact_count = 0
@@ -827,7 +828,7 @@ class Architect(Model):
         
         return mrr_sum, fact_count, individual_mrrs, group_mrr
 
-    def calculate_mrr_for_categories(self, frequent_indices, infrequent_indices):
+    def calculate_mrr_for_categories(self, frequent_indices: List[int], infrequent_indices: List[int]) -> Tuple[float, float]:
         """
         Calculate the MRR for frequent and infrequent categories based on given indices.
         
@@ -862,7 +863,7 @@ class Architect(Model):
 
         return frequent_mrr, infrequent_mrr
 
-    def link_pred(self, kg):
+    def link_pred(self, kg: KGATEGraph) -> float:
         """Link prediction evaluation on test set."""
         # Test MRR measure
         self.evaluator.evaluate(self.eval_batch_size,

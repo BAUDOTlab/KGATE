@@ -1,13 +1,14 @@
 import torch.nn as nn
 from torch_geometric.nn import HeteroConv, GATv2Conv, SAGEConv
+from torch_geometric.data import HeteroData
 
-# Utility?
+
 class DefaultEncoder(nn.Module):
     def __init__(self):
         self.deep = False
 
 class GNN(nn.Module):
-    def __init__(self, node_embeddings, aggr='sum'):
+    def __init__(self, node_embeddings: nn.ModuleDict, aggr:str='sum'):
         super().__init__()
         self.deep = True
         self.device = "cuda"
@@ -17,7 +18,7 @@ class GNN(nn.Module):
         # Initialize the embedding dict
         self.x_dict = {node_type: embedding.weight for node_type, embedding in node_embeddings.items()}
 
-    def forward(self, hetero_data):
+    def forward(self, hetero_data: HeteroData):
         x_dict = self.x_dict
         x_dict = {key: x.to(self.device) for key, x in self.x_dict.items()}  # Move x_dict to device
         edge_index_dict = {key: edge_index.to(self.device) for key, edge_index in hetero_data.edge_index_dict.items()}  # Move edges
@@ -29,7 +30,7 @@ class GNN(nn.Module):
     
 
 class GATEncoder(GNN):
-    def __init__(self, node_embeddings, hetero_data, emb_dim, num_gat_layers=2, aggr='sum', device="cuda"):
+    def __init__(self, node_embeddings: nn.ModuleDict, hetero_data: HeteroData, emb_dim: int, num_gat_layers: int=2, aggr: str='sum', device: str="cuda"):
         super().__init__(node_embeddings, aggr)
         
         for layer in range(num_gat_layers):
@@ -41,7 +42,7 @@ class GATEncoder(GNN):
             self.convs.append(conv)
         
 class GCNEncoder(GNN):
-    def __init__(self, node_embeddings, hetero_data, emb_dim, num_gcn_layers=2, aggr="sum", device="cuda"):
+    def __init__(self, node_embeddings: nn.ModuleDict, hetero_data: HeteroData, emb_dim: int, num_gcn_layers: int=2, aggr: str='sum', device: str="cuda"):
         super().__init__(node_embeddings, aggr)
         for layer in range(num_gcn_layers):
             conv = HeteroConv(

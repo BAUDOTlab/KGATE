@@ -6,6 +6,9 @@ from torchkge.exceptions import SizeMismatchError, WrongArgumentsError, SanityEr
 import torch
 from torch import cat, tensor
 import logging
+import pandas as pd
+from typing import Dict, Tuple, List, Self, Set
+from torch.types import Number
 
 from tqdm import tqdm
 
@@ -16,11 +19,17 @@ logging.basicConfig(
 
 class KGATEGraph(KnowledgeGraph):
     """Class extending on torchKGE KnowledgeGraph class, adding functionalities"""
-    def __init__(self, df=None, kg=None, ent2ix=None, rel2ix=None,
-                 dict_of_heads=None, dict_of_tails=None, dict_of_rels=None):
+    def __init__(self,
+                df: pd.DataFrame | None=None, 
+                kg: Dict[str, torch.Tensor] | None=None, 
+                ent2ix: Dict[str | int, int] | None=None, 
+                rel2ix: Dict[str | int, int] | None=None,
+                dict_of_heads: Dict[Tuple[int, int], List[int]] | None=None, 
+                dict_of_tails: Dict[Tuple[int, int], List[int]] | None=None, 
+                dict_of_rels: Dict[Tuple[int, int], List[int]] | None=None):
         super().__init__(df, kg, ent2ix, rel2ix, dict_of_heads, dict_of_tails, dict_of_rels)
     
-    def split_kg(self, share=0.8, sizes=None, validation=False):
+    def split_kg(self, share: float=0.8, sizes: Tuple[int, int] | Tuple[int, int, int] | None=None, validation:bool=False) -> Tuple[Self, Self, Self] | Tuple[Self, Self]:
         """Split the knowledge graph into train and test. If `sizes` is
         provided then it is used to split the samples as explained below. If
         only `share` is provided, the split is done at random but it assures
@@ -77,11 +86,10 @@ class KGATEGraph(KnowledgeGraph):
         else:
             assert share < 1
 
-        if ((sizes is not None) and (len(sizes) == 3)) or \
-                ((sizes is None) and validation):
+        if (sizes is not None and len(sizes) == 3) or (sizes is None and validation):
             # return training, validation and a testing graphs
 
-            if (sizes is None) and validation:
+            if sizes is None:
                 mask_tr, mask_val, mask_te = self.get_mask(share,
                                                            validation=True)
             else:
@@ -119,8 +127,7 @@ class KGATEGraph(KnowledgeGraph):
         else:
             # return training and testing graphs
 
-            assert (((sizes is not None) and len(sizes) == 2) or
-                    ((sizes is None) and not validation))
+            assert (sizes is not None and len(sizes) == 2) or (sizes is None and not validation)
             if sizes is None:
                 mask_tr, mask_te = self.get_mask(share, validation=False)
             else:
@@ -144,7 +151,7 @@ class KGATEGraph(KnowledgeGraph):
                         dict_of_tails=self.dict_of_tails,
                         dict_of_rels=self.dict_of_rels))
 
-    def keep_triples(self, indices_to_keep):
+    def keep_triples(self, indices_to_keep: List[int] | torch.Tensor) -> Self:
         """
         Keeps only the specified triples in the knowledge graph and returns a new
         KnowledgeGraph instance with these triples. Updates the dictionnary of facts.
@@ -176,7 +183,7 @@ class KGATEGraph(KnowledgeGraph):
             rel2ix=self.rel2ix
         )
 
-    def remove_triples(self, indices_to_remove):
+    def remove_triples(self, indices_to_remove: List[int] | torch.Tensor) -> Self:
         """
         Removes specified triples from the knowledge graph and returns a new
         KnowledgeGraph instance without these triples.
@@ -209,7 +216,7 @@ class KGATEGraph(KnowledgeGraph):
             dict_of_rels=self.dict_of_rels
         )
     
-    def add_triples(self, new_triples):
+    def add_triples(self, new_triples: torch.Tensor) -> Self:
         """
         Add new triples to the Knowledge Graph
 
@@ -258,7 +265,7 @@ class KGATEGraph(KnowledgeGraph):
             dict_of_rels=self.dict_of_rels
         )
 
-    def add_inverse_relations(self, undirected_relations):
+    def add_inverse_relations(self, undirected_relations: List[int]) -> Tuple[Self, List[int]]:
         """
         Adds inverse triples for the specified undirected relations in the knowledge graph.
         Updates head_idx, tail_idx, relations with the inverse triples, and updates the dictionaries to include
@@ -345,7 +352,7 @@ class KGATEGraph(KnowledgeGraph):
                 dict_of_rels=self.dict_of_rels
             ), reverse_list
 
-    def permute_tails(self, relation_id):
+    def permute_tails(self, relation_id: int) -> Self:
         """
         Randomly permutes the `tails` for a given relation while maintaining the original degree
         of `heads` and `tails`, ensuring there are no triples of the form (a, rel, a) where `head == tail`.
@@ -414,7 +421,7 @@ class KGATEGraph(KnowledgeGraph):
         )
 
 
-    def remove_duplicate_triples(self):
+    def remove_duplicate_triples(self) -> Self:
         """
         Remove duplicate triples from a knowledge graph for each relation and keep only unique triples.
 
@@ -467,7 +474,7 @@ class KGATEGraph(KnowledgeGraph):
         # Return a new KnowledgeGraph instance with only unique triples retained
         return self.keep_triples(keep)
 
-    def get_pairs(self, r, type='ht'):
+    def get_pairs(self, r: int, type:str='ht') -> Set[Tuple[Number, Number]]:
         mask = (self.relations == r)
 
         if type == 'ht':
@@ -480,7 +487,7 @@ class KGATEGraph(KnowledgeGraph):
                 (self.head_idx[mask].view(-1, 1),
                 self.tail_idx[mask].view(-1, 1)), dim=1))
         
-    def duplicates(self, theta1=0.8, theta2=0.8, counts=False, reverses=None):
+    def duplicates(self, theta1:float = 0.8, theta2:float = 0.8, counts:bool = False, reverses: List[int] | None = None) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
         """Return the duplicate and reverse duplicate relations as explained
         in paper by Akrami et al.
 
@@ -537,8 +544,8 @@ class KGATEGraph(KnowledgeGraph):
 
         logging.info('Finding duplicate relations')
 
-        duplicates = []
-        rev_duplicates = []
+        duplicates: List[Tuple[int, int]] = []
+        rev_duplicates: List[Tuple[int, int]] = []
 
         iter_ = list(combinations(range(self.n_rel), 2))
 
@@ -562,7 +569,7 @@ class KGATEGraph(KnowledgeGraph):
 
         return duplicates, rev_duplicates
 
-    def cartesian_product_relations(self, theta=0.8):
+    def cartesian_product_relations(self, theta: float=0.8) -> List[int]:
         """Return the cartesian product relations as explained in paper by
         Akrami et al.
 

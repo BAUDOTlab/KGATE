@@ -10,11 +10,17 @@ The modifications are licensed under the BSD license according to the source lic
 from torch import empty, zeros, cat
 from tqdm.autonotebook import tqdm
 
-from torchkge.evaluation import LinkPredictionEvaluator
+from torch import nn
+
+from torchkge.evaluation import LinkPredictionEvaluator, TripletClassificationEvaluator
 from torchkge.exceptions import NotYetEvaluatedError
 from torchkge.sampling import PositionalNegativeSampler
 from torchkge.utils import DataLoader, get_rank, filter_scores
 from torchkge.data_structures import SmallKG
+from torchkge.models import Model
+
+from .data_structures import KGATEGraph
+from .utils import HeteroMappings
 
 class KLinkPredictionEvaluator(LinkPredictionEvaluator):
     """Evaluate performance of given embedding using link prediction method.
@@ -64,17 +70,35 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
     def __init__(self):
         self.evaluated = False
 
-    def evaluate(self, b_size, decoder, knowledge_graph, node_embeddings, relation_embeddings, mappings, verbose=True):
+    def evaluate(self, 
+                b_size: int,
+                decoder: Model, 
+                knowledge_graph: KGATEGraph, 
+                node_embeddings: nn.ModuleDict, 
+                relation_embeddings: nn.Embedding, 
+                mappings: HeteroMappings, 
+                verbose: bool=True):
         """
 
         Parameters
         ----------
         b_size: int
             Size of the current batch.
+        decoder: torchkge.Model
+            Decoder model to evaluate, inheriting from the torchkge.Model class.
+        knowledge_graph: kgate.KGATEGraph
+            The test Knowledge Graph that will be used for the evaluation.
+        node_embeddings: nn.ModuleDict
+            A dictionnary where keys are relation types and values the
+            embedding tensor of this relation's nodes.
+        relation_embeddings: nn.Embedding
+            A tensor containing one embedding by relation type.
+        mappings: kgate.HeteroMappings
+            An object containing mapping between the knowledge graph and 
+            embeddings.
         verbose: bool
             Indicates whether a progress bar should be displayed during
             evaluation.
-
         """
         self.rank_true_heads = empty(size=(knowledge_graph.n_facts,)).long()
         self.rank_true_tails = empty(size=(knowledge_graph.n_facts,)).long()
@@ -122,7 +146,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             self.filt_rank_true_heads = self.filt_rank_true_heads.cpu()
             self.filt_rank_true_tails = self.filt_rank_true_tails.cpu()
 
-class KTripletClassificationEvaluator(object):
+class KTripletClassificationEvaluator(TripletClassificationEvaluator):
     """Evaluate performance of given embedding using triplet classification
     method.
 
@@ -130,7 +154,7 @@ class KTripletClassificationEvaluator(object):
     ----------
     * Richard Socher, Danqi Chen, Christopher D Manning, and Andrew Ng.
       Reasoning With Neural Tensor Networks for Knowledge Base Completion.
-      In Advances in Neural Information Processing Systems 26, pages 926–934.
+      In Advances in Neural Information Processing Systems 26, pages 926-934.
       2013.
       https://nlp.stanford.edu/pubs/SocherChenManningNg_NIPS2013.pdf
 
