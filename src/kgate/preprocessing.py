@@ -10,20 +10,27 @@ from .data_structures import KGATEGraph
 from torchkge import KnowledgeGraph
 from typing import Tuple, List
 
-def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None) -> Tuple[KGATEGraph, KGATEGraph, KGATEGraph]:
+def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.DataFrame | None) -> Tuple[KGATEGraph, KGATEGraph, KGATEGraph]:
     """Prepare and clean the knowledge graph."""
     # Load knowledge graph
-    if kg is None:
+    if kg is None and df is None:
         input_file = config["kg_csv"]
         kg_df = pd.read_csv(input_file, sep="\t", usecols=["from", "to", "rel"]) # QUESTION : \t or , ?
 
         kg = KGATEGraph(df=kg_df)
     else:
-        if isinstance(kg, KnowledgeGraph):
+        if kg is not None and isinstance(kg, KnowledgeGraph):
             if isinstance(kg, KGATEGraph):
                 kg = kg
             else:
-                kg = KGATEGraph(kg=kg)
+                kg_dict = {
+                    "heads": kg.head_idx,
+                    "tails": kg.tail_idx,
+                    "relations": kg.relations
+                }
+                kg = KGATEGraph(kg=kg_dict)
+        elif df is not None:
+            kg = KGATEGraph(df = df)
                 
     # Clean and process knowledge graph
     kg_train, kg_val, kg_test = clean_knowledge_graph(kg, config)
@@ -102,7 +109,7 @@ def clean_knowledge_graph(kg: KGATEGraph, config: dict) -> Tuple[KGATEGraph, KGA
 
     kg_train_ok, _ = verify_entity_coverage(kg_train, kg)
     if not kg_train_ok:
-        logging.info("Entity coverage verification failed...")
+        logging.info("Entity coverage verification failed...")  
     else:
         logging.info("Entity coverage verified successfully.")
 

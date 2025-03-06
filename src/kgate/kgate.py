@@ -42,8 +42,9 @@ logging.basicConfig(
 TRANSLATIONAL_MODELS = ['TransE', 'TransH', 'TransR', 'TransD', 'TorusE']
 
 class Architect(Model):
-    def __init__(self, kg: KGATEGraph | None = None, config_path: str = "", cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
+    def __init__(self, config_path: str = "", kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | None = None, df: pd.DataFrame | None = None, cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
         # kg should be of type KGATEGraph or KnowledgeGraph, if exists use it instead of the one in config
+        # df should have columns from, rel and to
         self.config = parse_config(config_path, kwargs)
 
         if torch.cuda.is_available():
@@ -84,9 +85,9 @@ class Architect(Model):
 
         run_kg_prep =  self.config["run_kg_preprocess"]
 
-        if run_kg_prep:
+        if run_kg_prep or df is not None:
             logging.info(f"Preparing KG...")
-            self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config, kg)
+            self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config, kg, df)
             logging.info("KG preprocessed.")
         else:
             if kg is not None:
@@ -94,7 +95,7 @@ class Architect(Model):
                 if isinstance(kg, (KnowledgeGraph,KnowledgeGraph,KnowledgeGraph)):
                     self.kg_train, self.kg_val, self.kg_test = kg
                 else:
-                    raise ValueError("Given KG needs to be either a tuple of training, validation and test KG if it is not preprocessed.")
+                    raise ValueError("Given KG needs to be a tuple of training, validation and test KG if it is preprocessed.")
             else:
                 logging.info("Loading KG...")
                 self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(self.config["kg_pkl"])
