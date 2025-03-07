@@ -276,10 +276,13 @@ class HeteroMappings():
         node_dict = {}
         for ntype in node_types:
             # Extract all unique identifiers for each type
-            nodes = pd.concat([
-                df[df['from_type'] == ntype]['from'],
-                df[df['to_type'] == ntype]['to']
-            ]).unique()
+            if metadata is not None:
+                nodes = pd.concat([
+                    df[df['from_type'] == ntype]['from'],
+                    df[df['to_type'] == ntype]['to']
+                ]).unique()
+            else:
+                nodes = pd.concat([df['from'], df['to']]).unique()
 
             node_dict[ntype] = {node: i for i, node in enumerate(nodes)}   
 
@@ -305,15 +308,22 @@ class HeteroMappings():
         # 4. Build edge_index for each relation type
         for rel, group in df.groupby('rel'):
             # Identify source and target node type for this group
-            src_types = group['from_type'].unique()
-            tgt_types = group['to_type'].unique()
+            if metadata is not None:
+                src_types = group['from_type'].unique()
+                tgt_types = group['to_type'].unique()
+            else:
+                src_types = ["Node"]
+                tgt_types = ["Node"]
             
             for src_type in src_types:
                 for tgt_type in tgt_types:
-                    subset = group[
-                        (group['from_type'] == src_type) &
-                        (group['to_type'] == tgt_type)
-                    ]
+                    if metadata is not None:
+                        subset = group[
+                            (group['from_type'] == src_type) &
+                            (group['to_type'] == tgt_type)
+                        ]
+                    else:
+                        subset = group
                     
                     if subset.empty:
                         continue  # Pass if there are no edges in this group
