@@ -193,8 +193,8 @@ def count_triplets(kg1: KGATEGraph, kg2: KGATEGraph, duplicates: List[Tuple[int,
 def find_best_model(dir: Path):
     try:
         best = max(
-            (f for f in os.listdir(dir) if f.startswith('best_model_checkpoint_val_mrr=') and f.endswith('.pt')),
-            key=lambda f: float(f.split('val_mrr=')[1].rstrip('.pt')),
+            (f for f in os.listdir(dir) if f.startswith('best_model_checkpoint_val_metrics=') and f.endswith('.pt')),
+            key=lambda f: float(f.split('val_metrics=')[1].rstrip('.pt')),
             default=None
         )
         return best
@@ -222,7 +222,7 @@ def plot_learning_curves(training_metrics_file: Path, outdir: Path):
     outdir = Path(outdir)
     df = read_training_metrics(training_metrics_file)
     df['Training Loss'] = pd.to_numeric(df['Training Loss'], errors='coerce')
-    df['Validation MRR'] = pd.to_numeric(df['Validation MRR'], errors='coerce')
+    df['Validation Metric'] = pd.to_numeric(df['Validation Metric'], errors='coerce')
     
     plt.figure(figsize=(12, 5))
 
@@ -237,12 +237,12 @@ def plot_learning_curves(training_metrics_file: Path, outdir: Path):
 
     # Plot pour le MRR de validation
     plt.subplot(1, 2, 2)
-    plt.plot(df['Epoch'], df['Validation MRR'], label='Validation MRR')
+    plt.plot(df['Epoch'], df['Validation Metric'], label='Validation Metric')
     plt.xlabel('Epoch')
-    plt.ylabel('Validation MRR')
-    plt.title('Validation MRR over Epochs')
+    plt.ylabel('Validation Metric')
+    plt.title('Validation Metric over Epochs')
     plt.legend()
-    plt.savefig(outdir.joinpath('validation_mrr_curve.png'))
+    plt.savefig(outdir.joinpath('validation_metric_curve.png'))
 
 class HeteroMappings():
     def __init__(self, kg: KGATEGraph, metadata:pd.DataFrame | None):

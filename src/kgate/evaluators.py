@@ -7,20 +7,20 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 
 The modifications are licensed under the BSD license according to the source license."""
 
-from torch import empty, zeros, cat
+from torch import empty, zeros, cat, Tensor
 from tqdm.autonotebook import tqdm
 
 from torch import nn
 
 from torchkge.evaluation import LinkPredictionEvaluator, TripletClassificationEvaluator
 from torchkge.exceptions import NotYetEvaluatedError
-from torchkge.sampling import PositionalNegativeSampler
 from torchkge.utils import DataLoader, get_rank, filter_scores
 from torchkge.data_structures import SmallKG
 from torchkge.models import Model
 
 from .data_structures import KGATEGraph
 from .utils import HeteroMappings
+from .samplers import FixedPositionalNegativeSampler
 
 class KLinkPredictionEvaluator(LinkPredictionEvaluator):
     """Evaluate performance of given embedding using link prediction method.
@@ -189,15 +189,15 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         self.architect = architect
         self.kg_val = kg_val
         self.kg_test = kg_test
-        self.is_cuda = next(self.architect.parameters()).is_cuda
+        self.is_cuda = self.architect.device == "cuda"
 
         self.evaluated = False
         self.thresholds = None
 
-        self.sampler = PositionalNegativeSampler(self.kg_val,
+        self.sampler = FixedPositionalNegativeSampler(self.kg_val,
                                                  kg_test=self.kg_test)
 
-    def get_scores(self, heads, tails, relations, batch_size):
+    def get_scores(self, heads: Tensor, tails: Tensor, relations: Tensor, batch_size: int):
         """With head, tail and relation indexes, compute the value of the
         scoring function of the model.
 
@@ -217,6 +217,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
             List of scores of each triplet.
         """
         scores = []
+        print(heads, heads.shape, tails, tails.shape, relations, relations.shape)
 
         small_kg = SmallKG(heads, tails, relations)
         if self.is_cuda:
@@ -226,12 +227,12 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
             dataloader = DataLoader(small_kg, batch_size=batch_size)
 
         for i, batch in enumerate(dataloader):
-            h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
+            h_idx, t_idx, r_idx = batch[0].to(self.architect.device), batch[1].to(self.architect.device), batch[2].to(self.architect.device)
             scores.append(self.architect.scoring_function(h_idx, t_idx, r_idx, train = False))
 
         return cat(scores, dim=0)
 
-    def evaluate(self, b_size):
+    def evaluate(self, b_size: int, knowledge_graph: KGATEGraph):
         """Find relation thresholds using the validation set. As described in
         the paper by Socher et al., for a relation, the threshold is a value t
         such that if the score of a triplet is larger than t, the fact is true.
@@ -243,9 +244,10 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         b_size: int
             Batch size.
         """
-        r_idx = self.kg_val.relations
+        sampler = FixedPositionalNegativeSampler(knowledge_graph)
+        r_idx = knowledge_graph.relations
 
-        neg_heads, neg_tails = self.sampler.corrupt_kg(b_size, self.is_cuda,
+        neg_heads, neg_tails = sampler.corrupt_kg(b_size, self.is_cuda,
                                                        which='main')
         neg_scores = self.get_scores(neg_heads, neg_tails, r_idx, b_size)
 
@@ -261,7 +263,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         self.evaluated = True
         self.thresholds.detach_()
 
-    def accuracy(self, b_size):
+    def accuracy(self, b_size:int, kg_test: KGATEGraph, kg_val: KGATEGraph | None = None):
         """
 
         Parameters
@@ -278,13 +280,14 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
 
         """
         if not self.evaluated:
-            self.evaluate(b_size)
+            kg_to_eval = kg_val if kg_val is not None else kg_test
+            self.evaluate(b_size=b_size, knowledge_graph=kg_to_eval)
 
-        r_idx = self.kg_test.relations
-
-        neg_heads, neg_tails = self.sampler.corrupt_kg(b_size,
-                                                       self.is_cuda,
-                                                       which='test')
+        sampler = FixedPositionalNegativeSampler(kg_test)
+        r_idx = kg_test.relations
+        neg_heads, neg_tails = sampler.corrupt_kg(b_size,
+                                                self.is_cuda,
+                                                which='main')
         scores = self.get_scores(self.kg_test.head_idx,
                                  self.kg_test.tail_idx,
                                  r_idx,

@@ -9,7 +9,7 @@ class FixedPositionalNegativeSampler(PositionalNegativeSampler):
     def __init__(self, kg:KGATEGraph, kg_val:KGATEGraph | None=None, kg_test: KGATEGraph | None=None):
         super().__init__(kg, kg_val, kg_test)
 
-    def corrupt_batch(self, heads: torch.LongTensor, tails: torch.LongTensor, relations: torch.LongTensor) -> Tuple[torch.LongTensor, torch.LongTensor]:
+    def corrupt_batch(self, heads: torch.LongTensor, tails: torch.LongTensor, relations: torch.LongTensor, n_neg: int = 1) -> Tuple[torch.LongTensor, torch.LongTensor]:
         """For each true triplet, produce a corrupted one not different from
         any other golden triplet. If `heads` and `tails` are cuda objects,
         then the returned tensors are on the GPU.

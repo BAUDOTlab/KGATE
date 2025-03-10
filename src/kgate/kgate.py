@@ -257,15 +257,18 @@ class Architect(Model):
         return scheduler
 
     def initialize_evaluator(self):
-        match self.config["evaluator"]:
+        match self.config["evaluation"]["objective"]:
             case "Link Prediction":
-                self.evaluator = KLinkPredictionEvaluator()
+                evaluator = KLinkPredictionEvaluator()
+                self.validation_metric = "MRR"
             case "Triplet Classification":
-                self.evaluator = KTripletClassificationEvaluator()
+                evaluator = KTripletClassificationEvaluator(architect=self, kg_val = self.kg_val, kg_test=self.kg_test)
+                self.validation_metric = "Accuracy"
             case _:
-                raise NotImplementedError(f"The requested evaluator {self.config['evaluator']} is not implemented.")
+                raise NotImplementedError(f"The requested evaluator {self.config["evaluation"]["objective"]} is not implemented.")
             
-        logging.info(f"Using {self.config['evaluator']} evaluator.")
+        logging.info(f"Using {self.config["evaluation"]["objective"]} evaluator.")
+        return evaluator
 
     def train(self, checkpoint_file: Path | None = None, attributes: Dict[str, nn.Embedding]={}):
         """Launch the training procedure of the Architect.
@@ -313,15 +316,18 @@ class Architect(Model):
         logging.info("Initializing lr scheduler...")
         self.scheduler = self.initialize_scheduler()
 
+        logging.info("Initializing evaluator...")
+        self.evaluator = self.initialize_evaluator()
+
         self.training_metrics_file = Path(self.config["output_directory"], "training_metrics.csv")
 
         if checkpoint_file is None:
             with open(self.training_metrics_file, mode="w", newline="") as file:
                 writer = csv.writer(file)
-                writer.writerow(["Epoch", "Training Loss", "Validation MRR", "Learning Rate"])
+                writer.writerow(["Epoch", "Training Loss", "Validation Metric", "Learning Rate"])
         
         self.train_losses = []
-        self.val_mrrs = []
+        self.val_metrics = []
         self.learning_rates = []
 
         train_iterator = DataLoader(self.kg_train, self.train_batch_size, use_cuda=use_cuda)
@@ -389,8 +395,8 @@ class Architect(Model):
             dirname=self.checkpoints_dir,
             filename_prefix="best_model",
             n_saved=1,
-            score_function=self.get_val_mrr,
-            score_name="val_mrr",
+            score_function=self.get_val_metrics,
+            score_name="val_metrics",
             require_empty=False,
             create_dir=True,
             atomic=True
@@ -435,42 +441,43 @@ class Architect(Model):
         gc.collect()
 
         self.load_best_model()
+        self.evaluator = self.initialize_evaluator()
 
         self.decoder.eval()
 
         list_rel_1 = self.config["evaluation"]["made_directed_relations"]
         list_rel_2 = self.config["evaluation"]["target_relations"]
         thresholds = self.config["evaluation"]["thresholds"]
-        mrr_file = Path(self.config["output_directory"], "evaluation_metrics.yaml")
+        metrics_file = Path(self.config["output_directory"], "evaluation_metrics.yaml")
 
         all_relations = set(self.kg_test.rel2ix.keys())
         remaining_relations = all_relations - set(list_rel_1) - set(list_rel_2)
         remaining_relations = list(remaining_relations)
 
-        total_mrr_sum_list_1, fact_count_list_1, individual_mrrs_list_1, group_mrr_list_1 = self.calculate_mrr_for_relations(
+        total_metrics_sum_list_1, fact_count_list_1, individual_metricss_list_1, group_metrics_list_1 = self.calculate_metrics_for_relations(
             self.kg_test, list_rel_1)
-        total_mrr_sum_list_2, fact_count_list_2, individual_mrrs_list_2, group_mrr_list_2 = self.calculate_mrr_for_relations(
+        total_metrics_sum_list_2, fact_count_list_2, individual_metricss_list_2, group_metrics_list_2 = self.calculate_metrics_for_relations(
             self.kg_test, list_rel_2)
-        total_mrr_sum_remaining, fact_count_remaining, individual_mrrs_remaining, group_mrr_remaining = self.calculate_mrr_for_relations(
+        total_metrics_sum_remaining, fact_count_remaining, individual_metricss_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
             self.kg_test, remaining_relations)
 
-        global_mrr = (total_mrr_sum_list_1 + total_mrr_sum_list_2 + total_mrr_sum_remaining) / (fact_count_list_1 + fact_count_list_2 + fact_count_remaining)
+        global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (fact_count_list_1 + fact_count_list_2 + fact_count_remaining)
 
-        logging.info(f"Final Test MRR with best model: {global_mrr}")
+        logging.info(f"Final Test metrics with best model: {global_metrics}")
 
         results = {
-            "Global_MRR": global_mrr,
+            "Global_metrics": global_metrics,
             "made_directed_relations": {
-                "Global_MRR": group_mrr_list_1,
-                "Individual_MRRs": individual_mrrs_list_1
+                "Global_metrics": group_metrics_list_1,
+                "Individual_metricss": individual_metricss_list_1
             },
             "target_relations": {
-                "Global_MRR": group_mrr_list_2,
-                "Individual_MRRs": individual_mrrs_list_2
+                "Global_metrics": group_metrics_list_2,
+                "Individual_metricss": individual_metricss_list_2
             },
             "remaining_relations": {
-                "Global_MRR": group_mrr_remaining,
-                "Individual_MRRs": individual_mrrs_remaining
+                "Global_metrics": group_metrics_remaining,
+                "Individual_metricss": individual_metricss_remaining
             },
             "target_relations_by_frequency": {}  
         }
@@ -479,32 +486,32 @@ class Architect(Model):
             relation = list_rel_2[i]
             threshold = thresholds[i]
             frequent_indices, infrequent_indices = self.categorize_test_nodes(relation, threshold)
-            frequent_mrr, infrequent_mrr = self.calculate_mrr_for_categories(frequent_indices, infrequent_indices)
-            logging.info(f"MRR for frequent nodes (threshold={threshold}) in relation {relation}: {frequent_mrr}")
-            logging.info(f"MRR for infrequent nodes (threshold={threshold}) in relation {relation}: {infrequent_mrr}")
+            frequent_metrics, infrequent_metrics = self.calculate_metrics_for_categories(frequent_indices, infrequent_indices)
+            logging.info(f"Metrics for frequent nodes (threshold={threshold}) in relation {relation}: {frequent_metrics}")
+            logging.info(f"Metrics for infrequent nodes (threshold={threshold}) in relation {relation}: {infrequent_metrics}")
 
             results["target_relations_by_frequency"][relation] = {
-                "Frequent_MRR": frequent_mrr,
-                "Infrequent_MRR": infrequent_mrr,
+                "Frequent_metrics": frequent_metrics,
+                "Infrequent_metrics": infrequent_metrics,
                 "Threshold": threshold
             }
                 
         
-        with open(mrr_file, "w") as file:
+        with open(metrics_file, "w") as file:
             yaml.dump(results, file, default_flow_style=False, sort_keys=False)
 
-        logging.info(f"Evaluation results stored in {mrr_file}")
+        logging.info(f"Evaluation results stored in {metrics_file}")
         
     def test_infer(self, inference_kg_path: Path):
-        inference_mrr_file = Path(self.config["output_directory"], "inference_metrics.yaml")
+        inference_metrics_file = Path(self.config["output_directory"], "inference_metrics.yaml")
 
         inference_df = pd.read_csv(inference_kg_path, sep="\t")
         inference_kg = KGATEGraph(df = inference_df, ent2ix=self.kg_train.ent2ix, rel2ix=self.kg_train.rel2ix) 
         
-        self.evaluator.evaluate(self.eval_batch_size, 
-                        self.decoder, inference_kg,
-                        self.node_embeddings, self.rel_emb,
-                        self.mappings, verbose=True)
+        self.evaluator.evaluate(b_size = self.eval_batch_size, 
+                        decoder =self.decoder, knowledge_graph=inference_kg,
+                        node_embeddings=self.node_embeddings, relation_embeddings=self.rel_emb,
+                        mappings=self.mappings, verbose=True)
             
         inference_mrr = self.evaluator.mrr()[1]
         inference_hit10 = self.evaluator.hit_at_k(10)[1]
@@ -513,11 +520,11 @@ class Architect(Model):
 
         logging.info(f"MRR on inference set: {inference_mrr}")
 
-        with open(inference_mrr_file, "w") as file:
+        with open(inference_metrics_file, "w") as file:
             yaml.dump(results, file, default_flow_style=False, sort_keys=False)
 
 
-        logging.info(f"Evaluation results stored in {inference_mrr_file}")
+        logging.info(f"Evaluation results stored in {inference_metrics_file}")
 
     def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], topk:int=100):
         """Infer missing entities or relations, depending on the given parameters"""
@@ -690,18 +697,18 @@ class Architect(Model):
     def log_metrics_to_csv(self, engine: Engine):
         epoch = engine.state.epoch
         train_loss = engine.state.metrics['loss_ra']
-        val_mrr = engine.state.metrics.get('val_mrr', 0)
+        val_metrics = engine.state.metrics.get('val_metrics', 0)
         lr = self.optimizer.param_groups[0]['lr']
 
         self.train_losses.append(train_loss)
-        self.val_mrrs.append(val_mrr)
+        self.val_metrics.append(val_metrics)
         self.learning_rates.append(lr)
 
         with open(self.training_metrics_file, mode='a', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow([epoch, train_loss, val_mrr, lr])
+            writer.writerow([epoch, train_loss, val_metrics, lr])
 
-        logging.info(f"Epoch {epoch} - Train Loss: {train_loss}, Validation MRR: {val_mrr}, Learning Rate: {lr}")
+        logging.info(f"Epoch {epoch} - Train Loss: {train_loss}, Validation Metrics: {val_metrics}, Learning Rate: {lr}")
 
     ##### Memory cleaning
     def clean_memory(self, engine:Engine):
@@ -714,13 +721,16 @@ class Architect(Model):
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
         self.decoder.eval()  # Set the decoder to evaluation mode
         with torch.no_grad():
-            # TODO : allow different task to be evaluated
-            val_mrr = self.link_pred(self.kg_val) 
-        engine.state.metrics['val_mrr'] = val_mrr 
-        logging.info(f"Validation MRR: {val_mrr}")
-
+            if isinstance(self.evaluator,KLinkPredictionEvaluator):
+                metric = self.link_pred(self.kg_val) 
+                engine.state.metrics["val_metric"] = metric 
+                logging.info(f"Validation MRR: {metric}")
+            elif isinstance(self.evaluator, KTripletClassificationEvaluator):
+                metric = self.triplet_classif(self.kg_val, self.kg_test)
+                engine.state.metrics["val_metric"] = metric
+                logging.info(f"Validation Accuracy: {metric}")
         if self.scheduler and isinstance(self.scheduler, lr_scheduler.ReduceLROnPlateau):
-            self.scheduler.step(val_mrr)
+            self.scheduler.step(metric)
             logging.info('Stepping scheduler ReduceLROnPlateau.')
 
         self.decoder.train()  # Set the decoder back to training mode
@@ -732,12 +742,11 @@ class Architect(Model):
 
     ##### Early stopping score function
     def score_function(self, engine: Engine) -> float:
-        val_mrr = engine.state.metrics.get("val_mrr", 0)
-        return val_mrr
+        return engine.state.metrics.get("val_metric", 0)
     
-    ##### Checkpoint best MRR
-    def get_val_mrr(self, engine: Engine) -> float:
-        return engine.state.metrics.get("val_mrr", 0)
+    ##### Checkpoint best metric
+    def get_val_metrics(self, engine: Engine) -> float:
+        return engine.state.metrics.get("val_metric", 0)
     
     ##### Late stopping
     def on_training_completed(self, engine: Engine):
@@ -796,11 +805,11 @@ class Architect(Model):
 
         return frequent_indices, infrequent_indices
     
-    def calculate_mrr_for_relations(self, kg: KGATEGraph, relations: List[str]) -> Tuple[float, int, Dict[str, float], float]:
+    def calculate_metrics_for_relations(self, kg: KGATEGraph, relations: List[str]) -> Tuple[float, int, Dict[str, float], float]:
         # MRR computed by ponderating for each relation
-        mrr_sum = 0.0
+        metrics_sum = 0.0
         fact_count = 0
-        individual_mrrs = {} 
+        individual_metrics = {} 
 
         for relation_name in relations:
             # Get triples associated with index
@@ -816,20 +825,24 @@ class Architect(Model):
             new_kg.dict_of_rels = kg.dict_of_rels
             new_kg.dict_of_heads = kg.dict_of_heads
             new_kg.dict_of_tails = kg.dict_of_tails
-            test_mrr = self.link_pred(new_kg)
+
+            if isinstance(self.evaluator, KLinkPredictionEvaluator):
+                test_metrics = self.link_pred(new_kg)
+            elif isinstance(self.evaluator, KTripletClassificationEvaluator):
+                test_metrics = self.triplet_classif(kg_val = self.kg_val, kg_test = new_kg)
             
             # Save each relation's MRR
-            individual_mrrs[relation_name] = test_mrr
+            individual_metrics[relation_name] = test_metrics
             
-            mrr_sum += test_mrr * indices_to_keep.numel()
+            metrics_sum += test_metrics * indices_to_keep.numel()
             fact_count += indices_to_keep.numel()
         
         # Compute global MRR for the relation group
-        group_mrr = mrr_sum / fact_count if fact_count > 0 else 0
+        group_metrics = metrics_sum / fact_count if fact_count > 0 else 0
         
-        return mrr_sum, fact_count, individual_mrrs, group_mrr
+        return metrics_sum, fact_count, individual_metrics, group_metrics
 
-    def calculate_mrr_for_categories(self, frequent_indices: List[int], infrequent_indices: List[int]) -> Tuple[float, float]:
+    def calculate_metrics_for_categories(self, frequent_indices: List[int], infrequent_indices: List[int]) -> Tuple[float, float]:
         """
         Calculate the MRR for frequent and infrequent categories based on given indices.
         
@@ -859,18 +872,32 @@ class Architect(Model):
         kg_infrequent.dict_of_tails = self.kg_test.dict_of_tails
         
         # Compute each category's MRR
-        frequent_mrr = self.link_pred(kg_frequent) if frequent_indices else 0
-        infrequent_mrr = self.link_pred(kg_infrequent) if infrequent_indices else 0
-
-        return frequent_mrr, infrequent_mrr
+        if isinstance(self.evaluator, KLinkPredictionEvaluator):
+            frequent_metrics = self.link_pred(kg_frequent) if frequent_indices else 0
+            infrequent_metrics = self.link_pred(kg_infrequent) if infrequent_indices else 0
+        elif isinstance(self.evaluator, KTripletClassificationEvaluator):
+            frequent_metrics = self.triplet_classif(self.kg_val, kg_frequent) if frequent_indices else 0
+            infrequent_metrics = self.triplet_classif(self.kg_val, kg_infrequent) if infrequent_indices else 0
+        return frequent_metrics, infrequent_metrics
 
     def link_pred(self, kg: KGATEGraph) -> float:
         """Link prediction evaluation on test set."""
         # Test MRR measure
-        self.evaluator.evaluate(self.eval_batch_size,
-                        self.decoder, kg,
-                        self.node_embeddings, self.rel_emb,
-                        self.mappings, verbose=True)
+        if not isinstance(self.evaluator, KLinkPredictionEvaluator):
+            raise ValueError(f"Wrong evaluator called. Calling Link Prediction method for {type(self.evaluator)} evaluator.")
+
+        self.evaluator.evaluate(b_size = self.eval_batch_size, 
+                        decoder =self.decoder, knowledge_graph=kg,
+                        node_embeddings=self.node_embeddings, relation_embeddings=self.rel_emb,
+                        mappings=self.mappings, verbose=True)
         
         test_mrr = self.evaluator.mrr()[1]
         return test_mrr
+    
+    def triplet_classif(self, kg_val: KGATEGraph, kg_test: KGATEGraph) -> float:
+        """Triplet Classification evaluation"""
+        if not isinstance(self.evaluator, KTripletClassificationEvaluator):
+            raise ValueError(f"Wrong evaluator called. Calling Triplet Classification method for {type(self.evaluator)} evaluator.")
+        
+        self.evaluator.evaluate(b_size=self.eval_batch_size, knowledge_graph=kg_val)
+        return self.evaluator.accuracy(self.eval_batch_size, kg_test = kg_test)
