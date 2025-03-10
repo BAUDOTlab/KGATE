@@ -237,7 +237,7 @@ def plot_learning_curves(training_metrics_file: Path, outdir: Path):
 
     # Plot pour le MRR de validation
     plt.subplot(1, 2, 2)
-    plt.plot(df['Epoch'], df['Validation Metric'], label='Validation Metric')
+    plt.plot(df['Epoch'], df['Validation Metric'], label=f'Validation Metric')
     plt.xlabel('Epoch')
     plt.ylabel('Validation Metric')
     plt.title('Validation Metric over Epochs')

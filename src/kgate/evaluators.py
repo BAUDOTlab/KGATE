@@ -189,7 +189,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         self.architect = architect
         self.kg_val = kg_val
         self.kg_test = kg_test
-        self.is_cuda = self.architect.device == "cuda"
+        self.is_cuda = self.architect.device.type == "cuda"
 
         self.evaluated = False
         self.thresholds = None
@@ -217,7 +217,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
             List of scores of each triplet.
         """
         scores = []
-        print(heads, heads.shape, tails, tails.shape, relations, relations.shape)
+        #print(heads, heads.shape, tails, tails.shape, relations, relations.shape)
 
         small_kg = SmallKG(heads, tails, relations)
         if self.is_cuda:
@@ -285,18 +285,19 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
 
         sampler = FixedPositionalNegativeSampler(kg_test)
         r_idx = kg_test.relations
+
         neg_heads, neg_tails = sampler.corrupt_kg(b_size,
                                                 self.is_cuda,
                                                 which='main')
-        scores = self.get_scores(self.kg_test.head_idx,
-                                 self.kg_test.tail_idx,
+        scores = self.get_scores(kg_test.head_idx,
+                                 kg_test.tail_idx,
                                  r_idx,
                                  b_size)
         neg_scores = self.get_scores(neg_heads, neg_tails, r_idx, b_size)
 
         if self.is_cuda:
             self.thresholds = self.thresholds.cuda()
-
+            
         scores = (scores > self.thresholds[r_idx])
         neg_scores = (neg_scores < self.thresholds[r_idx])
 

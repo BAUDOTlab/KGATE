@@ -818,8 +818,6 @@ class Architect(Model):
 
             if indices_to_keep.numel() == 0:
                 continue  # Skip to next relation if no triples found
-                
-            print(relation_name)
             
             new_kg = kg.keep_triples(indices_to_keep)
             new_kg.dict_of_rels = kg.dict_of_rels
