@@ -284,6 +284,7 @@ class Architect(Model):
         self.train_batch_size = training_config["train_batch_size"]
         self.patience = training_config["patience"]
         self.eval_interval = training_config["eval_interval"]
+        self.save_interval = training_config["save_interval"]
         # We make hetero data from our KG. 
         # If no mapping is provided, there will be only one node type.
         logging.info("Creating Hetero Data from KG...")
@@ -355,7 +356,8 @@ class Architect(Model):
             "entities": self.node_embeddings,
             "decoder": self.decoder,
             "optimizer": self.optimizer,
-            "trainer": trainer
+            "trainer": trainer,
+            "mappings": self.mappings
         }
         if self.encoder.deep:
             to_save.update({"encoder":self.encoder})
@@ -389,7 +391,7 @@ class Architect(Model):
             self.node_embeddings.to(self.device)
 
         # Attach checkpoint handler to trainer and call save_checkpoint_to_cpu
-        trainer.add_event_handler(Events.EPOCH_COMPLETED, save_checkpoint_to_cpu)
+        trainer.add_event_handler(Events.EPOCH_COMPLETED(every=self.save_interval), save_checkpoint_to_cpu)
     
         checkpoint_best_handler = ModelCheckpoint(
             dirname=self.checkpoints_dir,
@@ -412,7 +414,7 @@ class Architect(Model):
         if checkpoint_file is not None:
             if Path(checkpoint_file).is_file():
                 logging.info(f"Resuming training from checkpoint: {checkpoint_file}")
-                checkpoint = torch.load(checkpoint_file)
+                checkpoint = torch.load(checkpoint_file, weights_only=False)
                 Checkpoint.load_objects(to_load=to_save, checkpoint=checkpoint)
 
                 logging.info("Checkpoint loaded successfully.")
@@ -580,10 +582,11 @@ class Architect(Model):
             return
         
         logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
-        checkpoint = torch.load(self.checkpoints_dir.joinpath(best_model), map_location=self.device)
+        checkpoint = torch.load(self.checkpoints_dir.joinpath(best_model), map_location=self.device, weights_only=False)
         self.node_embeddings.load_state_dict(checkpoint["entities"])
         self.rel_emb.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])
+        self.mappings.load_state_dict(checkpoint["mappings"])
         
         self.node_embeddings.to(self.device)
         self.rel_emb.to(self.device)

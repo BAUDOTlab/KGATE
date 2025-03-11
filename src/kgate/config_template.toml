@@ -75,6 +75,7 @@ patience = 20
 train_batch_size = 2048
 eval_interval = 10
 eval_batch_size = 32
+save_interval = 5
 
 [evaluation]
 objective = "Link Prediction"

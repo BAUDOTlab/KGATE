@@ -337,3 +337,25 @@ class HeteroMappings():
 
                     edge_type = (src_type, rel, tgt_type)
                     self.data[edge_type].edge_index = edge_index
+
+    def state_dict(self):
+        return {
+            "df_to_hetero": self.df_to_hetero,
+            "hetero_to_df": self.hetero_to_df,
+            "df_to_kg": self.df_to_kg,
+            "kg_to_df": self.kg_to_df,
+            "kg_to_hetero": self.kg_to_hetero,
+            "hetero_to_kg": self.hetero_to_kg,
+            "kg_to_node_type": self.kg_to_node_type,
+            "data": self.data
+        }
+
+    def load_state_dict(self, state_dict):
+        self.df_to_hetero = state_dict["df_to_hetero"]
+        self.hetero_to_df = state_dict["hetero_to_df"]
+        self.df_to_kg = state_dict["df_to_kg"]
+        self.kg_to_df = state_dict["kg_to_df"]
+        self.kg_to_hetero = state_dict["kg_to_hetero"]
+        self.hetero_to_kg = state_dict["hetero_to_kg"]
+        self.kg_to_node_type = state_dict["kg_to_node_type"]
+        self.data = state_dict["data"]
