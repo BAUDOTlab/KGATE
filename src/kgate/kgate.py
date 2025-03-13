@@ -625,25 +625,26 @@ class Architect(Model):
             t_het_idx = self.mappings.kg_to_hetero[t_idx]
         except KeyError as e:
             logging.error(f"Mapping error on node ID: {e}")
-            raise
-        
-        unique_types = h_node_types.unique(sorted=True)
+
+        h_unique_types = h_node_types.unique()
+        t_unique_types = t_node_types.unique()
         embeddings = list(self.node_embeddings.values())
+
         if train and self.encoder.deep:
             encoder_output = self.encoder.forward(self.mappings.data) #Check what the encoder needs
     
             h_embeddings = torch.cat([
-                encoder_output[node_type][h_het_idx[h_node_types == node_type]] for node_type in unique_types
+                encoder_output[node_type][h_het_idx[h_node_types == node_type]] for node_type in h_unique_types
             ])
             t_embeddings = torch.cat([
-                encoder_output[node_type][t_het_idx[t_node_types == node_type]] for node_type in unique_types
+                encoder_output[node_type][t_het_idx[t_node_types == node_type]] for node_type in t_unique_types
             ])
         else:
             h_embeddings = torch.cat([
-                embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in unique_types
+                embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in h_unique_types
             ])
             t_embeddings = torch.cat([
-                embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in unique_types
+                embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
             ])
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 

@@ -58,21 +58,28 @@ class TransE(TransEModel):
         """
         b_size = h_idx.shape[0]
 
-        h_emb_list = []
-        t_emb_list = []
         # Get head, tail and relation embeddings
-        for h_id in h_idx:
-            node_type = mappings.kg_to_node_type[h_id.item()]
-            h_emb  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][h_id.item()]]
-            h_emb_list.append(h_emb)
-        for t_id in t_idx:
-            node_type = mappings.kg_to_node_type[t_id.item()]
-            t_emb  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][t_id.item()]]
-            t_emb_list.append(t_emb)
+        
+        embeddings = list(node_embeddings.values())
+
+        h_node_types = mappings.kg_to_node_type[h_idx]
+        h_unique_types = h_node_types.unique()
+        h_het_idx = mappings.kg_to_hetero[h_idx]
+
+        t_node_types = mappings.kg_to_node_type[t_idx]
+        t_unique_types = t_node_types.unique()
+        t_het_idx = mappings.kg_to_hetero[t_idx]
+        
+        h = torch.cat([
+            embeddings[node_type].weight.data[h_het_idx[h_node_types == node_type]] for node_type in h_unique_types
+        ])
+        t = torch.cat([
+            embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
+        ])
 
         
-        h = torch.stack(h_emb_list, dim=0) if len(h_emb_list) != 0 else tensor([]).long()
-        t = torch.stack(t_emb_list, dim=0) if len(t_emb_list) != 0 else tensor([]).long()
+        # h = torch.stack(h_emb_list, dim=0) if len(h_emb_list) != 0 else tensor([]).long()
+        # t = torch.stack(t_emb_list, dim=0) if len(t_emb_list) != 0 else tensor([]).long()
 
 
         r = relation_embeddings(r_idx)
@@ -156,8 +163,10 @@ class TransH(TransHModel):
             if norm_vect.is_cuda:
                 empty_cache()
 
-            node_type = mappings.kg_to_node_type[mask.item()]
-            ent  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][mask.item()]]
+            embeddings = list(node_embeddings.values())
+            node_type = mappings.kg_to_node_type[mask]
+            het_idx = mappings.kg_to_hetero[mask]
+            ent = embeddings[node_type].weight.data[het_idx]
 
             norm_components = (ent.view(1, -1) * norm_vect).sum(dim=1)
             self.projected_entities[:, i, :] = (ent.view(1, -1) - norm_components.view(-1, 1) * norm_vect)
@@ -234,9 +243,11 @@ class TransR(TransRModel):
             if projection_matrices.is_cuda:
                 empty_cache()
 
-            node_type = mappings.kg_to_node_type[mask.item()]
-            ent = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][mask.item()]]
-
+            embeddings = list(node_embeddings.values())
+            node_type = mappings.kg_to_node_type[mask]
+            het_idx = mappings.kg_to_hetero[mask]
+            ent = embeddings[node_type].weight.data[het_idx]
+            
             proj_ent = matmul(projection_matrices, ent.view(self.ent_emb_dim))
             proj_ent = proj_ent.view(self.n_rel, self.rel_emb_dim, 1)
             self.projected_entities[:, i, :] = proj_ent.view(self.n_rel, self.rel_emb_dim)
@@ -308,8 +319,12 @@ class TransD(TransDModel):
         for i in tqdm(range(self.n_ent), unit='entities', desc='Projecting entities'):
             rel_proj_vects = self.rel_proj_vect.weight.data
 
-            node_type = mappings.kg_to_node_type[i]
-            ent = node_embeddings[node_type].weight[mappings.kg_to_hetero[node_type][i]]
+            mask = tensor([i], device=rel_proj_vects.device).long()
+
+            embeddings = list(node_embeddings.values())
+            node_type = mappings.kg_to_node_type[mask]
+            het_idx = mappings.kg_to_hetero[mask]
+            ent = embeddings[node_type].weight.data[het_idx]
 
             ent_proj_vect = self.ent_proj_vect.weight[i]
 

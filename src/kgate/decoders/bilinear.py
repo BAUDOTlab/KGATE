@@ -1,7 +1,7 @@
 from torchkge.models import DistMultModel, RESCALModel, AnalogyModel
 from torch.nn.functional import normalize
 import torch
-from torch import matmul, tensor, Tensor, nn
+from torch import matmul, tensor, Tensor, nn, split
 from ..utils import init_embedding, HeteroMappings
 from typing import Tuple
 
@@ -36,28 +36,28 @@ class RESCAL(RESCALModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        h_emb_list = []
-        t_emb_list = []
-        
-        for h_id in h_idx:
-            node_type = mappings.kg_to_node_type[h_id.item()]
-            h_emb  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][h_id.item()]]
-            h_emb_list.append(h_emb)
-        for t_id in t_idx:
-            node_type = mappings.kg_to_node_type[t_id.item()]
-            t_emb  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][t_id.item()]]
-            t_emb_list.append(t_emb)
+        embeddings = list(node_embeddings.values())
 
-        
-        h = torch.stack(h_emb_list, dim=0) if len(h_emb_list) != 0 else tensor([]).long()
-        t = torch.stack(t_emb_list, dim=0) if len(t_emb_list) != 0 else tensor([]).long()
+        h_node_types = mappings.kg_to_node_type[h_idx]
+        h_unique_types = h_node_types.unique()
+        h_het_idx = mappings.kg_to_hetero[h_idx]
 
+        t_node_types = mappings.kg_to_node_type[t_idx]
+        t_unique_types = t_node_types.unique()
+        t_het_idx = mappings.kg_to_hetero[t_idx]
+        
+        h = torch.cat([
+            embeddings[node_type].weight.data[h_het_idx[h_node_types == node_type]] for node_type in h_unique_types
+        ])
+        t = torch.cat([
+            embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
+        ])
         r_mat = self.rel_mat(r_idx).view(-1, self.emb_dim, self.emb_dim)
 
             
         if entities:
             # Prepare candidates for every entities
-            candidates = torch.cat([embedding.weight.data for embedding in node_embeddings.values()], dim=0)
+            candidates = torch.cat([emb for embedding in node_embeddings.values() for emb in split(embedding.weight.data, 1)])
             candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
@@ -112,27 +112,27 @@ class DistMult(DistMultModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        h_emb_list = []
-        t_emb_list = []
-        
-        for h_id in h_idx:
-            node_type = mappings.kg_to_node_type[h_id.item()]
-            h_emb  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][h_id.item()]]
-            h_emb_list.append(h_emb)
-        for t_id in t_idx:
-            node_type = mappings.kg_to_node_type[t_id.item()]
-            t_emb  = node_embeddings[node_type].weight.data[mappings.kg_to_hetero[node_type][t_id.item()]]
-            t_emb_list.append(t_emb)
+        embeddings = list(node_embeddings.values())
 
-        
-        h = torch.stack(h_emb_list, dim=0) if len(h_emb_list) != 0 else tensor([]).long()
-        t = torch.stack(t_emb_list, dim=0) if len(t_emb_list) != 0 else tensor([]).long()
+        h_node_types = mappings.kg_to_node_type[h_idx]
+        h_unique_types = h_node_types.unique()
+        h_het_idx = mappings.kg_to_hetero[h_idx]
 
+        t_node_types = mappings.kg_to_node_type[t_idx]
+        t_unique_types = t_node_types.unique()
+        t_het_idx = mappings.kg_to_hetero[t_idx]
+        
+        h = torch.cat([
+            embeddings[node_type].weight.data[h_het_idx[h_node_types == node_type]] for node_type in h_unique_types
+        ])
+        t = torch.cat([
+            embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
+        ])
         r = relation_embeddings(r_idx)
 
         if entities:
             # Prepare candidates for every entities
-            candidates = torch.cat([embedding.weight.data for embedding in node_embeddings.values()], dim=0)
+            candidates = torch.cat([emb for embedding in node_embeddings.values() for emb in split(embedding.weight.data, 1)])
             candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
