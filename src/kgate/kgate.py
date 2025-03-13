@@ -631,8 +631,8 @@ class Architect(Model):
         embeddings = list(self.node_embeddings.values())
 
         if train and self.encoder.deep:
-            encoder_output = self.encoder.forward(self.mappings.data) #Check what the encoder needs
-    
+            encoder_output = list(self.encoder.forward(self.mappings.data).values()) #Check what the encoder needs
+
             h_embeddings = torch.cat([
                 encoder_output[node_type][h_het_idx[h_node_types == node_type]] for node_type in h_unique_types
             ])
