@@ -290,6 +290,8 @@ class Architect(Model):
         logging.info("Creating Hetero Data from KG...")
         self.mappings = HeteroMappings(self.kg_train, self.metadata)
         self.mappings.data = self.mappings.data.to(self.device)
+        self.mappings.kg_to_node_type = self.mappings.kg_to_node_type.to(self.device)
+        self.mappings.kg_to_hetero = self.mappings.kg_to_hetero.to(self.device)
 
         self.node_embeddings: nn.ModuleDict = nn.ModuleDict()
         for node_type in self.mappings.data.node_types:
@@ -615,36 +617,33 @@ class Architect(Model):
     def scoring_function(self, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor, train: bool = True) -> torch.types.Number:
         encoder_output = None
 
-        h_node_types = [self.mappings.kg_to_node_type[h.item()] for h in h_idx]
-        t_node_types = [self.mappings.kg_to_node_type[t.item()] for t in t_idx]
+        h_node_types = self.mappings.kg_to_node_type[h_idx]
+        t_node_types = self.mappings.kg_to_node_type[t_idx]
 
         try:
-            h_het_idx = tensor([
-                self.mappings.kg_to_hetero[h_type][h.item()] for h, h_type in zip(h_idx, h_node_types)
-            ], dtype=long, device=h_idx.device)
-            t_het_idx = tensor([
-                self.mappings.kg_to_hetero[t_type][t.item()] for t, t_type in zip(t_idx, t_node_types)
-            ], dtype=long, device=t_idx.device)
+            h_het_idx = self.mappings.kg_to_hetero[h_idx]
+            t_het_idx = self.mappings.kg_to_hetero[t_idx]
         except KeyError as e:
             logging.error(f"Mapping error on node ID: {e}")
             raise
-
-
+        
+        unique_types = h_node_types.unique(sorted=True)
+        embeddings = list(self.node_embeddings.values())
         if train and self.encoder.deep:
             encoder_output = self.encoder.forward(self.mappings.data) #Check what the encoder needs
     
-            h_embeddings = stack([
-                encoder_output[h_type][h_idx_item] for h_type, h_idx_item in zip(h_node_types, h_het_idx)
+            h_embeddings = torch.cat([
+                encoder_output[node_type][h_het_idx[h_node_types == node_type]] for node_type in unique_types
             ])
-            t_embeddings = stack([
-                encoder_output[t_type][t_idx_item] for t_type, t_idx_item in zip(t_node_types, t_het_idx)
+            t_embeddings = torch.cat([
+                encoder_output[node_type][t_het_idx[t_node_types == node_type]] for node_type in unique_types
             ])
         else:
-            h_embeddings = stack([
-                self.node_embeddings[h_type](h_idx_item) for h_type, h_idx_item in zip(h_node_types, h_het_idx)
+            h_embeddings = torch.cat([
+                embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in unique_types
             ])
-            t_embeddings = stack([
-                self.node_embeddings[t_type](t_idx_item) for t_type, t_idx_item in zip(t_node_types, t_het_idx)
+            t_embeddings = torch.cat([
+                embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in unique_types
             ])
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 

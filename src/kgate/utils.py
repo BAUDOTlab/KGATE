@@ -257,10 +257,8 @@ class HeteroMappings():
         self.df_to_kg = {}
         self.kg_to_df = {}
         
-        self.kg_to_hetero = {}
+        self.kg_to_hetero_tmp = {}
         self.hetero_to_kg = {}
-
-        self.kg_to_node_type = {} 
 
         if metadata is not None:
             # 1. Parse node types and IDs
@@ -274,7 +272,10 @@ class HeteroMappings():
             node_types = ["Node"]
         # 3. Create mappings for node IDs by type.
         node_dict = {}
-        for ntype in node_types:
+        kg_to_nt = torch.zeros(kg.n_ent, dtype=torch.int64)
+        kg_to_het = torch.zeros(kg.n_ent, dtype=torch.int64)
+        
+        for i, ntype in enumerate(node_types):
             # Extract all unique identifiers for each type
             if metadata is not None:
                 nodes = pd.concat([
@@ -295,15 +296,19 @@ class HeteroMappings():
             self.kg_to_df[ntype] = {v: k for k, v in self.df_to_kg[ntype].items()}  # KG -> DataFrame
             
             # Mapping KG -> HeteroData via DataFrame
-            self.kg_to_hetero[ntype] = {self.df_to_kg[ntype][k]: self.df_to_hetero[ntype][k] for k in node_dict[ntype].keys()}
-            self.hetero_to_kg[ntype] = {v: k for k, v in self.kg_to_hetero[ntype].items()}  # Inverted (HeteroData -> KG)
+            self.kg_to_hetero_tmp[ntype] = {self.df_to_kg[ntype][k]: self.df_to_hetero[ntype][k] for k in node_dict[ntype].keys()}
+            self.hetero_to_kg[ntype] = {v: k for k, v in self.kg_to_hetero_tmp[ntype].items()}  # Inverted (HeteroData -> KG)
 
             # Add node types associated to each ID of the KG
-            for kg_id in self.df_to_kg[ntype].values():
-                self.kg_to_node_type[kg_id] = ntype
+            for kg_id, het_id in self.kg_to_hetero_tmp[ntype].items():
+                kg_to_nt[kg_id] = i
+                kg_to_het[kg_id] = het_id
 
             # Define the number of nodes for this type in HeteroData
             self.data[ntype].num_nodes = len(node_dict[ntype])
+
+        self.kg_to_node_type = kg_to_nt
+        self.kg_to_hetero = kg_to_het
 
         # 4. Build edge_index for each relation type
         for rel, group in df.groupby('rel'):
