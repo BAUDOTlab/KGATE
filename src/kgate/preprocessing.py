@@ -287,7 +287,7 @@ def clean_datasets(kg_train: KGATEGraph, kg2: KGATEGraph, known_reverses: List[T
         logging.info(f"Processing relation pair: ({r1}, {r2})")
 
         # Get (h, t) pairs in kg2 related by r1
-        kg2_ht_r1 = kg2.get_pairs(kg2, r1, type="ht")
+        kg2_ht_r1 = kg2.get_pairs(r1, type="ht")
         # Get indices of (h, t) in kg_train that are related by r2
         indices_to_remove_kg_train = [i for i, (h, t) in enumerate(zip(kg_train.tail_idx, kg_train.head_idx)) if (h.item(), t.item()) in kg2_ht_r1 and kg_train.relations[i].item() == r2]
         indices_to_remove_kg_train.extend([i for i, (h, t) in enumerate(zip(kg_train.head_idx, kg_train.tail_idx)) if (h.item(), t.item()) in kg2_ht_r1 and kg_train.relations[i].item() == r2])
@@ -298,7 +298,7 @@ def clean_datasets(kg_train: KGATEGraph, kg2: KGATEGraph, known_reverses: List[T
         logging.info(f"Found {len(indices_to_remove_kg_train)} triplets to remove for relation {r2} with reverse {r1}.")
 
         # Get (h, t) pairs in kg2 related by r2
-        kg2_ht_r2 = kg2.get_pairs(kg2, r2, type="ht")
+        kg2_ht_r2 = kg2.get_pairs(r2, type="ht")
         # Get indices of (h, t) in kg_train that are related by r1
         indices_to_remove_kg_train_reverse = [i for i, (h, t) in enumerate(zip(kg_train.tail_idx, kg_train.head_idx)) if (h.item(), t.item()) in kg2_ht_r2 and kg_train.relations[i].item() == r1]
         indices_to_remove_kg_train_reverse.extend([i for i, (h, t) in enumerate(zip(kg_train.head_idx, kg_train.tail_idx)) if (h.item(), t.item()) in kg2_ht_r2 and kg_train.relations[i].item() == r1])

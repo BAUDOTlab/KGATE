@@ -12,7 +12,7 @@ from .preprocessing import prepare_knowledge_graph
 from .encoders import *
 from .decoders import *
 from .data_structures import KGATEGraph
-from .samplers import FixedPositionalNegativeSampler
+from .samplers import FixedPositionalNegativeSampler, MixedNegativeSampler
 from .evaluators import KLinkPredictionEvaluator, KTripletClassificationEvaluator
 from .inference import KEntityInference, KRelationInference
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss, DataLoader
@@ -204,6 +204,8 @@ class Architect(Model):
                 sampler = sampling.UniformNegativeSampler(self.kg_train, self.kg_val, self.kg_test, n_neg)
             case "Bernoulli":
                 sampler = sampling.BernoulliNegativeSampler(self.kg_train, self.kg_val, self.kg_test, n_neg)
+            case "Mixed":
+                sampler = MixedNegativeSampler(self.kg_train, self.kg_val, self.kg_test, n_neg)
             case _:
                 raise ValueError(f"Sampler type '{sampler_name}' is not supported. Please check the configuration.")
             
