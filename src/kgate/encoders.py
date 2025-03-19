@@ -6,6 +6,7 @@ from torch_geometric.data import HeteroData
 class DefaultEncoder(nn.Module):
     def __init__(self):
         self.deep = False
+        super().__init__()
 
 class GNN(nn.Module):
     def __init__(self, node_embeddings: nn.ModuleDict, aggr:str='sum'):
@@ -16,14 +17,13 @@ class GNN(nn.Module):
         self.aggr = aggr
         self.convs = nn.ModuleList()
         # Initialize the embedding dict
-        self.x_dict = {node_type: embedding.weight for node_type, embedding in node_embeddings.items()}
+        self.x_dict = {node_type: embedding.weight.to(self.device) for node_type, embedding in node_embeddings.items()}
 
     def forward(self, hetero_data: HeteroData):
         x_dict = self.x_dict
-        x_dict = {key: x.to(self.device) for key, x in self.x_dict.items()}  # Move x_dict to device
         edge_index_dict = {key: edge_index.to(self.device) for key, edge_index in hetero_data.edge_index_dict.items()}  # Move edges
 
-        for _, conv in enumerate(self.convs):
+        for conv in self.convs:
                 x_dict = conv(x_dict, edge_index_dict)
 
         return x_dict

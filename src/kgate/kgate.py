@@ -29,7 +29,7 @@ import pandas as pd
 import numpy as np
 import yaml
 import platform
-from typing import Tuple, Dict, List, Any
+from typing import Tuple, Dict, List, Any, Sequence
 
 # Configure logging
 logging.captureWarnings(True)
@@ -100,7 +100,7 @@ class Architect(Model):
                 logging.info("Loading KG...")
                 self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(self.config["kg_pkl"])
                 logging.info("Done")
-
+        self.grads = []
         super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
 
 
@@ -180,7 +180,7 @@ class Architect(Model):
         
         try:
             # Initialize the optimizer with given parameters
-            optimizer = optimizer_class(self.decoder.parameters(), **optimizer_params)
+            optimizer = optimizer_class(self.parameters(), **optimizer_params)
         except TypeError as e:
             raise ValueError(f"Error initializing optimizer '{optimizer_name}': {e}")
         
@@ -295,14 +295,14 @@ class Architect(Model):
         self.mappings.kg_to_node_type = self.mappings.kg_to_node_type.to(self.device)
         self.mappings.kg_to_hetero = self.mappings.kg_to_hetero.to(self.device)
 
-        self.node_embeddings: nn.ModuleDict = nn.ModuleDict()
+        self.node_embeddings: nn.ModuleList = nn.ModuleList()
         for node_type in self.mappings.data.node_types:
             num_nodes = self.mappings.data[node_type].num_nodes
             if node_type in attributes and isinstance(attributes[node_type], nn.Embedding):
                 assert self.emb_dim == attributes[node_type].embedding_dim, f"The embedding dimensions of attribute embeddings must be the same as the model embedding dimensions ({self.emb_dim}, found {attributes[node_type].embedding_dim})"
-                self.node_embeddings[node_type] = attributes[node_type]
+                self.node_embeddings.append(attributes[node_type])
             else:
-                self.node_embeddings[node_type] = init_embedding(num_nodes, self.emb_dim, self.device)
+                self.node_embeddings.append(init_embedding(num_nodes, self.emb_dim, self.device))
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
         logging.info("Initializing encoder...")
@@ -435,6 +435,7 @@ class Architect(Model):
                 logging.info(f"Checkpoint file {checkpoint_file} does not exist. Starting training from scratch.")
                 trainer.run(train_iterator, max_epochs=self.max_epochs)
         else:
+            self.normalize_parameters()
             trainer.run(train_iterator, max_epochs=self.max_epochs)
     
         #################
@@ -571,10 +572,10 @@ class Architect(Model):
         self.mappings = HeteroMappings(self.kg_train, self.metadata)
         self.mappings.data = self.mappings.data.to(self.device)
 
-        self.node_embeddings = nn.ModuleDict()
+        self.node_embeddings = nn.ModuleList()
         for node_type in self.mappings.data.node_types:
             num_nodes = self.mappings.data[node_type].num_nodes
-            self.node_embeddings[node_type] = init_embedding(num_nodes, self.emb_dim, self.device)
+            self.node_embeddings.append(init_embedding(num_nodes, self.emb_dim, self.device))
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
 
@@ -606,7 +607,7 @@ class Architect(Model):
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triples
-        pos, neg = self.forward(h, t, r, n_h, n_t)
+        pos, neg = self(h, t, r, n_h, n_t)
         loss = self.criterion(pos, neg)
         loss.backward()
 
@@ -630,10 +631,10 @@ class Architect(Model):
 
         h_unique_types = h_node_types.unique()
         t_unique_types = t_node_types.unique()
-        embeddings = list(self.node_embeddings.values())
 
         if train and self.encoder.deep:
-            encoder_output = list(self.encoder.forward(self.mappings.data).values()) #Check what the encoder needs
+            # Check what the encoder needs AND if list() casting doesn't break gradient
+            encoder_output = list(self.encoder.forward(self.mappings.data).values()) 
 
             h_embeddings = torch.cat([
                 encoder_output[node_type][h_het_idx[h_node_types == node_type]] for node_type in h_unique_types
@@ -643,14 +644,14 @@ class Architect(Model):
             ])
         else:
             h_embeddings = torch.cat([
-                embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in h_unique_types
+                self.node_embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in h_unique_types
             ])
             t_embeddings = torch.cat([
-                embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
+                self.node_embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
             ])
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 
-        # Normalize entities (heads and tails)
+
         h_normalized = normalize(h_embeddings, p=2, dim=1)
         t_normalized = normalize(t_embeddings, p=2, dim=1)
 
@@ -661,7 +662,7 @@ class Architect(Model):
                                   r_idx = r_idx, 
                                   t_idx = t_idx)
 
-    def get_embeddings(self) -> Tuple[Dict[str, nn.Embedding], nn.Embedding, Any | None]:
+    def get_embeddings(self) -> Tuple[Sequence[nn.Embedding], nn.Embedding, Any | None]:
         """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.
         
         If the encoder uses heteroData, a dict of {node_type : embedding} is returned for entity embeddings instead of a tensor."""
@@ -669,7 +670,7 @@ class Architect(Model):
 
         ent_emb = None
         
-        ent_emb = {node_type: embedding for node_type, embedding in self.node_embeddings.items()}
+        ent_emb = [embedding for embedding in self.node_embeddings]
 
         rel_emb = self.rel_emb.weight.data
 
@@ -687,11 +688,10 @@ class Architect(Model):
             stop_norm = normalize_func(rel_emb = self.rel_emb, ent_emb = self.node_embeddings)
             if stop_norm: return
         
-        for node_type, embedding in self.node_embeddings.items():
-            normalized_embedding = normalize(embedding.weight.data, p=2, dim=1)
-            embedding.weight.data = normalized_embedding
-            logging.debug(f"Normalized embeddings for node type '{node_type}'")
-
+        
+        for embedding in self.node_embeddings:
+            embedding.weight.data = normalize(embedding.weight.data, p=2, dim=1)
+            
         logging.debug(f"Normalized all embeddings")
 
         # Normaliser les embeddings des relations

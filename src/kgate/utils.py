@@ -297,7 +297,7 @@ class HeteroMappings():
             
             # Mapping KG -> HeteroData via DataFrame
             self.kg_to_hetero_tmp[ntype] = {self.df_to_kg[ntype][k]: self.df_to_hetero[ntype][k] for k in node_dict[ntype].keys()}
-            self.hetero_to_kg[ntype] = {v: k for k, v in self.kg_to_hetero_tmp[ntype].items()}  # Inverted (HeteroData -> KG)
+            self.hetero_to_kg[ntype] = [k for k in self.kg_to_hetero_tmp[ntype].keys()]  # Inverted (HeteroData -> KG)
 
             # Add node types associated to each ID of the KG
             for kg_id, het_id in self.kg_to_hetero_tmp[ntype].items():

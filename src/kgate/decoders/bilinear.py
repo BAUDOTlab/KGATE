@@ -23,7 +23,7 @@ class RESCAL(RESCALModel):
                                     h_idx: Tensor, 
                                     t_idx: Tensor, 
                                     r_idx: Tensor, 
-                                    node_embeddings: nn.ModuleDict, 
+                                    node_embeddings: nn.ModuleList, 
                                     relation_embeddings: nn.Embedding, 
                                     mappings: HeteroMappings, 
                                     entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
@@ -36,8 +36,6 @@ class RESCAL(RESCALModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        embeddings = list(node_embeddings.values())
-
         h_node_types = mappings.kg_to_node_type[h_idx]
         h_unique_types = h_node_types.unique()
         h_het_idx = mappings.kg_to_hetero[h_idx]
@@ -47,17 +45,17 @@ class RESCAL(RESCALModel):
         t_het_idx = mappings.kg_to_hetero[t_idx]
         
         h = torch.cat([
-            embeddings[node_type].weight.data[h_het_idx[h_node_types == node_type]] for node_type in h_unique_types
+            node_embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in h_unique_types
         ])
         t = torch.cat([
-            embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
+            node_embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
         ])
         r_mat = self.rel_mat(r_idx).view(-1, self.emb_dim, self.emb_dim)
 
             
         if entities:
             # Prepare candidates for every entities
-            candidates = torch.cat([emb for embedding in node_embeddings.values() for emb in split(embedding.weight.data, 1)])
+            candidates = torch.cat([emb for embedding in node_embeddings for emb in split(embedding.weight.data, 1)])
             candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
@@ -78,7 +76,7 @@ class DistMult(DistMultModel):
                                     h_idx: Tensor, 
                                     t_idx: Tensor, 
                                     r_idx: Tensor, 
-                                    node_embeddings: nn.ModuleDict, 
+                                    node_embeddings: nn.ModuleList, 
                                     relation_embeddings: nn.Embedding, 
                                     mappings: HeteroMappings, 
                                     entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
@@ -112,8 +110,6 @@ class DistMult(DistMultModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        embeddings = list(node_embeddings.values())
-
         h_node_types = mappings.kg_to_node_type[h_idx]
         h_unique_types = h_node_types.unique()
         h_het_idx = mappings.kg_to_hetero[h_idx]
@@ -123,16 +119,16 @@ class DistMult(DistMultModel):
         t_het_idx = mappings.kg_to_hetero[t_idx]
         
         h = torch.cat([
-            embeddings[node_type].weight.data[h_het_idx[h_node_types == node_type]] for node_type in h_unique_types
+            node_embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in h_unique_types
         ])
         t = torch.cat([
-            embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
+            node_embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
         ])
         r = relation_embeddings(r_idx)
 
         if entities:
             # Prepare candidates for every entities
-            candidates = torch.cat([emb for embedding in node_embeddings.values() for emb in split(embedding.weight.data, 1)])
+            candidates = torch.cat([emb for embedding in node_embeddings for emb in split(embedding.weight.data, 1)])
             candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
