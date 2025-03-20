@@ -10,12 +10,24 @@ from .data_structures import KGATEGraph
 from torchkge import KnowledgeGraph
 from typing import Tuple, List
 
+SUPPORTED_SEPARATORS = [",","\t",";"]
+
 def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.DataFrame | None) -> Tuple[KGATEGraph, KGATEGraph, KGATEGraph]:
     """Prepare and clean the knowledge graph."""
     # Load knowledge graph
     if kg is None and df is None:
         input_file = config["kg_csv"]
-        kg_df = pd.read_csv(input_file, sep="\t", usecols=["from", "to", "rel"]) # QUESTION : \t or , ?
+        kg_df: pd.DataFrame = None
+
+        for separator in SUPPORTED_SEPARATORS:
+            try:
+                kg_df = pd.read_csv(input_file, sep=separator, usecols=["from","to","rel"])
+                break
+            except ValueError:
+                continue
+        
+        if kg_df is None:
+            raise ValueError(f"The Knowledge Graph csv file was not found or uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
         kg = KGATEGraph(df=kg_df)
     else:

@@ -8,7 +8,7 @@ import torch
 from torch import tensor, long, stack
 from torch.nn.functional import normalize
 from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, HeteroMappings, init_embedding, plot_learning_curves
-from .preprocessing import prepare_knowledge_graph
+from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .encoders import *
 from .decoders import *
 from .data_structures import KGATEGraph
@@ -78,10 +78,19 @@ class Architect(Model):
         self.rel_emb_dim = self.config["model"]["rel_emb_dim"]
         self.eval_batch_size = self.config["training"]["eval_batch_size"]
 
+        self.metadata: pd.DataFrame | None = None
+
         if self.config["metadata_csv"] != "" and Path(self.config["metadata_csv"]).exists():
-            self.metadata = pd.read_csv(self.config["metadata_csv"], sep=",", usecols=["type","id"])
-        else:
-            self.metadata = None
+            for separator in SUPPORTED_SEPARATORS:
+                try:
+                    self.metadata = pd.read_csv(self.config["metadata_csv"], sep=separator, usecols=["type","id"])
+                    break
+                except ValueError:
+                    continue
+        
+            if self.metadata is None:
+                raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
+
 
         run_kg_prep =  self.config["run_kg_preprocess"]
 
