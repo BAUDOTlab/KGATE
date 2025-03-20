@@ -29,7 +29,7 @@ import pandas as pd
 import numpy as np
 import yaml
 import platform
-from typing import Tuple, Dict, List, Any, Sequence
+from typing import Tuple, Dict, List, Any, Sequence, Set
 
 # Configure logging
 logging.captureWarnings(True)
@@ -45,7 +45,7 @@ class Architect(Model):
     def __init__(self, config_path: str = "", kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | None = None, df: pd.DataFrame | None = None, cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
         # kg should be of type KGATEGraph or KnowledgeGraph, if exists use it instead of the one in config
         # df should have columns from, rel and to
-        self.config = parse_config(config_path, kwargs)
+        self.config: dict = parse_config(config_path, kwargs)
 
         if torch.cuda.is_available():
             # Benchmark convolution algorithms to chose the optimal one.
@@ -56,27 +56,27 @@ class Architect(Model):
         # Otherwise, use all the cores the process has access to.
             
         if platform.system() == "Windows":
-            num_cores = num_cores if num_cores > 0 else os.cpu_count()
+            num_cores: int = num_cores if num_cores > 0 else os.cpu_count()
         else:
-            num_cores = num_cores if num_cores > 0 else len(os.sched_getaffinity(0))
+            num_cores: int = num_cores if num_cores > 0 else len(os.sched_getaffinity(0))
         logging.info(f"Setting number of threads to {num_cores}")
         torch.set_num_threads(num_cores)
 
-        outdir = Path(self.config["output_directory"])
+        outdir: Path = Path(self.config["output_directory"])
         # Create output folder if it doesn't exist
         logging.info(f"Output folder: {outdir}")
         outdir.mkdir(parents=True, exist_ok=True)
-        self.checkpoints_dir = outdir.joinpath("checkpoints")
+        self.checkpoints_dir: Path = outdir.joinpath("checkpoints")
 
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device: torch.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logging.info(f'Detected device: {self.device}')
 
         set_random_seeds(self.config["seed"])
 
-        self.emb_dim = self.config["model"]["emb_dim"]
-        self.rel_emb_dim = self.config["model"]["rel_emb_dim"]
-        self.eval_batch_size = self.config["training"]["eval_batch_size"]
+        self.emb_dim: int = self.config["model"]["emb_dim"]
+        self.rel_emb_dim: int = self.config["model"]["rel_emb_dim"]
+        self.eval_batch_size: int = self.config["training"]["eval_batch_size"]
 
         self.metadata: pd.DataFrame | None = None
 
@@ -92,7 +92,7 @@ class Architect(Model):
                 raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
 
-        run_kg_prep =  self.config["run_kg_preprocess"]
+        run_kg_prep: bool = self.config["run_kg_preprocess"]
 
         if run_kg_prep or df is not None:
             logging.info(f"Preparing KG...")
@@ -109,30 +109,30 @@ class Architect(Model):
                 logging.info("Loading KG...")
                 self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(self.config["kg_pkl"])
                 logging.info("Done")
-        self.grads = []
+
         super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
 
 
     def initialize_encoder(self) -> DefaultEncoder | GCNEncoder | GATEncoder:
-        encoder_config = self.config["model"]["encoder"]
-        encoder_name = encoder_config["name"]
-        gnn_layers = encoder_config["gnn_layer_number"]
+        encoder_config: dict = self.config["model"]["encoder"]
+        encoder_name: str = encoder_config["name"]
+        gnn_layers: int = encoder_config["gnn_layer_number"]
 
         match encoder_name:
             case "Default":
                 encoder = DefaultEncoder()
             case "GCN": 
-                encoder = GCNEncoder(self.node_embeddings, self.mappings.data, self.emb_dim, gnn_layers)
+                encoder = GCNEncoder(self.node_embeddings, self.mappings, self.emb_dim, gnn_layers)
             case "GAT":
-                encoder = GATEncoder(self.node_embeddings, self.mappings.data, self.emb_dim, gnn_layers)
+                encoder = GATEncoder(self.node_embeddings, self.mappings, self.emb_dim, gnn_layers)
 
         return encoder
 
     def initialize_decoder(self) -> Tuple[Model, nn.Module]:
-        decoder_config = self.config["model"]["decoder"]
-        decoder_name = decoder_config["name"]
-        dissimilarity = decoder_config["dissimilarity"]
-        margin = decoder_config["margin"]
+        decoder_config: dict = self.config["model"]["decoder"]
+        decoder_name: str = decoder_config["name"]
+        dissimilarity: str = decoder_config["dissimilarity"]
+        margin: int = decoder_config["margin"]
 
         # Translational models
         match decoder_name:
@@ -168,10 +168,10 @@ class Architect(Model):
         - optimizer: Initialized optimizer.
         """
 
-        optimizer_name = self.config["optimizer"]["name"]
+        optimizer_name: str = self.config["optimizer"]["name"]
 
         # Retrieve optimizer parameters, defaulting to an empty dict if not specified
-        optimizer_params = self.config["optimizer"]["params"]
+        optimizer_params: dict = self.config["optimizer"]["params"]
 
         # Mapping of optimizer names to their corresponding PyTorch classes
         optimizer_mapping = {
@@ -189,7 +189,7 @@ class Architect(Model):
         
         try:
             # Initialize the optimizer with given parameters
-            optimizer = optimizer_class(self.parameters(), **optimizer_params)
+            optimizer: optim.Optimizer = optimizer_class(self.parameters(), **optimizer_params)
         except TypeError as e:
             raise ValueError(f"Error initializing optimizer '{optimizer_name}': {e}")
         
@@ -202,9 +202,9 @@ class Architect(Model):
             Returns:
             - sampler: the initialized sampler"""
         
-        sampler_config = self.config["sampler"]
-        sampler_name = sampler_config["name"]
-        n_neg = sampler_config["n_neg"]
+        sampler_config: dict = self.config["sampler"]
+        sampler_name: str = sampler_config["name"]
+        n_neg: int = sampler_config["n_neg"]
 
         match sampler_name:
             case "Positional":
@@ -231,14 +231,14 @@ class Architect(Model):
         Raises:
             ValueError: If the scheduler type is unsupported or required parameters are missing.
         """
-        scheduler_config = self.config["lr_scheduler"]
+        scheduler_config: dict = self.config["lr_scheduler"]
         
         if scheduler_config["type"] == "":
             warnings.warn("No learning rate scheduler specified in the configuration, none will be used.")
             return None
     
-        scheduler_type = scheduler_config["type"]
-        scheduler_params = scheduler_config["params"]
+        scheduler_type: str = scheduler_config["type"]
+        scheduler_params: dict = scheduler_config["params"]
         # Mapping of scheduler names to their corresponding PyTorch classes
         scheduler_mapping = {
             'StepLR': lr_scheduler.StepLR,
@@ -259,7 +259,7 @@ class Architect(Model):
         
         # Initialize the scheduler based on its type
         try:
-                scheduler = scheduler_class(self.optimizer, **scheduler_params)
+                scheduler: lr_scheduler.LRScheduler = scheduler_class(self.optimizer, **scheduler_params)
         except TypeError as e:
             raise ValueError(f"Error initializing '{scheduler_type}': {e}")
 
@@ -290,12 +290,13 @@ class Architect(Model):
             """
         use_cuda = "all" if self.device.type == "cuda" else None
 
-        training_config = self.config["training"]
-        self.max_epochs = training_config["max_epochs"]
-        self.train_batch_size = training_config["train_batch_size"]
-        self.patience = training_config["patience"]
-        self.eval_interval = training_config["eval_interval"]
-        self.save_interval = training_config["save_interval"]
+        training_config: dict = self.config["training"]
+        self.max_epochs: int = training_config["max_epochs"]
+        self.train_batch_size: int = training_config["train_batch_size"]
+        self.patience: int = training_config["patience"]
+        self.eval_interval: int = training_config["eval_interval"]
+        self.save_interval: int = training_config["save_interval"]
+
         # We make hetero data from our KG. 
         # If no mapping is provided, there will be only one node type.
         logging.info("Creating Hetero Data from KG...")
@@ -333,24 +334,24 @@ class Architect(Model):
         logging.info("Initializing evaluator...")
         self.evaluator = self.initialize_evaluator()
 
-        self.training_metrics_file = Path(self.config["output_directory"], "training_metrics.csv")
+        self.training_metrics_file: Path = Path(self.config["output_directory"], "training_metrics.csv")
 
         if checkpoint_file is None:
             with open(self.training_metrics_file, mode="w", newline="") as file:
                 writer = csv.writer(file)
-                writer.writerow(["Epoch", "Training Loss", "Validation Metric", "Learning Rate"])
+                writer.writerow(["Epoch", "Training Loss", f"Validation {self.validation_metric}", "Learning Rate"])
         
-        self.train_losses = []
-        self.val_metrics = []
-        self.learning_rates = []
+        self.train_losses: List[float] = []
+        self.val_metrics: List[float] = []
+        self.learning_rates: List[float] = []
 
-        train_iterator = DataLoader(self.kg_train, self.train_batch_size, use_cuda=use_cuda)
+        train_iterator: DataLoader = DataLoader(self.kg_train, self.train_batch_size, use_cuda=use_cuda)
         logging.info(f"Number of training batches: {len(train_iterator)}")
 
-        trainer = Engine(self.process_batch)
+        trainer: Engine = Engine(self.process_batch)
         RunningAverage(output_transform=lambda x: x).attach(trainer, "loss_ra")
 
-        early_stopping = EarlyStopping(
+        early_stopping: EarlyStopping = EarlyStopping(
             patience = self.patience,
             score_function = self.score_function,
             trainer = trainer
@@ -372,6 +373,7 @@ class Architect(Model):
             "trainer": trainer,
             "mappings": self.mappings
         }
+
         if self.encoder.deep:
             to_save.update({"encoder":self.encoder})
         if self.scheduler is not None:
@@ -406,7 +408,7 @@ class Architect(Model):
         # Attach checkpoint handler to trainer and call save_checkpoint_to_cpu
         trainer.add_event_handler(Events.EPOCH_COMPLETED(every=self.save_interval), save_checkpoint_to_cpu)
     
-        checkpoint_best_handler = ModelCheckpoint(
+        checkpoint_best_handler: ModelCheckpoint = ModelCheckpoint(
             dirname=self.checkpoints_dir,
             filename_prefix="best_model",
             n_saved=1,
@@ -459,14 +461,14 @@ class Architect(Model):
         self.load_best_model()
         self.evaluator = self.initialize_evaluator()
 
-        self.decoder.eval()
+        self.eval()
 
-        list_rel_1 = self.config["evaluation"]["made_directed_relations"]
-        list_rel_2 = self.config["evaluation"]["target_relations"]
-        thresholds = self.config["evaluation"]["thresholds"]
-        metrics_file = Path(self.config["output_directory"], "evaluation_metrics.yaml")
+        list_rel_1: List[str] = self.config["evaluation"]["made_directed_relations"]
+        list_rel_2: List[str] = self.config["evaluation"]["target_relations"]
+        thresholds: List[int] = self.config["evaluation"]["thresholds"]
+        metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.yaml")
 
-        all_relations = set(self.kg_test.rel2ix.keys())
+        all_relations: Set[Any] = set(self.kg_test.rel2ix.keys())
         remaining_relations = all_relations - set(list_rel_1) - set(list_rel_2)
         remaining_relations = list(remaining_relations)
 
@@ -499,8 +501,8 @@ class Architect(Model):
         }
 
         for i in range(len(list_rel_2)):
-            relation = list_rel_2[i]
-            threshold = thresholds[i]
+            relation: str = list_rel_2[i]
+            threshold: int = thresholds[i]
             frequent_indices, infrequent_indices = self.categorize_test_nodes(relation, threshold)
             frequent_metrics, infrequent_metrics = self.calculate_metrics_for_categories(frequent_indices, infrequent_indices)
             logging.info(f"Metrics for frequent nodes (threshold={threshold}) in relation {relation}: {frequent_metrics}")
@@ -519,7 +521,7 @@ class Architect(Model):
         logging.info(f"Evaluation results stored in {metrics_file}")
         
     def test_infer(self, inference_kg_path: Path):
-        inference_metrics_file = Path(self.config["output_directory"], "inference_metrics.yaml")
+        inference_metrics_file: Path = Path(self.config["output_directory"], "inference_metrics.yaml")
 
         inference_df = pd.read_csv(inference_kg_path, sep="\t")
         inference_kg = KGATEGraph(df = inference_df, ent2ix=self.kg_train.ent2ix, rel2ix=self.kg_train.rel2ix) 
@@ -629,17 +631,17 @@ class Architect(Model):
     def scoring_function(self, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor, train: bool = True) -> torch.types.Number:
         encoder_output = None
 
-        h_node_types = self.mappings.kg_to_node_type[h_idx]
-        t_node_types = self.mappings.kg_to_node_type[t_idx]
+        h_node_types: torch.Tensor = self.mappings.kg_to_node_type[h_idx]
+        t_node_types: torch.Tensor = self.mappings.kg_to_node_type[t_idx]
 
         try:
-            h_het_idx = self.mappings.kg_to_hetero[h_idx]
-            t_het_idx = self.mappings.kg_to_hetero[t_idx]
+            h_het_idx: torch.Tensor = self.mappings.kg_to_hetero[h_idx]
+            t_het_idx: torch.Tensor = self.mappings.kg_to_hetero[t_idx]
         except KeyError as e:
             logging.error(f"Mapping error on node ID: {e}")
 
-        h_unique_types = h_node_types.unique()
-        t_unique_types = t_node_types.unique()
+        h_unique_types: List[int] = h_node_types.unique()
+        t_unique_types: List[int] = t_node_types.unique()
 
         if train and self.encoder.deep:
             # Check what the encoder needs AND if list() casting doesn't break gradient
@@ -711,7 +713,7 @@ class Architect(Model):
     def log_metrics_to_csv(self, engine: Engine):
         epoch = engine.state.epoch
         train_loss = engine.state.metrics['loss_ra']
-        val_metrics = engine.state.metrics.get('val_metrics', 0)
+        val_metrics = engine.state.metrics.get('val_metric', 0)
         lr = self.optimizer.param_groups[0]['lr']
 
         self.train_losses.append(train_loss)
