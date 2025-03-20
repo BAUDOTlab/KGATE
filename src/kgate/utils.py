@@ -218,11 +218,11 @@ def read_training_metrics(training_metrics_file: Path):
 
     return df
 
-def plot_learning_curves(training_metrics_file: Path, outdir: Path):
+def plot_learning_curves(training_metrics_file: Path, outdir: Path, val_metric: str):
     outdir = Path(outdir)
     df = read_training_metrics(training_metrics_file)
     df['Training Loss'] = pd.to_numeric(df['Training Loss'], errors='coerce')
-    df['Validation Metric'] = pd.to_numeric(df['Validation Metric'], errors='coerce')
+    df[f"Validation {val_metric}"] = pd.to_numeric(df[f"Validation {val_metric}"], errors='coerce')
     
     plt.figure(figsize=(12, 5))
 
@@ -237,9 +237,9 @@ def plot_learning_curves(training_metrics_file: Path, outdir: Path):
 
     # Plot pour le MRR de validation
     plt.subplot(1, 2, 2)
-    plt.plot(df['Epoch'], df['Validation Metric'], label=f'Validation Metric')
+    plt.plot(df['Epoch'], df[f"Validation {val_metric}"], label=f"Validation {val_metric}")
     plt.xlabel('Epoch')
-    plt.ylabel('Validation Metric')
+    plt.ylabel(f"Validation {val_metric}")
     plt.title('Validation Metric over Epochs')
     plt.legend()
     plt.savefig(outdir.joinpath('validation_metric_curve.png'))
