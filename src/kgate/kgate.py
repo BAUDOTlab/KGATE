@@ -272,7 +272,7 @@ class Architect(Model):
         logging.info(f"Using {self.config["evaluation"]["objective"]} evaluator.")
         return evaluator
 
-    def train(self, checkpoint_file: Path | None = None, attributes: Dict[str, nn.Embedding]={}):
+    def train_model(self, checkpoint_file: Path | None = None, attributes: Dict[str, nn.Embedding]={}):
         """Launch the training procedure of the Architect.
         
         Arguments:
@@ -724,7 +724,7 @@ class Architect(Model):
     ##### Evaluation on validation set
     def evaluate(self, engine:Engine):
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
-        self.decoder.eval()  # Set the decoder to evaluation mode
+        self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             if isinstance(self.evaluator,KLinkPredictionEvaluator):
                 metric = self.link_pred(self.kg_val) 
@@ -738,7 +738,7 @@ class Architect(Model):
             self.scheduler.step(metric)
             logging.info('Stepping scheduler ReduceLROnPlateau.')
 
-        self.decoder.train()  # Set the decoder back to training mode
+        self.train() # Set the model back to training mode
 
     ##### Scheduler update
     def update_scheduler(self, engine: Engine):

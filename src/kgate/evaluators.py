@@ -7,7 +7,7 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 
 The modifications are licensed under the BSD license according to the source license."""
 
-from torch import empty, zeros, cat, Tensor
+from torch import empty, zeros, cat, Tensor, tensor
 from tqdm.autonotebook import tqdm
 
 from torch import nn
@@ -74,7 +74,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
                 b_size: int,
                 decoder: Model, 
                 knowledge_graph: KGATEGraph, 
-                node_embeddings: nn.ModuleDict, 
+                node_embeddings: nn.ModuleList, 
                 relation_embeddings: nn.Embedding, 
                 mappings: HeteroMappings, 
                 verbose: bool=True):
@@ -88,7 +88,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             Decoder model to evaluate, inheriting from the torchkge.Model class.
         knowledge_graph: kgate.KGATEGraph
             The test Knowledge Graph that will be used for the evaluation.
-        node_embeddings: nn.ModuleDict
+        node_embeddings: nn.ModuleList
             A dictionnary where keys are relation types and values the
             embedding tensor of this relation's nodes.
         relation_embeddings: nn.Embedding
@@ -105,7 +105,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
         self.filt_rank_true_heads = empty(size=(knowledge_graph.n_facts,)).long()
         self.filt_rank_true_tails = empty(size=(knowledge_graph.n_facts,)).long()
 
-        use_cuda = next(decoder.parameters()).is_cuda
+        use_cuda = node_embeddings[0].weight.is_cuda
 
         if use_cuda:
             dataloader = DataLoader(knowledge_graph, batch_size=b_size, use_cuda='batch')

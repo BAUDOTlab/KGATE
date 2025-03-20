@@ -86,7 +86,12 @@ class TransE(TransEModel):
         if entities:
             # Prepare candidates for every entities
             # TODO : ensure candidates don't have index issues
-            candidates = torch.cat([emb for embedding in node_embeddings for emb in split(embedding.weight.data, 1)])
+            candidate_list = [tensor(0)] * len(mappings.kg_to_hetero)
+            for i, embedding in enumerate(node_embeddings):
+                for j, emb in enumerate(split(embedding.weight.data, 1)):
+                    candidate_list[mappings.hetero_to_kg[i][j]] = emb
+                    
+            candidates = torch.cat(candidate_list)
             candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
