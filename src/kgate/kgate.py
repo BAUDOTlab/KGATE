@@ -158,6 +158,8 @@ class Architect(Model):
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
 
+        del decoder.ent_emb
+        del decoder.rel_emb
         return decoder, criterion
 
     def initialize_optimizer(self) -> optim.Optimizer:
@@ -612,6 +614,7 @@ class Architect(Model):
 
     def process_batch(self, engine: Engine, batch) -> torch.types.Number:
         h, t, r = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)
+        logging.debug(h, t, r)
         n_h, n_t = self.sampler.corrupt_batch(h, t, r)
         n_h, n_t = n_h.to(self.device), n_t.to(self.device)
 
@@ -724,7 +727,7 @@ class Architect(Model):
             writer = csv.writer(file)
             writer.writerow([epoch, train_loss, val_metrics, lr])
 
-        logging.info(f"Epoch {epoch} - Train Loss: {train_loss}, Validation Metrics: {val_metrics}, Learning Rate: {lr}")
+        logging.info(f"Epoch {epoch} - Train Loss: {train_loss}, Validation {self.validation_metric}: {val_metrics}, Learning Rate: {lr}")
 
     ##### Memory cleaning
     def clean_memory(self, engine:Engine):
@@ -739,11 +742,11 @@ class Architect(Model):
         with torch.no_grad():
             if isinstance(self.evaluator,KLinkPredictionEvaluator):
                 metric = self.link_pred(self.kg_val) 
-                engine.state.metrics["val_metric"] = metric 
+                engine.state.metrics["val_metrics"] = metric 
                 logging.info(f"Validation MRR: {metric}")
             elif isinstance(self.evaluator, KTripletClassificationEvaluator):
                 metric = self.triplet_classif(self.kg_val, self.kg_test)
-                engine.state.metrics["val_metric"] = metric
+                engine.state.metrics["val_metrics"] = metric
                 logging.info(f"Validation Accuracy: {metric}")
         if self.scheduler and isinstance(self.scheduler, lr_scheduler.ReduceLROnPlateau):
             self.scheduler.step(metric)
@@ -758,11 +761,11 @@ class Architect(Model):
 
     ##### Early stopping score function
     def score_function(self, engine: Engine) -> float:
-        return engine.state.metrics.get("val_metric", 0)
+        return engine.state.metrics.get("val_metrics", 0)
     
     ##### Checkpoint best metric
     def get_val_metrics(self, engine: Engine) -> float:
-        return engine.state.metrics.get("val_metric", 0)
+        return engine.state.metrics.get("val_metrics", 0)
     
     ##### Late stopping
     def on_training_completed(self, engine: Engine):

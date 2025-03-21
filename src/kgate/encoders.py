@@ -7,6 +7,7 @@ from .utils import HeteroMappings
 
 class DefaultEncoder(nn.Module):
     def __init__(self):
+        super().__init__()
         self.deep = False
         super().__init__()
 
