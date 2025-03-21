@@ -614,7 +614,7 @@ class Architect(Model):
 
     def process_batch(self, engine: Engine, batch) -> torch.types.Number:
         h, t, r = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)
-        logging.debug(h, t, r)
+
         n_h, n_t = self.sampler.corrupt_batch(h, t, r)
         n_h, n_t = n_h.to(self.device), n_t.to(self.device)
 

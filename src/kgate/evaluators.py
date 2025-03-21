@@ -117,8 +117,8 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             dataloader = DataLoader(knowledge_graph, batch_size=b_size)
 
         for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
-                             unit='batch', disable=(not verbose),
-                             desc='Link prediction evaluation'):
+                             unit="batch", disable=(not verbose),
+                             desc="Link prediction evaluation"):
             h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
             h_emb, t_emb, r_emb, candidates = decoder.inference_prepare_candidates(h_idx = h_idx, 
                                                                                    t_idx = t_idx, 
@@ -222,7 +222,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         small_kg = SmallKG(heads, tails, relations)
         if self.is_cuda:
             dataloader = DataLoader(small_kg, batch_size=batch_size,
-                                    use_cuda='batch')
+                                    use_cuda="batch")
         else:
             dataloader = DataLoader(small_kg, batch_size=batch_size)
 
@@ -248,7 +248,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         r_idx = knowledge_graph.relations
 
         neg_heads, neg_tails = sampler.corrupt_kg(b_size, self.is_cuda,
-                                                       which='main')
+                                                       which="main")
         neg_scores = self.get_scores(neg_heads, neg_tails, r_idx, b_size)
 
         self.thresholds = zeros(self.kg_val.n_rel)
@@ -288,7 +288,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
 
         neg_heads, neg_tails = sampler.corrupt_kg(b_size,
                                                 self.is_cuda,
-                                                which='main')
+                                                which="main")
         scores = self.get_scores(kg_test.head_idx,
                                  kg_test.tail_idx,
                                  r_idx,

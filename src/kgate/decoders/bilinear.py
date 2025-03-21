@@ -52,10 +52,18 @@ class RESCAL(RESCALModel):
         ])
         r_mat = self.rel_mat(r_idx).view(-1, self.emb_dim, self.emb_dim)
 
+        device = h.device
             
         if entities:
             # Prepare candidates for every entities
-            candidates = torch.cat([emb for embedding in node_embeddings for emb in split(embedding.weight.data, 1)])
+            candidates = torch.zeros((self.n_ent, self.emb_dim), device=device)
+
+            all_embeddings = torch.cat([embedding.weight for embedding in node_embeddings], dim=0)
+
+            hetero_to_kg = torch.tensor([mappings.hetero_to_kg[i][j] for i in range(len(node_embeddings)) 
+                                        for j in range(node_embeddings[i].num_embeddings)], device=device)
+
+            candidates[hetero_to_kg] = all_embeddings
             candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
@@ -126,9 +134,18 @@ class DistMult(DistMultModel):
         ])
         r = relation_embeddings(r_idx)
 
+        device = h.device
+        
         if entities:
             # Prepare candidates for every entities
-            candidates = torch.cat([emb for embedding in node_embeddings for emb in split(embedding.weight.data, 1)])
+            candidates = torch.zeros((self.n_ent, self.emb_dim), device=device)
+
+            all_embeddings = torch.cat([embedding.weight for embedding in node_embeddings], dim=0)
+
+            hetero_to_kg = torch.tensor([mappings.hetero_to_kg[i][j] for i in range(len(node_embeddings)) 
+                                        for j in range(node_embeddings[i].num_embeddings)], device=device)
+
+            candidates[hetero_to_kg] = all_embeddings
             candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
