@@ -160,7 +160,7 @@ class TransH(TransHModel):
         if self.evaluated_projections:
             return
 
-        for i in tqdm(range(self.n_ent), unit='entities', desc='Projecting entities'):
+        for i in tqdm(range(self.n_ent), unit="entities", desc="Projecting entities"):
 
             norm_vect = self.norm_vect.weight.data.view(self.n_rel, self.emb_dim)
             mask = tensor([i], device=norm_vect.device).long()
@@ -238,7 +238,7 @@ class TransR(TransRModel):
         if self.evaluated_projections:
             return
 
-        for i in tqdm(range(self.n_ent), unit='entities', desc='Projecting entities'):
+        for i in tqdm(range(self.n_ent), unit="entities", desc="Projecting entities"):
             projection_matrices = self.proj_mat.weight.data
             projection_matrices = projection_matrices.view(self.n_rel, self.rel_emb_dim, self.ent_emb_dim)
 
@@ -319,7 +319,7 @@ class TransD(TransDModel):
         if self.evaluated_projections:
             return
 
-        for i in tqdm(range(self.n_ent), unit='entities', desc='Projecting entities'):
+        for i in tqdm(range(self.n_ent), unit="entities", desc="Projecting entities"):
             rel_proj_vects = self.rel_proj_vect.weight.data
 
             mask = tensor([i], device=rel_proj_vects.device).long()

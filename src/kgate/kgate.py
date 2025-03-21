@@ -36,10 +36,9 @@ logging.captureWarnings(True)
 log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
 logging.basicConfig(
     level=log_level,  
-    format='%(asctime)s - %(levelname)s - %(message)s' 
+    format="%(asctime)s - %(levelname)s - %(message)s" 
 )
 
-TRANSLATIONAL_MODELS = ['TransE', 'TransH', 'TransR', 'TransD', 'TorusE']
 
 class Architect(Model):
     def __init__(self, config_path: str = "", kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | None = None, df: pd.DataFrame | None = None, cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
@@ -69,8 +68,8 @@ class Architect(Model):
         self.checkpoints_dir: Path = outdir.joinpath("checkpoints")
 
 
-        self.device: torch.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        logging.info(f'Detected device: {self.device}')
+        self.device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        logging.info(f"Detected device: {self.device}")
 
         set_random_seeds(self.config["seed"])
 
@@ -177,9 +176,9 @@ class Architect(Model):
 
         # Mapping of optimizer names to their corresponding PyTorch classes
         optimizer_mapping = {
-            'Adam': optim.Adam,
-            'SGD': optim.SGD,
-            'RMSprop': optim.RMSprop,
+            "Adam": optim.Adam,
+            "SGD": optim.SGD,
+            "RMSprop": optim.RMSprop,
             # Add other optimizers as needed
         }
 
@@ -243,15 +242,15 @@ class Architect(Model):
         scheduler_params: dict = scheduler_config["params"]
         # Mapping of scheduler names to their corresponding PyTorch classes
         scheduler_mapping = {
-            'StepLR': lr_scheduler.StepLR,
-            'MultiStepLR': lr_scheduler.MultiStepLR,
-            'ExponentialLR': lr_scheduler.ExponentialLR,
-            'CosineAnnealingLR': lr_scheduler.CosineAnnealingLR,
-            'CosineAnnealingWarmRestarts': lr_scheduler.CosineAnnealingWarmRestarts,
-            'ReduceLROnPlateau': lr_scheduler.ReduceLROnPlateau,
-            'LambdaLR': lr_scheduler.LambdaLR,
-            'OneCycleLR': lr_scheduler.OneCycleLR,
-            'CyclicLR': lr_scheduler.CyclicLR,
+            "StepLR": lr_scheduler.StepLR,
+            "MultiStepLR": lr_scheduler.MultiStepLR,
+            "ExponentialLR": lr_scheduler.ExponentialLR,
+            "CosineAnnealingLR": lr_scheduler.CosineAnnealingLR,
+            "CosineAnnealingWarmRestarts": lr_scheduler.CosineAnnealingWarmRestarts,
+            "ReduceLROnPlateau": lr_scheduler.ReduceLROnPlateau,
+            "LambdaLR": lr_scheduler.LambdaLR,
+            "OneCycleLR": lr_scheduler.OneCycleLR,
+            "CyclicLR": lr_scheduler.CyclicLR,
         }
 
         # Verify that the scheduler type is supported
@@ -437,7 +436,7 @@ class Architect(Model):
                 logging.info("Checkpoint loaded successfully.")
                 with open(self.training_metrics_file, mode="a", newline="") as file:
                     writer = csv.writer(file)
-                    writer.writerow(['CHECKPOINT RESTART', 'CHECKPOINT RESTART', 'CHECKPOINT RESTART', 'CHECKPOINT RESTART'])
+                    writer.writerow(["CHECKPOINT RESTART", "CHECKPOINT RESTART", "CHECKPOINT RESTART", "CHECKPOINT RESTART"])
 
                 if trainer.state.epoch < self.max_epochs:
                     logging.info(f"Starting from epoch {trainer.state.epoch}")
@@ -750,7 +749,7 @@ class Architect(Model):
                 logging.info(f"Validation Accuracy: {metric}")
         if self.scheduler and isinstance(self.scheduler, lr_scheduler.ReduceLROnPlateau):
             self.scheduler.step(metric)
-            logging.info('Stepping scheduler ReduceLROnPlateau.')
+            logging.info("Stepping scheduler ReduceLROnPlateau.")
 
         self.train() # Set the model back to training mode
 
@@ -781,7 +780,7 @@ class Architect(Model):
         Parameters
         ----------
         relation_name : str
-            The name of the relation to check (e.g., 'indication').
+            The name of the relation to check (e.g., "indication").
         threshold : int
             The minimum number of occurrences of the relation for a node to be considered as "frequent".
 

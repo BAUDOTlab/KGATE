@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 logging.basicConfig(
     level=logging.INFO,  
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 class KGATEGraph(KnowledgeGraph):
@@ -68,21 +68,16 @@ class KGATEGraph(KnowledgeGraph):
                     try:
                         assert (sizes[0] + sizes[1] + sizes[2] == self.n_facts)
                     except AssertionError:
-                        raise WrongArgumentsError('Sizes should sum to the '
-                                                  'number of facts.')
+                        raise WrongArgumentsError("Sizes should sum to the number of facts.")
                 elif len(sizes) == 2:
                     try:
                         assert (sizes[0] + sizes[1] == self.n_facts)
                     except AssertionError:
-                        raise WrongArgumentsError('Sizes should sum to the '
-                                                  'number of facts.')
+                        raise WrongArgumentsError("Sizes should sum to the number of facts.")
                 else:
-                    raise SizeMismatchError('Tuple `sizes` should be of '
-                                            'length 2 or 3.')
+                    raise SizeMismatchError("Tuple `sizes` should be of length 2 or 3.")
             except AssertionError:
-                raise SizeMismatchError('Tuple `sizes` should sum up to the '
-                                        'number of facts in the knowledge '
-                                        'graph.')
+                raise SizeMismatchError("Tuple `sizes` should sum up to the number of facts in the knowledge graph.")
         else:
             assert share < 1
 
@@ -101,25 +96,25 @@ class KGATEGraph(KnowledgeGraph):
                 mask_te = ~(mask_tr | mask_val)
 
             return (self.__class__(
-                        kg={'heads': self.head_idx[mask_tr],
-                            'tails': self.tail_idx[mask_tr],
-                            'relations': self.relations[mask_tr]},
+                        kg={"heads": self.head_idx[mask_tr],
+                            "tails": self.tail_idx[mask_tr],
+                            "relations": self.relations[mask_tr]},
                         ent2ix=self.ent2ix, rel2ix=self.rel2ix,
                         dict_of_heads=self.dict_of_heads,
                         dict_of_tails=self.dict_of_tails,
                         dict_of_rels=self.dict_of_rels),
                     self.__class__(
-                        kg={'heads': self.head_idx[mask_val],
-                            'tails': self.tail_idx[mask_val],
-                            'relations': self.relations[mask_val]},
+                        kg={"heads": self.head_idx[mask_val],
+                            "tails": self.tail_idx[mask_val],
+                            "relations": self.relations[mask_val]},
                         ent2ix=self.ent2ix, rel2ix=self.rel2ix,
                         dict_of_heads=self.dict_of_heads,
                         dict_of_tails=self.dict_of_tails,
                         dict_of_rels=self.dict_of_rels),
                     self.__class__(
-                        kg={'heads': self.head_idx[mask_te],
-                            'tails': self.tail_idx[mask_te],
-                            'relations': self.relations[mask_te]},
+                        kg={"heads": self.head_idx[mask_te],
+                            "tails": self.tail_idx[mask_te],
+                            "relations": self.relations[mask_te]},
                         ent2ix=self.ent2ix, rel2ix=self.rel2ix,
                         dict_of_heads=self.dict_of_heads,
                         dict_of_tails=self.dict_of_tails,
@@ -135,17 +130,17 @@ class KGATEGraph(KnowledgeGraph):
                                tensor([0 for _ in range(sizes[1])])]).bool()
                 mask_te = ~mask_tr
             return (self.__class__(
-                        kg={'heads': self.head_idx[mask_tr],
-                            'tails': self.tail_idx[mask_tr],
-                            'relations': self.relations[mask_tr]},
+                        kg={"heads": self.head_idx[mask_tr],
+                            "tails": self.tail_idx[mask_tr],
+                            "relations": self.relations[mask_tr]},
                         ent2ix=self.ent2ix, rel2ix=self.rel2ix,
                         dict_of_heads=self.dict_of_heads,
                         dict_of_tails=self.dict_of_tails,
                         dict_of_rels=self.dict_of_rels),
                     self.__class__(
-                        kg={'heads': self.head_idx[mask_te],
-                            'tails': self.tail_idx[mask_te],
-                            'relations': self.relations[mask_te]},
+                        kg={"heads": self.head_idx[mask_te],
+                            "tails": self.tail_idx[mask_te],
+                            "relations": self.relations[mask_te]},
                         ent2ix=self.ent2ix, rel2ix=self.rel2ix,
                         dict_of_heads=self.dict_of_heads,
                         dict_of_tails=self.dict_of_tails,
@@ -178,7 +173,7 @@ class KGATEGraph(KnowledgeGraph):
 
         # Create a new KGATEGraph instance
         return self.__class__(
-            kg={'heads': new_heads, 'tails': new_tails, 'relations': new_relations},
+            kg={"heads": new_heads, "tails": new_tails, "relations": new_relations},
             ent2ix=self.ent2ix,
             rel2ix=self.rel2ix
         )
@@ -208,7 +203,7 @@ class KGATEGraph(KnowledgeGraph):
         new_relations = self.relations[mask]
 
         return self.__class__(
-            kg={'heads': new_heads, 'tails': new_tails, 'relations': new_relations},
+            kg={"heads": new_heads, "tails": new_tails, "relations": new_relations},
             ent2ix=self.ent2ix,
             rel2ix=self.rel2ix, 
             dict_of_heads=self.dict_of_heads,
@@ -230,19 +225,17 @@ class KGATEGraph(KnowledgeGraph):
         KnowledgeGraph
             A new instance of KnowledgeGraph with the updated triples.
         """
-        if not isinstance(new_triples, torch.Tensor):
-            raise TypeError("new_triples doit être un torch.Tensor.")
         if new_triples.dim() != 2 or new_triples.size(1) != 3:
-            raise ValueError("new_triples doit avoir la forme (n, 3).")
+            raise ValueError("new_triples must have shape (n, 3).")
 
         # Check that entities and relations exist in ent2ix and rel2ix
         max_ent_idx = max(new_triples[:, 0].max().item(), new_triples[:, 1].max().item())
         max_rel_idx = new_triples[:, 2].max().item()
 
         if max_ent_idx >= self.n_ent:
-            raise ValueError(f"L'indice d'entité maximal ({max_ent_idx}) dépasse le nombre d'entités ({self.n_ent}).")
+            raise ValueError(f"The maximum entity index ({max_ent_idx}) is superior to the number of entities ({self.n_ent}).")
         if max_rel_idx >= self.n_rel:
-            raise ValueError(f"L'indice de relation maximal ({max_rel_idx}) dépasse le nombre de relations ({self.n_rel}).")
+            raise ValueError(f"The maximum relation index ({max_rel_idx}) is superior to the number of relations ({self.n_rel}).")
 
         # Concatenate new triples to existing ones
         updated_head_idx = torch.cat((self.head_idx, new_triples[:, 0]), dim=0)
@@ -257,7 +250,7 @@ class KGATEGraph(KnowledgeGraph):
 
         # Create a new instance of the class with updated triples
         return self.__class__(
-            kg={'heads': updated_head_idx, 'tails': updated_tail_idx, 'relations': updated_relations},
+            kg={"heads": updated_head_idx, "tails": updated_tail_idx, "relations": updated_relations},
             ent2ix=self.ent2ix,
             rel2ix=self.rel2ix,
             dict_of_heads=self.dict_of_heads,
@@ -344,7 +337,7 @@ class KGATEGraph(KnowledgeGraph):
             self.relations = torch.cat((self.relations, *new_relations), dim=0)
 
         return self.__class__(
-                kg={'heads': self.head_idx, 'tails': self.tail_idx, 'relations': self.relations},
+                kg={"heads": self.head_idx, "tails": self.tail_idx, "relations": self.relations},
                 ent2ix=self.ent2ix,
                 rel2ix=self.rel2ix,
                 dict_of_heads=self.dict_of_heads,
@@ -415,7 +408,7 @@ class KGATEGraph(KnowledgeGraph):
         assert all(new_head_idx[i] != new_tail_idx[i] for i in range(len(new_head_idx))), "Some triples have the same `head` and `tail` after permutation (self-loop)."
 
         return self.__class__(
-            kg={'heads': new_head_idx, 'tails': new_tail_idx, 'relations': new_relations},
+            kg={"heads": new_head_idx, "tails": new_tail_idx, "relations": new_relations},
             ent2ix=self.ent2ix,
             rel2ix=self.rel2ix,
         )
@@ -469,20 +462,20 @@ class KGATEGraph(KnowledgeGraph):
 
             # Logging duplicate information
             if len(pairs) - len(unique) > 0:
-                logging.info(f'{len(pairs) - len(unique)} duplicates found. Keeping {len(unique)} unique triplets for relation {r_}')
+                logging.info(f"{len(pairs) - len(unique)} duplicates found. Keeping {len(unique)} unique triplets for relation {r_}")
 
         # Return a new KnowledgeGraph instance with only unique triples retained
         return self.keep_triples(keep)
 
-    def get_pairs(self, r: int, type:str='ht') -> Set[Tuple[Number, Number]]:
+    def get_pairs(self, r: int, type:str="ht") -> Set[Tuple[Number, Number]]:
         mask = (self.relations == r)
 
-        if type == 'ht':
+        if type == "ht":
             return set((i.item(), j.item()) for i, j in cat(
                 (self.head_idx[mask].view(-1, 1),
                 self.tail_idx[mask].view(-1, 1)), dim=1))
         else:
-            assert type == 'th'
+            assert type == "th"
             return set((j.item(), i.item()) for i, j in cat(
                 (self.head_idx[mask].view(-1, 1),
                 self.tail_idx[mask].view(-1, 1)), dim=1))
@@ -542,7 +535,7 @@ class KGATEGraph(KnowledgeGraph):
             T[r_] = set([(h_.item(), t_.item()) for h_, t_ in pairs])
             T_inv[r_] = set([(t_.item(), h_.item()) for h_, t_ in pairs])
 
-        logging.info('Finding duplicate relations')
+        logging.info("Finding duplicate relations")
 
         duplicates: List[Tuple[int, int]] = []
         rev_duplicates: List[Tuple[int, int]] = []
@@ -563,9 +556,9 @@ class KGATEGraph(KnowledgeGraph):
                 if a > theta1 and b > theta2:
                     rev_duplicates.append((r1, r2))
 
-        logging.info('Duplicate relations: {}'.format(len(duplicates)))
-        logging.info('Reverse duplicate relations: '
-                '{}\n'.format(len(rev_duplicates)))
+        logging.info("Duplicate relations: {}".format(len(duplicates)))
+        logging.info("Reverse duplicate relations: "
+                "{}\n".format(len(rev_duplicates)))
 
         return duplicates, rev_duplicates
 

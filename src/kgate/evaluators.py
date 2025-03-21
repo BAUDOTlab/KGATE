@@ -108,7 +108,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
         use_cuda = node_embeddings[0].weight.is_cuda
 
         if use_cuda:
-            dataloader = DataLoader(knowledge_graph, batch_size=b_size, use_cuda='batch')
+            dataloader = DataLoader(knowledge_graph, batch_size=b_size, use_cuda="batch")
             self.rank_true_heads = self.rank_true_heads.cuda()
             self.rank_true_tails = self.rank_true_tails.cuda()
             self.filt_rank_true_heads = self.filt_rank_true_heads.cuda()

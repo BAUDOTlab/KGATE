@@ -54,14 +54,14 @@ class KRelationInference(RelationInference):
             use_cuda = next(self.model.parameters()).is_cuda
 
             if use_cuda:
-                dataloader = DataLoader_(self.entities1, self.entities2, batch_size=b_size, use_cuda='batch')
+                dataloader = DataLoader_(self.entities1, self.entities2, batch_size=b_size, use_cuda="batch")
                 self.predictions = self.predictions.cuda()
             else:
                 dataloader = DataLoader_(self.entities1, self.entities2, batch_size=b_size)
 
             for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
-                                unit='batch', disable=(not verbose),
-                                desc='Inference'):
+                                unit="batch", disable=(not verbose),
+                                desc="Inference"):
                 ents1_idx, ents2_idx = batch[0], batch[1]
                 h_emb, t_emb, _, candidates = self.model.inference_prepare_candidates(ents1_idx, ents2_idx, tensor([]).long(),
                                                                                     node_embeddings, relation_embeddings, mapping, entities=False)
@@ -121,7 +121,7 @@ class KEntityInference(EntityInference):
             List of the scores of resulting triples for each test fact.
 
     """
-    def __init__(self, model: Model, known_entities: torch.Tensor, known_relations: torch.Tensor, top_k:int=1, missing:str='tails', dictionary: Dict[Tuple[int, int], List[int]] | None         =None):
+    def __init__(self, model: Model, known_entities: torch.Tensor, known_relations: torch.Tensor, top_k:int=1, missing:str="tails", dictionary: Dict[Tuple[int, int], List[int]] | None         =None):
         super().__init__(model, known_entities, known_relations, top_k, missing, dictionary)
 
     def evaluate(self, b_size: int, node_embeddings: nn.ModuleDict, relation_embeddings: nn.Embedding, mapping: HeteroMappings, verbose:bool=True):
@@ -130,16 +130,16 @@ class KEntityInference(EntityInference):
             device = "cuda" if use_cuda else "cpu"
             
             if use_cuda:
-                dataloader = DataLoader_(self.known_entities, self.known_relations, batch_size=b_size, use_cuda='batch')
+                dataloader = DataLoader_(self.known_entities, self.known_relations, batch_size=b_size, use_cuda="batch")
                 self.predictions = self.predictions.cuda()
             else:
                 dataloader = DataLoader_(self.known_entities, self.known_relations, batch_size=b_size)
 
             for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
-                                unit='batch', disable=(not verbose),
-                                desc='Inference'):
+                                unit="batch", disable=(not verbose),
+                                desc="Inference"):
                 known_ents, known_rels = batch[0], batch[1]
-                if self.missing == 'heads':
+                if self.missing == "heads":
                     _, t_emb, rel_emb, candidates = self.model.inference_prepare_candidates(tensor([]).long().to(device), known_ents,
                                                                                             known_rels, node_embeddings,
                                                                                             relation_embeddings, mapping,
