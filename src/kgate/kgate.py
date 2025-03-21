@@ -454,7 +454,7 @@ class Architect(Model):
         #################
         # Report metrics
         #################
-        plot_learning_curves(self.training_metrics_file, self.config["output_directory"])
+        plot_learning_curves(self.training_metrics_file, self.config["output_directory"], self.validation_metric)
 
     def test(self):
         torch.cuda.empty_cache()
@@ -715,15 +715,15 @@ class Architect(Model):
     ##### Metrics recording in CSV file
     def log_metrics_to_csv(self, engine: Engine):
         epoch = engine.state.epoch
-        train_loss = engine.state.metrics['loss_ra']
-        val_metrics = engine.state.metrics.get('val_metric', 0)
-        lr = self.optimizer.param_groups[0]['lr']
+        train_loss = engine.state.metrics["loss_ra"]
+        val_metrics = engine.state.metrics.get("val_metrics", 0)
+        lr = self.optimizer.param_groups[0]["lr"]
 
         self.train_losses.append(train_loss)
         self.val_metrics.append(val_metrics)
         self.learning_rates.append(lr)
 
-        with open(self.training_metrics_file, mode='a', newline='') as file:
+        with open(self.training_metrics_file, mode="a", newline="") as file:
             writer = csv.writer(file)
             writer.writerow([epoch, train_loss, val_metrics, lr])
 
