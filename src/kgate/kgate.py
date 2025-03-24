@@ -158,8 +158,6 @@ class Architect(Model):
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
 
-        del decoder.ent_emb
-        del decoder.rel_emb
         return decoder, criterion
 
     def initialize_optimizer(self) -> optim.Optimizer:
