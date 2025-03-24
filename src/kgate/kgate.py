@@ -29,7 +29,7 @@ import pandas as pd
 import numpy as np
 import yaml
 import platform
-from typing import Tuple, Dict, List, Any, Sequence, Set
+from typing import Tuple, Dict, List, Any, Sequence, Set, Literal
 
 # Configure logging
 logging.captureWarnings(True)
@@ -113,10 +113,42 @@ class Architect(Model):
         super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
 
 
-    def initialize_encoder(self) -> DefaultEncoder | GCNEncoder | GATEncoder:
+    def initialize_encoder(self, encoder_name: str = "", gnn_layers: int = 0) -> DefaultEncoder | GCNEncoder | GATEncoder:
+        """Create and initialize the encoder object according to the configuration or arguments.
+
+        The encoder is created from PyG encoding layers. Currently, the implemented encoders 
+        are a random initialization, GCN [1]_ and GAT [2]_. See the encoder class for a detailed
+        explanation of the encoders.
+
+        If both configuration and arguments are given, the arguments take priority.
+
+        References
+        ----------
+        .. [1] Kipf, Thomas and Max Welling. “Semi-Supervised Classification with Graph Convolutional Networks.” ArXiv abs/1609.02907 (2016): n. pag.
+        .. [2] Brody, Shaked et al. “How Attentive are Graph Attention Networks?” ArXiv abs/2105.14491 (2021): n. pag.
+
+        Parameters
+        ----------
+        encoder_name: {"Default", "GCN", "GAT"}, optional
+            Name of the encoder
+        gnn_layers: int, optional
+            Number of hidden layers for the encoder. Only used for deep learning encoders.
+
+        Warns
+        -----
+        If the provided encoder name is not supported, it will default to a random initialization and warn the user.
+
+        Returns
+        -------
+        encoder
+            The encoder object
+        """
         encoder_config: dict = self.config["model"]["encoder"]
-        encoder_name: str = encoder_config["name"]
-        gnn_layers: int = encoder_config["gnn_layer_number"]
+        if encoder_name == "":
+            encoder_name = encoder_config["name"]
+        
+        if gnn_layers == 0:
+            gnn_layers = encoder_config["gnn_layer_number"]
 
         match encoder_name:
             case "Default":
@@ -125,14 +157,20 @@ class Architect(Model):
                 encoder = GCNEncoder(self.node_embeddings, self.mappings, self.emb_dim, gnn_layers)
             case "GAT":
                 encoder = GATEncoder(self.node_embeddings, self.mappings, self.emb_dim, gnn_layers)
-
+            case _:
+                encoder = DefaultEncoder()
+                logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
         return encoder
 
-    def initialize_decoder(self) -> Tuple[Model, nn.Module]:
+    def initialize_decoder(self, decoder_name: str = "", dissimilarity: Literal["L1","L2",""] = "", margin: int = 0) -> Tuple[Model, nn.Module]:
         decoder_config: dict = self.config["model"]["decoder"]
-        decoder_name: str = decoder_config["name"]
-        dissimilarity: str = decoder_config["dissimilarity"]
-        margin: int = decoder_config["margin"]
+
+        if decoder_name == "":
+            decoder_name = decoder_config["name"]
+        if dissimilarity == "":
+            dissimilarity = decoder_config["dissimilarity"]
+        if margin == 0:
+            margin = decoder_config["margin"]
 
         # Translational models
         match decoder_name:
