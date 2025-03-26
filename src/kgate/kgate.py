@@ -666,11 +666,13 @@ class Architect(Model):
 
         return loss.item()
 
-    def scoring_function(self, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor, train: bool = True) -> torch.types.Number:
+    def scoring_function(self, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor) -> torch.types.Number:
         encoder_output = None
 
         h_node_types: torch.Tensor = self.mappings.kg_to_node_type[h_idx]
+        h_embeddings: torch.Tensor = torch.zeros((h_idx.size(0), self.emb_dim), device=self.device)
         t_node_types: torch.Tensor = self.mappings.kg_to_node_type[t_idx]
+        t_embeddings: torch.Tensor = torch.zeros((t_idx.size(0), self.emb_dim), device=self.device)
 
         try:
             h_het_idx: torch.Tensor = self.mappings.kg_to_hetero[h_idx]
@@ -681,23 +683,25 @@ class Architect(Model):
         h_unique_types: List[int] = h_node_types.unique()
         t_unique_types: List[int] = t_node_types.unique()
 
-        if train and self.encoder.deep:
-            # Check what the encoder needs AND if list() casting doesn't break gradient
+        if self.encoder.deep:
+            # TODO : Check what the encoder needs AND if list() casting doesn't break gradient
             encoder_output = list(self.encoder.forward(self.mappings.data).values()) 
 
-            h_embeddings = torch.cat([
-                encoder_output[node_type][h_het_idx[h_node_types == node_type]] for node_type in h_unique_types
-            ])
-            t_embeddings = torch.cat([
-                encoder_output[node_type][t_het_idx[t_node_types == node_type]] for node_type in t_unique_types
-            ])
-        else:
-            h_embeddings = torch.cat([
-                self.node_embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in h_unique_types
-            ])
-            t_embeddings = torch.cat([
-                self.node_embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
-            ])
+        for node_type in h_unique_types:
+            h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
+            indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
+            if self.encoder.deep:
+                h_embeddings[indices] = encoder_output[node_type][h_het_idx[h_mask]]
+            else:
+                h_embeddings[indices] = self.node_embeddings[node_type](h_het_idx[h_mask])
+        for node_type in t_unique_types:
+            t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
+            indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
+            if self.encoder.deep:
+                t_embeddings[indices] = encoder_output[node_type][t_het_idx[t_mask]]
+            else:
+                t_embeddings[indices] = self.node_embeddings[node_type](t_het_idx[h_mask])
+
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 
 
