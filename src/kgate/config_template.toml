@@ -12,9 +12,10 @@ metadata_csv = ""
 output_directory = ""
 
 verbose = true
+
+# If the knowledge graph has not been preprocessed by KGATE before,
+# it is highly recommended to set this option as true.
 run_kg_preprocess = true
-run_training = false
-run_evaluation = false
 
 [preprocessing]
 
@@ -26,13 +27,8 @@ make_directed_relations = []
 
 flag_near_duplicate_relations = true
 
-# DL stuff, keep ?
-#permute_entities = false
-
 # Remove all flagged relations from the train set
 clean_train_set = true
-
-#mixed_test = true
 
 [preprocessing.params]
 theta = 0.8
@@ -40,46 +36,118 @@ theta1 = 0.8
 theta2 = 0.8
 
 [model]
+# The dimension of the embedding vectors for entities and relations.
+# Some models need to have the same dimensions for entity and relation vectors.
+# The default value for rel_emb_dim, -1, will set it to be equal to emb_dim
 emb_dim = 256
-rel_emb_dim = 256
+rel_emb_dim = -1
 
 [model.encoder]
+# The encoder transforms the entities and relations into embedding vectors
+# of size model.emb_dim and model.rel_emb_dim respectively.
+# Read the documentation for more information about the different encoders.
+# Supported options are :
+# - Default : a simple lookup table, similar to a random initialization.
+# - GCN : Graph Convolutional Network proposed by Kipf & Welling 2017
+# - GAT : Graph Attention Network improvment proposed by Brody et al. 2021
 name = "Default" #Lookup table
 gnn_layer_number = 1
-#add other possible hyperparams
+
 
 [model.decoder]
+# The decoder learns from the embedding to reconstruct the graph.
+# Read the documentation for more information about the different decoders.
+# Supported options are :
+# - TransE : Translational model proposed by Bordes et al. 2013
+# - TransH : Translational model proposed by Wang et al. 2014
+# - TransR : Translational model proposed by Lin et al. 2015
+# - TransD : Translational model proposed by Ji et al. 2015
+# - RESCAL : Bilinear model proposed by Nickel et al. 2011
+# - DistMult : Bilinear model proposed by Yang et al. 2014
 name = "TransE"
-margin = 1 # Models using MarginLoss
+
+# Translational decoders use a Margin Loss, which needs a margin parameter.
+# This is ignored for non-translational decoders.
+margin = 1
+
+# Type of dissimilarity used in the loss function. L1 or L2.
 dissimilarity = "L2"
-#add other possible hyperparams
 
 [sampler]
+# Type of negative sampler to generate false triple during the training.
+# Supported options are :
+# - Positional : proposed by Socher et al. 2011, replaces either the head or tail of a triplet by another entity in the same place with the same relation.
+# - Uniform : proposed by Bordes et al. 2013, replaces either the head or tail by another entity at random following an uniform distribution.
+# - Bernouilli : proposed by Wang et al. 2014, replaces either the head or tail using probabilities taking relations into account.
+# - Mixed : proposed by Brière et al. 2025, combines the three negative samplers above, sampling n_neg negative samples for each triplet.
 name = "Positional"
+
+# Number of negative samples to generate for each triplet.
 n_neg = 1
 
 [optimizer]
+# Pytorch optimizer to guide training. 
+# See Pytorch documentation for their differences.
+# Supported options are :
+# - Adam
+# - SGD
+# - RMSprop
 name = "Adam"
+
 [optimizer.params]
+# Parameters passed to the pytorch optimizer
 weight_decay = 0.001
 
+# This is the initial learning rate, which might be modified by a learning rate scheduler (see below)
+lr = 0.001
+
 [lr_scheduler]
-type = "CosineAnnealingWarmRestarts"
+# The Learning Rate Scheduler is an optional module that alter the learning rate throughout the training.
+# They follow different patterns following the type of LR scheduler and parameters.
+# lr_scheduler.params are the parameters passed to the LR scheduler. The name of the parameters must be the same
+# as those found in Pytorch's torch.optim.lr_scheduler documentation.
+# Supported options are:
+# - Empty string : no LR scheduler, the learning rate will stay the same during the entirety of the training.
+# - StepLR : applies a multiplicative decay to the learning rate each step
+# - MultiStepLR : same as StepLR, but at specified epochs (milestones) instead of each step.
+# - ExponentialLR : Decays the learning rate by gamma every epoch
+# - CosineAnnealingLR : Reduce the learning rate using a cosine function, between a maximum and minimum LR
+# - ConsineAnnealingWarmRestarts : Same as CosineAnnealingLR, except that the learning rate returns sometimes to the maximum
+# - ReduceLROnPlateau : Reduces the learning rate when the validation metric stopped improving.
+# - LambdaLR : Set the learning rate after each epoch according to a given function. To use this LR scheduler,
+#              see the documentation for Architect.initialize_scheduler() and give the function name as argument.
+# - OneCycleLR : Increase the learning rate to a maximum learning rate before reducing it to a minimum.
+# - CyclicLR : Cycles the learning rate between two boundaries with a constant frequency.
+type = ""
 [lr_scheduler.params]
-T_0 = 10
-T_mult = 2
+
 
 [training]
+# Maximum number of training epochs. The training may stop before, but will at most do this much epochs.
 max_epochs = 100
+
+# Number of epochs with no significant loss improvement before the training is stopped early.
 patience = 20
+
+# Size of a training batch. The higher it is, the faster the training go, within reasons.
 train_batch_size = 2048
+
+# Number of epochs between an evaluation of the model on the validation set.
 eval_interval = 10
+
+# Size of an evaluation and inference batch. Must be smaller than the training batch, as evaluation takes a lot more memory.
 eval_batch_size = 32
+
+# Number of epochs between which a checkpoint is saved to retain the training state of a model.
 save_interval = 5
 
 [evaluation]
+# Type of evaluation to be run on the validation and testing set.
+# Supported options are :
+# - Link Prediction : Predict plausible relations between two nodes of the graph
+# - Triplet Classification : Discriminate between true and false triplets
 objective = "Link Prediction"
+
 made_directed_relations = []
-# List of relations for which link prediction will be evaluated
 target_relations = [] 
 thresholds = [10]
