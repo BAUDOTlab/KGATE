@@ -41,7 +41,46 @@ logging.basicConfig(
 
 
 class Architect(Model):
-    def __init__(self, config_path: str = "", kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | None = None, df: pd.DataFrame | None = None, cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
+    """Architect class for knowledge graph embedding training.
+    
+    The Architect class contains the kg and manages every step from the training to the inference.
+    
+    Parameters
+    ----------
+    config_path : str, optional
+        Path to the configuration file
+    kg : Tuple of KGATEGraph or torchkge.KnowledgeGraph, optional
+        Either a knowledge graph that has already been preprocessed by KGATE and split accordingly, or an unprocessed KnowledgeGraph object.
+        In the first case, the knowledge graph won't be preprocessed even if `config.run_kg_preprocess` is set to True.
+        In the second case, an error is thrown if the `config.run_kg_preprocess` is set to False.
+    df : pd.DataFrame
+        The knowledge graph as a pandas dataframe containing at least the columns from, to and rel
+    cuddn_benchmark : bool, default to True
+        Benchmark different convolution algorithms to chose the optimal one. Initialization is slightly longer when it is enabled, and only if cuda is available.
+    num_cores : int, default to 0
+        Set the number of cpu cores used by KGATE. If set to 0, the maximum number of available cores is used.
+    kwargs: dict
+        Inline configuration parameters. The name of the arguments must match the parameters found in `config_template.toml`.
+        
+    Raises
+    ------
+    ValueError
+        If the `config.metadata_csv` file exists but cannot be parsed, or if `kg` is given, but not a tuple of KGATEGraph and `config.run_kg_preprocess` is set to false.
+
+    Examples
+    --------
+    Inline hyperparameter declaration
+    >>> model_params = {"emb_dim": 100, "decoder": {"name":"DistMult"}}
+    >>> sampler_params = {"n_neg":5}
+    >>> run_preprocessing = True
+    >>> architect = Architect("/path/to/configuration", model = model_params, sampler = sampler_params, run_kg_preprocess = run_preprocessing)
+
+    Notes
+    -----
+    While it is possible to give any part of the configuration, even everything, as kwargs, it is recommended
+    to use a separated configuration file to ensure reproducibility of training.
+    """
+    def __init__(self, config_path: str = "", kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None, cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
         # kg should be of type KGATEGraph or KnowledgeGraph, if exists use it instead of the one in config
         # df should have columns from, rel and to
         self.config: dict = parse_config(config_path, kwargs)
@@ -100,13 +139,13 @@ class Architect(Model):
         else:
             if kg is not None:
                 logging.info("Using given KG...")
-                if isinstance(kg, (KnowledgeGraph,KnowledgeGraph,KnowledgeGraph)):
+                if isinstance(kg, (KGATEGraph,KGATEGraph,KGATEGraph)):
                     self.kg_train, self.kg_val, self.kg_test = kg
                 else:
                     raise ValueError("Given KG needs to be a tuple of training, validation and test KG if it is preprocessed.")
             else:
                 logging.info("Loading KG...")
-                self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(self.config["kg_pkl"])
+                self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
                 logging.info("Done")
 
         super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
@@ -162,6 +201,49 @@ class Architect(Model):
         return encoder
 
     def initialize_decoder(self, decoder_name: str = "", dissimilarity: Literal["L1","L2",""] = "", margin: int = 0) -> Tuple[Model, nn.Module]:
+        """Create and initialize the decider object according to the configuration or arguments.
+
+        The decoders are adapted and inherit from torchKGE decoders to be able to handle heterogeneous data.
+        Not all torchKGE decoders are already implemented, but all of them and more will eventually be. Currently, 
+        the available decoders are **TransE** [1]_, **TransH** [2]_, **TransR** [3]_, **TransD** [4]_,
+        **RESCAL** [5]_ and **DistMult** [6]_. See the description of decoder classes for details about 
+        their implementation, or read their original papers.
+
+        Translational models are used with a `torchkge.MarginLoss` while bilinear models are used with a 
+        `torchkge.BinaryCrossEntropyLoss`.
+
+        If both configuration and arguments are given, the arguments take priority.
+
+        References
+        ----------
+        .. [1] Bordes, Antoine et al. “Translating Embeddings for Modeling Multi-relational Data.” Neural Information Processing Systems (2013).
+        .. [2] Wang, Zhen et al. “Knowledge Graph Embedding by Translating on Hyperplanes.” AAAI Conference on Artificial Intelligence (2014).
+        .. [3] Lin, Yankai et al. “Learning Entity and Relation Embeddings for Knowledge Graph Completion.” AAAI Conference on Artificial Intelligence (2015).
+        .. [4] Ji, Guoliang et al. “Knowledge Graph Embedding via Dynamic Mapping Matrix.” Annual Meeting of the Association for Computational Linguistics (2015).
+        .. [5] Nickel, Maximilian et al. “A Three-Way Model for Collective Learning on Multi-Relational Data.” International Conference on Machine Learning (2011).
+        .. [6] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2014).
+
+        Parameters
+        ----------
+        decoder_name: str, optional
+            Name of the decoder.
+        dissimlarity: {"L1","L2"}, optional
+            Type of the dissimilarity metric.
+        margin: int, optional
+            Margin to be used with MarginLoss. Unused with bilinear models.
+
+        Raises
+        -----
+        NotImplementedError
+            If the provided decoder name is not supported.
+
+        Returns
+        -------
+        decoder
+            The decoder object
+        criterion
+        The loss object"""
+        
         decoder_config: dict = self.config["model"]["decoder"]
 
         if decoder_name == "":

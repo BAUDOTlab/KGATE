@@ -74,7 +74,7 @@ def set_config_key(key: str, default: dict, config: dict | None = None, inline: 
     else:
         return inline_value
 
-def load_knowledge_graph(pickle_filename: str):
+def load_knowledge_graph(pickle_filename: Path) -> Tuple[KGATEGraph, KGATEGraph, KGATEGraph]:
     """Load the knowledge graph from pickle files."""
     logging.info(f"Will not run the preparation step. Using KG stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:

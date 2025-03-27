@@ -13,7 +13,29 @@ from typing import Tuple, List
 SUPPORTED_SEPARATORS = [",","\t",";"]
 
 def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.DataFrame | None) -> Tuple[KGATEGraph, KGATEGraph, KGATEGraph]:
-    """Prepare and clean the knowledge graph."""
+    """Prepare and clean the knowledge graph.
+    
+    This function takes an input knowledge graph either as a csv file (from the configuration), an object of type
+    `torchkge.KnowledgeGraph` or a pandas `DataFrame`. It is preprocessed by the `clean_knowledge_graph` function
+    and saved as a pickle file with the `save_knowledge_graph` function.
+    
+    Notes
+    -----
+    The CSV file can have any number of columns but at least three named from, to and rel.
+
+    Arguments
+    ---------
+    config : dict
+        The full configuration, usually parsed from the KGATE configuration file.
+    kg : torchKGE.KnowledgeGraph
+        The knowledge graph as a single object of class KnowledgeGraph or inheriting the class (KGATEGraph inherits the class)
+    df : pd.DataFrame
+        The knowledge graph as a pandas DataFrame.
+        
+    Returns
+    -------
+    kg_train, kg_val, kg_test : KGATEGraph
+        A tuple containing the preprocessed and split knowledge graph."""
     # Load knowledge graph
     if kg is None and df is None:
         input_file = config["kg_csv"]
@@ -53,7 +75,22 @@ def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.Data
     return kg_train, kg_val, kg_test
 
 def save_knowledge_graph(config: dict, kg_train: KGATEGraph, kg_val: KGATEGraph, kg_test:KGATEGraph):
-    """Save the knowledge graph to files."""
+    """Save the knowledge graph to a pickle file.
+    
+    If the name of a pickle file is specified in the configuration, it will be used. Otherwise, the 
+    file will be created in `config["output_directory"]/kg.pkl`.
+    
+    Arguments
+    ---------
+    config : dict
+        The full configuration, usually parsed from the KGATE configuration file.
+    kg_train : KGATEGraph
+        The training knowledge graph.
+    kg_val : KGATEGraph
+        The validation knowledge graph.
+    kg_test : KGATEGraph
+        The testing knowledge graph."""
+    
     if config["kg_pkl"] == "":
         pickle_filename = Path(config["output_directory"], "kg.pkl")
     else:
@@ -64,9 +101,8 @@ def save_knowledge_graph(config: dict, kg_train: KGATEGraph, kg_val: KGATEGraph,
         pickle.dump(kg_val, file)
         pickle.dump(kg_test, file)
 
-def load_knowledge_graph(config: dict):
-    """Load the knowledge graph from pickle files."""
-    pickle_filename = config["kg_pkl"]
+def load_knowledge_graph(pickle_filename: Path):
+    """Load the knowledge graph from a pickle file."""
     with open(pickle_filename, "rb") as file:
         kg_train = pickle.load(file)
         kg_val = pickle.load(file)
