@@ -46,6 +46,7 @@ def parse_config(config_path: str, config_dict: dict) -> dict:
     return config
 
 def set_config_key(key: str, default: dict, config: dict | None = None, inline: dict | None = None) -> str | int | list | dict:
+    logging.info(f"Setting parameter {key}")
     if inline is not None and key in inline:
         inline_value = inline[key]
     else:
@@ -56,10 +57,17 @@ def set_config_key(key: str, default: dict, config: dict | None = None, inline: 
     else: 
         config_value = None
 
-    if isinstance(default[key], dict):
+    if key in default and isinstance(default[key], dict):
         new_value = {}
-        for child_key in default[key]:
+        keys = list(default[key].keys())
+        if config_value is not None:
+            keys += (list(config_value.keys()))
+        if inline_value is not None:
+            keys += (list(inline_value.keys()))
+        logging.info(keys)
+        for child_key in set(keys):
             new_value.update({child_key: set_config_key(child_key, default[key], config_value,  inline_value)})
+
         return new_value
     
     if inline_value is None:

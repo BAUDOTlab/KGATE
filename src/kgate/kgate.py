@@ -114,6 +114,8 @@ class Architect(Model):
 
         self.emb_dim: int = self.config["model"]["emb_dim"]
         self.rel_emb_dim: int = self.config["model"]["rel_emb_dim"]
+        if self.rel_emb_dim == -1:
+            self.rel_emb_dim = self.emb_dim
         self.eval_batch_size: int = self.config["training"]["eval_batch_size"]
 
         self.metadata: pd.DataFrame | None = None
@@ -782,7 +784,7 @@ class Architect(Model):
             if self.encoder.deep:
                 t_embeddings[indices] = encoder_output[node_type][t_het_idx[t_mask]]
             else:
-                t_embeddings[indices] = self.node_embeddings[node_type](t_het_idx[h_mask])
+                t_embeddings[indices] = self.node_embeddings[node_type](t_het_idx[t_mask])
 
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 
