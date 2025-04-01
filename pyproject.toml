@@ -1,6 +1,6 @@
 [project]
 name = "KGATE"
-version = "0.1.15"
+version = "0.1.16"
 description = "Knowledge Graph Autoencoder Training Environment, bridging PyG encoders and TorchKGE decoders."
 authors = [
     {name = "Benjamin Loire", email = "benjamin.loire@univ-amu.fr"},
@@ -40,3 +40,4 @@ matplotlib = "^3.10.0"
 pytorch-ignite = "^0.5.1"
 pyyaml = "^6.0.2"
 pytest = "^8.3.4"
+optuna = "^4.2.1"
