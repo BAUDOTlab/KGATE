@@ -656,6 +656,8 @@ class Architect(Model):
             yaml.dump(results, file, default_flow_style=False, sort_keys=False)
 
         logging.info(f"Evaluation results stored in {metrics_file}")
+
+        return results
         
     def test_infer(self, inference_kg_path: Path):
         inference_metrics_file: Path = Path(self.config["output_directory"], "inference_metrics.yaml")

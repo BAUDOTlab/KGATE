@@ -6,7 +6,7 @@ import pandas as pd
 from torchkge import KnowledgeGraph
 from typing import Tuple, Any
 
-def run_grid_search(config_path: str, kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None):
+def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None):
     """Run a grid search hyperparameter optimization according to the given configuration.
 
     To register a hyperparameter in the grid search optimization, set it as a list in the configuration.
@@ -18,13 +18,19 @@ def run_grid_search(config_path: str, kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph
     If the configuration file has no hyperparameter list, this function is effectively the same
     as running `Architect(config_path).train_model()`"""
 
-
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=n_trials)
     def objective(trial: optuna.trial.Trial):
         config = parse_config(config_path=config_path, config_dict={})
 
         config = {key: suggest_value(trial, key, config[key]) for key in config}
 
-        architect = Architect(config_path=config_path, kg=kg, df=df)
+        architect = Architect(kg=kg, df=df, **config)
+
+        architect.train_model()
+
+        res = architect.test()
+        return res["Global_metrics"]
 
 def suggest_value(trial: optuna.trial.Trial, value_name: str, value: Any):
     if value_name == "evaluation":
