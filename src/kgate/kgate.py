@@ -148,6 +148,15 @@ class Architect(Model):
                 self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
                 logging.info("Done")
 
+        # Initialize attributes
+        self.encoder = None
+        self.decoder = None
+        self.criterion = None
+        self.optimizer = None
+        self.sampler = None
+        self.scheduler = None
+        self.evaluator = None
+
         super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
 
 
@@ -435,24 +444,30 @@ class Architect(Model):
                 self.node_embeddings.append(init_embedding(num_nodes, self.emb_dim, self.device))
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
-        logging.info("Initializing encoder...")
-        self.encoder = self.initialize_encoder()
+        if self.encoder is None:
+            logging.info("Initializing encoder...")
+            self.encoder = self.initialize_encoder()
 
-        logging.info("Initializing decoder...")
-        self.decoder, self.criterion = self.initialize_decoder()
-        self.decoder.to(self.device)
+        if self.decoder is None:
+            logging.info("Initializing decoder...")
+            self.decoder, self.criterion = self.initialize_decoder()
+            self.decoder.to(self.device)
 
-        logging.info("Initializing optimizer...")
-        self.optimizer = self.initialize_optimizer()
+        if self.optimizer is None:
+            logging.info("Initializing optimizer...")
+            self.optimizer = self.initialize_optimizer()
 
-        logging.info("Initializing sampler...")
-        self.sampler = self.initialize_sampler()
+        if self.sampler is None:
+            logging.info("Initializing sampler...")
+            self.sampler = self.initialize_sampler()
 
-        logging.info("Initializing lr scheduler...")
-        self.scheduler = self.initialize_scheduler()
+        if self.scheduler is None:
+            logging.info("Initializing lr scheduler...")
+            self.scheduler = self.initialize_scheduler()
 
-        logging.info("Initializing evaluator...")
-        self.evaluator = self.initialize_evaluator()
+        if self.evaluator is None:
+            logging.info("Initializing evaluator...")
+            self.evaluator = self.initialize_evaluator()
 
         self.training_metrics_file: Path = Path(self.config["output_directory"], "training_metrics.csv")
 
