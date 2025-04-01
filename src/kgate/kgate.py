@@ -427,8 +427,9 @@ class Architect(Model):
         self.node_embeddings: nn.ModuleList = nn.ModuleList()
         for node_type in self.mappings.data.node_types:
             num_nodes = self.mappings.data[node_type].num_nodes
-            if node_type in attributes and isinstance(attributes[node_type], nn.Embedding):
-                assert self.emb_dim == attributes[node_type].embedding_dim, f"The embedding dimensions of attribute embeddings must be the same as the model embedding dimensions ({self.emb_dim}, found {attributes[node_type].embedding_dim})"
+            if node_type in attributes:
+                if self.config["model"]["encoder"]["name"] == "Default":
+                    assert isinstance(attributes[node_type], nn.Embedding) and (attributes[node_type].embedding_dim == self.emb_dim), f"If there is no encoder, the embedding dimensions of the given attributes ({attributes[node_type].embedding_dim}) must match the embedding dimension ({self.emb_dim})."
                 self.node_embeddings.append(attributes[node_type])
             else:
                 self.node_embeddings.append(init_embedding(num_nodes, self.emb_dim, self.device))
