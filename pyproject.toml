@@ -1,6 +1,6 @@
 [project]
 name = "KGATE"
-version = "0.1.16"
+version = "0.1.17"
 description = "Knowledge Graph Autoencoder Training Environment, bridging PyG encoders and TorchKGE decoders."
 authors = [
     {name = "Benjamin Loire", email = "benjamin.loire@univ-amu.fr"},

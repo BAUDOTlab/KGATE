@@ -5,6 +5,14 @@ from .utils import parse_config
 import pandas as pd
 from torchkge import KnowledgeGraph
 from typing import Tuple, Any
+import logging 
+
+logging.captureWarnings(True)
+log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
+logging.basicConfig(
+    level=log_level,  
+    format="%(asctime)s - %(levelname)s - %(message)s" 
+)
 
 def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None):
     """Run a grid search hyperparameter optimization according to the given configuration.
@@ -19,7 +27,14 @@ def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KGATEGraph,K
     as running `Architect(config_path).train_model()`"""
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(objective, n_trials=n_trials, pruner=optuna.pruners.MedianPruner(), sampler=optuna.samplers.GridSampler())
+
+    best_trial = study.best_trial
+    logging.info(f"Best trial score: {best_trial.value}")
+    logging.info(f"Best trial hyperparameters:")
+    for key, value in best_trial.params.items():
+        logging.info("{}: {}".format(key, value))
+
     def objective(trial: optuna.trial.Trial):
         config = parse_config(config_path=config_path, config_dict={})
 
