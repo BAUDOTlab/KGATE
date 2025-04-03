@@ -59,28 +59,27 @@ class TransE(TransEModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        
+        device = h_idx.device        
 
         h_node_types = mappings.kg_to_node_type[h_idx]
+        h_embeddings: torch.Tensor = torch.zeros((h_idx.size(0), self.emb_dim), device=device)
         h_unique_types = h_node_types.unique()
         h_het_idx = mappings.kg_to_hetero[h_idx]
 
         t_node_types = mappings.kg_to_node_type[t_idx]
+        t_embeddings: torch.Tensor = torch.zeros((t_idx.size(0), self.emb_dim), device=device)
         t_unique_types = t_node_types.unique()
         t_het_idx = mappings.kg_to_hetero[t_idx]
-        
-        h = torch.cat([
-            node_embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in h_unique_types
-        ])
-        t = torch.cat([
-            node_embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
-        ])
 
-        
-        # h = torch.stack(h_emb_list, dim=0) if len(h_emb_list) != 0 else tensor([]).long()
-        # t = torch.stack(t_emb_list, dim=0) if len(t_emb_list) != 0 else tensor([]).long()
+        for node_type in h_unique_types:
+            h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
+            indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
+            h_embeddings[indices] = node_embeddings[node_type](h_het_idx[h_mask])
+        for node_type in t_unique_types:
+            t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
+            indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
+            t_embeddings[indices] = node_embeddings[node_type](t_het_idx[t_mask])
 
-        device = h.device
         r = relation_embeddings(r_idx)
 
         if entities:

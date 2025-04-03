@@ -53,8 +53,12 @@ class Architect(Model):
         Either a knowledge graph that has already been preprocessed by KGATE and split accordingly, or an unprocessed KnowledgeGraph object.
         In the first case, the knowledge graph won't be preprocessed even if `config.run_kg_preprocess` is set to True.
         In the second case, an error is thrown if the `config.run_kg_preprocess` is set to False.
-    df : pd.DataFrame
+    df : pd.DataFrame, optional
         The knowledge graph as a pandas dataframe containing at least the columns from, to and rel
+    metadata : pd.DataFrame, optional
+        The metadata as a pandas dataframe, with at least the columns id and type, where id is the name of the node as it is in the
+        knowledge graph. If this argument is not provided, the metadata will be read from config.metadata if it exists. If both are absent,
+        all nodes will be considered to be the same node type.
     cuddn_benchmark : bool, default to True
         Benchmark different convolution algorithms to chose the optimal one. Initialization is slightly longer when it is enabled, and only if cuda is available.
     num_cores : int, default to 0
@@ -80,7 +84,7 @@ class Architect(Model):
     While it is possible to give any part of the configuration, even everything, as kwargs, it is recommended
     to use a separated configuration file to ensure reproducibility of training.
     """
-    def __init__(self, config_path: str = "", kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None, cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
+    def __init__(self, config_path: str = "", kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None, metadata: pd.DataFrame | None = None, cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
         # kg should be of type KGATEGraph or KnowledgeGraph, if exists use it instead of the one in config
         # df should have columns from, rel and to
         self.config: dict = parse_config(config_path, kwargs)
@@ -118,9 +122,12 @@ class Architect(Model):
             self.rel_emb_dim = self.emb_dim
         self.eval_batch_size: int = self.config["training"]["eval_batch_size"]
 
-        self.metadata: pd.DataFrame | None = None
+        if metadata is not None and not set(["id","type"]).issubset(metadata.keys()):
+            raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
+        
+        self.metadata = metadata
 
-        if self.config["metadata_csv"] != "" and Path(self.config["metadata_csv"]).exists():
+        if metadata is None and self.config["metadata_csv"] != "" and Path(self.config["metadata_csv"]).exists():
             for separator in SUPPORTED_SEPARATORS:
                 try:
                     self.metadata = pd.read_csv(self.config["metadata_csv"], sep=separator, usecols=["type","id"])
@@ -203,9 +210,9 @@ class Architect(Model):
             case "Default":
                 encoder = DefaultEncoder()
             case "GCN": 
-                encoder = GCNEncoder(self.node_embeddings, self.mappings, self.emb_dim, gnn_layers)
+                encoder = GCNEncoder(self.mappings, self.emb_dim, gnn_layers)
             case "GAT":
-                encoder = GATEncoder(self.node_embeddings, self.mappings, self.emb_dim, gnn_layers)
+                encoder = GATEncoder(self.mappings, self.emb_dim, gnn_layers)
             case _:
                 encoder = DefaultEncoder()
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
@@ -411,7 +418,7 @@ class Architect(Model):
         logging.info(f"Using {self.config["evaluation"]["objective"]} evaluator.")
         return evaluator
 
-    def train_model(self, checkpoint_file: Path | None = None, attributes: Dict[str, nn.Embedding]={}):
+    def train_model(self, checkpoint_file: Path | None = None, attributes: Dict[str, Any]={}):
         """Launch the training procedure of the Architect.
         
         Arguments:
@@ -439,9 +446,15 @@ class Architect(Model):
         for node_type in self.mappings.data.node_types:
             num_nodes = self.mappings.data[node_type].num_nodes
             if node_type in attributes:
-                if self.config["model"]["encoder"]["name"] == "Default":
-                    assert isinstance(attributes[node_type], nn.Embedding) and (attributes[node_type].embedding_dim == self.emb_dim), f"If there is no encoder, the embedding dimensions of the given attributes ({attributes[node_type].embedding_dim}) must match the embedding dimension ({self.emb_dim})."
-                self.node_embeddings.append(attributes[node_type])
+                current_attribute = attributes[node_type]
+                if isinstance(current_attribute, nn.Embedding):
+                    assert current_attribute.embedding_dim == self.emb_dim and current_attribute.num_embeddings == num_nodes, f"The number and dimensions and embedding of the given attributes ({current_attribute.num_embeddings},{current_attribute.embedding_dim}) must match the embedding dimension ({num_nodes},{self.emb_dim})."
+                    self.node_embeddings.append(current_attribute)
+                else:
+                    assert len(current_attribute) == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
+                    emb = nn.Embedding(num_nodes, self.emb_dim, device=self.device)
+                    emb.weight.data = tensor(current_attribute).to(self.device)
+                    self.node_embeddings.append(emb)
             else:
                 self.node_embeddings.append(init_embedding(num_nodes, self.emb_dim, self.device))
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
@@ -665,9 +678,11 @@ class Architect(Model):
         inference_df = pd.read_csv(inference_kg_path, sep="\t")
         inference_kg = KGATEGraph(df = inference_df, ent2ix=self.kg_train.ent2ix, rel2ix=self.kg_train.rel2ix) 
         
+        embeddings = self.encoder.forward(self.node_embeddings, self.mappings)
+
         self.evaluator.evaluate(b_size = self.eval_batch_size, 
                         decoder =self.decoder, knowledge_graph=inference_kg,
-                        node_embeddings=self.node_embeddings, relation_embeddings=self.rel_emb,
+                        node_embeddings=embeddings, relation_embeddings=self.rel_emb,
                         mappings=self.mappings, verbose=True)
             
         inference_mrr = self.evaluator.mrr()[1]
@@ -706,8 +721,10 @@ class Architect(Model):
             known_heads = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in heads])
             known_tails = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in tails])
             inference = KRelationInference(self.decoder, known_heads, known_tails, dictionary=self.kg_train.dict_of_rels, top_k=topk)
+        
+        embeddings = self.encoder.forward(self.node_embeddings, self.mappings)
 
-        inference.evaluate(self.eval_batch_size, self.node_embeddings, self.rel_emb, self.mappings)
+        inference.evaluate(self.eval_batch_size, embeddings, self.rel_emb, self.mappings)
 
         ix2ent = {v: k for k, v in self.kg_train.ent2ix.items()}
         pred_idx = inference.predictions.reshape(-1).T
@@ -786,8 +803,8 @@ class Architect(Model):
         t_unique_types: List[int] = t_node_types.unique()
 
         if self.encoder.deep:
-            # TODO : Check what the encoder needs AND if list() casting doesn't break gradient
-            encoder_output = list(self.encoder.forward(self.mappings.data).values()) 
+            encoder_output = nn.Embedding()
+            encoder_output = list(self.encoder.forward(self.node_embeddings, self.mappings).values()) 
 
         for node_type in h_unique_types:
             h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
@@ -804,8 +821,9 @@ class Architect(Model):
             else:
                 t_embeddings[indices] = self.node_embeddings[node_type](t_het_idx[t_mask])
 
+        logging.info(f"Node embeddings : \n{self.node_embeddings[0].weight}")
+        logging.info(f"Encoder output: \n{encoder_output[0]}")
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
-
 
         h_normalized = normalize(h_embeddings, p=2, dim=1)
         t_normalized = normalize(t_embeddings, p=2, dim=1)
@@ -1044,9 +1062,11 @@ class Architect(Model):
         if not isinstance(self.evaluator, KLinkPredictionEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Link Prediction method for {type(self.evaluator)} evaluator.")
 
+        embeddings = self.encoder.forward(self.node_embeddings, self.mappings)
+
         self.evaluator.evaluate(b_size = self.eval_batch_size, 
                         decoder =self.decoder, knowledge_graph=kg,
-                        node_embeddings=self.node_embeddings, relation_embeddings=self.rel_emb,
+                        node_embeddings=embeddings, relation_embeddings=self.rel_emb,
                         mappings=self.mappings, verbose=True)
         
         test_mrr = self.evaluator.mrr()[1]

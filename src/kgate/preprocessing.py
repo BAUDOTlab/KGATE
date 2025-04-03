@@ -36,6 +36,7 @@ def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.Data
     -------
     kg_train, kg_val, kg_test : KGATEGraph
         A tuple containing the preprocessed and split knowledge graph."""
+
     # Load knowledge graph
     if kg is None and df is None:
         input_file = config["kg_csv"]

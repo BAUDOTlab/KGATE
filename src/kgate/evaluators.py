@@ -22,6 +22,8 @@ from .data_structures import KGATEGraph
 from .utils import HeteroMappings
 from .samplers import FixedPositionalNegativeSampler
 
+from typing import Dict
+
 class KLinkPredictionEvaluator(LinkPredictionEvaluator):
     """Evaluate performance of given embedding using link prediction method.
 
@@ -74,7 +76,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
                 b_size: int,
                 decoder: Model, 
                 knowledge_graph: KGATEGraph, 
-                node_embeddings: nn.ModuleList, 
+                node_embeddings: nn.ModuleList | Dict[str, Tensor], 
                 relation_embeddings: nn.Embedding, 
                 mappings: HeteroMappings, 
                 verbose: bool=True):
@@ -105,7 +107,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
         self.filt_rank_true_heads = empty(size=(knowledge_graph.n_facts,)).long()
         self.filt_rank_true_tails = empty(size=(knowledge_graph.n_facts,)).long()
 
-        use_cuda = node_embeddings[0].weight.is_cuda
+        use_cuda = relation_embeddings.weight.is_cuda
 
         if use_cuda:
             dataloader = DataLoader(knowledge_graph, batch_size=b_size, use_cuda="batch")
