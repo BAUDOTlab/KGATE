@@ -320,8 +320,10 @@ class HeteroMappings():
         self.kg_to_node_type = kg_to_nt
         self.kg_to_hetero = kg_to_het
 
+        self.relations = []
         # 4. Build edge_index for each relation type
         for rel, group in df.groupby("rel"):
+            self.relations.append(rel)
             # Identify source and target node type for this group
             if metadata is not None:
                 src_types = group["from_type"].unique()

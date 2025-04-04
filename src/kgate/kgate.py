@@ -5,7 +5,8 @@ from torchkge import KnowledgeGraph
 from torchkge.models import Model
 import torchkge.sampling as sampling
 import torch
-from torch import tensor, long, stack
+from torch import tensor, long, stack, Tensor
+from torch.nn import Parameter
 from torch.nn.functional import normalize
 from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, HeteroMappings, init_embedding, plot_learning_curves
 from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
@@ -438,7 +439,7 @@ class Architect(Model):
         # If no mapping is provided, there will be only one node type.
         logging.info("Creating Hetero Data from KG...")
         self.mappings = HeteroMappings(self.kg_train, self.metadata)
-        self.mappings.data = self.mappings.data.to(self.device)
+        self.data = self.mappings.data.to(self.device)
         self.mappings.kg_to_node_type = self.mappings.kg_to_node_type.to(self.device)
         self.mappings.kg_to_hetero = self.mappings.kg_to_hetero.to(self.device)
 
@@ -446,17 +447,20 @@ class Architect(Model):
         for node_type in self.mappings.data.node_types:
             num_nodes = self.mappings.data[node_type].num_nodes
             if node_type in attributes:
-                current_attribute = attributes[node_type]
-                if isinstance(current_attribute, nn.Embedding):
-                    assert current_attribute.embedding_dim == self.emb_dim and current_attribute.num_embeddings == num_nodes, f"The number and dimensions and embedding of the given attributes ({current_attribute.num_embeddings},{current_attribute.embedding_dim}) must match the embedding dimension ({num_nodes},{self.emb_dim})."
-                    self.node_embeddings.append(current_attribute)
-                else:
-                    assert len(current_attribute) == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
-                    emb = nn.Embedding(num_nodes, self.emb_dim, device=self.device)
-                    emb.weight.data = tensor(current_attribute).to(self.device)
-                    self.node_embeddings.append(emb)
+                current_attribute: Tensor = attributes[node_type]
+                assert current_attribute.size(0) == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
+                self.data[node_type].x = Parameter(current_attribute).to(self.device)
+                # if isinstance(current_attribute, nn.Embedding):
+                #     assert current_attribute.embedding_dim == self.emb_dim and current_attribute.num_embeddings == num_nodes, f"The number and dimensions and embedding of the given attributes ({current_attribute.num_embeddings},{current_attribute.embedding_dim}) must match the embedding dimension ({num_nodes},{self.emb_dim})."
+                #     self.node_embeddings.append(current_attribute)
+                # else:
+                #     assert len(current_attribute) == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
+                #     emb = nn.Embedding(num_nodes, self.emb_dim, device=self.device)
+                #     emb.weight.data = tensor(current_attribute).to(self.device)
+                #     self.node_embeddings.append(emb)
             else:
-                self.node_embeddings.append(init_embedding(num_nodes, self.emb_dim, self.device))
+                self.data[node_type].x = init_embedding(num_nodes, self.emb_dim, self.device).weight
+                #self.node_embeddings.append(init_embedding(num_nodes, self.emb_dim, self.device))
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
         if self.encoder is None:
@@ -766,7 +770,7 @@ class Architect(Model):
         logging.info("Best model successfully loaded.")
 
 
-    def process_batch(self, engine: Engine, batch) -> torch.types.Number:
+    def process_batch(self, engine: Engine, batch: Tuple[Tensor, Tensor, Tensor]) -> torch.types.Number:
         h, t, r = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)
 
         n_h, n_t = self.sampler.corrupt_batch(h, t, r)
@@ -787,6 +791,9 @@ class Architect(Model):
 
     def scoring_function(self, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor) -> torch.types.Number:
         encoder_output = None
+        # TODO : implement a custom dataloader able to return h,r,t index AND the corresponding HeteroData
+        # TODO : to feed the encoder. 
+        edge_index_dict = {}
 
         h_node_types: torch.Tensor = self.mappings.kg_to_node_type[h_idx]
         h_embeddings: torch.Tensor = torch.zeros((h_idx.size(0), self.emb_dim), device=self.device)
@@ -802,24 +809,29 @@ class Architect(Model):
         h_unique_types: List[int] = h_node_types.unique()
         t_unique_types: List[int] = t_node_types.unique()
 
+        for node_type in h_unique_types:
+            h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
+            indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
+            h_embeddings[indices] = self.node_embeddings[node_type](h_het_idx[h_mask])
+            
+
+        for node_type in t_unique_types:
+            t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
+            indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
+            t_embeddings[indices] = self.node_embeddings[node_type](t_het_idx[t_mask])
+
+        h_embeddings = self.encoder()
+
         if self.encoder.deep:
             encoder_output = nn.Embedding()
             encoder_output = list(self.encoder.forward(self.node_embeddings, self.mappings).values()) 
 
-        for node_type in h_unique_types:
-            h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
-            indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            if self.encoder.deep:
-                h_embeddings[indices] = encoder_output[node_type][h_het_idx[h_mask]]
-            else:
-                h_embeddings[indices] = self.node_embeddings[node_type](h_het_idx[h_mask])
-        for node_type in t_unique_types:
-            t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
-            indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            if self.encoder.deep:
-                t_embeddings[indices] = encoder_output[node_type][t_het_idx[t_mask]]
-            else:
-                t_embeddings[indices] = self.node_embeddings[node_type](t_het_idx[t_mask])
+            # if self.encoder.deep:
+            #     h_embeddings[indices] = encoder_output[node_type][h_het_idx[h_mask]]
+            # else:
+            # if self.encoder.deep:
+            #     t_embeddings[indices] = encoder_output[node_type][t_het_idx[t_mask]]
+            # else:
 
         logging.info(f"Node embeddings : \n{self.node_embeddings[0].weight}")
         logging.info(f"Encoder output: \n{encoder_output[0]}")
