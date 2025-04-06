@@ -26,15 +26,6 @@ def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KGATEGraph,K
     If the configuration file has no hyperparameter list, this function is effectively the same
     as running `Architect(config_path).train_model()`"""
 
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials, pruner=optuna.pruners.MedianPruner(), sampler=optuna.samplers.GridSampler())
-
-    best_trial = study.best_trial
-    logging.info(f"Best trial score: {best_trial.value}")
-    logging.info(f"Best trial hyperparameters:")
-    for key, value in best_trial.params.items():
-        logging.info("{}: {}".format(key, value))
-
     def objective(trial: optuna.trial.Trial):
         config = parse_config(config_path=config_path, config_dict={})
 
@@ -47,13 +38,28 @@ def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KGATEGraph,K
         res = architect.test()
         return res["Global_metrics"]
 
+    study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner())
+    study.optimize(objective, n_trials=n_trials)
+
+    best_trial = study.best_trial
+    logging.info(f"Best trial score: {best_trial.value}")
+    logging.info(f"Best trial hyperparameters:")
+    for key, value in best_trial.params.items():
+        logging.info("{}: {}".format(key, value))
+
+    
+
 def suggest_value(trial: optuna.trial.Trial, value_name: str, value: Any):
+    logging.info(value_name)
+    logging.info(value)
     if value_name == "evaluation":
         return value
     elif isinstance(value, dict):
         return {child_key: suggest_value(trial, child_key, value[child_key]) for child_key in value}
     elif isinstance(value, list):
-        if len(value) == 3 and (isinstance(value[0], int) or isinstance(value[0], float)):
+        if len(value) == 0:
+            return value
+        elif len(value) == 3 and (isinstance(value[0], int) or isinstance(value[0], float)):
             
             low, high = value[:2]
             step = None
