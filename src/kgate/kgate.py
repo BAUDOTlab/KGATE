@@ -459,8 +459,9 @@ class Architect(Model):
                 #     emb.weight.data = tensor(current_attribute).to(self.device)
                 #     self.node_embeddings.append(emb)
             else:
-                self.data[node_type].x = init_embedding(num_nodes, self.emb_dim, self.device).weight
-                #self.node_embeddings.append(init_embedding(num_nodes, self.emb_dim, self.device))
+                emb = init_embedding(num_nodes, self.emb_dim, self.device)
+                self.data[node_type].x = emb.weight
+                self.node_embeddings.append(emb)
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
         if self.encoder is None:
@@ -510,6 +511,8 @@ class Architect(Model):
             score_function = self.score_function,
             trainer = trainer
         )
+
+        trainer.add_event_handler(Events.EPOCH_STARTED, self.encoder_pass   )
 
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.log_metrics_to_csv)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.clean_memory)
@@ -769,6 +772,10 @@ class Architect(Model):
         self.decoder.to(self.device)
         logging.info("Best model successfully loaded.")
 
+    def encoder_pass(self, engine: Engine):
+        encoder_output = [Parameter(output) for output in self.encoder.forward(self.node_embeddings, self.mappings).values()]
+        self.embeddings = nn.ModuleList(encoder_output)
+
 
     def process_batch(self, engine: Engine, batch: Tuple[Tensor, Tensor, Tensor]) -> torch.types.Number:
         h, t, r = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)
@@ -790,11 +797,6 @@ class Architect(Model):
         return loss.item()
 
     def scoring_function(self, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor) -> torch.types.Number:
-        encoder_output = None
-        # TODO : implement a custom dataloader able to return h,r,t index AND the corresponding HeteroData
-        # TODO : to feed the encoder. 
-        edge_index_dict = {}
-
         h_node_types: torch.Tensor = self.mappings.kg_to_node_type[h_idx]
         h_embeddings: torch.Tensor = torch.zeros((h_idx.size(0), self.emb_dim), device=self.device)
         t_node_types: torch.Tensor = self.mappings.kg_to_node_type[t_idx]
@@ -812,29 +814,13 @@ class Architect(Model):
         for node_type in h_unique_types:
             h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
             indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            h_embeddings[indices] = self.node_embeddings[node_type](h_het_idx[h_mask])
-            
+            h_embeddings[indices] = self.embeddings[node_type](h_het_idx[h_mask])
 
         for node_type in t_unique_types:
             t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
             indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            t_embeddings[indices] = self.node_embeddings[node_type](t_het_idx[t_mask])
+            t_embeddings[indices] = self.embeddings[node_type](t_het_idx[t_mask])
 
-        h_embeddings = self.encoder()
-
-        if self.encoder.deep:
-            encoder_output = nn.Embedding()
-            encoder_output = list(self.encoder.forward(self.node_embeddings, self.mappings).values()) 
-
-            # if self.encoder.deep:
-            #     h_embeddings[indices] = encoder_output[node_type][h_het_idx[h_mask]]
-            # else:
-            # if self.encoder.deep:
-            #     t_embeddings[indices] = encoder_output[node_type][t_het_idx[t_mask]]
-            # else:
-
-        logging.info(f"Node embeddings : \n{self.node_embeddings[0].weight}")
-        logging.info(f"Encoder output: \n{encoder_output[0]}")
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 
         h_normalized = normalize(h_embeddings, p=2, dim=1)

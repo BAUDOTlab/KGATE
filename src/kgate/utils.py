@@ -306,7 +306,7 @@ class HeteroMappings():
             
             # Mapping KG -> HeteroData via DataFrame
             self.kg_to_hetero_tmp[ntype] = {self.df_to_kg[ntype][k]: self.df_to_hetero[ntype][k] for k in node_dict[ntype].keys()}
-            self.hetero_to_kg.append([k for k in self.kg_to_hetero_tmp[ntype].keys()])  # Inverted (HeteroData -> KG)
+            self.hetero_to_kg.append(torch.tensor([k for k in self.kg_to_hetero_tmp[ntype].keys()]))  # Inverted (HeteroData -> KG)
             self.hetero_node_type.append(ntype)
             
             # Add node types associated to each ID of the KG

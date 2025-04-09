@@ -17,6 +17,9 @@ class DefaultEncoder(nn.Module):
         super().__init__()
         self.deep = False
 
+    def forward(self, node_embeddings: nn.ModuleList, mappings: HeteroMappings):
+        return {node_type: embedding.weight.data.to(self.device) for node_type, embedding in zip(mappings.hetero_node_type, node_embeddings)}
+
 class GNN(nn.Module):
     def __init__(self, aggr:str="sum"):
         super().__init__()
@@ -27,9 +30,8 @@ class GNN(nn.Module):
         self.convs = nn.ModuleList()
 
     def forward(self, node_embeddings: nn.ModuleList, mappings: HeteroMappings):
-        x_dict = {node_type: deepcopy(embedding.weight.to(self.device)) for node_type, embedding in zip(mappings.hetero_node_type, node_embeddings)}
+        x_dict = {node_type: embedding.weight.to(self.device) for node_type, embedding in zip(mappings.hetero_node_type, node_embeddings)}
         edge_index_dict = {key: edge_index.to(self.device) for key, edge_index in mappings.data.edge_index_dict.items()}  # Move edges
-
         for conv in self.convs:
             x_dict = conv(x_dict=x_dict, edge_index_dict=edge_index_dict)
 

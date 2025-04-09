@@ -605,3 +605,6 @@ class KGATEGraph(KnowledgeGraph):
                 selected_relations.append(r_)
 
         return selected_relations
+    
+    def __getitem__(self, idx):
+        return (self.head_idx[idx], self.tail_idx[idx], self.relations[idx])
