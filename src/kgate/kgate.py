@@ -158,6 +158,7 @@ class Architect(Model):
                 self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
                 logging.info("Done")
 
+        super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
         # Initialize attributes
         self.encoder = None
         self.decoder = None
@@ -167,7 +168,6 @@ class Architect(Model):
         self.scheduler = None
         self.evaluator = None
 
-        super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
 
 
     def initialize_encoder(self, encoder_name: str = "", gnn_layers: int = 0) -> DefaultEncoder | GCNEncoder | GATEncoder:
@@ -512,7 +512,7 @@ class Architect(Model):
             trainer = trainer
         )
 
-        trainer.add_event_handler(Events.EPOCH_STARTED, self.encoder_pass   )
+        # trainer.add_event_handler(Events.EPOCH_STARTED, self.encoder_pass)
 
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.log_metrics_to_csv)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.clean_memory)
@@ -772,9 +772,9 @@ class Architect(Model):
         self.decoder.to(self.device)
         logging.info("Best model successfully loaded.")
 
-    def encoder_pass(self, engine: Engine):
-        encoder_output = [Parameter(output) for output in self.encoder.forward(self.node_embeddings, self.mappings).values()]
-        self.embeddings = nn.ModuleList(encoder_output)
+    # def encoder_pass(self, engine: Engine):
+    #     self.embeddings = list(self.encoder.forward(self.node_embeddings, self.mappings).values())
+    #     logging.info(self.embeddings[0])
 
 
     def process_batch(self, engine: Engine, batch: Tuple[Tensor, Tensor, Tensor]) -> torch.types.Number:
@@ -788,6 +788,7 @@ class Architect(Model):
         # Compute loss with positive and negative triples
         pos, neg = self(h, t, r, n_h, n_t)
         loss = self.criterion(pos, neg)
+        
         loss.backward()
 
         self.optimizer.step()
@@ -797,6 +798,7 @@ class Architect(Model):
         return loss.item()
 
     def scoring_function(self, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor) -> torch.types.Number:
+        # self.embeddings = list(self.encoder.forward(self.node_embeddings, self.mappings).values())
         h_node_types: torch.Tensor = self.mappings.kg_to_node_type[h_idx]
         h_embeddings: torch.Tensor = torch.zeros((h_idx.size(0), self.emb_dim), device=self.device)
         t_node_types: torch.Tensor = self.mappings.kg_to_node_type[t_idx]
@@ -808,27 +810,40 @@ class Architect(Model):
         except KeyError as e:
             logging.error(f"Mapping error on node ID: {e}")
 
-        h_unique_types: List[int] = h_node_types.unique()
-        t_unique_types: List[int] = t_node_types.unique()
+        h_unique_types: Tensor = h_node_types.unique()
+        t_unique_types: Tensor = t_node_types.unique()
+
+        x_dict: Dict[str, Tensor] = {}
+
+        node_types = torch.cat([h_node_types,t_node_types])
+        het_idx = self.mappings.kg_to_hetero[torch.cat([h_idx, t_idx])]
+
+        for node_type in set(torch.cat([h_unique_types,t_unique_types])):
+            mask = (node_types == node_type)
+            x_dict[self.mappings.hetero_node_type[node_type]] = self.node_embeddings[node_type](het_idx[mask]).unique()
+
+        encoder_output = self.encoder(x_dict=x_dict, edge_index_dict=self.mappings.data.edge_index_dict)
+
 
         for node_type in h_unique_types:
             h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
             indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            h_embeddings[indices] = self.embeddings[node_type](h_het_idx[h_mask])
+            nt = self.mappings.hetero_node_type[node_type]
+            h_embeddings[indices] = encoder_output[nt][h_het_idx[h_mask]]
+            # emb = encoder_output[node_type](h_het_idx[h_mask])
+            # embeddings[node_type] = encoder_output[node_type](h_het_idx[h_mask])
 
         for node_type in t_unique_types:
             t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
             indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            t_embeddings[indices] = self.embeddings[node_type](t_het_idx[t_mask])
+            nt = self.mappings.hetero_node_type[node_type]
+            t_embeddings[indices] = encoder_output[nt][t_het_idx[t_mask]]
 
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 
-        h_normalized = normalize(h_embeddings, p=2, dim=1)
-        t_normalized = normalize(t_embeddings, p=2, dim=1)
-
-        return self.decoder.score(h_norm = h_normalized,
+        return self.decoder.score(h_emb = h_embeddings,
                                   r_emb = r_embeddings, 
-                                  t_norm = t_normalized, 
+                                  t_emb = t_embeddings, 
                                   h_idx = h_idx, 
                                   r_idx = r_idx, 
                                   t_idx = t_idx)
@@ -1060,7 +1075,7 @@ class Architect(Model):
         if not isinstance(self.evaluator, KLinkPredictionEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Link Prediction method for {type(self.evaluator)} evaluator.")
 
-        embeddings = self.encoder.forward(self.node_embeddings, self.mappings)
+        embeddings = list(self.encoder.forward(self.node_embeddings, self.mappings).values())
 
         self.evaluator.evaluate(b_size = self.eval_batch_size, 
                         decoder =self.decoder, knowledge_graph=kg,

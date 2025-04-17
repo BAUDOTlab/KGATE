@@ -1,8 +1,9 @@
 import torch.nn as nn
+from torch import Tensor
 from torch_geometric.nn import HeteroConv, GATv2Conv, SAGEConv
 from torch_geometric.data import HeteroData
 
-from typing import List
+from typing import List, Dict, Tuple
 from .utils import HeteroMappings
 
 from copy import deepcopy
@@ -18,7 +19,8 @@ class DefaultEncoder(nn.Module):
         self.deep = False
 
     def forward(self, node_embeddings: nn.ModuleList, mappings: HeteroMappings):
-        return {node_type: embedding.weight.data.to(self.device) for node_type, embedding in zip(mappings.hetero_node_type, node_embeddings)}
+        device = node_embeddings[0].weight.device
+        return {node_type: embedding.weight.data.to(device) for node_type, embedding in zip(mappings.hetero_node_type, node_embeddings)}
 
 class GNN(nn.Module):
     def __init__(self, aggr:str="sum"):
@@ -29,9 +31,9 @@ class GNN(nn.Module):
         self.aggr = aggr
         self.convs = nn.ModuleList()
 
-    def forward(self, node_embeddings: nn.ModuleList, mappings: HeteroMappings):
-        x_dict = {node_type: embedding.weight.to(self.device) for node_type, embedding in zip(mappings.hetero_node_type, node_embeddings)}
-        edge_index_dict = {key: edge_index.to(self.device) for key, edge_index in mappings.data.edge_index_dict.items()}  # Move edges
+    def forward(self, x_dict: Dict[str, Tensor], edge_index_dict: Dict[Tuple[str, str, str,], Tensor]):
+        # x_dict = {node_type: embedding.weight.to(self.device) for node_type, embedding in zip(mappings.hetero_node_type, node_embeddings)}
+        # edge_index_dict = {key: edge_index.to(self.device) for key, edge_index in mappings.data.edge_index_dict.items()}  # Move edges
         for conv in self.convs:
             x_dict = conv(x_dict=x_dict, edge_index_dict=edge_index_dict)
 

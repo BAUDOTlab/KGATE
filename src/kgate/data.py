@@ -3,7 +3,7 @@ from .utils import HeteroMappings
 from torch_geometric.data import HeteroData
 from torchkge.utils.data import get_n_batches
 from collections import defaultdict
-from typing import Tuple
+from typing import Tuple, List
 
 import torch
 from torch import tensor, cat
@@ -18,6 +18,7 @@ class KGLoader:
         self.mappings = mappings
         self.edgelist = tensor([], dtype=torch.int64)
         self.edge_type_to_indices = defaultdict(list)
+        self.edge_type_indices = []
 
         for i, edge_type in enumerate(self.data.edge_types):
             triplet_index = cat([
@@ -29,10 +30,12 @@ class KGLoader:
                 self.edgelist,
                 triplet_index
             ], dim=1)
-        for i, r in enumerate(self.edgelist[2]):
-            self.edge_type_to_indices[r.item()].append(i)
-        for k in self.edge_type_to_indices:
-            self.edge_type_to_indices[k] = torch.tensor(self.edge_type_to_indices[k], dtype=torch.long)
+
+            self.edge_type_indices += [i] * self.data[edge_type].num_edges
+        # for i, r in enumerate(self.edgelist[2]):
+        #     self.edge_type_to_indices[r.item()].append(i)
+        # for k in self.edge_type_to_indices:
+        #     self.edge_type_to_indices[k] = torch.tensor(self.edge_type_to_indices[k], dtype=torch.long)
 
 
         if use_cuda == "all":
@@ -49,7 +52,7 @@ class _KGLoaderIter:
         self.edgelist: torch.Tensor = loader.edgelist
         self.data: HeteroData = loader.data
         self.mappings: HeteroMappings = loader.mappings
-        self.edge_type_to_indices: torch.Tensor = loader.edge_type_to_indices
+        self.edge_type_indices: List[int] = loader.edge_type_indices
 
         self.use_cuda = loader.use_cuda
         self.batch_size = loader.batch_size
@@ -64,6 +67,7 @@ class _KGLoaderIter:
             i = self.current_batch
             self.current_batch += 1
 
+            edge_type_ids = set([self.edge_type_indices[i * self.batch_size], self.edge_type_indices[min(len(self.edge_type_indices) -1, (i+1) * self.batch_size)]])
             edges = self.data.edge_types
             batch_data = HeteroData()
             node_ids = defaultdict(set)
@@ -73,7 +77,7 @@ class _KGLoaderIter:
             # Tensor of shape (3,batch_size), where the first row is the head idx, the second the tail idx,
             # and the third the relation idx
             batch_triplets: torch.Tensor = self.edgelist[:, i * self.batch_size: (i+1) * self.batch_size]
-            for edge_type_id in self.edge_type_to_indices:
+            for edge_type_id in edge_type_ids:
                 # Keep only the triplets of the same type
                 mask: torch.Tensor = batch_triplets[2] == edge_type_id
                 triplets = batch_triplets[:, mask]
@@ -97,12 +101,12 @@ class _KGLoaderIter:
 
                 batch_data[edge_type].edge_index = edge_index
 
-                # h_type_id = self.mappings.hetero_node_type.index(h_type)
-                # t_type_id = self.mappings.hetero_node_type.index(t_type)
+                h_type_id = self.mappings.hetero_node_type.index(h_type)
+                t_type_id = self.mappings.hetero_node_type.index(t_type)
 
-                # h = cat([h, self.mappings.hetero_to_kg[h_type_id][src]])
-                # t = cat([t, self.mappings.hetero_to_kg[t_type_id][dst]])
-                # r = cat([r, tensor([self.mappings.relations.index(r_type)]).repeat(self.batch_size)])
+                h = cat([h, self.mappings.hetero_to_kg[h_type_id][src]])
+                t = cat([t, self.mappings.hetero_to_kg[t_type_id][dst]])
+                r = cat([r, tensor([self.mappings.relations.index(r_type)]).repeat(self.batch_size)])
 
             for ntype, ids in node_ids.items():
                 idx = torch.tensor(list(ids), dtype=torch.long)

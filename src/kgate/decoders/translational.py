@@ -1,11 +1,11 @@
-from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel
+from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel, TorusEModel
 from torch.nn.functional import normalize
 from torch import nn, tensor, split, matmul, Tensor
 from torch.cuda import empty_cache
 import torch
 from tqdm import tqdm
 
-from typing import Tuple
+from typing import Tuple, List
 from ..utils import HeteroMappings
 
 # Code adapted from torchKGE's implementation
@@ -14,7 +14,9 @@ class TransE(TransEModel):
     def __init__(self, emb_dim: int, n_entities: int, n_relations: int, dissimilarity_type: str):
         super().__init__(emb_dim, n_entities, n_relations, dissimilarity_type=dissimilarity_type)
 
-    def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, **_) -> Tensor:
+    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, **_) -> Tensor:
+        h_norm = normalize(h_emb, p=2, dim=1)
+        t_norm = normalize(t_emb, p=2, dim=1)
         return -self.dissimilarity(h_norm + r_emb, t_norm)
     
     def get_embeddings(self):
@@ -24,7 +26,7 @@ class TransE(TransEModel):
                                     h_idx: Tensor, 
                                     t_idx: Tensor, 
                                     r_idx: Tensor, 
-                                    node_embeddings: nn.ModuleList, 
+                                    node_embeddings: List[Tensor], 
                                     relation_embeddings: nn.Embedding, 
                                     mappings: HeteroMappings, 
                                     entities: bool=True
@@ -74,11 +76,11 @@ class TransE(TransEModel):
         for node_type in h_unique_types:
             h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
             indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            h_embeddings[indices] = node_embeddings[node_type](h_het_idx[h_mask])
+            h_embeddings[indices] = node_embeddings[node_type][h_het_idx[h_mask]]
         for node_type in t_unique_types:
             t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
             indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            t_embeddings[indices] = node_embeddings[node_type](t_het_idx[t_mask])
+            t_embeddings[indices] = node_embeddings[node_type][t_het_idx[t_mask]]
 
         r = relation_embeddings(r_idx)
 
@@ -86,10 +88,10 @@ class TransE(TransEModel):
             # Prepare candidates for every entities
             candidates = torch.zeros((self.n_ent, self.emb_dim), device=device)
 
-            all_embeddings = torch.cat([embedding.weight for embedding in node_embeddings], dim=0)
+            all_embeddings = torch.cat([embedding for embedding in node_embeddings], dim=0)
 
             hetero_to_kg = torch.tensor([mappings.hetero_to_kg[i][j] for i in range(len(node_embeddings)) 
-                                        for j in range(node_embeddings[i].num_embeddings)], device=device)
+                                        for j in range(node_embeddings[i].size(0))], device=device)
 
             candidates[hetero_to_kg] = all_embeddings
             candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
@@ -97,13 +99,15 @@ class TransE(TransEModel):
             # Prepare candidates for every relations
             candidates = relation_embeddings.weight.data.unsqueeze(0).expand(b_size, -1, -1)
         
-        return h, t, r, candidates
+        return h_embeddings, t_embeddings, r, candidates
     
 class TransH(TransHModel):
     def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(emb_dim, n_entities, n_relations)
 
-    def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, r_idx: Tensor, **_) -> Tensor:
+    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, r_idx: Tensor, **_) -> Tensor:
+        h_norm = normalize(h_emb, p=2, dim=1)
+        t_norm = normalize(t_emb, p=2, dim=1)
         self.evaluated_projections = False
         norm_vect = normalize(self.norm_vect(r_idx), p=2, dim=1)
         return - self.dissimilarity(self.project(h_norm, norm_vect) + r_emb,
@@ -182,7 +186,9 @@ class TransR(TransRModel):
     def __init__(self, ent_emb_dim: int, rel_emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(ent_emb_dim, rel_emb_dim, n_entities, n_relations)
 
-    def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, r_idx: Tensor, **_) -> Tensor:
+    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, r_idx: Tensor, **_) -> Tensor:
+        h_norm = normalize(h_emb, p=2, dim=1)
+        t_norm = normalize(t_emb, p=2, dim=1)
         self.evaluated_projections = False
         b_size = h_norm.shape[0]
 
@@ -262,7 +268,9 @@ class TransD(TransDModel):
     def __init__(self, ent_emb_dim: int, rel_emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(ent_emb_dim, rel_emb_dim, n_entities, n_relations)
 
-    def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, h_idx: Tensor, r_idx: Tensor, t_idx: Tensor, **_) -> Tensor:
+    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, h_idx: Tensor, r_idx: Tensor, t_idx: Tensor, **_) -> Tensor:
+        h_norm = normalize(h_emb, p=2, dim=1)
+        t_norm = normalize(t_emb, p=2, dim=1)
         r = normalize(r_emb, p=2, dim=1)
 
         h_proj_v = normalize(self.ent_proj_vect(h_idx), p=2, dim=1)
@@ -337,3 +345,79 @@ class TransD(TransDModel):
             del proj_e
 
         self.evaluated_projections = True
+
+class TorusE(TorusEModel):
+    def __init__(self, emb_dim: int, n_entities: int, n_relations: int, dissimilarity_type: str):
+        super().__init__(emb_dim, n_entities, n_relations, dissimilarity_type)
+    
+    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, h_idx: Tensor, r_idx: Tensor, t_idx: Tensor, **_) -> Tensor:
+        self.normalized = False
+
+        h = h_emb.frac()
+        t = t_emb.frac()
+        r = r_emb.frac()
+
+        return - self.dissimilarity(h + r, t)
+
+    def normalize_parameters(self, ent_emb: List[Tensor], rel_emb: nn.Embedding):
+        for node_embedding in ent_emb:
+            node_embedding.frac_()
+
+        rel_emb.weight.data.frac_()
+        self.normalized = True
+    
+    def get_embeddings(self):
+        return None
+    
+    def inference_prepare_candidates(self, *, 
+                                    h_idx: Tensor, 
+                                    t_idx: Tensor, 
+                                    r_idx: Tensor, 
+                                    node_embeddings: List[Tensor], 
+                                    relation_embeddings: nn.Embedding, 
+                                    mappings: HeteroMappings, 
+                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        b_size = h_idx.shape[0]
+
+        if not self.normalized:
+            self.normalize_parameters(node_embeddings, relation_embeddings)
+
+        device = h_idx.device        
+
+        h_node_types = mappings.kg_to_node_type[h_idx]
+        h_embeddings: torch.Tensor = torch.zeros((h_idx.size(0), self.emb_dim), device=device)
+        h_unique_types = h_node_types.unique()
+        h_het_idx = mappings.kg_to_hetero[h_idx]
+
+        t_node_types = mappings.kg_to_node_type[t_idx]
+        t_embeddings: torch.Tensor = torch.zeros((t_idx.size(0), self.emb_dim), device=device)
+        t_unique_types = t_node_types.unique()
+        t_het_idx = mappings.kg_to_hetero[t_idx]
+
+        for node_type in h_unique_types:
+            h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
+            indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
+            h_embeddings[indices] = node_embeddings[node_type][h_het_idx[h_mask]]
+        for node_type in t_unique_types:
+            t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
+            indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
+            t_embeddings[indices] = node_embeddings[node_type][t_het_idx[t_mask]]
+
+        r = relation_embeddings(r_idx)
+
+        if entities:
+            # Prepare candidates for every entities
+            candidates = torch.zeros((self.n_ent, self.emb_dim), device=device)
+
+            all_embeddings = torch.cat([embedding for embedding in node_embeddings], dim=0)
+
+            hetero_to_kg = torch.tensor([mappings.hetero_to_kg[i][j] for i in range(len(node_embeddings)) 
+                                        for j in range(node_embeddings[i].size(0))], device=device)
+
+            candidates[hetero_to_kg] = all_embeddings
+            candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
+        else:
+            # Prepare candidates for every relations
+            candidates = relation_embeddings.weight.data.unsqueeze(0).expand(b_size, -1, -1)
+        
+        return h_embeddings, t_embeddings, r, candidates
