@@ -252,6 +252,7 @@ def plot_learning_curves(training_metrics_file: Path, outdir: Path, val_metric: 
     plt.legend()
     plt.savefig(outdir.joinpath("validation_metric_curve.png"))
 
+
 class HeteroMappings():
     def __init__(self, kg: KGATEGraph, metadata:pd.DataFrame | None):
         df = kg.get_df()

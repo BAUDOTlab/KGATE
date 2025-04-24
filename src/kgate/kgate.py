@@ -464,30 +464,26 @@ class Architect(Model):
                 self.node_embeddings.append(emb)
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
-        if self.encoder is None:
-            logging.info("Initializing encoder...")
-            self.encoder = self.initialize_encoder()
+        logging.info("Initializing encoder...")
+        self.encoder = self.encoder or self.initialize_encoder()
 
+        # Cannot use short-circuit syntax with tuples
         if self.decoder is None:
             logging.info("Initializing decoder...")
             self.decoder, self.criterion = self.initialize_decoder()
             self.decoder.to(self.device)
 
-        if self.optimizer is None:
-            logging.info("Initializing optimizer...")
-            self.optimizer = self.initialize_optimizer()
+        logging.info("Initializing optimizer...")
+        self.optimizer = self.optimizer or self.initialize_optimizer()
 
-        if self.sampler is None:
-            logging.info("Initializing sampler...")
-            self.sampler = self.initialize_sampler()
+        logging.info("Initializing sampler...")
+        self.sampler = self.sampler or self.initialize_sampler()
 
-        if self.scheduler is None:
-            logging.info("Initializing lr scheduler...")
-            self.scheduler = self.initialize_scheduler()
+        logging.info("Initializing lr scheduler...")
+        self.scheduler = self.scheduler or self.initialize_scheduler()
 
-        if self.evaluator is None:
-            logging.info("Initializing evaluator...")
-            self.evaluator = self.initialize_evaluator()
+        logging.info("Initializing evaluator...")
+        self.evaluator = self.evaluator or self.initialize_evaluator()
 
         self.training_metrics_file: Path = Path(self.config["output_directory"], "training_metrics.csv")
 
@@ -777,8 +773,9 @@ class Architect(Model):
     #     logging.info(self.embeddings[0])
 
 
-    def process_batch(self, engine: Engine, batch: Tuple[Tensor, Tensor, Tensor]) -> torch.types.Number:
-        h, t, r = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)
+    def process_batch(self, engine: Engine, batch: Tuple[HeteroData, Tensor, Tensor, Tensor]) -> torch.types.Number:
+        batch_data = batch[0].to(self.device)
+        h, t, r = batch[1].to(self.device), batch[2].to(self.device), batch[3].to(self.device)
 
         n_h, n_t = self.sampler.corrupt_batch(h, t, r)
         n_h, n_t = n_h.to(self.device), n_t.to(self.device)
@@ -797,47 +794,50 @@ class Architect(Model):
 
         return loss.item()
 
-    def scoring_function(self, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor) -> torch.types.Number:
+    def scoring_function(self, data: HeteroData, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor) -> torch.types.Number:
+        encoder_output = self.encoder(data.x_dict, data.edge_index_dict)
         # self.embeddings = list(self.encoder.forward(self.node_embeddings, self.mappings).values())
         h_node_types: torch.Tensor = self.mappings.kg_to_node_type[h_idx]
-        h_embeddings: torch.Tensor = torch.zeros((h_idx.size(0), self.emb_dim), device=self.device)
+        h_embeddings: torch.Tensor = torch.tensor([], device=self.device) #torch.zeros((h_idx.size(0), self.emb_dim), device=self.device)
         t_node_types: torch.Tensor = self.mappings.kg_to_node_type[t_idx]
-        t_embeddings: torch.Tensor = torch.zeros((t_idx.size(0), self.emb_dim), device=self.device)
+        t_embeddings: torch.Tensor = torch.tensor([], device=self.device) #torch.zeros((t_idx.size(0), self.emb_dim), device=self.device)
 
-        try:
-            h_het_idx: torch.Tensor = self.mappings.kg_to_hetero[h_idx]
-            t_het_idx: torch.Tensor = self.mappings.kg_to_hetero[t_idx]
-        except KeyError as e:
-            logging.error(f"Mapping error on node ID: {e}")
-
-        h_unique_types: Tensor = h_node_types.unique()
-        t_unique_types: Tensor = t_node_types.unique()
-
-        x_dict: Dict[str, Tensor] = {}
-
-        node_types = torch.cat([h_node_types,t_node_types])
-        het_idx = self.mappings.kg_to_hetero[torch.cat([h_idx, t_idx])]
-
-        for node_type in set(torch.cat([h_unique_types,t_unique_types])):
-            mask = (node_types == node_type)
-            x_dict[self.mappings.hetero_node_type[node_type]] = self.node_embeddings[node_type](het_idx[mask]).unique()
-
-        encoder_output = self.encoder(x_dict=x_dict, edge_index_dict=self.mappings.data.edge_index_dict)
+        for edge_type in data.edge_types:
+            head_node_type, tail_node_type = edge_type[0], edge_type[2]
+            head_idx = data[edge_type].edge_index[0]
+            tail_idx = data[edge_type].edge_index[1]
+            h_embeddings = torch.cat([h_embeddings, encoder_output[head_node_type][head_idx]])
+            t_embeddings = torch.cat([t_embeddings, encoder_output[tail_node_type][tail_idx]])
 
 
-        for node_type in h_unique_types:
-            h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
-            indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            nt = self.mappings.hetero_node_type[node_type]
-            h_embeddings[indices] = encoder_output[nt][h_het_idx[h_mask]]
-            # emb = encoder_output[node_type](h_het_idx[h_mask])
-            # embeddings[node_type] = encoder_output[node_type](h_het_idx[h_mask])
+        # h_unique_types: Tensor = h_node_types.unique()
+        # t_unique_types: Tensor = t_node_types.unique()
 
-        for node_type in t_unique_types:
-            t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
-            indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            nt = self.mappings.hetero_node_type[node_type]
-            t_embeddings[indices] = encoder_output[nt][t_het_idx[t_mask]]
+        # x_dict: Dict[str, Tensor] = {}
+
+        # node_types = torch.cat([h_node_types,t_node_types])
+        # het_idx = self.mappings.kg_to_hetero[torch.cat([h_idx, t_idx])]
+
+        # for node_type in set(torch.cat([h_unique_types,t_unique_types])):
+        #     mask = (node_types == node_type)
+        #     x_dict[self.mappings.hetero_node_type[node_type]] = self.node_embeddings[node_type](het_idx[mask]).unique()
+
+        # encoder_output = self.encoder(x_dict=x_dict, edge_index_dict=self.mappings.data.edge_index_dict)
+
+
+        # for node_type in h_unique_types:
+        #     h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
+        #     indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
+        #     nt = self.mappings.hetero_node_type[node_type]
+        #     h_embeddings[indices] = encoder_output[nt][h_het_idx[h_mask]]
+        #     # emb = encoder_output[node_type](h_het_idx[h_mask])
+        #     # embeddings[node_type] = encoder_output[node_type](h_het_idx[h_mask])
+
+        # for node_type in t_unique_types:
+        #     t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
+        #     indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
+        #     nt = self.mappings.hetero_node_type[node_type]
+        #     t_embeddings[indices] = encoder_output[nt][t_het_idx[t_mask]]
 
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 
