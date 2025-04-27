@@ -87,31 +87,32 @@ class _KGLoaderIter:
                 # Retrieve names of nodes and relation type
                 src = triplets[0]
                 dst = triplets[1]
+                src_list = src.tolist()
+                dst_list = dst.tolist()
                 edge_type = edges[edge_type_id]
                 h_type, r_type, t_type = edge_type
 
-                node_ids[h_type].update(src.tolist())
-                node_ids[t_type].update(dst.tolist())
+                node_ids[h_type].update(src_list)
+                node_ids[t_type].update(dst_list)
                 
                 # Can probably be optimized
-                id_maps = {ntype: {global_id.item(): i for i, global_id in enumerate(torch.tensor(list(idx), dtype=torch.long))}
-                for ntype, idx in node_ids.items()}
+                # id_maps = {ntype: {global_id.item(): i for i, global_id in enumerate(torch.tensor(list(idx), dtype=torch.long))}
+                # for ntype, idx in node_ids.items()}
 
+                h_list = [list(node_ids[h_type]).index(i) for i in src_list]
+                t_list = [list(node_ids[t_type]).index(i) for i in dst_list]
                 edge_index = torch.stack([
-                    torch.tensor([id_maps[h_type][i.item()] for i in src]),
-                    torch.tensor([id_maps[t_type][i.item()] for i in dst])
+                    torch.tensor(h_list),
+                    torch.tensor(t_list)
                 ], dim=0)
-
-                batch_to_kg[h_type].update([key for key in id_maps[h_type].keys()])
-                batch_to_kg[t_type].update([key for key in id_maps[t_type].keys()])
-
+                
                 batch_data[edge_type].edge_index = edge_index
 
                 h_type_id = self.mappings.hetero_node_type.index(h_type)
                 t_type_id = self.mappings.hetero_node_type.index(t_type)
 
-                h = cat([h, self.mappings.hetero_to_kg[h_type_id][src]])
-                t = cat([t, self.mappings.hetero_to_kg[t_type_id][dst]])
+                h = cat([h, self.mappings.hetero_to_kg[h_type_id][h_list]])
+                t = cat([t, self.mappings.hetero_to_kg[t_type_id][t_list]])
                 r = cat([r, tensor([self.mappings.relations.index(r_type)]).repeat(triplets.size(1))])
 
             for ntype, ids in node_ids.items():
