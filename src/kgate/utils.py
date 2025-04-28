@@ -296,7 +296,7 @@ class HeteroMappings():
                 nodes = pd.concat([df["from"], df["to"]], ignore_index=True).unique()
 
             node_dict[ntype] = {node: i for i, node in enumerate(nodes)}   
-            print(nodes)
+            
             # Create correspondings for this type of node (DataFrame - HeteroData)
             self.df_to_hetero[ntype] = node_dict[ntype]  # Mapping DataFrame -> HeteroData
             self.hetero_to_df[ntype] = {v: k for k, v in node_dict[ntype].items()}  # Mapping HeteroData -> DataFrame
