@@ -12,7 +12,7 @@ from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_be
 from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .encoders import *
 from .decoders import *
-from .data_structures import KGATEGraph
+from .knowledgegraph import KnowledgeGraph
 from .samplers import FixedPositionalNegativeSampler, MixedNegativeSampler
 from .evaluators import KLinkPredictionEvaluator, KTripletClassificationEvaluator
 from .inference import KEntityInference, KRelationInference
@@ -50,7 +50,7 @@ class Architect(Model):
     ----------
     config_path : str, optional
         Path to the configuration file
-    kg : Tuple of KGATEGraph or torchkge.KnowledgeGraph, optional
+    kg : Tuple of KnowledgeGraph or torchkge.KnowledgeGraph, optional
         Either a knowledge graph that has already been preprocessed by KGATE and split accordingly, or an unprocessed KnowledgeGraph object.
         In the first case, the knowledge graph won't be preprocessed even if `config.run_kg_preprocess` is set to True.
         In the second case, an error is thrown if the `config.run_kg_preprocess` is set to False.
@@ -70,7 +70,7 @@ class Architect(Model):
     Raises
     ------
     ValueError
-        If the `config.metadata_csv` file exists but cannot be parsed, or if `kg` is given, but not a tuple of KGATEGraph and `config.run_kg_preprocess` is set to false.
+        If the `config.metadata_csv` file exists but cannot be parsed, or if `kg` is given, but not a tuple of KnowledgeGraph and `config.run_kg_preprocess` is set to false.
 
     Examples
     --------
@@ -85,8 +85,8 @@ class Architect(Model):
     While it is possible to give any part of the configuration, even everything, as kwargs, it is recommended
     to use a separated configuration file to ensure reproducibility of training.
     """
-    def __init__(self, config_path: str = "", kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None, metadata: pd.DataFrame | None = None, cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
-        # kg should be of type KGATEGraph or KnowledgeGraph, if exists use it instead of the one in config
+    def __init__(self, config_path: str = "", kg: Tuple[KnowledgeGraph,KnowledgeGraph,KnowledgeGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None, metadata: pd.DataFrame | None = None, cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
+        # kg should be of type KnowledgeGraph, if exists use it instead of the one in config
         # df should have columns from, rel and to
         self.config: dict = parse_config(config_path, kwargs)
 
@@ -149,7 +149,7 @@ class Architect(Model):
         else:
             if kg is not None:
                 logging.info("Using given KG...")
-                if isinstance(kg, (KGATEGraph,KGATEGraph,KGATEGraph)):
+                if isinstance(kg, tuple):
                     self.kg_train, self.kg_val, self.kg_test = kg
                 else:
                     raise ValueError("Given KG needs to be a tuple of training, validation and test KG if it is preprocessed.")
@@ -160,7 +160,7 @@ class Architect(Model):
 
         super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
         # Initialize attributes
-        self.encoder = None
+        self.encoder: DefaultEncoder | GNN
         self.decoder = None
         self.criterion = None
         self.optimizer = None
@@ -679,7 +679,7 @@ class Architect(Model):
         inference_metrics_file: Path = Path(self.config["output_directory"], "inference_metrics.yaml")
 
         inference_df = pd.read_csv(inference_kg_path, sep="\t")
-        inference_kg = KGATEGraph(df = inference_df, ent2ix=self.kg_train.ent2ix, rel2ix=self.kg_train.rel2ix) 
+        inference_kg = KnowledgeGraph(df = inference_df, ent2ix=self.kg_train.ent2ix, rel2ix=self.kg_train.rel2ix) 
         
         embeddings = self.encoder.forward(self.node_embeddings, self.mappings)
 
@@ -772,10 +772,28 @@ class Architect(Model):
     #     self.embeddings = list(self.encoder.forward(self.node_embeddings, self.mappings).values())
     #     logging.info(self.embeddings[0])
 
+    def forward(self, pos_batch, neg_batch):
+        pos = self.scoring_function(pos_batch)
 
-    def process_batch(self, engine: Engine, batch: Tuple[HeteroData, Tensor, Tensor, Tensor]) -> torch.types.Number:
-        batch_data = batch[0].to(self.device)
-        h, t, r = batch[1].to(self.device), batch[2].to(self.device), batch[3].to(self.device)
+        if negative_relations is None:
+            negative_relations = relations
+
+        if negative_heads.shape[0] > negative_relations.shape[0]:
+            # in that case, several negative samples are sampled from each fact
+            n_neg = int(negative_heads.shape[0] / negative_relations.shape[0])
+            pos = pos.repeat(n_neg)
+            neg = self.scoring_function(negative_heads,
+                                        negative_tails,
+                                        negative_relations.repeat(n_neg))
+        else:
+            neg = self.scoring_function(negative_heads,
+                                        negative_tails,
+                                        negative_relations)
+
+        return pos, neg
+
+    def process_batch(self, engine: Engine, batch: Tensor) -> torch.types.Number:
+        h, t, r, f = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device), batch[3].to(self.device)
 
         n_h, n_t = self.sampler.corrupt_batch(h, t, r)
         n_h, n_t = n_h.to(self.device), n_t.to(self.device)
@@ -794,8 +812,9 @@ class Architect(Model):
 
         return loss.item()
 
-    def scoring_function(self, data: HeteroData, h_idx: torch.Tensor, t_idx: torch.Tensor, r_idx: torch.Tensor) -> torch.types.Number:
-        encoder_output = self.encoder(data.x_dict, data.edge_index_dict)
+    def scoring_function(self, batch: Tensor) -> torch.types.Number:
+        input = self.kg_train.get_encoder_input(batch, self.node_embeddings)
+        encoder_output = self.encoder(input.x_dict, input.edge_index)
         # self.embeddings = list(self.encoder.forward(self.node_embeddings, self.mappings).values())
         h_node_types: torch.Tensor = self.mappings.kg_to_node_type[h_idx]
         h_embeddings: torch.Tensor = torch.tensor([], device=self.device) #torch.zeros((h_idx.size(0), self.emb_dim), device=self.device)
@@ -996,7 +1015,7 @@ class Architect(Model):
 
         return frequent_indices, infrequent_indices
     
-    def calculate_metrics_for_relations(self, kg: KGATEGraph, relations: List[str]) -> Tuple[float, int, Dict[str, float], float]:
+    def calculate_metrics_for_relations(self, kg: KnowledgeGraph, relations: List[str]) -> Tuple[float, int, Dict[str, float], float]:
         # MRR computed by ponderating for each relation
         metrics_sum = 0.0
         fact_count = 0
@@ -1069,7 +1088,7 @@ class Architect(Model):
             infrequent_metrics = self.triplet_classif(self.kg_val, kg_infrequent) if infrequent_indices else 0
         return frequent_metrics, infrequent_metrics
 
-    def link_pred(self, kg: KGATEGraph) -> float:
+    def link_pred(self, kg: KnowledgeGraph) -> float:
         """Link prediction evaluation on test set."""
         # Test MRR measure
         if not isinstance(self.evaluator, KLinkPredictionEvaluator):
@@ -1085,7 +1104,7 @@ class Architect(Model):
         test_mrr = self.evaluator.mrr()[1]
         return test_mrr
     
-    def triplet_classif(self, kg_val: KGATEGraph, kg_test: KGATEGraph) -> float:
+    def triplet_classif(self, kg_val: KnowledgeGraph, kg_test: KnowledgeGraph) -> float:
         """Triplet Classification evaluation"""
         if not isinstance(self.evaluator, KTripletClassificationEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Triplet Classification method for {type(self.evaluator)} evaluator.")

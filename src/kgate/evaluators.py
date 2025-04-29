@@ -18,7 +18,7 @@ from torchkge.utils import DataLoader, get_rank, filter_scores
 from torchkge.data_structures import SmallKG
 from torchkge.models import Model
 
-from .data_structures import KGATEGraph
+from .knowledgegraph import KnowledgeGraph
 from .utils import HeteroMappings
 from .samplers import FixedPositionalNegativeSampler
 
@@ -75,7 +75,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
     def evaluate(self, 
                 b_size: int,
                 decoder: Model, 
-                knowledge_graph: KGATEGraph, 
+                knowledge_graph: KnowledgeGraph, 
                 node_embeddings: nn.ModuleList | Dict[str, Tensor], 
                 relation_embeddings: nn.Embedding, 
                 mappings: HeteroMappings, 
@@ -88,7 +88,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             Size of the current batch.
         decoder: torchkge.Model
             Decoder model to evaluate, inheriting from the torchkge.Model class.
-        knowledge_graph: kgate.KGATEGraph
+        knowledge_graph: kgate.KnowledgeGraph
             The test Knowledge Graph that will be used for the evaluation.
         node_embeddings: nn.ModuleList
             A dictionnary where keys are relation types and values the
@@ -234,7 +234,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
 
         return cat(scores, dim=0)
 
-    def evaluate(self, b_size: int, knowledge_graph: KGATEGraph):
+    def evaluate(self, b_size: int, knowledge_graph: KnowledgeGraph):
         """Find relation thresholds using the validation set. As described in
         the paper by Socher et al., for a relation, the threshold is a value t
         such that if the score of a triplet is larger than t, the fact is true.
@@ -265,7 +265,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         self.evaluated = True
         self.thresholds.detach_()
 
-    def accuracy(self, b_size:int, kg_test: KGATEGraph, kg_val: KGATEGraph | None = None):
+    def accuracy(self, b_size:int, kg_test: KnowledgeGraph, kg_val: KnowledgeGraph | None = None):
         """
 
         Parameters

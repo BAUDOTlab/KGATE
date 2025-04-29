@@ -30,6 +30,11 @@ flag_near_duplicate_relations = true
 # Remove all flagged relations from the train set
 clean_train_set = true
 
+# How the KG should be split between train, val and test.
+# First value is train set proportion, second is validation set,
+# and third value is test set.
+split = [0.8,0.1,0.1] 
+
 [preprocessing.params]
 theta = 0.8
 theta1 = 0.8

@@ -14,7 +14,7 @@ from importlib.resources import open_binary
 import matplotlib.pyplot as plt
 
 from typing import List, Tuple
-from .data_structures import KGATEGraph
+from .knowledgegraph import KnowledgeGraph
 
 log_level = logging.INFO# if config["common"]["verbose"] else logging.WARNING
 logging.basicConfig(
@@ -82,7 +82,7 @@ def set_config_key(key: str, default: dict, config: dict | None = None, inline: 
     else:
         return inline_value
 
-def load_knowledge_graph(pickle_filename: Path) -> Tuple[KGATEGraph, KGATEGraph, KGATEGraph]:
+def load_knowledge_graph(pickle_filename: Path) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """Load the knowledge graph from pickle files."""
     logging.info(f"Will not run the preparation step. Using KG stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:
@@ -102,7 +102,7 @@ def extract_node_type(node_name: str):
     """Extracts the node type from the node name, based on the string before the first underscore."""
     return node_name.split("_")[0]
 
-def compute_triplet_proportions(kg_train: KGATEGraph, kg_test: KGATEGraph, kg_val: KGATEGraph):
+def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGraph, kg_val: KnowledgeGraph):
     """
     Computes the proportion of triples for each relation in each of the KnowledgeGraphs
     (train, test, val) relative to the total number of triples for that relation.
@@ -146,13 +146,13 @@ def compute_triplet_proportions(kg_train: KGATEGraph, kg_test: KGATEGraph, kg_va
 
     return proportions
 
-def concat_kgs(kg_tr: KGATEGraph, kg_val: KGATEGraph, kg_te: KGATEGraph):
+def concat_kgs(kg_tr: KnowledgeGraph, kg_val: KnowledgeGraph, kg_te: KnowledgeGraph):
     h = cat((kg_tr.head_idx, kg_val.head_idx, kg_te.head_idx))
     t = cat((kg_tr.tail_idx, kg_val.tail_idx, kg_te.tail_idx))
     r = cat((kg_tr.relations, kg_val.relations, kg_te.relations))
     return h, t, r
 
-def count_triplets(kg1: KGATEGraph, kg2: KGATEGraph, duplicates: List[Tuple[int, int]], rev_duplicates: List[Tuple[int, int]]):
+def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tuple[int, int]], rev_duplicates: List[Tuple[int, int]]):
     """
     Parameters
     ----------
@@ -254,7 +254,7 @@ def plot_learning_curves(training_metrics_file: Path, outdir: Path, val_metric: 
 
 
 class HeteroMappings():
-    def __init__(self, kg: KGATEGraph, metadata:pd.DataFrame | None):
+    def __init__(self, kg: KnowledgeGraph, metadata:pd.DataFrame | None):
         df = kg.get_df()
         
         self.data = HeteroData()

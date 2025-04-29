@@ -6,13 +6,13 @@ import torch
 from torch import cat
 
 from .utils import set_random_seeds, compute_triplet_proportions
-from .data_structures import KGATEGraph
-from torchkge import KnowledgeGraph
+from .knowledgegraph import KnowledgeGraph
+import torchkge
 from typing import Tuple, List
 
 SUPPORTED_SEPARATORS = [",","\t",";"]
 
-def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.DataFrame | None) -> Tuple[KGATEGraph, KGATEGraph, KGATEGraph]:
+def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.DataFrame | None) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """Prepare and clean the knowledge graph.
     
     This function takes an input knowledge graph either as a csv file (from the configuration), an object of type
@@ -28,19 +28,19 @@ def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.Data
     config : dict
         The full configuration, usually parsed from the KGATE configuration file.
     kg : torchKGE.KnowledgeGraph
-        The knowledge graph as a single object of class KnowledgeGraph or inheriting the class (KGATEGraph inherits the class)
+        The knowledge graph as a single object of class KnowledgeGraph or inheriting the class (KnowledgeGraph inherits the class)
     df : pd.DataFrame
         The knowledge graph as a pandas DataFrame.
         
     Returns
     -------
-    kg_train, kg_val, kg_test : KGATEGraph
+    kg_train, kg_val, kg_test : KnowledgeGraph
         A tuple containing the preprocessed and split knowledge graph."""
 
     # Load knowledge graph
     if kg is None and df is None:
         input_file = config["kg_csv"]
-        kg_df: pd.DataFrame = None
+        kg_df: pd.DataFrame
 
         for separator in SUPPORTED_SEPARATORS:
             try:
@@ -52,20 +52,18 @@ def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.Data
         if kg_df is None:
             raise ValueError(f"The Knowledge Graph csv file was not found or uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
-        kg = KGATEGraph(df=kg_df)
+        kg = KnowledgeGraph(df=kg_df)
     else:
-        if kg is not None and isinstance(kg, KnowledgeGraph):
-            if isinstance(kg, KGATEGraph):
+        if kg is not None:
+            if isinstance(kg, torchkge.KnowledgeGraph):
+                kg_df = kg.get_df()
+                kg = KnowledgeGraph(df= kg_df)
+            elif isinstance(kg, KnowledgeGraph):
                 kg = kg
             else:
-                kg_dict = {
-                    "heads": kg.head_idx,
-                    "tails": kg.tail_idx,
-                    "relations": kg.relations
-                }
-                kg = KGATEGraph(kg=kg_dict)
+                raise NotImplementedError(f"Knowledge Graph type {type(kg)} is not supported.")
         elif df is not None:
-            kg = KGATEGraph(df = df)
+            kg = KnowledgeGraph(df = df)
                 
     # Clean and process knowledge graph
     kg_train, kg_val, kg_test = clean_knowledge_graph(kg, config)
@@ -75,7 +73,7 @@ def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.Data
 
     return kg_train, kg_val, kg_test
 
-def save_knowledge_graph(config: dict, kg_train: KGATEGraph, kg_val: KGATEGraph, kg_test:KGATEGraph):
+def save_knowledge_graph(config: dict, kg_train: KnowledgeGraph, kg_val: KnowledgeGraph, kg_test:KnowledgeGraph):
     """Save the knowledge graph to a pickle file.
     
     If the name of a pickle file is specified in the configuration, it will be used. Otherwise, the 
@@ -85,11 +83,11 @@ def save_knowledge_graph(config: dict, kg_train: KGATEGraph, kg_val: KGATEGraph,
     ---------
     config : dict
         The full configuration, usually parsed from the KGATE configuration file.
-    kg_train : KGATEGraph
+    kg_train : KnowledgeGraph
         The training knowledge graph.
-    kg_val : KGATEGraph
+    kg_val : KnowledgeGraph
         The validation knowledge graph.
-    kg_test : KGATEGraph
+    kg_test : KnowledgeGraph
         The testing knowledge graph."""
     
     if config["kg_pkl"] == "":
@@ -110,7 +108,7 @@ def load_knowledge_graph(pickle_filename: Path):
         kg_test = pickle.load(file)
     return kg_train, kg_val, kg_test
 
-def clean_knowledge_graph(kg: KGATEGraph, config: dict) -> Tuple[KGATEGraph, KGATEGraph, KGATEGraph]:
+def clean_knowledge_graph(kg: KnowledgeGraph, config: dict) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """Clean and prepare the knowledge graph according to the configuration."""
 
     set_random_seeds(config["seed"])
@@ -154,7 +152,7 @@ def clean_knowledge_graph(kg: KGATEGraph, config: dict) -> Tuple[KGATEGraph, KGA
             duplicated_relations_list.extend(undirected_relations_list)
 
     logging.info("Splitting the dataset into train, validation and test sets...")
-    kg_train, kg_val, kg_test = kg.split_kg(validation=True)
+    kg_train, kg_val, kg_test = kg.split_kg(shares=config["preprocessing"]["split"])
 
     kg_train_ok, _ = verify_entity_coverage(kg_train, kg)
     if not kg_train_ok:
@@ -191,7 +189,7 @@ def clean_knowledge_graph(kg: KGATEGraph, config: dict) -> Tuple[KGATEGraph, KGA
 
     return new_train, new_val, new_test
 
-def verify_entity_coverage(train_kg: KGATEGraph, full_kg: KGATEGraph) -> Tuple[bool, List[str]]:
+def verify_entity_coverage(train_kg: KnowledgeGraph, full_kg: KnowledgeGraph) -> Tuple[bool, List[str]]:
     """
     Verify that all entities in the full knowledge graph are represented in the training set.
 
@@ -226,7 +224,7 @@ def verify_entity_coverage(train_kg: KGATEGraph, full_kg: KGATEGraph) -> Tuple[b
     else:
         return True, []
 
-def ensure_entity_coverage(kg_train: KGATEGraph, kg_val: KGATEGraph, kg_test:KGATEGraph) -> Tuple[KGATEGraph,KGATEGraph,KGATEGraph]:
+def ensure_entity_coverage(kg_train: KnowledgeGraph, kg_val: KnowledgeGraph, kg_test:KnowledgeGraph) -> Tuple[KnowledgeGraph,KnowledgeGraph,KnowledgeGraph]:
     """
     Ensure that all entities in kg_train.ent2ix are present in kg_train as head or tail.
     If an entity is missing, move a triplet involving that entity from kg_val or kg_test to kg_train.
@@ -312,7 +310,7 @@ def ensure_entity_coverage(kg_train: KGATEGraph, kg_val: KGATEGraph, kg_test:KGA
     return kg_train, kg_val, kg_test
 
 
-def clean_datasets(kg_train: KGATEGraph, kg2: KGATEGraph, known_reverses: List[Tuple[int, int]]) -> KGATEGraph:
+def clean_datasets(kg_train: KnowledgeGraph, kg2: KnowledgeGraph, known_reverses: List[Tuple[int, int]]) -> KnowledgeGraph:
     """
     Clean the training KG by removing reverse duplicate triples contained in KG2 (test or val KG).
 
@@ -359,7 +357,7 @@ def clean_datasets(kg_train: KGATEGraph, kg2: KGATEGraph, known_reverses: List[T
     
     return kg_train
 
-def clean_cartesians(kg1: KGATEGraph, kg2: KGATEGraph, known_cartesian: List[int], entity_type: str="head") -> Tuple[KGATEGraph,KGATEGraph]:
+def clean_cartesians(kg1: KnowledgeGraph, kg2: KnowledgeGraph, known_cartesian: List[int], entity_type: str="head") -> Tuple[KnowledgeGraph,KnowledgeGraph]:
     """
     Transfer cartesian product triplets from training set to test set to prevent data leakage.
     For each entity (head or tail) involved in a cartesian product relation in the test set,

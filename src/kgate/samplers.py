@@ -1,12 +1,12 @@
 from torch import tensor, bernoulli, randint, ones, rand, cat
 import torch
 from torchkge.sampling import get_possible_heads_tails, PositionalNegativeSampler, UniformNegativeSampler, BernoulliNegativeSampler, NegativeSampler
-from .data_structures import KGATEGraph
+from .knowledgegraph import KnowledgeGraph
 from typing import Tuple
 
 class FixedPositionalNegativeSampler(PositionalNegativeSampler):
     """Simple fix of the PositionalNegativeSampler from torchkge, to solve a CPU/GPU device incompatibiltiy."""
-    def __init__(self, kg:KGATEGraph, kg_val:KGATEGraph | None=None, kg_test: KGATEGraph | None=None):
+    def __init__(self, kg:KnowledgeGraph, kg_val:KnowledgeGraph | None=None, kg_test: KnowledgeGraph | None=None):
         super().__init__(kg, kg_val, kg_test)
 
     def corrupt_batch(self, heads: torch.LongTensor, tails: torch.LongTensor, relations: torch.LongTensor, n_neg: int = 1) -> Tuple[torch.LongTensor, torch.LongTensor]:
