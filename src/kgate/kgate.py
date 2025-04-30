@@ -144,7 +144,7 @@ class Architect(Model):
 
         if run_kg_prep or df is not None:
             logging.info(f"Preparing KG...")
-            self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config, kg, df)
+            self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config, kg, df, self.metadata)
             logging.info("KG preprocessed.")
         else:
             if kg is not None:
@@ -160,13 +160,13 @@ class Architect(Model):
 
         super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
         # Initialize attributes
-        self.encoder: DefaultEncoder | GNN
-        self.decoder = None
-        self.criterion = None
-        self.optimizer = None
-        self.sampler = None
-        self.scheduler = None
-        self.evaluator = None
+        self.encoder: DefaultEncoder | GNN = None
+        self.decoder: Model = None
+        self.criterion: MarginLoss | BinaryCrossEntropyLoss = None
+        self.optimizer: optim.Optimizer = None
+        self.sampler: sampling.NegativeSampler = None
+        self.scheduler: lr_scheduler.LRScheduler | None = None
+        self.evaluator: KLinkPredictionEvaluator | KTripletClassificationEvaluator = None
 
 
 
@@ -405,7 +405,7 @@ class Architect(Model):
         logging.info(f"Scheduler '{scheduler_type}' initialized with parameters: {scheduler_params}")
         return scheduler
 
-    def initialize_evaluator(self):
+    def initialize_evaluator(self) -> KLinkPredictionEvaluator | KTripletClassificationEvaluator:
         match self.config["evaluation"]["objective"]:
             case "Link Prediction":
                 evaluator = KLinkPredictionEvaluator()
@@ -443,25 +443,25 @@ class Architect(Model):
         self.mappings.kg_to_node_type = self.mappings.kg_to_node_type.to(self.device)
         self.mappings.kg_to_hetero = self.mappings.kg_to_hetero.to(self.device)
 
-        self.node_embeddings: nn.ModuleList = nn.ModuleList()
-        for node_type in self.mappings.data.node_types:
-            num_nodes = self.mappings.data[node_type].num_nodes
-            if node_type in attributes:
-                current_attribute: Tensor = attributes[node_type]
-                assert current_attribute.size(0) == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
-                self.data[node_type].x = Parameter(current_attribute).to(self.device)
-                # if isinstance(current_attribute, nn.Embedding):
-                #     assert current_attribute.embedding_dim == self.emb_dim and current_attribute.num_embeddings == num_nodes, f"The number and dimensions and embedding of the given attributes ({current_attribute.num_embeddings},{current_attribute.embedding_dim}) must match the embedding dimension ({num_nodes},{self.emb_dim})."
-                #     self.node_embeddings.append(current_attribute)
-                # else:
-                #     assert len(current_attribute) == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
-                #     emb = nn.Embedding(num_nodes, self.emb_dim, device=self.device)
-                #     emb.weight.data = tensor(current_attribute).to(self.device)
-                #     self.node_embeddings.append(emb)
-            else:
-                emb = init_embedding(num_nodes, self.emb_dim, self.device)
-                self.data[node_type].x = emb.weight
-                self.node_embeddings.append(emb)
+        self.node_embeddings: nn.Embedding = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
+        # for node_type in self.mappings.data.node_types:
+        #     num_nodes = self.mappings.data[node_type].num_nodes
+        #     if node_type in attributes:
+        #         current_attribute: Tensor = attributes[node_type]
+        #         assert current_attribute.size(0) == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
+        #         self.data[node_type].x = Parameter(current_attribute).to(self.device)
+        #         # if isinstance(current_attribute, nn.Embedding):
+        #         #     assert current_attribute.embedding_dim == self.emb_dim and current_attribute.num_embeddings == num_nodes, f"The number and dimensions and embedding of the given attributes ({current_attribute.num_embeddings},{current_attribute.embedding_dim}) must match the embedding dimension ({num_nodes},{self.emb_dim})."
+        #         #     self.node_embeddings.append(current_attribute)
+        #         # else:
+        #         #     assert len(current_attribute) == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
+        #         #     emb = nn.Embedding(num_nodes, self.emb_dim, device=self.device)
+        #         #     emb.weight.data = tensor(current_attribute).to(self.device)
+        #         #     self.node_embeddings.append(emb)
+        #     else:
+        #         emb = init_embedding(num_nodes, self.emb_dim, self.device)
+        #         self.data[node_type].x = emb.weight
+        #         self.node_embeddings.append(emb)
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
         logging.info("Initializing encoder...")
@@ -742,10 +742,7 @@ class Architect(Model):
         self.mappings = HeteroMappings(self.kg_train, self.metadata)
         self.mappings.data = self.mappings.data.to(self.device)
 
-        self.node_embeddings = nn.ModuleList()
-        for node_type in self.mappings.data.node_types:
-            num_nodes = self.mappings.data[node_type].num_nodes
-            self.node_embeddings.append(init_embedding(num_nodes, self.emb_dim, self.device))
+        self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
 
@@ -775,33 +772,18 @@ class Architect(Model):
     def forward(self, pos_batch, neg_batch):
         pos = self.scoring_function(pos_batch)
 
-        if negative_relations is None:
-            negative_relations = relations
-
-        if negative_heads.shape[0] > negative_relations.shape[0]:
-            # in that case, several negative samples are sampled from each fact
-            n_neg = int(negative_heads.shape[0] / negative_relations.shape[0])
-            pos = pos.repeat(n_neg)
-            neg = self.scoring_function(negative_heads,
-                                        negative_tails,
-                                        negative_relations.repeat(n_neg))
-        else:
-            neg = self.scoring_function(negative_heads,
-                                        negative_tails,
-                                        negative_relations)
+        neg = self.scoring_function(neg_batch)
 
         return pos, neg
 
     def process_batch(self, engine: Engine, batch: Tensor) -> torch.types.Number:
-        h, t, r, f = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device), batch[3].to(self.device)
-
-        n_h, n_t = self.sampler.corrupt_batch(h, t, r)
-        n_h, n_t = n_h.to(self.device), n_t.to(self.device)
+        n_batch = self.sampler.corrupt_batch(batch)
+        n_batch = n_batch.to(self.device)
 
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triples
-        pos, neg = self(h, t, r, n_h, n_t)
+        pos, neg = self(batch, n_batch)
         loss = self.criterion(pos, neg)
         
         loss.backward()
@@ -813,52 +795,24 @@ class Architect(Model):
         return loss.item()
 
     def scoring_function(self, batch: Tensor) -> torch.types.Number:
-        input = self.kg_train.get_encoder_input(batch, self.node_embeddings)
-        encoder_output = self.encoder(input.x_dict, input.edge_index)
-        # self.embeddings = list(self.encoder.forward(self.node_embeddings, self.mappings).values())
-        h_node_types: torch.Tensor = self.mappings.kg_to_node_type[h_idx]
-        h_embeddings: torch.Tensor = torch.tensor([], device=self.device) #torch.zeros((h_idx.size(0), self.emb_dim), device=self.device)
-        t_node_types: torch.Tensor = self.mappings.kg_to_node_type[t_idx]
-        t_embeddings: torch.Tensor = torch.tensor([], device=self.device) #torch.zeros((t_idx.size(0), self.emb_dim), device=self.device)
+        h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
 
-        for edge_type in data.edge_types:
-            head_node_type, tail_node_type = edge_type[0], edge_type[2]
-            head_idx = data[edge_type].edge_index[0]
-            tail_idx = data[edge_type].edge_index[1]
-            h_embeddings = torch.cat([h_embeddings, encoder_output[head_node_type][head_idx]])
-            t_embeddings = torch.cat([t_embeddings, encoder_output[tail_node_type][tail_idx]])
+        if isinstance(self.encoder, GNN):
+            input = self.kg_train.get_encoder_input(batch, self.node_embeddings)
 
+            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
+            
+            embeddings: torch.Tensor = torch.zeros((self.kg_train.n_ent, self.emb_dim), device=self.device, dtype=torch.long)
 
-        # h_unique_types: Tensor = h_node_types.unique()
-        # t_unique_types: Tensor = t_node_types.unique()
+            for node_type, idx in input.mapping.items():
+                embeddings[idx] = encoder_output[node_type]
 
-        # x_dict: Dict[str, Tensor] = {}
-
-        # node_types = torch.cat([h_node_types,t_node_types])
-        # het_idx = self.mappings.kg_to_hetero[torch.cat([h_idx, t_idx])]
-
-        # for node_type in set(torch.cat([h_unique_types,t_unique_types])):
-        #     mask = (node_types == node_type)
-        #     x_dict[self.mappings.hetero_node_type[node_type]] = self.node_embeddings[node_type](het_idx[mask]).unique()
-
-        # encoder_output = self.encoder(x_dict=x_dict, edge_index_dict=self.mappings.data.edge_index_dict)
-
-
-        # for node_type in h_unique_types:
-        #     h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
-        #     indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-        #     nt = self.mappings.hetero_node_type[node_type]
-        #     h_embeddings[indices] = encoder_output[nt][h_het_idx[h_mask]]
-        #     # emb = encoder_output[node_type](h_het_idx[h_mask])
-        #     # embeddings[node_type] = encoder_output[node_type](h_het_idx[h_mask])
-
-        # for node_type in t_unique_types:
-        #     t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
-        #     indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-        #     nt = self.mappings.hetero_node_type[node_type]
-        #     t_embeddings[indices] = encoder_output[nt][t_het_idx[t_mask]]
-
-        r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
+            h_embeddings = embeddings[h_idx]
+            t_embeddings = embeddings[t_idx]
+        else:
+            h_embeddings = self.node_embeddings(h_idx)
+            t_embeddings = self.node_embeddings(t_idx)
+        r_embeddings = self.rel_emb(batch[2])  # Relations are unchanged
 
         return self.decoder.score(h_emb = h_embeddings,
                                   r_emb = r_embeddings, 
@@ -867,15 +821,13 @@ class Architect(Model):
                                   r_idx = r_idx, 
                                   t_idx = t_idx)
 
-    def get_embeddings(self) -> Tuple[Sequence[nn.Embedding], nn.Embedding, Any | None]:
+    def get_embeddings(self) -> Tuple[Tensor, Tensor, Any | None]:
         """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.
         
         If the encoder uses heteroData, a dict of {node_type : embedding} is returned for entity embeddings instead of a tensor."""
         self.normalize_parameters()
-
-        ent_emb = None
         
-        ent_emb = [embedding for embedding in self.node_embeddings]
+        ent_emb = self.node_embeddings.weight.data
 
         rel_emb = self.rel_emb.weight.data
 
@@ -894,8 +846,7 @@ class Architect(Model):
             if stop_norm: return
         
         
-        for embedding in self.node_embeddings:
-            embedding.weight.data = normalize(embedding.weight.data, p=2, dim=1)
+        self.node_embeddings.weight.data = normalize(self.node_embeddings.weight.data, p=2, dim=1)
             
         logging.debug(f"Normalized all embeddings")
 
@@ -990,7 +941,7 @@ class Architect(Model):
 
         # Count occurrences of nodes with the specified relation in the training set
         train_node_counts = {}
-        for i in range(self.kg_train.n_facts):
+        for i in range(self.kg_train.n_triples):
             if self.kg_train.relations[i].item() == relation_idx:
                 head = self.kg_train.head_idx[i].item()
                 tail = self.kg_train.tail_idx[i].item()
@@ -1000,7 +951,7 @@ class Architect(Model):
         # Separate test triples with the specified relation based on the threshold
         frequent_indices = []
         infrequent_indices = []
-        for i in range(self.kg_test.n_facts):
+        for i in range(self.kg_test.n_triples):
             if self.kg_test.relations[i].item() == relation_idx:  # Only consider triples with the specified relation
                 head = self.kg_test.head_idx[i].item()
                 tail = self.kg_test.tail_idx[i].item()
@@ -1030,9 +981,6 @@ class Architect(Model):
                 continue  # Skip to next relation if no triples found
             
             new_kg = kg.keep_triples(indices_to_keep)
-            new_kg.dict_of_rels = kg.dict_of_rels
-            new_kg.dict_of_heads = kg.dict_of_heads
-            new_kg.dict_of_tails = kg.dict_of_tails
 
             if isinstance(self.evaluator, KLinkPredictionEvaluator):
                 test_metrics = self.link_pred(new_kg)
@@ -1071,13 +1019,7 @@ class Architect(Model):
 
         # Create subgraph for frequent and infrequent categories
         kg_frequent = self.kg_test.keep_triples(frequent_indices)
-        kg_frequent.dict_of_rels = self.kg_test.dict_of_rels
-        kg_frequent.dict_of_heads = self.kg_test.dict_of_heads
-        kg_frequent.dict_of_tails = self.kg_test.dict_of_tails
         kg_infrequent = self.kg_test.keep_triples(infrequent_indices)
-        kg_infrequent.dict_of_rels = self.kg_test.dict_of_rels
-        kg_infrequent.dict_of_heads = self.kg_test.dict_of_heads
-        kg_infrequent.dict_of_tails = self.kg_test.dict_of_tails
         
         # Compute each category's MRR
         if isinstance(self.evaluator, KLinkPredictionEvaluator):
@@ -1094,12 +1036,13 @@ class Architect(Model):
         if not isinstance(self.evaluator, KLinkPredictionEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Link Prediction method for {type(self.evaluator)} evaluator.")
 
-        embeddings = list(self.encoder.forward(self.node_embeddings, self.mappings).values())
-
-        self.evaluator.evaluate(b_size = self.eval_batch_size, 
-                        decoder =self.decoder, knowledge_graph=kg,
-                        node_embeddings=embeddings, relation_embeddings=self.rel_emb,
-                        mappings=self.mappings, verbose=True)
+        self.evaluator.evaluate(b_size = self.eval_batch_size,
+                        encoder=self.encoder,
+                        decoder =self.decoder,
+                        knowledge_graph=kg,
+                        node_embeddings=self.node_embeddings, 
+                        relation_embeddings=self.rel_emb,
+                        verbose=True)
         
         test_mrr = self.evaluator.mrr()[1]
         return test_mrr

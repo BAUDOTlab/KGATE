@@ -7,10 +7,11 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 
 The modifications are licensed under the BSD license according to the source license."""
 
+import torch
 from torch import empty, zeros, cat, Tensor, tensor
 from tqdm.autonotebook import tqdm
 
-from torch import nn
+import torch.nn as nn
 
 from torchkge.evaluation import LinkPredictionEvaluator, TripletClassificationEvaluator
 from torchkge.exceptions import NotYetEvaluatedError
@@ -21,8 +22,9 @@ from torchkge.models import Model
 from .knowledgegraph import KnowledgeGraph
 from .utils import HeteroMappings
 from .samplers import FixedPositionalNegativeSampler
+from .encoders import GNN, DefaultEncoder
 
-from typing import Dict
+from typing import Dict, Literal
 
 class KLinkPredictionEvaluator(LinkPredictionEvaluator):
     """Evaluate performance of given embedding using link prediction method.
@@ -49,18 +51,18 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
         Embedding model inheriting from the right interface.
     kg: torchkge.data_structures.KnowledgeGraph
         Knowledge graph on which the evaluation will be done.
-    rank_true_heads: torch.Tensor, shape: (n_facts), dtype: `torch.int`
+    rank_true_heads: torch.Tensor, shape: (n_triples), dtype: `torch.int`
         For each fact, this is the rank of the true head when all entities
         are ranked as possible replacement of the head entity. They are
         ranked in decreasing order of scoring function :math:`f_r(h,t)`.
-    rank_true_tails: torch.Tensor, shape: (n_facts), dtype: `torch.int`
+    rank_true_tails: torch.Tensor, shape: (n_triples), dtype: `torch.int`
         For each fact, this is the rank of the true tail when all entities
         are ranked as possible replacement of the tail entity. They are
         ranked in decreasing order of scoring function :math:`f_r(h,t)`.
-    filt_rank_true_heads: torch.Tensor, shape: (n_facts), dtype: `torch.int`
+    filt_rank_true_heads: torch.Tensor, shape: (n_triples), dtype: `torch.int`
         This is the same as the `rank_of_true_heads` when in the filtered
         case. See referenced paper by Bordes et al. for more information.
-    filt_rank_true_tails: torch.Tensor, shape: (n_facts), dtype: `torch.int`
+    filt_rank_true_tails: torch.Tensor, shape: (n_triples), dtype: `torch.int`
         This is the same as the `rank_of_true_tails` when in the filtered
         case. See referenced paper by Bordes et al. for more information.
     evaluated: bool
@@ -74,11 +76,11 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
 
     def evaluate(self, 
                 b_size: int,
+                encoder: DefaultEncoder | GNN,
                 decoder: Model, 
                 knowledge_graph: KnowledgeGraph, 
-                node_embeddings: nn.ModuleList | Dict[str, Tensor], 
-                relation_embeddings: nn.Embedding, 
-                mappings: HeteroMappings, 
+                node_embeddings: nn.Embedding, 
+                relation_embeddings: nn.Embedding,
                 verbose: bool=True):
         """
 
@@ -86,6 +88,8 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
         ----------
         b_size: int
             Size of the current batch.
+        encoder: DefaultEncoder or GNN
+            Encoder model to embed the nodes. Deactivated with DefaultEncoder
         decoder: torchkge.Model
             Decoder model to evaluate, inheriting from the torchkge.Model class.
         knowledge_graph: kgate.KnowledgeGraph
@@ -102,10 +106,10 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             Indicates whether a progress bar should be displayed during
             evaluation.
         """
-        self.rank_true_heads = empty(size=(knowledge_graph.n_facts,)).long()
-        self.rank_true_tails = empty(size=(knowledge_graph.n_facts,)).long()
-        self.filt_rank_true_heads = empty(size=(knowledge_graph.n_facts,)).long()
-        self.filt_rank_true_tails = empty(size=(knowledge_graph.n_facts,)).long()
+        self.rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long()
+        self.rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long()
+        self.filt_rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long()
+        self.filt_rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long()
 
         use_cuda = relation_embeddings.weight.is_cuda
 
@@ -122,21 +126,46 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
                              unit="batch", disable=(not verbose),
                              desc="Link prediction evaluation"):
             h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
+            if isinstance(encoder, GNN):
+                input = knowledge_graph.get_encoder_input(knowledge_graph.edgelist, node_embeddings)
+
+                encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
+
+                embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, node_embeddings.emb_dim), device=node_embeddings.device, dtype=torch.long)
+
+                for node_type, idx in input.mapping.items():
+                    embeddings[idx] = encoder_output[node_type]
+            else:
+                embeddings = node_embeddings.weight.data
+
             h_emb, t_emb, r_emb, candidates = decoder.inference_prepare_candidates(h_idx = h_idx, 
                                                                                    t_idx = t_idx, 
                                                                                    r_idx = r_idx, 
                                                                                    node_embeddings = node_embeddings, 
-                                                                                   relation_embeddings = relation_embeddings, 
-                                                                                   mappings = mappings, 
+                                                                                   relation_embeddings = relation_embeddings,
                                                                                    entities=True)
 
             scores = decoder.inference_scoring_function(h_emb, candidates, r_emb)
-            filt_scores = filter_scores(scores, knowledge_graph.dict_of_tails, h_idx, r_idx, t_idx)
+            filt_scores = filter_scores(
+                scores = scores, 
+                edgelist = knowledge_graph.edgelist,
+                missing = "tail",
+                ent_idx=h_idx,
+                r_idx=r_idx,
+                true_idx=t_idx
+            )
             self.rank_true_tails[i * b_size: (i + 1) * b_size] = get_rank(scores, t_idx).detach()
             self.filt_rank_true_tails[i * b_size: (i + 1) * b_size] = get_rank(filt_scores, t_idx).detach()
 
             scores = decoder.inference_scoring_function(candidates, t_emb, r_emb)
-            filt_scores = filter_scores(scores, knowledge_graph.dict_of_heads, t_idx, r_idx, h_idx)
+            filt_scores = filter_scores(
+                scores = scores, 
+                edgelist = knowledge_graph.edgelist,
+                missing = "head",
+                ent_idx=t_idx,
+                r_idx=r_idx,
+                true_idx=h_idx
+            )
             self.rank_true_heads[i * b_size: (i + 1) * b_size] = get_rank(scores, h_idx).detach()
             self.filt_rank_true_heads[i * b_size: (i + 1) * b_size] = get_rank(filt_scores, h_idx).detach()
 
@@ -147,6 +176,24 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             self.rank_true_tails = self.rank_true_tails.cpu()
             self.filt_rank_true_heads = self.filt_rank_true_heads.cpu()
             self.filt_rank_true_tails = self.filt_rank_true_tails.cpu()
+
+def filter_scores(scores, edgelist, missing: Literal["head","tail"], ent_idx, r_idx, true_idx):
+    b_size = scores.shape[0]
+    filt_scores = scores.clone()
+
+    e_idx = 0 if missing == "tail" else 1
+    m_idx = 1 - e_idx
+
+    for i in range(b_size):
+        true_targets = edgelist[m_idx, 
+                                    (edgelist[e_idx] == ent_idx) & 
+                                    (edgelist[2] == r_idx) & 
+                                    (edgelist[m_idx] != true_idx[i])
+                                ]
+        filt_scores[i, true_targets] = - float('Inf')
+
+    return filt_scores
+
 
 class KTripletClassificationEvaluator(TripletClassificationEvaluator):
     """Evaluate performance of given embedding using triplet classification
@@ -205,17 +252,17 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
 
         Parameters
         ----------
-        heads: torch.Tensor, dtype: torch.long, shape: n_facts
+        heads: torch.Tensor, dtype: torch.long, shape: n_triples
             List of heads indices.
-        tails: torch.Tensor, dtype: torch.long, shape: n_facts
+        tails: torch.Tensor, dtype: torch.long, shape: n_triples
             List of tails indices.
-        relations: torch.Tensor, dtype: torch.long, shape: n_facts
+        relations: torch.Tensor, dtype: torch.long, shape: n_triples
             List of relation indices.
         batch_size: int
 
         Returns
         -------
-        scores: torch.Tensor, dtype: torch.float, shape: n_facts
+        scores: torch.Tensor, dtype: torch.float, shape: n_triples
             List of scores of each triplet.
         """
         scores = []
@@ -304,4 +351,4 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         neg_scores = (neg_scores < self.thresholds[r_idx])
 
         return (scores.sum().item() +
-                neg_scores.sum().item()) / (2 * self.kg_test.n_facts)
+                neg_scores.sum().item()) / (2 * self.kg_test.n_triples)

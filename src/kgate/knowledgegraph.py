@@ -62,84 +62,97 @@ class KnowledgeGraph(Dataset):
                  metadata: pd.DataFrame | None=None, 
                  triple_types: List[Tuple[str,str,str]] | None = None,
                  ent2ix: Dict[str, int] | None=None, 
-                 rel2ix: Dict[str, int] | None=None):
+                 rel2ix: Dict[str, int] | None=None,
+                 nt2ix: Dict[str, int] | None=None):
         
         if df is None:
             assert edgelist is not None and \
                    ent2ix is not None and \
                    rel2ix is not None and \
-                   triple_types is not None, "If df is not given, `edgelist`, `ent2ix` and `rel2ix` must be provided."
+                   triple_types is not None and \
+                   nt2ix is not None, "If df is not given, `edgelist`, `ent2ix`, `rel2ix` and `nt2ix` must be provided."
+            self.n_triples = edgelist.size(1)
+        else:
+            self.n_triples = len(df)
 
         if edgelist is not None:
-            assert edgelist.size(1) == 4, "The `edgelist` parameter must be a 2D tensor of size [4, num_triples]."
+            assert edgelist.size(0) == 4, "The `edgelist` parameter must be a 2D tensor of size [4, num_triples]."
             self.edgelist = edgelist.long()
         else:
             self.edgelist = tensor([], dtype=torch.long)
         
         self.triple_types: List[Tuple[str,str,str]] = triple_types or []
 
-        self._df = df
-
         self.ent2ix = ent2ix or get_dictionaries(df, ent=True)
-
+        self.nt2ix: Dict[str,int] = nt2ix or {"Node": 0}
         self.rel2ix = rel2ix or get_dictionaries(df, ent=False)
 
         self.n_ent = max(self.ent2ix.values()) + 1
         self.n_rel = max(self.rel2ix.values()) + 1
-        self.n_triples = len(df)
-            
 
-        if metadata is not None:
-            assert not set(["type","id"]).isdisjoint(list(metadata.columns)), f"The mapping dataframe must have at least the columns `type` and `id`, but found only {",".join(list(metadata.columns))}"
+        self.node_types = torch.zeros(self.n_ent, dtype=torch.long)
 
-            mapping_df = pd.merge(df, metadata.add_prefix("from_"), how="left", left_on="from", right_on="from_id")
-            mapping_df = pd.merge(mapping_df, metadata.add_prefix("to_"), how="left", left_on="to", right_on="to_id", suffixes=(None, "_to"))
-            mapping_df.drop([i for i in mapping_df.columns if "id" in i],axis=1, inplace=True)
-        else:
-            mapping_df = df
-
-        i = 0
-
-        for rel, group in mapping_df.groupby("rel"):
-            relation = self.rel2ix[rel]
+        if df is not None:
             if metadata is not None:
-                src_types = group["from_type"].unique()
-                tgt_types = group["to_type"].unique()
+                assert not set(["type","id"]).isdisjoint(list(metadata.columns)), f"The mapping dataframe must have at least the columns `type` and `id`, but found only {",".join(list(metadata.columns))}"
+
+                mapping_df = pd.merge(df, metadata.add_prefix("from_"), how="left", left_on="from", right_on="from_id")
+                mapping_df = pd.merge(mapping_df, metadata.add_prefix("to_"), how="left", left_on="to", right_on="to_id", suffixes=(None, "_to"))
+                mapping_df.drop([i for i in mapping_df.columns if "id" in i],axis=1, inplace=True)
+
+                node_types = list(set(mapping_df['from_type'].unique()).union(set(mapping_df['to_type'].unique())))
+                self.nt2ix = {nt: i for i, nt in enumerate(sorted(node_types))}
             else:
-                src_types = tgt_types = ["Node"]
+                mapping_df = df
 
-            for src_type in src_types:
-                for tgt_type in tgt_types:
-                    if metadata is not None:
-                        subset = group[
-                            (group["from_type"] == src_type) &
-                            (group["to_type"] == tgt_type)
-                        ]
-                    else:
-                        subset = group
+            i = 0
 
-                    # Skip if there are no edges in this group
-                    if subset.empty: 
-                        continue 
+            for rel, group in mapping_df.groupby("rel"):
+                relation = self.rel2ix[rel]
+                if metadata is not None:
+                    src_types = group["from_type"].unique()
+                    tgt_types = group["to_type"].unique()
+                else:
+                    src_types = tgt_types = ["Node"]
 
-                    src = subset["from"].map(self.ent2ix).values
-                    tgt = subset["to"].map(self.ent2ix).values
-                    
-                    triplets = torch.cat([
-                        tensor(src).unsqueeze(0).long(),
-                        tensor(tgt).unsqueeze(0).long(),
-                        tensor(relation).repeat(len(subset)).unsqueeze(0),
-                        tensor(i).repeat(len(subset)).unsqueeze(0)
-                    ], dim=0)
 
-                    self.edgelist = torch.cat([
-                        self.edgelist,
-                        triplets
-                    ], dim=1)
+                for src_type in src_types:
+                    for tgt_type in tgt_types:
+                        if metadata is not None:
+                            subset = group[
+                                (group["from_type"] == src_type) &
+                                (group["to_type"] == tgt_type)
+                            ]
+                        else:
+                            subset = group
 
-                    edge_type = (src_type, rel, tgt_type)
-                    self.triple_types.append(edge_type)
-                    i+=1
+                        # Skip if there are no edges in this group
+                        if subset.empty: 
+                            continue 
+
+                        src = subset["from"].map(self.ent2ix).values
+                        src = tensor(src).unsqueeze(0).long()
+                        tgt = subset["to"].map(self.ent2ix).values
+                        tgt = tensor(tgt).unsqueeze(0).long()
+
+                        triplets = torch.cat([
+                            src,
+                            tgt,
+                            tensor(relation).repeat(len(subset)).unsqueeze(0),
+                            tensor(i).repeat(len(subset)).unsqueeze(0)
+                        ], dim=0)
+
+                        self.edgelist = torch.cat([
+                            self.edgelist,
+                            triplets
+                        ], dim=1)
+
+                        self.node_types[src] = self.nt2ix[src_type]
+                        self.node_types[tgt] = self.nt2ix[tgt_type]
+
+                        edge_type = (src_type, rel, tgt_type)
+                        self.triple_types.append(edge_type)
+                        i+=1
 
 
 
@@ -149,10 +162,6 @@ class KnowledgeGraph(Dataset):
     
     def __getitem__(self, index) -> Tensor:
         return self.edgelist[:, index]
-    
-    @property
-    def df(self) -> pd.DataFrame:
-        return self._df
     
     @property
     def head_idx(self) -> Tensor:
@@ -165,6 +174,29 @@ class KnowledgeGraph(Dataset):
     @property
     def relations(self) -> Tensor:
         return self.edgelist[2]
+    
+    # torchkge compatibility
+    @property
+    def n_facts(self) -> int:
+        return self.n_triples
+
+    def get_df(self):
+        """
+        Returns a Pandas DataFrame with columns ['from', 'to', 'rel'].
+        """
+        ix2ent = {v: k for k, v in self.ent2ix.items()}
+        ix2rel = {v: k for k, v in self.rel2ix.items()}
+
+        df = pd.DataFrame(cat((self.head_idx.view(1, -1),
+                            self.tail_idx.view(1, -1),
+                            self.relations.view(1, -1))).transpose(0, 1).numpy(),
+                       columns=['from', 'to', 'rel'])
+
+        df['from'] = df['from'].apply(lambda x: ix2ent[x])
+        df['to'] = df['to'].apply(lambda x: ix2ent[x])
+        df['rel'] = df['rel'].apply(lambda x: ix2rel[x])
+
+        return df
 
     def split_kg(self, shares: Tuple[float,float,float]=(0.8,0.1,0.1), 
                  sizes: Tuple[int, int, int] | None=None) -> Tuple[Self, Self, Self]:
@@ -186,19 +218,22 @@ class KnowledgeGraph(Dataset):
             
         return (
             self.__class__(
-                edgelist = self.edgelist[mask_tr], 
+                edgelist = self.edgelist[:, mask_tr], 
                 triple_types=self.triple_types,
                 ent2ix=self.ent2ix, rel2ix=self.rel2ix,
+                nt2ix=self.nt2ix
             ),
             self.__class__(
-                edgelist = self.edgelist[mask_val], 
+                edgelist = self.edgelist[:, mask_val], 
                 triple_types=self.triple_types,
                 ent2ix=self.ent2ix, rel2ix=self.rel2ix,
+                nt2ix=self.nt2ix
             ),
             self.__class__(
-                edgelist = self.edgelist[mask_te], 
+                edgelist = self.edgelist[:, mask_te], 
                 triple_types=self.triple_types,
                 ent2ix=self.ent2ix, rel2ix=self.rel2ix,
+                nt2ix=self.nt2ix
             )
         )
             
@@ -223,7 +258,7 @@ class KnowledgeGraph(Dataset):
             assert train_size + val_size + test_size == count
 
             train_mask[sub_mask[rand[:train_size]]] = True
-            val_mask[sub_mask[rand[train_size:train_size + val_size]]]
+            val_mask[sub_mask[rand[train_size:train_size + val_size]]] = True
 
         u = cat([self.head_idx[train_mask], self.tail_idx[train_mask]]).unique()
         if len(u) < self.n_ent:
@@ -268,7 +303,8 @@ class KnowledgeGraph(Dataset):
             edgelist=self.edgelist[:, mask],
             triple_types=self.triple_types,
             ent2ix=self.ent2ix,
-            rel2ix=self.rel2ix
+            rel2ix=self.rel2ix,
+            nt2ix=self.nt2ix
         )
 
     def remove_triples(self, indices_to_remove: List[int] | torch.Tensor) -> Self:
@@ -294,7 +330,8 @@ class KnowledgeGraph(Dataset):
             edgelist=self.edgelist[:, mask],
             triple_types=self.triple_types,
             ent2ix=self.ent2ix,
-            rel2ix=self.rel2ix, 
+            rel2ix=self.rel2ix,
+            nt2ix=self.nt2ix
         )
     
     def add_triples(self, new_triples: torch.Tensor) -> Self:
@@ -336,7 +373,8 @@ class KnowledgeGraph(Dataset):
             edgelist=updated_edgelist,
             triple_types=self.triple_types,
             ent2ix=self.ent2ix,
-            rel2ix=self.rel2ix
+            rel2ix=self.rel2ix,
+            nt2ix=self.nt2ix
         )
 
     def add_inverse_relations(self, undirected_relations: List[int]) -> Tuple[Self, List[int]]:
@@ -437,6 +475,7 @@ class KnowledgeGraph(Dataset):
                 triple_types=self.triple_types,
                 ent2ix=self.ent2ix,
                 rel2ix=self.rel2ix,
+                nt2ix=self.nt2ix
             ), reverse_list
 
     def remove_duplicate_triples(self) -> Self:
@@ -633,7 +672,7 @@ class KnowledgeGraph(Dataset):
 
     def get_encoder_input(self, data: Tensor, node_embedding: nn.Embedding) -> EncoderInput:
         edge_types = data[3].unique()
-        node_ids = defaultdict(Tensor)
+        node_ids: Dict[str, Tensor] = defaultdict(Tensor)
 
         edge_indices = {}
         x_dict = {}
@@ -662,6 +701,6 @@ class KnowledgeGraph(Dataset):
             edge_indices[edge_type] = edge_index
             
         for ntype, idx in node_ids.items():
-            x_dict[ntype] = torch.index_select(node_embedding.weight.data, 0, idx)
+            x_dict[ntype] = node_embedding(idx) #torch.index_select(node_embedding.weight.data, 0, idx)
 
         return EncoderInput(x_dict, edge_indices, node_ids)

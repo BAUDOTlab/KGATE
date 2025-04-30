@@ -26,9 +26,8 @@ class TransE(TransEModel):
                                     h_idx: Tensor, 
                                     t_idx: Tensor, 
                                     r_idx: Tensor, 
-                                    node_embeddings: List[Tensor], 
-                                    relation_embeddings: nn.Embedding, 
-                                    mappings: HeteroMappings, 
+                                    node_embeddings: nn.Embedding, 
+                                    relation_embeddings: nn.Embedding,
                                     entities: bool=True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -61,45 +60,20 @@ class TransE(TransEModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        device = h_idx.device        
-
-        h_node_types = mappings.kg_to_node_type[h_idx]
-        h_embeddings: torch.Tensor = torch.zeros((h_idx.size(0), self.emb_dim), device=device)
-        h_unique_types = h_node_types.unique()
-        h_het_idx = mappings.kg_to_hetero[h_idx]
-
-        t_node_types = mappings.kg_to_node_type[t_idx]
-        t_embeddings: torch.Tensor = torch.zeros((t_idx.size(0), self.emb_dim), device=device)
-        t_unique_types = t_node_types.unique()
-        t_het_idx = mappings.kg_to_hetero[t_idx]
-
-        for node_type in h_unique_types:
-            h_mask = (h_node_types == node_type)  # Boolean h_mask for current node type
-            indices = h_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            h_embeddings[indices] = node_embeddings[node_type][h_het_idx[h_mask]]
-        for node_type in t_unique_types:
-            t_mask = (t_node_types == node_type)  # Boolean t_mask for current node type
-            indices = t_mask.nonzero(as_tuple=True)[0]  # Get indices in original order
-            t_embeddings[indices] = node_embeddings[node_type][t_het_idx[t_mask]]
-
+        h = node_embeddings(h_idx)
+        t = node_embeddings(t_idx)
         r = relation_embeddings(r_idx)
 
         if entities:
             # Prepare candidates for every entities
-            candidates = torch.zeros((self.n_ent, self.emb_dim), device=device)
-
-            all_embeddings = torch.cat([embedding for embedding in node_embeddings], dim=0)
-
-            hetero_to_kg = torch.tensor([mappings.hetero_to_kg[i][j] for i in range(len(node_embeddings)) 
-                                        for j in range(node_embeddings[i].size(0))], device=device)
-
-            candidates[hetero_to_kg] = all_embeddings
-            candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
+            candidates = node_embeddings
         else:
             # Prepare candidates for every relations
-            candidates = relation_embeddings.weight.data.unsqueeze(0).expand(b_size, -1, -1)
+            candidates = relation_embeddings
         
-        return h_embeddings, t_embeddings, r, candidates
+        candidates = candidates.weight.data.unsqueeze(0).expand(b_size, -1, -1)
+
+        return h, t, r, candidates
     
 class TransH(TransHModel):
     def __init__(self, emb_dim: int, n_entities: int, n_relations: int):

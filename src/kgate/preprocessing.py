@@ -12,7 +12,11 @@ from typing import Tuple, List
 
 SUPPORTED_SEPARATORS = [",","\t",";"]
 
-def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.DataFrame | None) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
+def prepare_knowledge_graph(config: dict, 
+                            kg: KnowledgeGraph | None, 
+                            df: pd.DataFrame | None,
+                            metadata: pd.DataFrame | None
+                            ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """Prepare and clean the knowledge graph.
     
     This function takes an input knowledge graph either as a csv file (from the configuration), an object of type
@@ -52,18 +56,18 @@ def prepare_knowledge_graph(config: dict, kg: KnowledgeGraph | None, df: pd.Data
         if kg_df is None:
             raise ValueError(f"The Knowledge Graph csv file was not found or uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
-        kg = KnowledgeGraph(df=kg_df)
+        kg = KnowledgeGraph(df=kg_df, metadata=metadata)
     else:
         if kg is not None:
             if isinstance(kg, torchkge.KnowledgeGraph):
                 kg_df = kg.get_df()
-                kg = KnowledgeGraph(df= kg_df)
+                kg = KnowledgeGraph(df=kg_df, metadata=metadata)
             elif isinstance(kg, KnowledgeGraph):
                 kg = kg
             else:
                 raise NotImplementedError(f"Knowledge Graph type {type(kg)} is not supported.")
         elif df is not None:
-            kg = KnowledgeGraph(df = df)
+            kg = KnowledgeGraph(df = df, metadata = metadata)
                 
     # Clean and process knowledge graph
     kg_train, kg_val, kg_test = clean_knowledge_graph(kg, config)
