@@ -8,6 +8,7 @@ import torch
 from torch import tensor, long, stack, Tensor
 from torch.nn import Parameter
 from torch.nn.functional import normalize
+from torch.utils.data import DataLoader
 from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, HeteroMappings, init_embedding, plot_learning_curves
 from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .encoders import *
@@ -16,11 +17,13 @@ from .knowledgegraph import KnowledgeGraph
 from .samplers import FixedPositionalNegativeSampler, MixedNegativeSampler
 from .evaluators import KLinkPredictionEvaluator, KTripletClassificationEvaluator
 from .inference import KEntityInference, KRelationInference
-from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss, DataLoader
+from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
 import logging
 import warnings
 import torch.optim as optim
 from torch.optim import lr_scheduler
+from torch_geometric.loader import LinkNeighborLoader
+from torch_geometric.data import Data
 import csv
 import gc
 from ignite.metrics import RunningAverage
@@ -496,8 +499,23 @@ class Architect(Model):
         self.val_metrics: List[float] = []
         self.learning_rates: List[float] = []
 
-        train_iterator: DataLoader = DataLoader(self.kg_train, self.train_batch_size, use_cuda=use_cuda)
-        logging.info(f"Number of training batches: {len(train_iterator)}")
+        # Create a Data object to sample the whole graph from the training set
+        train_data = Data(
+            x = self.node_embeddings.weight.data,
+            edge_index = self.kg_train.edgelist[:2]
+        )
+
+        num_neighbors: int = self.config["model"]["encoder"]["num_neighbors"]
+        gnn_layers: int = self.config["model"]["encoder"]["gnn_layers"]
+        encoder_dataloader: LinkNeighborLoader = LinkNeighborLoader(
+            data=train_data,
+            num_neighbors=[num_neighbors] * gnn_layers,
+            batch_size=self.train_batch_size,
+            edge_label_index=train_data.edge_index
+        )
+
+        decoder_dataloader: DataLoader = DataLoader(self.kg_train, self.train_batch_size)
+        logging.info(f"Number of training batches: {len(decoder_dataloader)}")
 
         trainer: Engine = Engine(self.process_batch)
         RunningAverage(output_transform=lambda x: x).attach(trainer, "loss_ra")
@@ -592,15 +610,15 @@ class Architect(Model):
 
                 if trainer.state.epoch < self.max_epochs:
                     logging.info(f"Starting from epoch {trainer.state.epoch}")
-                    trainer.run(train_iterator)
+                    trainer.run(decoder_dataloader)
                 else:
                     logging.info(f"Training already completed. Last epoch is {trainer.state.epoch} and max_epochs is set to {self.max_epochs}")
             else:
                 logging.info(f"Checkpoint file {checkpoint_file} does not exist. Starting training from scratch.")
-                trainer.run(train_iterator, max_epochs=self.max_epochs)
+                trainer.run(decoder_dataloader, max_epochs=self.max_epochs)
         else:
             self.normalize_parameters()
-            trainer.run(train_iterator, max_epochs=self.max_epochs)
+            trainer.run(decoder_dataloader, max_epochs=self.max_epochs)
     
         #################
         # Report metrics
@@ -777,6 +795,8 @@ class Architect(Model):
         return pos, neg
 
     def process_batch(self, engine: Engine, batch: Tensor) -> torch.types.Number:
+        batch = batch.T.to(self.device)
+
         n_batch = self.sampler.corrupt_batch(batch)
         n_batch = n_batch.to(self.device)
 
@@ -799,10 +819,10 @@ class Architect(Model):
 
         if isinstance(self.encoder, GNN):
             input = self.kg_train.get_encoder_input(batch, self.node_embeddings)
-
+            logging.info(input)
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
-            
-            embeddings: torch.Tensor = torch.zeros((self.kg_train.n_ent, self.emb_dim), device=self.device, dtype=torch.long)
+            logging.info(encoder_output)
+            embeddings: torch.Tensor = torch.zeros((self.kg_train.n_ent, self.emb_dim), device=self.device, dtype=torch.float)
 
             for node_type, idx in input.mapping.items():
                 embeddings[idx] = encoder_output[node_type]
