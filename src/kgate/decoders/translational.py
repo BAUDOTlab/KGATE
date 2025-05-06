@@ -26,7 +26,7 @@ class TransE(TransEModel):
                                     h_idx: Tensor, 
                                     t_idx: Tensor, 
                                     r_idx: Tensor, 
-                                    node_embeddings: nn.Embedding, 
+                                    node_embeddings: Tensor, 
                                     relation_embeddings: nn.Embedding,
                                     entities: bool=True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
@@ -60,8 +60,8 @@ class TransE(TransEModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        h = node_embeddings(h_idx)
-        t = node_embeddings(t_idx)
+        h = node_embeddings[h_idx]
+        t = node_embeddings[t_idx]
         r = relation_embeddings(r_idx)
 
         if entities:
@@ -69,9 +69,9 @@ class TransE(TransEModel):
             candidates = node_embeddings
         else:
             # Prepare candidates for every relations
-            candidates = relation_embeddings
+            candidates = relation_embeddings.weight.data
         
-        candidates = candidates.weight.data.unsqueeze(0).expand(b_size, -1, -1)
+        candidates = candidates.unsqueeze(0).expand(b_size, -1, -1)
 
         return h, t, r, candidates
     

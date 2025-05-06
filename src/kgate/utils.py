@@ -124,15 +124,15 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGrap
     """
      
     # Concatenate relations from all KGs
-    all_relations = torch.cat((kg_train.relations, kg_test.relations, kg_val.relations))
+    all_relations = torch.cat((kg_train.triples, kg_test.triples, kg_val.triples))
 
     # Compute the number of triples for all relations
     total_counts = torch.bincount(all_relations)
 
     # Compute occurences of each relations
-    train_counts = torch.bincount(kg_train.relations, minlength=len(total_counts))
-    test_counts = torch.bincount(kg_test.relations, minlength=len(total_counts))
-    val_counts = torch.bincount(kg_val.relations, minlength=len(total_counts))
+    train_counts = torch.bincount(kg_train.triples, minlength=len(total_counts))
+    test_counts = torch.bincount(kg_test.triples, minlength=len(total_counts))
+    val_counts = torch.bincount(kg_val.triples, minlength=len(total_counts))
 
     # Compute proportions for each KG
     proportions = {}

@@ -9,15 +9,18 @@ The modifications are licensed under the BSD license according to the source lic
 
 import torch
 from torch import empty, zeros, cat, Tensor, tensor
+from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm
 
 import torch.nn as nn
 
 from torchkge.evaluation import LinkPredictionEvaluator, TripletClassificationEvaluator
 from torchkge.exceptions import NotYetEvaluatedError
-from torchkge.utils import DataLoader, get_rank, filter_scores
+from torchkge.utils import get_rank, filter_scores
 from torchkge.data_structures import SmallKG
 from torchkge.models import Model
+
+from torch_geometric.utils import k_hop_subgraph
 
 from .knowledgegraph import KnowledgeGraph
 from .utils import HeteroMappings
@@ -110,29 +113,43 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
         self.rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long()
         self.filt_rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long()
         self.filt_rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long()
-
+        device = node_embeddings.weight.data.device
         use_cuda = relation_embeddings.weight.is_cuda
 
         if use_cuda:
-            dataloader = DataLoader(knowledge_graph, batch_size=b_size, use_cuda="batch")
+            dataloader = DataLoader(knowledge_graph, batch_size=b_size)
             self.rank_true_heads = self.rank_true_heads.cuda()
             self.rank_true_tails = self.rank_true_tails.cuda()
             self.filt_rank_true_heads = self.filt_rank_true_heads.cuda()
             self.filt_rank_true_tails = self.filt_rank_true_tails.cuda()
+            edgelist = knowledge_graph.edgelist.cuda()
         else:
             dataloader = DataLoader(knowledge_graph, batch_size=b_size)
 
         for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                              unit="batch", disable=(not verbose),
                              desc="Link prediction evaluation"):
+            batch:Tensor = batch.T.to(device)
             h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
-            if isinstance(encoder, GNN):
-                input = knowledge_graph.get_encoder_input(knowledge_graph.edgelist, node_embeddings)
 
+            seed_nodes = batch[:2].unique()
+            num_hops = encoder.n_layers
+            edge_index = knowledge_graph.edge_index
+
+            if isinstance(encoder, GNN):
+                
+                _,_,_, edge_mask = k_hop_subgraph(
+                    node_idx = seed_nodes,
+                    num_hops = num_hops,
+                    edge_index = edge_index
+                    )
+                
+                input = knowledge_graph.get_encoder_input(edgelist[:, edge_mask], node_embeddings)
                 encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
 
-                embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, node_embeddings.emb_dim), device=node_embeddings.device, dtype=torch.long)
-
+                embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, node_embeddings.embedding_dim), device=device, dtype=torch.float)
+                print(input)
+                print(encoder_output)
                 for node_type, idx in input.mapping.items():
                     embeddings[idx] = encoder_output[node_type]
             else:
@@ -141,14 +158,14 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             h_emb, t_emb, r_emb, candidates = decoder.inference_prepare_candidates(h_idx = h_idx, 
                                                                                    t_idx = t_idx, 
                                                                                    r_idx = r_idx, 
-                                                                                   node_embeddings = node_embeddings, 
+                                                                                   node_embeddings = embeddings, 
                                                                                    relation_embeddings = relation_embeddings,
                                                                                    entities=True)
 
             scores = decoder.inference_scoring_function(h_emb, candidates, r_emb)
             filt_scores = filter_scores(
                 scores = scores, 
-                edgelist = knowledge_graph.edgelist,
+                edgelist = edgelist,
                 missing = "tail",
                 ent_idx=h_idx,
                 r_idx=r_idx,
@@ -160,7 +177,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             scores = decoder.inference_scoring_function(candidates, t_emb, r_emb)
             filt_scores = filter_scores(
                 scores = scores, 
-                edgelist = knowledge_graph.edgelist,
+                edgelist = edgelist,
                 missing = "head",
                 ent_idx=t_idx,
                 r_idx=r_idx,
@@ -177,7 +194,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             self.filt_rank_true_heads = self.filt_rank_true_heads.cpu()
             self.filt_rank_true_tails = self.filt_rank_true_tails.cpu()
 
-def filter_scores(scores, edgelist, missing: Literal["head","tail"], ent_idx, r_idx, true_idx):
+def filter_scores(scores, edgelist: Tensor, missing: Literal["head","tail"], ent_idx: Tensor, r_idx: Tensor, true_idx: Tensor):
     b_size = scores.shape[0]
     filt_scores = scores.clone()
 

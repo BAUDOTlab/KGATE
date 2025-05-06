@@ -43,7 +43,8 @@ class GNN(nn.Module):
 class GATEncoder(GNN):
     def __init__(self, mappings: HeteroMappings, emb_dim: int, num_gat_layers: int=2, aggr: str="sum", device: str="cuda"):
         super().__init__(aggr)
-        
+        self.n_layers = num_gat_layers
+
         for layer in range(num_gat_layers):
             # Add_self_loops doesn"t work on heterogeneous graphs as per https://github.com/pyg-team/pytorch_geometric/issues/8121#issuecomment-1751129825  
             conv = HeteroConv(
@@ -55,6 +56,8 @@ class GATEncoder(GNN):
 class GCNEncoder(GNN):
     def __init__(self, mappings: HeteroMappings, emb_dim: int, num_gcn_layers: int=2, aggr: str="sum", device: str="cuda"):
         super().__init__(aggr)
+        self.n_layers = num_gcn_layers
+        
         for layer in range(num_gcn_layers):
             conv = HeteroConv(
                 {edge_type: SAGEConv(in_channels=-1, out_channels=emb_dim, aggr="mean") for edge_type in mappings.data.edge_types},

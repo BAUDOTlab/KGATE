@@ -24,6 +24,7 @@ import torch.optim as optim
 from torch.optim import lr_scheduler
 from torch_geometric.loader import LinkNeighborLoader
 from torch_geometric.data import Data
+from torch_geometric.utils import k_hop_subgraph
 import csv
 import gc
 from ignite.metrics import RunningAverage
@@ -328,11 +329,10 @@ class Architect(Model):
 
         optimizer_class = optimizer_mapping[optimizer_name]
         
-        try:
-            # Initialize the optimizer with given parameters
-            optimizer: optim.Optimizer = optimizer_class(self.parameters(), **optimizer_params)
-        except TypeError as e:
-            raise ValueError(f"Error initializing optimizer '{optimizer_name}': {e}")
+        
+        # Initialize the optimizer with given parameters
+        optimizer: optim.Optimizer = optimizer_class(self.parameters(), **optimizer_params)
+
         
         logging.info(f"Optimizer '{optimizer_name}' initialized with parameters: {optimizer_params}")
         return optimizer
@@ -505,14 +505,14 @@ class Architect(Model):
             edge_index = self.kg_train.edgelist[:2]
         )
 
-        num_neighbors: int = self.config["model"]["encoder"]["num_neighbors"]
-        gnn_layers: int = self.config["model"]["encoder"]["gnn_layers"]
-        encoder_dataloader: LinkNeighborLoader = LinkNeighborLoader(
-            data=train_data,
-            num_neighbors=[num_neighbors] * gnn_layers,
-            batch_size=self.train_batch_size,
-            edge_label_index=train_data.edge_index
-        )
+        # num_neighbors: int = self.config["model"]["encoder"]["num_neighbors"]
+        # gnn_layers: int = self.config["model"]["encoder"]["gnn_layers"]
+        # encoder_dataloader: LinkNeighborLoader = LinkNeighborLoader(
+        #     data=train_data,
+        #     num_neighbors=[num_neighbors] * gnn_layers,
+        #     batch_size=self.train_batch_size,
+        #     edge_label_index=train_data.edge_index
+        # )
 
         decoder_dataloader: DataLoader = DataLoader(self.kg_train, self.train_batch_size)
         logging.info(f"Number of training batches: {len(decoder_dataloader)}")
@@ -788,9 +788,9 @@ class Architect(Model):
     #     logging.info(self.embeddings[0])
 
     def forward(self, pos_batch, neg_batch):
-        pos = self.scoring_function(pos_batch)
+        pos = self.scoring_function(pos_batch, self.kg_train)
 
-        neg = self.scoring_function(neg_batch)
+        neg = self.scoring_function(neg_batch, self.kg_train)
 
         return pos, neg
 
@@ -814,15 +814,24 @@ class Architect(Model):
 
         return loss.item()
 
-    def scoring_function(self, batch: Tensor) -> torch.types.Number:
+    def scoring_function(self, batch: Tensor, kg:KnowledgeGraph) -> torch.types.Number:
         h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
 
+        seed_nodes = batch[:2].unique()
+        num_hops = self.encoder.n_layers
+        edge_index = kg.edge_index
+
         if isinstance(self.encoder, GNN):
-            input = self.kg_train.get_encoder_input(batch, self.node_embeddings)
-            logging.info(input)
+            
+            _,_,_, edge_mask = k_hop_subgraph(
+                node_idx = seed_nodes,
+                num_hops = num_hops,
+                edge_index = edge_index
+                )
+            input = self.kg_train.get_encoder_input(kg.edgelist[:, edge_mask].to(self.device), self.node_embeddings)
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
-            logging.info(encoder_output)
-            embeddings: torch.Tensor = torch.zeros((self.kg_train.n_ent, self.emb_dim), device=self.device, dtype=torch.float)
+
+            embeddings: torch.Tensor = torch.zeros((kg.n_ent, self.emb_dim), device=self.device, dtype=torch.float)
 
             for node_type, idx in input.mapping.items():
                 embeddings[idx] = encoder_output[node_type]

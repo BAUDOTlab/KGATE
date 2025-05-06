@@ -174,6 +174,14 @@ class KnowledgeGraph(Dataset):
     @property
     def relations(self) -> Tensor:
         return self.edgelist[2]
+
+    @property
+    def triples(self) -> Tensor:
+        return self.edgelist[3]
+
+    @property
+    def edge_index(self) -> Tensor:
+        return self.edgelist[:2]
     
     # torchkge compatibility
     @property
@@ -400,7 +408,7 @@ class KnowledgeGraph(Dataset):
         reverse_list = []
 
         # New triples lists
-        new_edgelist = self.edgelist
+        tmp_edgelist = [self.edgelist]
 
         for relation_id in undirected_relations:
             inverse_relation = f"{ix2rel[relation_id]}_inv"
@@ -424,17 +432,16 @@ class KnowledgeGraph(Dataset):
                 
                 mask = (self.edgelist[3] == triple_id)
                 subset = self.edgelist[:, mask]
-                
-                new_edgelist = cat([
-                    new_edgelist,
+                tmp_edgelist.append(
                     cat([
-                        subset[1],
-                        subset[0],
+                        subset[1].unsqueeze(0),
+                        subset[0].unsqueeze(0),
                         tensor(inverse_relation_id).repeat(subset.size(1)).unsqueeze(0),
                         tensor(inverse_triple_id).repeat(subset.size(1)).unsqueeze(0)
                     ])
-                ])
+                )
 
+            new_edgelist = torch.cat(tmp_edgelist, dim=1)
             reverse_list.append((relation_id, inverse_relation_id))
 
             # # Masks for the original relation
@@ -671,6 +678,9 @@ class KnowledgeGraph(Dataset):
         return selected_relations
 
     def get_encoder_input(self, data: Tensor, node_embedding: nn.Embedding) -> EncoderInput:
+        assert data.device == node_embedding.weight.device
+        device = data.device
+
         edge_types = data[3].unique()
         node_ids: Dict[str, Tensor] = defaultdict(Tensor)
 
@@ -687,18 +697,18 @@ class KnowledgeGraph(Dataset):
             src = triples[0]
             tgt = triples[1]
 
-            node_ids[h_type] = torch.cat([node_ids[h_type], src]).long().unique()
-            node_ids[t_type] = torch.cat([node_ids[t_type], tgt]).long().unique()
+            node_ids[h_type] = torch.cat([node_ids[h_type].to(device), src]).long().unique()
+            node_ids[t_type] = torch.cat([node_ids[t_type].to(device), tgt]).long().unique()
 
-            h_list = src.apply_(lambda x: (node_ids[h_type] == x).nonzero(as_tuple=True)[0])
-            t_list = tgt.apply_(lambda x: (node_ids[t_type] == x).nonzero(as_tuple=True)[0])
+            h_list = src.cpu().apply_(lambda x: (node_ids[h_type] == x).nonzero(as_tuple=True)[0])
+            t_list = tgt.cpu().apply_(lambda x: (node_ids[t_type] == x).nonzero(as_tuple=True)[0])
             
             edge_index = torch.stack([
                 h_list,
                 t_list
             ], dim=0)
 
-            edge_indices[edge_type] = edge_index
+            edge_indices[edge_type] = edge_index.to(device)
             
         for ntype, idx in node_ids.items():
             x_dict[ntype] = node_embedding(idx) #torch.index_select(node_embedding.weight.data, 0, idx)
