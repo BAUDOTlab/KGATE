@@ -349,7 +349,7 @@ class KnowledgeGraph(Dataset):
         Parameters
         ----------
         new_triples : torch.Tensor
-            Tensor of shape (n, 3) where each row represent a triple (head_idx, tail_idx, rel_idx).
+            Tensor of shape (4, n) where each column represent a triple (head_idx, tail_idx, rel_idx, triple_type).
 
         Returns
         -------
@@ -700,9 +700,11 @@ class KnowledgeGraph(Dataset):
             node_ids[h_type] = torch.cat([node_ids[h_type].to(device), src]).long().unique()
             node_ids[t_type] = torch.cat([node_ids[t_type].to(device), tgt]).long().unique()
 
-            h_list = src.cpu().apply_(lambda x: (node_ids[h_type] == x).nonzero(as_tuple=True)[0])
-            t_list = tgt.cpu().apply_(lambda x: (node_ids[t_type] == x).nonzero(as_tuple=True)[0])
-            
+            h_sorted_ids, h_sort_idx = torch.sort(node_ids[h_type])
+            h_list = h_sort_idx[torch.searchsorted(h_sorted_ids, src)]
+            t_sorted_ids, t_sort_idx = torch.sort(node_ids[t_type])
+            t_list = t_sort_idx[torch.searchsorted(t_sorted_ids, tgt)]
+
             edge_index = torch.stack([
                 h_list,
                 t_list

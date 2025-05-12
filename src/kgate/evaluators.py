@@ -165,7 +165,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             scores = decoder.inference_scoring_function(h_emb, candidates, r_emb)
             filt_scores = filter_scores(
                 scores = scores, 
-                edgelist = edgelist,
+                edgelist = batch,
                 missing = "tail",
                 ent_idx=h_idx,
                 r_idx=r_idx,
@@ -177,7 +177,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             scores = decoder.inference_scoring_function(candidates, t_emb, r_emb)
             filt_scores = filter_scores(
                 scores = scores, 
-                edgelist = edgelist,
+                edgelist = batch,
                 missing = "head",
                 ent_idx=t_idx,
                 r_idx=r_idx,

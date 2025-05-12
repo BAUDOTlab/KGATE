@@ -29,7 +29,7 @@ import csv
 import gc
 from ignite.metrics import RunningAverage
 from ignite.engine import Events, Engine
-from ignite.handlers import EarlyStopping, ModelCheckpoint, Checkpoint, DiskSaver
+from ignite.handlers import EarlyStopping, ModelCheckpoint, Checkpoint, DiskSaver, ProgressBar
 import pandas as pd
 import numpy as np
 import yaml
@@ -215,9 +215,9 @@ class Architect(Model):
             case "Default":
                 encoder = DefaultEncoder()
             case "GCN": 
-                encoder = GCNEncoder(self.mappings, self.emb_dim, gnn_layers)
+                encoder = GCNEncoder(self.kg_train.triple_types, self.emb_dim, gnn_layers)
             case "GAT":
-                encoder = GATEncoder(self.mappings, self.emb_dim, gnn_layers)
+                encoder = GATEncoder(self.kg_train.triple_types, self.emb_dim, gnn_layers)
             case _:
                 encoder = DefaultEncoder()
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
@@ -440,12 +440,12 @@ class Architect(Model):
 
         # We make hetero data from our KG. 
         # If no mapping is provided, there will be only one node type.
-        logging.info("Creating Hetero Data from KG...")
-        self.mappings = HeteroMappings(self.kg_train, self.metadata)
-        self.data = self.mappings.data.to(self.device)
-        self.mappings.kg_to_node_type = self.mappings.kg_to_node_type.to(self.device)
-        self.mappings.kg_to_hetero = self.mappings.kg_to_hetero.to(self.device)
-
+        # logging.info("Creating Hetero Data from KG...")
+        # self.mappings = HeteroMappings(self.kg_train, self.metadata)
+        # self.data = self.mappings.data.to(self.device)
+        # self.mappings.kg_to_node_type = self.mappings.kg_to_node_type.to(self.device)
+        # self.mappings.kg_to_hetero = self.mappings.kg_to_hetero.to(self.device)
+        logging.info("Initializing embeddings...")
         self.node_embeddings: nn.Embedding = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
         # for node_type in self.mappings.data.node_types:
         #     num_nodes = self.mappings.data[node_type].num_nodes
@@ -520,6 +520,9 @@ class Architect(Model):
         trainer: Engine = Engine(self.process_batch)
         RunningAverage(output_transform=lambda x: x).attach(trainer, "loss_ra")
 
+        pbar = ProgressBar()
+        pbar.attach(trainer)
+
         early_stopping: EarlyStopping = EarlyStopping(
             patience = self.patience,
             score_function = self.score_function,
@@ -542,7 +545,6 @@ class Architect(Model):
             "decoder": self.decoder,
             "optimizer": self.optimizer,
             "trainer": trainer,
-            "mappings": self.mappings
         }
 
         if self.encoder.deep:
@@ -756,9 +758,6 @@ class Architect(Model):
         self.predictions = pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
 
     def load_best_model(self):
-        logging.info("Creating Hetero Data from KG...")
-        self.mappings = HeteroMappings(self.kg_train, self.metadata)
-        self.mappings.data = self.mappings.data.to(self.device)
 
         self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
@@ -776,7 +775,6 @@ class Architect(Model):
         self.node_embeddings.load_state_dict(checkpoint["entities"])
         self.rel_emb.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])
-        self.mappings.load_state_dict(checkpoint["mappings"])
         
         self.node_embeddings.to(self.device)
         self.rel_emb.to(self.device)
@@ -816,19 +814,20 @@ class Architect(Model):
 
     def scoring_function(self, batch: Tensor, kg:KnowledgeGraph) -> torch.types.Number:
         h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
-
+        
         seed_nodes = batch[:2].unique()
         num_hops = self.encoder.n_layers
         edge_index = kg.edge_index
 
         if isinstance(self.encoder, GNN):
-            
             _,_,_, edge_mask = k_hop_subgraph(
                 node_idx = seed_nodes,
                 num_hops = num_hops,
                 edge_index = edge_index
                 )
+                
             input = self.kg_train.get_encoder_input(kg.edgelist[:, edge_mask].to(self.device), self.node_embeddings)
+
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
             embeddings: torch.Tensor = torch.zeros((kg.n_ent, self.emb_dim), device=self.device, dtype=torch.float)

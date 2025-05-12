@@ -8,7 +8,7 @@ from torch import cat
 from .utils import set_random_seeds, compute_triplet_proportions
 from .knowledgegraph import KnowledgeGraph
 import torchkge
-from typing import Tuple, List
+from typing import Tuple, List, Set
 
 SUPPORTED_SEPARATORS = [",","\t",";"]
 
@@ -267,7 +267,7 @@ def ensure_entity_coverage(kg_train: KnowledgeGraph, kg_val: KnowledgeGraph, kg_
     logging.info(f"Entities present in kg_train: {len(present_entities)}")
     logging.info(f"Missing entities in kg_train: {len(missing_entities)}")
 
-    def find_and_move_triplets(source_kg, entities):
+    def find_and_move_triplets(source_kg: KnowledgeGraph, entities: Set[int]):
         nonlocal kg_train, kg_val, kg_test
 
         # Convert `entities` set to a `Tensor` for compatibility with `torch.isin`
@@ -281,10 +281,8 @@ def ensure_entity_coverage(kg_train: KnowledgeGraph, kg_val: KnowledgeGraph, kg_
         if mask.any():
             # Extract the indices and corresponding triplets
             indices = torch.nonzero(mask, as_tuple=True)[0]
-            triplets = torch.stack([source_kg.head_idx[indices],
-                                    source_kg.tail_idx[indices],
-                                    source_kg.relations[indices]], dim=1)
-
+            triplets = source_kg.edgelist[:, indices]
+            logging.info(triplets)
             # Add the found triplets to kg_train
             kg_train = kg_train.add_triples(triplets)
 
@@ -296,7 +294,7 @@ def ensure_entity_coverage(kg_train: KnowledgeGraph, kg_val: KnowledgeGraph, kg_
                 kg_test = kg_cleaned
 
             # Update the list of missing entities
-            entities_in_triplets = set(triplets[:, 0].tolist() + triplets[:, 1].tolist())
+            entities_in_triplets = set(triplets[0].tolist() + triplets[1].tolist())
             remaining_entities = entities - set(entities_in_triplets)
             return remaining_entities
         return entities
