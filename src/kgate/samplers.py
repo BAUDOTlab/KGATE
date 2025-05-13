@@ -1,18 +1,57 @@
 from torch import tensor, bernoulli, randint, ones, rand, cat
 import torch
-from torchkge.sampling import get_possible_heads_tails, PositionalNegativeSampler, UniformNegativeSampler, BernoulliNegativeSampler, NegativeSampler
+import torchkge
+from torchkge.sampling import get_possible_heads_tails, NegativeSampler
+import torchkge.sampling
 from .knowledgegraph import KnowledgeGraph
 from typing import Tuple, List, Dict, Set
 from torch.types import Number, Tensor
 
-class FixedPositionalNegativeSampler(PositionalNegativeSampler):
-    """Simple fix of the PositionalNegativeSampler from torchkge, to solve a CPU/GPU device incompatibiltiy."""
-    def __init__(self, kg:KnowledgeGraph, kg_val:KnowledgeGraph | None=None, kg_test: KnowledgeGraph | None=None):
-        super().__init__(kg, kg_val, kg_test)
+class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
+    """Adaptation of torchKGE's PositionalNegativeSampler to KGATE's edgelist format.
+
+    Either the head or the tail of a triplet is replaced by another entity
+    chosen among entities that have already appeared at the same place in a
+    triplet (involving the same relation), using bernouilli sampling.
+
+    If the corrupted triplet is of a type that doesn't exist in the original KG,
+    it is createad.
+
+    Parameters
+    ----------
+    kg: kgate.data_structure.KnowledgeGraph
+        Knowledge Graph from which the corrupted triples will be created.
+            
+    Attributes
+    ----------
+    possible_heads: Dict[int, List[int]]
+        keys : relations
+        values : list of possible heads for each relation.
+    possible_tails: Dict[int, List[int]]
+        keys : relations
+        values : list of possible tails for each relation.
+    n_poss_heads: List[int]
+        List of number of possible heads for each relation.
+    n_poss_tails: List[int]
+        List of number of possible tails for each relation.
+    ix2nt : Dict[int,str]
+        keys : node index
+        values : node types
+    rel_types : Dict[int,str]
+        keys : relation index
+        values : relation name
+    
+    Notes
+    -----
+    Also fixes GPU/CPU incompatibility bug.
+    See original implementation here : https://github.com/torchkge-team/torchkge/blob/3adb9344dec974fc29d158025c014b0dcb48118c/torchkge/sampling.py#L330C52-L330C53
+    """
+    def __init__(self, kg:KnowledgeGraph,):
+        super().__init__(kg)
         self.ix2nt = {v: k for k,v in self.kg.nt2ix.items()}
         self.rel_types = {v: k for k,v in self.kg.rel2ix.items()}
 
-    def corrupt_batch(self, batch: torch.LongTensor, n_neg: int = 1) -> torch.LongTensor:
+    def corrupt_batch(self, batch: Tensor, n_neg: int = 1) -> Tensor:
         """For each true triplet, produce a corrupted one not different from
         any other golden triplet. If `heads` and `tails` are cuda objects,
         then the returned tensors are on the GPU.
@@ -38,7 +77,7 @@ class FixedPositionalNegativeSampler(PositionalNegativeSampler):
         triple_types = self.kg.triple_types
 
         batch_size = batch.size(1)
-        neg_batch: torch.LongTensor = batch.clone().long()
+        neg_batch: Tensor = batch.clone().long()
 
         self.bern_probs = self.bern_probs.to(device)
         # Randomly choose which samples will have head/tail corrupted
@@ -64,7 +103,7 @@ class FixedPositionalNegativeSampler(PositionalNegativeSampler):
         for i in range(n_heads_corrupted):
             r = corr_head_batch[2][i].item()
             t = corr_head_batch[1][i].item()
-            choices = self.possible_heads[r]
+            choices: Dict[Number,Set[Number]] = self.possible_heads[r]
             if len(choices) == 0:
                 # in this case the relation r has never been used with any head
                 # choose one entity at random
@@ -72,11 +111,13 @@ class FixedPositionalNegativeSampler(PositionalNegativeSampler):
             else:
                 corr_head = choices[choice_heads[i].item()]
 
+            # Find the corrupted triplet index
             corr_tri = (
                         self.ix2nt[node_types[corr_head].item()],
                         self.rel_types[r],
                         self.ix2nt[node_types[t].item()]
                     )
+            # Add it if it doesn't already exists
             if not corr_tri in triple_types:
                 triple_types.append(corr_tri)
                 triple = len(triple_types)
@@ -130,7 +171,114 @@ class FixedPositionalNegativeSampler(PositionalNegativeSampler):
             neg_batch[:, mask == 0] = torch.stack(corrupted_triples, dim=1).long().to(device)
 
         return neg_batch
+
+class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
+    def __init__(self, kg, kg_val=None, kg_test=None, n_neg=1):
+        super().__init__(kg, kg_val, kg_test, n_neg)
+        self.ix2nt = {v: k for k,v in self.kg.nt2ix.items()}
+        self.rel_types = {v: k for k,v in self.kg.rel2ix.items()}
     
+    def corrupt_batch(self, batch: torch.Tensor, n_neg=None) -> Tensor:
+        n_neg = n_neg or self.n_neg
+
+        device = batch.device
+        batch_size = batch.size(1)
+        neg_heads = batch[0].repeat(n_neg)
+        neg_tails = batch[1].repeat(n_neg)
+        rels = batch[2].repeat(n_neg)
+        
+        mask = bernoulli(ones(size=(batch_size * n_neg,),
+                              device = device) / 2).double()
+        n_h_cor = int(mask.sum().item())
+
+        neg_heads[mask == 1] = randint(1, self.n_ent,
+                                       (n_h_cor,),
+                                       device=device)
+        neg_tails[mask == 0] = randint(1, self.n_ent,
+                                       (batch_size * n_neg - n_h_cor,),
+                                       device=device)
+        
+        corrupted_triples = []
+        node_types = self.kg.node_types
+        triple_types = self.kg.triple_types
+        for i in range(batch_size):
+            h = neg_heads[i]
+            t = neg_tails[i]
+            r = rels[i]
+            corr_tri = (
+                        self.ix2nt[node_types[h].item()],
+                        self.rel_types[r],
+                        self.ix2nt[node_types[t].item()]
+                    )
+            if not corr_tri in triple_types:
+                triple_types.append(corr_tri)
+                triple = len(triple_types)
+            else:
+                triple = triple_types.index(corr_tri)
+                
+            corrupted_triples.append(tensor([
+                h,
+                t,
+                r,
+                triple
+            ]))
+
+        return torch.stack(corrupted_triples, dim=1).long().to(device)
+    
+
+    
+class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
+    def __init__(self, kg, kg_val=None, kg_test=None, n_neg=1):
+        super().__init__(kg, kg_val, kg_test, n_neg)
+        self.ix2nt = {v: k for k,v in self.kg.nt2ix.items()}
+        self.rel_types = {v: k for k,v in self.kg.rel2ix.items()}
+
+    def corrupt_batch(self, batch: torch.LongTensor, n_neg=None):
+        n_neg = n_neg or self.n_neg
+
+        device = batch.device
+        batch_size = batch.size(1)
+        neg_heads = batch[0].repeat(n_neg)
+        neg_tails = batch[1].repeat(n_neg)
+        rels = batch[2]
+
+        self.bern_probs: Tensor = self.bern_probs.to(device)
+        mask = bernoulli(self.bern_probs[rels].repeat(n_neg)).double()
+        n_h_cor = int(mask.sum().item())
+
+        neg_heads[mask == 1] = randint(1, self.n_ent,
+                                       (n_h_cor,),
+                                       device=device)
+        neg_tails[mask == 0] = randint(1, self.n_ent,
+                                       (batch_size * n_neg - n_h_cor,),
+                                       device=device)
+        
+        corrupted_triples = []
+        node_types = self.kg.node_types
+        triple_types = self.kg.triple_types
+        for i in range(batch_size):
+            h = neg_heads[i]
+            t = neg_tails[i]
+            r = rels[i]
+            corr_tri = (
+                        self.ix2nt[node_types[h].item()],
+                        self.rel_types[r],
+                        self.ix2nt[node_types[t].item()]
+                    )
+            if not corr_tri in triple_types:
+                triple_types.append(corr_tri)
+                triple = len(triple_types)
+            else:
+                triple = triple_types.index(corr_tri)
+                
+            corrupted_triples.append(tensor([
+                h,
+                t,
+                r,
+                triple
+            ]))
+
+        return torch.stack(corrupted_triples, dim=1).long().to(device)
 class MixedNegativeSampler(NegativeSampler):
     """
     A custom negative sampler that combines the BernoulliNegativeSampler
@@ -156,7 +304,7 @@ class MixedNegativeSampler(NegativeSampler):
         self.bernoulli_sampler = BernoulliNegativeSampler(kg, kg_val, kg_test, n_neg)
         self.positional_sampler = FixedPositionalNegativeSampler(kg, kg_val, kg_test)
         
-    def corrupt_batch(self, heads, tails, relations, n_neg=None):
+    def corrupt_batch(self, batch: torch.LongTensor, n_neg=None):
         """For each true triplet, produce `n_neg` corrupted ones from the
         Unniform sampler, the Bernoulli sampler and the Positional sampler. If `heads` and `tails` are
         cuda objects, then the returned tensors are on the GPU.
@@ -184,29 +332,24 @@ class MixedNegativeSampler(NegativeSampler):
             Tensor containing the integer key of negatively sampled tails from both samplers.
         """
 
-        if heads.device != tails.device or heads.device != relations.device:
-            raise ValueError(f"Tensors are on different devices: h is on {heads.device}, t is on {tails.device}, r is on {relations.device}")
-
-        if n_neg is None:
-            n_neg = self.n_neg
+        n_neg = n_neg or self.n_neg
 
         # Get negative samples from Uniform sampler
-        uniform_neg_heads, uniform_neg_tails = self.uniform_sampler.corrupt_batch(
-            heads, tails, relations, n_neg=n_neg
+        uniform_neg_batch = self.uniform_sampler.corrupt_batch(
+            batch, n_neg=n_neg
         )
         
         # Get negative samples from Bernoulli sampler
-        bernoulli_neg_heads, bernoulli_neg_tails = self.bernoulli_sampler.corrupt_batch(
-            heads, tails, relations, n_neg=n_neg
+        bernoulli_neg_batch = self.bernoulli_sampler.corrupt_batch(
+            batch, n_neg=n_neg
         )
         
         # Get negative samples from Positional sampler
-        positional_neg_heads, positional_neg_tails = self.positional_sampler.corrupt_batch(
-            heads, tails, relations
+        positional_neg_batch = self.positional_sampler.corrupt_batch(
+            batch
         )
         
         # Combine results from all samplers
-        combined_neg_heads = cat([uniform_neg_heads, bernoulli_neg_heads, positional_neg_heads])
-        combined_neg_tails = cat([uniform_neg_tails,bernoulli_neg_tails, positional_neg_tails])
+        combined_neg_batch = cat([uniform_neg_batch, bernoulli_neg_batch, positional_neg_batch])
         
-        return combined_neg_heads, combined_neg_tails
+        return combined_neg_batch

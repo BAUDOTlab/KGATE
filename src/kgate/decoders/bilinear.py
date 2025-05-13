@@ -23,9 +23,8 @@ class RESCAL(RESCALModel):
                                     h_idx: Tensor, 
                                     t_idx: Tensor, 
                                     r_idx: Tensor, 
-                                    node_embeddings: nn.ModuleList, 
-                                    relation_embeddings: nn.Embedding, 
-                                    mappings: HeteroMappings, 
+                                    node_embeddings: Tensor, 
+                                    relation_embeddings: nn.Embedding,
                                     entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
@@ -36,35 +35,13 @@ class RESCAL(RESCALModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        h_node_types = mappings.kg_to_node_type[h_idx]
-        h_unique_types = h_node_types.unique()
-        h_het_idx = mappings.kg_to_hetero[h_idx]
-
-        t_node_types = mappings.kg_to_node_type[t_idx]
-        t_unique_types = t_node_types.unique()
-        t_het_idx = mappings.kg_to_hetero[t_idx]
-        
-        h = torch.cat([
-            node_embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in h_unique_types
-        ])
-        t = torch.cat([
-            node_embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
-        ])
+        h = node_embeddings[h_idx]
+        t = node_embeddings[t_idx]
         r_mat = self.rel_mat(r_idx).view(-1, self.emb_dim, self.emb_dim)
 
-        device = h.device
-            
         if entities:
             # Prepare candidates for every entities
-            candidates = torch.zeros((self.n_ent, self.emb_dim), device=device)
-
-            all_embeddings = torch.cat([embedding.weight for embedding in node_embeddings], dim=0)
-
-            hetero_to_kg = torch.tensor([mappings.hetero_to_kg[i][j] for i in range(len(node_embeddings)) 
-                                        for j in range(node_embeddings[i].num_embeddings)], device=device)
-
-            candidates[hetero_to_kg] = all_embeddings
-            candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
+            candidates = node_embeddings.unsqueeze(0).expand(b_size, -1, -1)
         else:
             # Prepare candidates for every relations
             candidates = self.rel_mat.weight.data.unsqueeze(0).expand(b_size, -1, -1, -1)
@@ -79,14 +56,12 @@ class DistMult(DistMultModel):
     def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, **_):
         return (h_norm * r_emb * t_norm).sum(dim=1)
     
-    # TODO: if possible, factorize this
     def inference_prepare_candidates(self, *, 
                                     h_idx: Tensor, 
                                     t_idx: Tensor, 
                                     r_idx: Tensor, 
-                                    node_embeddings: nn.ModuleList, 
-                                    relation_embeddings: nn.Embedding, 
-                                    mappings: HeteroMappings, 
+                                    node_embeddings: Tensor, 
+                                    relation_embeddings: nn.Embedding,
                                     entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get entities embeddings
@@ -118,37 +93,17 @@ class DistMult(DistMultModel):
         b_size = h_idx.shape[0]
 
         # Get head, tail and relation embeddings
-        h_node_types = mappings.kg_to_node_type[h_idx]
-        h_unique_types = h_node_types.unique()
-        h_het_idx = mappings.kg_to_hetero[h_idx]
-
-        t_node_types = mappings.kg_to_node_type[t_idx]
-        t_unique_types = t_node_types.unique()
-        t_het_idx = mappings.kg_to_hetero[t_idx]
-        
-        h = torch.cat([
-            node_embeddings[node_type](h_het_idx[h_node_types == node_type]) for node_type in h_unique_types
-        ])
-        t = torch.cat([
-            node_embeddings[node_type](t_het_idx[t_node_types == node_type]) for node_type in t_unique_types
-        ])
+        h = node_embeddings[h_idx]
+        t = node_embeddings[t_idx]
         r = relation_embeddings(r_idx)
-
-        device = h.device
         
         if entities:
             # Prepare candidates for every entities
-            candidates = torch.zeros((self.n_ent, self.emb_dim), device=device)
-
-            all_embeddings = torch.cat([embedding.weight for embedding in node_embeddings], dim=0)
-
-            hetero_to_kg = torch.tensor([mappings.hetero_to_kg[i][j] for i in range(len(node_embeddings)) 
-                                        for j in range(node_embeddings[i].num_embeddings)], device=device)
-
-            candidates[hetero_to_kg] = all_embeddings
-            candidates = candidates.view(1, -1, self.emb_dim).expand(b_size, -1, -1)
+            candidates = node_embeddings
         else:
             # Prepare candidates for every relations
-            candidates = relation_embeddings.weight.data.unsqueeze(0).expand(b_size, -1, -1)
+            candidates = relation_embeddings.weight.data
+        
+        candidates = candidates.unsqueeze(0).expand(b_size, -1, -1)
         
         return h, t, r, candidates
