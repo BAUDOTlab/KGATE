@@ -148,8 +148,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
                 encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
 
                 embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, node_embeddings.embedding_dim), device=device, dtype=torch.float)
-                print(input)
-                print(encoder_output)
+        
                 for node_type, idx in input.mapping.items():
                     embeddings[idx] = encoder_output[node_type]
             else:
