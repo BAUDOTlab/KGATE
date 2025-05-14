@@ -814,11 +814,11 @@ class Architect(Model):
     def scoring_function(self, batch: Tensor, kg:KnowledgeGraph) -> torch.types.Number:
         h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
         
-        seed_nodes = batch[:2].unique()
-        num_hops = self.encoder.n_layers
-        edge_index = kg.edge_index
-
         if isinstance(self.encoder, GNN):
+            seed_nodes = batch[:2].unique()
+            num_hops = self.encoder.n_layers
+            edge_index = kg.edge_index
+            
             _,_,_, edge_mask = k_hop_subgraph(
                 node_idx = seed_nodes,
                 num_hops = num_hops,
