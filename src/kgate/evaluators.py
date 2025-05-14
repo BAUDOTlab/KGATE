@@ -132,12 +132,11 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             batch:Tensor = batch.T.to(device)
             h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
 
-            seed_nodes = batch[:2].unique()
-            num_hops = encoder.n_layers
-            edge_index = knowledge_graph.edge_index
-
             if isinstance(encoder, GNN):
-                
+                seed_nodes = batch[:2].unique()
+                num_hops = encoder.n_layers
+                edge_index = knowledge_graph.edge_index
+
                 _,_,_, edge_mask = k_hop_subgraph(
                     node_idx = seed_nodes,
                     num_hops = num_hops,
