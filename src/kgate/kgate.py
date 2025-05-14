@@ -14,7 +14,7 @@ from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .encoders import *
 from .decoders import *
 from .knowledgegraph import KnowledgeGraph
-from .samplers import FixedPositionalNegativeSampler, MixedNegativeSampler
+from .samplers import PositionalNegativeSampler, MixedNegativeSampler
 from .evaluators import KLinkPredictionEvaluator, KTripletClassificationEvaluator
 from .inference import KEntityInference, KRelationInference
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
@@ -349,7 +349,7 @@ class Architect(Model):
 
         match sampler_name:
             case "Positional":
-                sampler = FixedPositionalNegativeSampler(self.kg_train, self.kg_val, self.kg_test)
+                sampler = PositionalNegativeSampler(self.kg_train, self.kg_val, self.kg_test)
             case "Uniform":
                 sampler = sampling.UniformNegativeSampler(self.kg_train, self.kg_val, self.kg_test, n_neg)
             case "Bernoulli":

@@ -24,7 +24,7 @@ from torch_geometric.utils import k_hop_subgraph
 
 from .knowledgegraph import KnowledgeGraph
 from .utils import HeteroMappings
-from .samplers import FixedPositionalNegativeSampler
+from .samplers import PositionalNegativeSampler
 from .encoders import GNN, DefaultEncoder
 
 from typing import Dict, Literal
@@ -259,7 +259,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         self.evaluated = False
         self.thresholds = None
 
-        self.sampler = FixedPositionalNegativeSampler(self.kg_val,
+        self.sampler = PositionalNegativeSampler(self.kg_val,
                                                  kg_test=self.kg_test)
 
     def get_scores(self, heads: Tensor, tails: Tensor, relations: Tensor, batch_size: int):
@@ -309,7 +309,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         b_size: int
             Batch size.
         """
-        sampler = FixedPositionalNegativeSampler(knowledge_graph)
+        sampler = PositionalNegativeSampler(knowledge_graph)
         r_idx = knowledge_graph.relations
 
         neg_heads, neg_tails = sampler.corrupt_kg(b_size, self.is_cuda,
@@ -348,7 +348,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
             kg_to_eval = kg_val if kg_val is not None else kg_test
             self.evaluate(b_size=b_size, knowledge_graph=kg_to_eval)
 
-        sampler = FixedPositionalNegativeSampler(kg_test)
+        sampler = PositionalNegativeSampler(kg_test)
         r_idx = kg_test.relations
 
         neg_heads, neg_tails = sampler.corrupt_kg(b_size,

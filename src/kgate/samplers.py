@@ -46,7 +46,7 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
     Also fixes GPU/CPU incompatibility bug.
     See original implementation here : https://github.com/torchkge-team/torchkge/blob/3adb9344dec974fc29d158025c014b0dcb48118c/torchkge/sampling.py#L330C52-L330C53
     """
-    def __init__(self, kg:KnowledgeGraph,):
+    def __init__(self, kg:KnowledgeGraph):
         super().__init__(kg)
         self.ix2nt = {v: k for k,v in self.kg.nt2ix.items()}
         self.rel_types = {v: k for k,v in self.kg.rel2ix.items()}
@@ -111,18 +111,22 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
             else:
                 corr_head = choices[choice_heads[i].item()]
 
-            # Find the corrupted triplet index
-            corr_tri = (
-                        self.ix2nt[node_types[corr_head].item()],
-                        self.rel_types[r],
-                        self.ix2nt[node_types[t].item()]
-                    )
-            # Add it if it doesn't already exists
-            if not corr_tri in triple_types:
-                triple_types.append(corr_tri)
-                triple = len(triple_types)
+            # If we don't use metadata, there is only 1 node type
+            if len(self.kg.nt2ix) == 1:
+                triple = 0
             else:
-                triple = triple_types.index(corr_tri)
+                # Find the corrupted triplet index
+                corr_tri = (
+                            self.ix2nt[node_types[corr_head].item()],
+                            self.rel_types[r],
+                            self.ix2nt[node_types[t].item()]
+                        )
+                # Add it if it doesn't already exists
+                if not corr_tri in triple_types:
+                    triple_types.append(corr_tri)
+                    triple = len(triple_types)
+                else:
+                    triple = triple_types.index(corr_tri)
 
             corrupted_triples.append(
                 tensor([
@@ -149,16 +153,20 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
                 corr_tail = randint(low=0, high=self.n_ent, size=(1,)).item()
             else:
                 corr_tail = choices[choice_tails[i].item()]
-            corr_tri = (
-                        self.ix2nt[node_types[h].item()],
-                        self.rel_types[r],
-                        self.ix2nt[node_types[corr_tail].item()]
-                    )
-            if not corr_tri in triple_types:
-                triple_types.append(corr_tri)
-                triple = len(triple_types)
+            # If we don't use metadata, there is only 1 node type
+            if len(self.kg.nt2ix) == 1:
+                triple = 0
             else:
-                triple = triple_types.index(corr_tri)
+                corr_tri = (
+                            self.ix2nt[node_types[h].item()],
+                            self.rel_types[r],
+                            self.ix2nt[node_types[corr_tail].item()]
+                        )
+                if not corr_tri in triple_types:
+                    triple_types.append(corr_tri)
+                    triple = len(triple_types)
+                else:
+                    triple = triple_types.index(corr_tri)
             corrupted_triples.append(
                 tensor([
                     h,
@@ -166,7 +174,7 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
                     r,
                     triple
                 ])
-            )
+        )
         if len(corrupted_triples) > 0:
             neg_batch[:, mask == 0] = torch.stack(corrupted_triples, dim=1).long().to(device)
 
@@ -197,6 +205,10 @@ class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
         neg_tails[mask == 0] = randint(1, self.n_ent,
                                        (batch_size * n_neg - n_h_cor,),
                                        device=device)
+        
+        # If we don't use metadata, there is only 1 node type
+        if len(self.kg.nt2ix):
+            return torch.stack([neg_heads, neg_tails, rels, batch[3].repeat(n_neg)], dim=1).long().to(device)
         
         corrupted_triples = []
         node_types = self.kg.node_types
@@ -253,6 +265,10 @@ class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
                                        (batch_size * n_neg - n_h_cor,),
                                        device=device)
         
+        # If we don't use metadata, there is only 1 node type
+        if len(self.kg.nt2ix):
+            return torch.stack([neg_heads, neg_tails, rels.repeat(n_neg), batch[3].repeat(n_neg)], dim=1).long().to(device)
+        
         corrupted_triples = []
         node_types = self.kg.node_types
         triple_types = self.kg.triple_types
@@ -302,7 +318,7 @@ class MixedNegativeSampler(NegativeSampler):
         # Initialize both Bernoulli and Positional samplers
         self.uniform_sampler = UniformNegativeSampler(kg, kg_val, kg_test, n_neg)
         self.bernoulli_sampler = BernoulliNegativeSampler(kg, kg_val, kg_test, n_neg)
-        self.positional_sampler = FixedPositionalNegativeSampler(kg, kg_val, kg_test)
+        self.positional_sampler = PositionalNegativeSampler(kg, kg_val, kg_test)
         
     def corrupt_batch(self, batch: torch.LongTensor, n_neg=None):
         """For each true triplet, produce `n_neg` corrupted ones from the
