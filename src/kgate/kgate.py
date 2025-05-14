@@ -14,7 +14,7 @@ from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .encoders import *
 from .decoders import *
 from .knowledgegraph import KnowledgeGraph
-from .samplers import PositionalNegativeSampler, MixedNegativeSampler
+from .samplers import PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .evaluators import KLinkPredictionEvaluator, KTripletClassificationEvaluator
 from .inference import KEntityInference, KRelationInference
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
@@ -22,7 +22,6 @@ import logging
 import warnings
 import torch.optim as optim
 from torch.optim import lr_scheduler
-from torch_geometric.loader import LinkNeighborLoader
 from torch_geometric.data import Data
 from torch_geometric.utils import k_hop_subgraph
 import csv
@@ -34,7 +33,7 @@ import pandas as pd
 import numpy as np
 import yaml
 import platform
-from typing import Tuple, Dict, List, Any, Sequence, Set, Literal
+from typing import Tuple, Dict, List, Any, Set, Literal
 
 # Configure logging
 logging.captureWarnings(True)
@@ -349,13 +348,13 @@ class Architect(Model):
 
         match sampler_name:
             case "Positional":
-                sampler = PositionalNegativeSampler(self.kg_train, self.kg_val, self.kg_test)
+                sampler = PositionalNegativeSampler(self.kg_train)
             case "Uniform":
-                sampler = sampling.UniformNegativeSampler(self.kg_train, self.kg_val, self.kg_test, n_neg)
+                sampler = UniformNegativeSampler(self.kg_train, n_neg)
             case "Bernoulli":
-                sampler = sampling.BernoulliNegativeSampler(self.kg_train, self.kg_val, self.kg_test, n_neg)
+                sampler = BernoulliNegativeSampler(self.kg_train, n_neg)
             case "Mixed":
-                sampler = MixedNegativeSampler(self.kg_train, self.kg_val, self.kg_test, n_neg)
+                sampler = MixedNegativeSampler(self.kg_train, n_neg)
             case _:
                 raise ValueError(f"Sampler type '{sampler_name}' is not supported. Please check the configuration.")
             
