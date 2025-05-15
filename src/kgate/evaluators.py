@@ -82,7 +82,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
                 encoder: DefaultEncoder | GNN,
                 decoder: Model, 
                 knowledge_graph: KnowledgeGraph, 
-                node_embeddings: nn.Embedding, 
+                node_embeddings: nn.ParameterList, 
                 relation_embeddings: nn.Embedding,
                 verbose: bool=True):
         """
@@ -97,9 +97,8 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             Decoder model to evaluate, inheriting from the torchkge.Model class.
         knowledge_graph: kgate.KnowledgeGraph
             The test Knowledge Graph that will be used for the evaluation.
-        node_embeddings: nn.ModuleList
-            A dictionnary where keys are relation types and values the
-            embedding tensor of this relation's nodes.
+        node_embeddings: nn.ParameterList
+            
         relation_embeddings: nn.Embedding
             A tensor containing one embedding by relation type.
         mappings: kgate.HeteroMappings
@@ -113,7 +112,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
         self.rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long()
         self.filt_rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long()
         self.filt_rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long()
-        device = node_embeddings.weight.data.device
+        device = node_embeddings[0].device
         use_cuda = relation_embeddings.weight.is_cuda
 
         if use_cuda:
@@ -125,6 +124,8 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             edgelist = knowledge_graph.edgelist.cuda()
         else:
             dataloader = DataLoader(knowledge_graph, batch_size=b_size)
+
+        embeddings = knowledge_graph.flatten_embeddings(node_embeddings)
 
         for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                              unit="batch", disable=(not verbose),
@@ -145,13 +146,9 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
                 
                 input = knowledge_graph.get_encoder_input(edgelist[:, edge_mask], node_embeddings)
                 encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
-
-                embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, node_embeddings.embedding_dim), device=device, dtype=torch.float)
         
                 for node_type, idx in input.mapping.items():
                     embeddings[idx] = encoder_output[node_type]
-            else:
-                embeddings = node_embeddings.weight.data
 
             h_emb, t_emb, r_emb, candidates = decoder.inference_prepare_candidates(h_idx = h_idx, 
                                                                                    t_idx = t_idx, 
@@ -258,8 +255,7 @@ class KTripletClassificationEvaluator(TripletClassificationEvaluator):
         self.evaluated = False
         self.thresholds = None
 
-        self.sampler = PositionalNegativeSampler(self.kg_val,
-                                                 kg_test=self.kg_test)
+        self.sampler = PositionalNegativeSampler(self.kg_val)
 
     def get_scores(self, heads: Tensor, tails: Tensor, relations: Tensor, batch_size: int):
         """With head, tail and relation indexes, compute the value of the

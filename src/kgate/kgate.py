@@ -264,7 +264,8 @@ class Architect(Model):
         decoder
             The decoder object
         criterion
-        The loss object"""
+            The loss object
+        """
         
         decoder_config: dict = self.config["model"]["decoder"]
 
@@ -305,8 +306,18 @@ class Architect(Model):
         """
         Initialize the optimizer based on the configuration provided.
         
-        Returns:
-        - optimizer: Initialized optimizer.
+        Available optimizers are Adam, SGD and RMSprop. See Pytorch.optim 
+        documentation for optimizer parameters.
+
+        Raises
+        ------
+        NotImplementedError
+            If the optimizer is not supported.
+
+        Returns
+        -------
+        optimizer
+            Initialized optimizer.
         """
 
         optimizer_name: str = self.config["optimizer"]["name"]
@@ -324,7 +335,7 @@ class Architect(Model):
 
         # Check if the specified optimizer is supported
         if optimizer_name not in optimizer_mapping:
-            raise ValueError(f"Optimizer type '{optimizer_name}' is not supported. Please check the configuration. Supported optimizers are :\n{'\n'.join(optimizer_mapping.keys())}")
+            raise NotImplementedError(f"Optimizer type '{optimizer_name}' is not supported. Please check the configuration. Supported optimizers are :\n{'\n'.join(optimizer_mapping.keys())}")
 
         optimizer_class = optimizer_mapping[optimizer_name]
         
@@ -339,8 +350,19 @@ class Architect(Model):
     def initialize_sampler(self) -> sampling.NegativeSampler:
         """Initialize the sampler according to the configuration.
         
-            Returns:
-            - sampler: the initialized sampler"""
+            Supported samplers are Positional, Uniform, Bernoulli and Mixed.
+            They are adapted from torchKGE's samplers to be compatible with the 
+            edgelist format.
+
+            Raises
+            ------
+            NotImplementedError
+                If the name of the sampler is not supported.
+
+            Returns
+            -------
+            sampler
+                The initialized sampler"""
         
         sampler_config: dict = self.config["sampler"]
         sampler_name: str = sampler_config["name"]
@@ -356,7 +378,7 @@ class Architect(Model):
             case "Mixed":
                 sampler = MixedNegativeSampler(self.kg_train, n_neg)
             case _:
-                raise ValueError(f"Sampler type '{sampler_name}' is not supported. Please check the configuration.")
+                raise NotImplementedError(f"Sampler type '{sampler_name}' is not supported. Please check the configuration.")
             
         return sampler
     
@@ -408,6 +430,23 @@ class Architect(Model):
         return scheduler
 
     def initialize_evaluator(self) -> KLinkPredictionEvaluator | KTripletClassificationEvaluator:
+        """Set the task for which the model will be evaluated on using the validation set.
+        
+        Options are Link Prediction or Triplet Classification.
+        Link Prediction evaluate the ability of a model to predict correctly the head or tail of a triple given the other 
+        entity and relation. 
+        Triplet Classification evaluate the ability of a model to discriminate between existing and 
+        fake triplet in a KG.
+        
+        Raises
+        ------
+        NotImplementedError
+            If the name of the task is not supported.
+            
+        Returns
+        -------
+        evaluator
+            The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator."""
         match self.config["evaluation"]["objective"]:
             case "Link Prediction":
                 evaluator = KLinkPredictionEvaluator()
@@ -421,7 +460,7 @@ class Architect(Model):
         logging.info(f"Using {self.config["evaluation"]["objective"]} evaluator.")
         return evaluator
 
-    def train_model(self, checkpoint_file: Path | None = None, attributes: Dict[str, Any]={}):
+    def train_model(self, checkpoint_file: Path | None = None, attributes: Dict[str,pd.DataFrame]={}):
         """Launch the training procedure of the Architect.
         
         Arguments:
@@ -445,25 +484,26 @@ class Architect(Model):
         # self.mappings.kg_to_node_type = self.mappings.kg_to_node_type.to(self.device)
         # self.mappings.kg_to_hetero = self.mappings.kg_to_hetero.to(self.device)
         logging.info("Initializing embeddings...")
-        self.node_embeddings: nn.Embedding = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
-        # for node_type in self.mappings.data.node_types:
-        #     num_nodes = self.mappings.data[node_type].num_nodes
-        #     if node_type in attributes:
-        #         current_attribute: Tensor = attributes[node_type]
-        #         assert current_attribute.size(0) == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
-        #         self.data[node_type].x = Parameter(current_attribute).to(self.device)
-        #         # if isinstance(current_attribute, nn.Embedding):
-        #         #     assert current_attribute.embedding_dim == self.emb_dim and current_attribute.num_embeddings == num_nodes, f"The number and dimensions and embedding of the given attributes ({current_attribute.num_embeddings},{current_attribute.embedding_dim}) must match the embedding dimension ({num_nodes},{self.emb_dim})."
-        #         #     self.node_embeddings.append(current_attribute)
-        #         # else:
-        #         #     assert len(current_attribute) == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
-        #         #     emb = nn.Embedding(num_nodes, self.emb_dim, device=self.device)
-        #         #     emb.weight.data = tensor(current_attribute).to(self.device)
-        #         #     self.node_embeddings.append(emb)
-        #     else:
-        #         emb = init_embedding(num_nodes, self.emb_dim, self.device)
-        #         self.data[node_type].x = emb.weight
-        #         self.node_embeddings.append(emb)
+        #self.node_embeddings: nn.Embedding = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
+        self.node_embeddings = nn.ParameterList()
+        ix2nt = {v: k for k,v in self.kg_train.nt2ix}
+        for node_type in self.kg_train.nt2glob:
+            num_nodes = self.kg_train.nt2glob[node_type].size(0)
+            if node_type in attributes:
+                current_attribute: pd.DataFrame = attributes[node_type]
+                assert current_attribute.shape[0] == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
+                input_features = torch.zeros((num_nodes,current_attribute.shape[1]), dtype=torch.double)
+                for node in current_attribute.index:
+                    node_idx = self.kg_train.ent2ix[node]
+                    nt_idx = self.kg_train.node_types[node_idx]
+                    assert nt_idx == self.kg_train.nt2ix[node_type], f"The entity {node} is given as {node_type} but registered as {ix2nt[str(nt_idx)]} in the KG."
+
+                    input_features[node_idx] = tensor(current_attribute[node,:], dtype=torch.double)
+                
+                self.node_embeddings.append(Parameter(input_features).to(self.device))
+            else:
+                emb = init_embedding(num_nodes, self.emb_dim, self.device)
+                self.node_embeddings.append(emb.weight)
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
         logging.info("Initializing encoder...")
@@ -498,23 +538,8 @@ class Architect(Model):
         self.val_metrics: List[float] = []
         self.learning_rates: List[float] = []
 
-        # Create a Data object to sample the whole graph from the training set
-        train_data = Data(
-            x = self.node_embeddings.weight.data,
-            edge_index = self.kg_train.edgelist[:2]
-        )
-
-        # num_neighbors: int = self.config["model"]["encoder"]["num_neighbors"]
-        # gnn_layers: int = self.config["model"]["encoder"]["gnn_layers"]
-        # encoder_dataloader: LinkNeighborLoader = LinkNeighborLoader(
-        #     data=train_data,
-        #     num_neighbors=[num_neighbors] * gnn_layers,
-        #     batch_size=self.train_batch_size,
-        #     edge_label_index=train_data.edge_index
-        # )
-
-        decoder_dataloader: DataLoader = DataLoader(self.kg_train, self.train_batch_size)
-        logging.info(f"Number of training batches: {len(decoder_dataloader)}")
+        iterator: DataLoader = DataLoader(self.kg_train, self.train_batch_size)
+        logging.info(f"Number of training batches: {len(iterator)}")
 
         trainer: Engine = Engine(self.process_batch)
         RunningAverage(output_transform=lambda x: x).attach(trainer, "loss_ra")
@@ -611,15 +636,15 @@ class Architect(Model):
 
                 if trainer.state.epoch < self.max_epochs:
                     logging.info(f"Starting from epoch {trainer.state.epoch}")
-                    trainer.run(decoder_dataloader)
+                    trainer.run(iterator)
                 else:
                     logging.info(f"Training already completed. Last epoch is {trainer.state.epoch} and max_epochs is set to {self.max_epochs}")
             else:
                 logging.info(f"Checkpoint file {checkpoint_file} does not exist. Starting training from scratch.")
-                trainer.run(decoder_dataloader, max_epochs=self.max_epochs)
+                trainer.run(iterator, max_epochs=self.max_epochs)
         else:
             self.normalize_parameters()
-            trainer.run(decoder_dataloader, max_epochs=self.max_epochs)
+            trainer.run(iterator, max_epochs=self.max_epochs)
     
         #################
         # Report metrics
@@ -694,32 +719,6 @@ class Architect(Model):
 
         return results
         
-    def test_infer(self, inference_kg_path: Path):
-        inference_metrics_file: Path = Path(self.config["output_directory"], "inference_metrics.yaml")
-
-        inference_df = pd.read_csv(inference_kg_path, sep="\t")
-        inference_kg = KnowledgeGraph(df = inference_df, ent2ix=self.kg_train.ent2ix, rel2ix=self.kg_train.rel2ix) 
-        
-        embeddings = self.encoder.forward(self.node_embeddings, self.mappings)
-
-        self.evaluator.evaluate(b_size = self.eval_batch_size, 
-                        decoder =self.decoder, knowledge_graph=inference_kg,
-                        node_embeddings=embeddings, relation_embeddings=self.rel_emb,
-                        mappings=self.mappings, verbose=True)
-            
-        inference_mrr = self.evaluator.mrr()[1]
-        inference_hit10 = self.evaluator.hit_at_k(10)[1]
-
-        results = {"Inference MRR": inference_mrr, "Inference hit@10:": inference_hit10}
-
-        logging.info(f"MRR on inference set: {inference_mrr}")
-
-        with open(inference_metrics_file, "w") as file:
-            yaml.dump(results, file, default_flow_style=False, sort_keys=False)
-
-
-        logging.info(f"Evaluation results stored in {inference_metrics_file}")
-
     def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], topk:int=100):
         """Infer missing entities or relations, depending on the given parameters"""
         if not sum([len(arr) > 0 for arr in [heads,rels,tails]]) == 2:
@@ -758,9 +757,10 @@ class Architect(Model):
 
     def load_best_model(self):
 
-        self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
+        self.node_embeddings = nn.ParameterList([init_embedding(nt_count, self.emb_dim, self.device).weight for _, nt_count in self.kg_train.node_types.unique(return_counts=True)])
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
+        self.encoder = self.initialize_encoder()
 
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_dir)
@@ -774,15 +774,14 @@ class Architect(Model):
         self.node_embeddings.load_state_dict(checkpoint["entities"])
         self.rel_emb.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])
+        self.encoder.load_state_dict(checkpoint["encoder"])
         
         self.node_embeddings.to(self.device)
         self.rel_emb.to(self.device)
         self.decoder.to(self.device)
+        self.encoder.to(self.device)
         logging.info("Best model successfully loaded.")
 
-    # def encoder_pass(self, engine: Engine):
-    #     self.embeddings = list(self.encoder.forward(self.node_embeddings, self.mappings).values())
-    #     logging.info(self.embeddings[0])
 
     def forward(self, pos_batch, neg_batch):
         pos = self.scoring_function(pos_batch, self.kg_train)
@@ -825,7 +824,7 @@ class Architect(Model):
                 edge_index = edge_index
                 )
                 
-            input = self.kg_train.get_encoder_input(kg.edgelist[:, edge_mask].to(self.device), self.node_embeddings)
+            input = kg.get_encoder_input(kg.edgelist[:, edge_mask].to(self.device), self.node_embeddings)
 
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
@@ -837,8 +836,9 @@ class Architect(Model):
             h_embeddings = embeddings[h_idx]
             t_embeddings = embeddings[t_idx]
         else:
-            h_embeddings = self.node_embeddings(h_idx)
-            t_embeddings = self.node_embeddings(t_idx)
+            embeddings = kg.flatten_embeddings(self.node_embeddings)
+            h_embeddings = embeddings[h_idx]
+            t_embeddings = embeddings[t_idx]
         r_embeddings = self.rel_emb(batch[2])  # Relations are unchanged
 
         return self.decoder.score(h_emb = h_embeddings,
@@ -848,13 +848,13 @@ class Architect(Model):
                                   r_idx = r_idx, 
                                   t_idx = t_idx)
 
-    def get_embeddings(self) -> Tuple[Tensor, Tensor, Any | None]:
+    def get_embeddings(self) -> Tuple[nn.ParameterList, Tensor, Any | None]:
         """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.
         
         If the encoder uses heteroData, a dict of {node_type : embedding} is returned for entity embeddings instead of a tensor."""
         self.normalize_parameters()
         
-        ent_emb = self.node_embeddings.weight.data
+        ent_emb = self.node_embeddings
 
         rel_emb = self.rel_emb.weight.data
 
@@ -873,7 +873,8 @@ class Architect(Model):
             if stop_norm: return
         
         
-        self.node_embeddings.weight.data = normalize(self.node_embeddings.weight.data, p=2, dim=1)
+        if not isinstance(self.encoder, GNN):
+            self.node_embeddings[0] = normalize(self.node_embeddings[0], p=2, dim=1)
             
         logging.debug(f"Normalized all embeddings")
 

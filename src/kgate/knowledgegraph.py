@@ -90,9 +90,17 @@ class KnowledgeGraph(Dataset):
         self.n_ent = max(self.ent2ix.values()) + 1
         self.n_rel = max(self.rel2ix.values()) + 1
 
-        self.node_types = torch.zeros(self.n_ent, dtype=torch.long)
+        if df is None:
+            self.n_nodes = cat([self.head_idx, self.tail_idx]).unique().size(0)
+            self.node_types = torch.zeros(self.n_nodes, dtype=torch.long)
 
-        if df is not None:
+            for tri_type in self.triples.unique():
+                h_t, t_t = self.triple_types[tri_type][0], self.triple_types[tri_type][2]
+                triple_edgelist = self.edgelist[:, self.triples == tri_type]
+                self.node_types[triple_edgelist[0]] = self.nt2ix[h_t]
+                self.node_types[triple_edgelist[1]] = self.nt2ix[t_t]
+
+        else:
             if metadata is not None:
                 assert not set(["type","id"]).isdisjoint(list(metadata.columns)), f"The mapping dataframe must have at least the columns `type` and `id`, but found only {",".join(list(metadata.columns))}"
 
@@ -100,12 +108,14 @@ class KnowledgeGraph(Dataset):
                 mapping_df = pd.merge(mapping_df, metadata.add_prefix("to_"), how="left", left_on="to", right_on="to_id", suffixes=(None, "_to"))
                 mapping_df.drop([i for i in mapping_df.columns if "id" in i],axis=1, inplace=True)
 
-                node_types = list(set(mapping_df['from_type'].unique()).union(set(mapping_df['to_type'].unique())))
-                self.nt2ix = {nt: i for i, nt in enumerate(sorted(node_types))}
+                df_node_types = list(set(mapping_df['from_type'].unique()).union(set(mapping_df['to_type'].unique())))
+                self.nt2ix = {nt: i for i, nt in enumerate(sorted(df_node_types))}
             else:
                 mapping_df = df
 
             i = 0
+            self.n_nodes = self.n_ent
+            self.node_types = torch.zeros(self.n_nodes, dtype=torch.long)
 
             for rel, group in mapping_df.groupby("rel"):
                 relation = self.rel2ix[rel]
@@ -153,8 +163,14 @@ class KnowledgeGraph(Dataset):
                         edge_type = (src_type, rel, tgt_type)
                         self.triple_types.append(edge_type)
                         i+=1
+        
+        self.nt2glob: Dict[str, Tensor] = {}
+        self.glob2loc = tensor(torch.zeros(self.n_nodes), dtype=torch.long)
 
-
+        for i, node_type in enumerate(self.nt2ix):
+            glob_idx = (self.node_types == i).nonzero(as_tuple=True)[0]
+            self.nt2glob[node_type] = glob_idx
+            self.glob2loc[glob_idx] = torch.arange(glob_idx.size(0))
 
 
     def __len__(self):
@@ -677,8 +693,8 @@ class KnowledgeGraph(Dataset):
 
         return selected_relations
 
-    def get_encoder_input(self, data: Tensor, node_embedding: nn.Embedding) -> EncoderInput:
-        assert data.device == node_embedding.weight.device
+    def get_encoder_input(self, data: Tensor, node_embedding: nn.ParameterList) -> EncoderInput:
+        assert data.device == node_embedding[0].device
         device = data.device
 
         edge_types = data[3].unique()
@@ -713,6 +729,16 @@ class KnowledgeGraph(Dataset):
             edge_indices[edge_type] = edge_index.to(device)
             
         for ntype, idx in node_ids.items():
-            x_dict[ntype] = node_embedding(idx) #torch.index_select(node_embedding.weight.data, 0, idx)
+            loc_idx = self.glob2loc.to(device)[idx]
+            x_dict[ntype] = node_embedding[self.nt2ix[ntype]][loc_idx] #torch.index_select(node_embedding.weight.data, 0, idx)
 
         return EncoderInput(x_dict, edge_indices, node_ids)
+
+    def flatten_embeddings(self, node_embeddings: nn.ParameterList) -> Tensor:
+        embeddings: torch.Tensor = torch.zeros((self.n_nodes, node_embeddings[0].size(1)), device=node_embeddings[0].device, dtype=torch.float)
+
+        for nt_idx in self.nt2ix.values():
+            mask = (self.node_types == nt_idx)
+            embeddings[mask] = node_embeddings[nt_idx][self.glob2loc[mask]]
+        
+        return embeddings
