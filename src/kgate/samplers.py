@@ -146,7 +146,7 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
                 corr_tail = choices[choice_tails[i].item()]
             # If we don't use metadata, there is only 1 node type
             if len(self.kg.nt2ix) > 1:
-                h = corr_head_batch[0][i].item()
+                h = corr_tail_batch[0][i].item()
                 corr_tri = (
                             self.ix2nt[node_types[h].item()],
                             self.rel_types[r],
