@@ -92,7 +92,7 @@ class KnowledgeGraph(Dataset):
 
         if df is None:
             self.n_nodes = cat([self.head_idx, self.tail_idx]).unique().size(0)
-            self.node_types = torch.zeros(self.n_nodes, dtype=torch.long)
+            self.node_types = torch.zeros(self.n_ent, dtype=torch.long)
 
             for tri_type in self.triples.unique():
                 h_t, t_t = self.triple_types[tri_type][0], self.triple_types[tri_type][2]
@@ -115,7 +115,7 @@ class KnowledgeGraph(Dataset):
 
             i = 0
             self.n_nodes = self.n_ent
-            self.node_types = torch.zeros(self.n_nodes, dtype=torch.long)
+            self.node_types = torch.ones(self.n_nodes, dtype=torch.long).neg()
 
             for rel, group in mapping_df.groupby("rel"):
                 relation = self.rel2ix[rel]
@@ -165,7 +165,7 @@ class KnowledgeGraph(Dataset):
                         i+=1
         
         self.nt2glob: Dict[str, Tensor] = {}
-        self.glob2loc = tensor(torch.zeros(self.n_nodes), dtype=torch.long)
+        self.glob2loc = torch.ones(self.n_ent, dtype=torch.long).neg()
 
         for i, node_type in enumerate(self.nt2ix):
             glob_idx = (self.node_types == i).nonzero(as_tuple=True)[0]
@@ -735,7 +735,7 @@ class KnowledgeGraph(Dataset):
         return EncoderInput(x_dict, edge_indices, node_ids)
 
     def flatten_embeddings(self, node_embeddings: nn.ParameterList) -> Tensor:
-        embeddings: torch.Tensor = torch.zeros((self.n_nodes, node_embeddings[0].size(1)), device=node_embeddings[0].device, dtype=torch.float)
+        embeddings: torch.Tensor = torch.zeros((self.n_ent, node_embeddings[0].size(1)), device=node_embeddings[0].device, dtype=torch.float)
 
         for nt_idx in self.nt2ix.values():
             mask = (self.node_types == nt_idx)

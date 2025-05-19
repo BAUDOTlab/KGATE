@@ -486,7 +486,7 @@ class Architect(Model):
         logging.info("Initializing embeddings...")
         #self.node_embeddings: nn.Embedding = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
         self.node_embeddings = nn.ParameterList()
-        ix2nt = {v: k for k,v in self.kg_train.nt2ix}
+        ix2nt = {v: k for k,v in self.kg_train.nt2ix.items()}
         for node_type in self.kg_train.nt2glob:
             num_nodes = self.kg_train.nt2glob[node_type].size(0)
             if node_type in attributes:
@@ -756,8 +756,8 @@ class Architect(Model):
         self.predictions = pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
 
     def load_best_model(self):
-
-        self.node_embeddings = nn.ParameterList([init_embedding(nt_count, self.emb_dim, self.device).weight for _, nt_count in self.kg_train.node_types.unique(return_counts=True)])
+        _, nt_count = self.kg_train.node_types.unique(return_counts=True)
+        self.node_embeddings = nn.ParameterList([init_embedding(count, self.emb_dim, self.device).weight for count in nt_count])
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
@@ -774,7 +774,8 @@ class Architect(Model):
         self.node_embeddings.load_state_dict(checkpoint["entities"])
         self.rel_emb.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])
-        self.encoder.load_state_dict(checkpoint["encoder"])
+        if "encoder" in checkpoint:
+            self.encoder.load_state_dict(checkpoint["encoder"])
         
         self.node_embeddings.to(self.device)
         self.rel_emb.to(self.device)
@@ -784,8 +785,10 @@ class Architect(Model):
 
 
     def forward(self, pos_batch, neg_batch):
+        logging.info("Positive forward pass")
         pos = self.scoring_function(pos_batch, self.kg_train)
 
+        logging.info("Negative forward pass")
         neg = self.scoring_function(neg_batch, self.kg_train)
 
         return pos, neg
@@ -793,9 +796,10 @@ class Architect(Model):
     def process_batch(self, engine: Engine, batch: Tensor) -> torch.types.Number:
         batch = batch.T.to(self.device)
 
+        logging.info("Sampling...")
         n_batch = self.sampler.corrupt_batch(batch)
         n_batch = n_batch.to(self.device)
-
+        logging.info("Sampling Done")
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triples
@@ -814,6 +818,7 @@ class Architect(Model):
         h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
         
         if isinstance(self.encoder, GNN):
+            logging.info("Running encoder")
             seed_nodes = batch[:2].unique()
             num_hops = self.encoder.n_layers
             edge_index = kg.edge_index
@@ -836,11 +841,13 @@ class Architect(Model):
             h_embeddings = embeddings[h_idx]
             t_embeddings = embeddings[t_idx]
         else:
+            logging.info("Flattening embeddings")
             embeddings = kg.flatten_embeddings(self.node_embeddings)
             h_embeddings = embeddings[h_idx]
             t_embeddings = embeddings[t_idx]
         r_embeddings = self.rel_emb(batch[2])  # Relations are unchanged
 
+        logging.info("Running decoder")
         return self.decoder.score(h_emb = h_embeddings,
                                   r_emb = r_embeddings, 
                                   t_emb = t_embeddings, 
@@ -854,7 +861,7 @@ class Architect(Model):
         If the encoder uses heteroData, a dict of {node_type : embedding} is returned for entity embeddings instead of a tensor."""
         self.normalize_parameters()
         
-        ent_emb = self.node_embeddings
+        ent_emb = self.kg_train.flatten_embeddings(self.node_embeddings)
 
         rel_emb = self.rel_emb.weight.data
 
@@ -877,10 +884,6 @@ class Architect(Model):
             self.node_embeddings[0] = normalize(self.node_embeddings[0], p=2, dim=1)
             
         logging.debug(f"Normalized all embeddings")
-
-        # Normaliser les embeddings des relations
-        # self.rel_emb.weight.data = normalize(self.rel_emb.weight.data, p=2, dim=1)
-        # logging.debug("Normalized relation embeddings")
 
     ##### Metrics recording in CSV file
     def log_metrics_to_csv(self, engine: Engine):
