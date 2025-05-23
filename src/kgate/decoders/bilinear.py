@@ -11,7 +11,9 @@ class RESCAL(RESCALModel):
 
         self.rel_mat = init_embedding(self.n_rel, self.emb_dim * self.emb_dim)
 
-    def score(self, *, h_norm: Tensor, t_norm: Tensor, r_idx: Tensor, **_) -> Tensor:
+    def score(self, *, h_emb: Tensor, t_emb: Tensor, r_idx: Tensor, **_) -> Tensor:
+        h_norm = normalize(h_emb, p=2, dim=1)
+        t_norm = normalize(t_emb, p=2, dim=1)
         r = self.rel_mat(r_idx).view(-1, self.emb_dim, self.emb_dim)
         hr = matmul(h_norm.view(-1, 1, self.emb_dim), r)
         return (hr.view(-1, self.emb_dim) * t_norm).sum(dim=1)
@@ -53,7 +55,9 @@ class DistMult(DistMultModel):
     def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(emb_dim, n_entities, n_relations)
     
-    def score(self, *, h_norm: Tensor, r_emb: Tensor, t_norm: Tensor, **_):
+    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, r_idx: Tensor, **_) -> Tensor:
+        h_norm = normalize(h_emb, p=2, dim=1)
+        t_norm = normalize(t_emb, p=2, dim=1)
         return (h_norm * r_emb * t_norm).sum(dim=1)
     
     def inference_prepare_candidates(self, *, 
