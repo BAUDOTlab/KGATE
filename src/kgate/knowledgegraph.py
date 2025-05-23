@@ -8,6 +8,8 @@ from torch.types import Number
 from typing import Self, Dict, Tuple, List, Set
 from tqdm import tqdm
 import logging
+import torchkge
+from torch_geometric.data import HeteroData
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -742,3 +744,32 @@ class KnowledgeGraph(Dataset):
             embeddings[mask] = node_embeddings[nt_idx][self.glob2loc[mask]]
         
         return embeddings
+
+    @staticmethod
+    def from_hetero_data(hetero_data: HeteroData):
+        pass
+
+    @staticmethod
+    def from_torchkge(kg: torchkge.KnowledgeGraph, metadata: pd.DataFrame | None = None) -> Self:
+        """Create a new KGATE Knowledge Graph instance from the torchKGE format.
+        
+        Parameters
+        ----------
+        kg : torchKGE.KnowledgeGraph
+            The knowledge graph as a torchKGE KnowledgeGraph object.
+        metadata : pd.DataFrame
+            The metadata of the knowledge graph, with at least the columns "id" and "type".
+
+        Returns
+        -------
+        KnowledgeGraph
+            The knowledge graph as a KGATE KnowledgeGraph object.
+        """
+        if metadata is None:
+            edgelist = torch.stack([kg.head_idx, kg.tail_idx, kg.relations, tensor(0).repeat(kg.n_facts)], dim=0).long()
+            nt2ix = {"Node":0}
+            triple_types = [("Node", rel, "Node") for rel in kg.rel2ix]
+
+            return KnowledgeGraph(edgelist=edgelist, triple_types=triple_types, ent2ix=kg.ent2ix, rel2ix=kg.rel2ix, nt2ix=nt2ix)
+        else:
+            return KnowledgeGraph(df=kg.get_df(), metadata=metadata, ent2ix=kg.ent2ix, rel2ix=kg.rel2ix)

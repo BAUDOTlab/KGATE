@@ -811,6 +811,27 @@ class Architect(Model):
         return loss.item()
 
     def scoring_function(self, batch: Tensor, kg:KnowledgeGraph) -> torch.types.Number:
+        """Runs the encoder and decoder pass on a batch for a given KG.
+        
+        If the encoder is not a GNN, directly runs and update the embeddings.
+        Otherwise, samples a subgraph from the given batch nodes and runs the encoder before.
+        
+        Arguments
+        ---------
+        batch: torch.Tensor
+            Batch of triples, in the format [4, batch_size]. The rows corresponds to:
+            - head_idx
+            - tail_idx
+            - rel_idx
+            - triple_idx
+        kg: KnowledgeGraph
+            The Knowledge Graph corresponding to the batch identifiers.
+            
+        Returns
+        -------
+        score: torch.types.Number
+            The score given by the decoder for the batch..
+        """
         h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
         
         if isinstance(self.encoder, GNN):
