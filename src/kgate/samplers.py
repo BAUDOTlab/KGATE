@@ -192,7 +192,7 @@ class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
         
         # If we don't use metadata, there is only 1 node type
         if len(self.kg.nt2ix) == 1:
-            return torch.stack([neg_heads, neg_tails, rels, batch[3].repeat(n_neg)], dim=1).long().to(device)
+            return torch.stack([neg_heads, neg_tails, rels, batch[3].repeat(n_neg)], dim=0).long().to(device)
         
         corrupted_triples = []
         node_types = self.kg.node_types
@@ -200,7 +200,7 @@ class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
         for i in range(batch_size):
             h = neg_heads[i]
             t = neg_tails[i]
-            r = rels[i]
+            r = rels[i].item()
             corr_tri = (
                         self.ix2nt[node_types[h].item()],
                         self.rel_types[r],
@@ -251,7 +251,7 @@ class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
         
         # If we don't use metadata, there is only 1 node type
         if len(self.kg.nt2ix) == 1:
-            return torch.stack([neg_heads, neg_tails, rels.repeat(n_neg), batch[3].repeat(n_neg)], dim=1).long().to(device)
+            return torch.stack([neg_heads, neg_tails, rels.repeat(n_neg), batch[3].repeat(n_neg)], dim=0).long().to(device)
         
         corrupted_triples = []
         node_types = self.kg.node_types
@@ -259,7 +259,7 @@ class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
         for i in range(batch_size):
             h = neg_heads[i]
             t = neg_tails[i]
-            r = rels[i]
+            r = rels[i].item()
             corr_tri = (
                         self.ix2nt[node_types[h].item()],
                         self.rel_types[r],
