@@ -784,9 +784,11 @@ class Architect(Model):
 
 
     def forward(self, pos_batch, neg_batch):
-        pos = self.scoring_function(pos_batch, self.kg_train)
+        pos: Tensor = self.scoring_function(pos_batch, self.kg_train)
+        n_neg = neg_batch.size(0) // pos_batch.size(0)
+        pos = pos.repeat(n_neg)
 
-        neg = self.scoring_function(neg_batch, self.kg_train)
+        neg: Tensor = self.scoring_function(neg_batch, self.kg_train)
 
         return pos, neg
 
@@ -809,7 +811,7 @@ class Architect(Model):
 
         return loss.item()
 
-    def scoring_function(self, batch: Tensor, kg:KnowledgeGraph) -> torch.types.Number:
+    def scoring_function(self, batch: Tensor, kg:KnowledgeGraph) -> Tensor:
         """Runs the encoder and decoder pass on a batch for a given KG.
         
         If the encoder is not a GNN, directly runs and update the embeddings.
@@ -828,7 +830,7 @@ class Architect(Model):
             
         Returns
         -------
-        score: torch.types.Number
+        score: Tensor
             The score given by the decoder for the batch..
         """
         h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
