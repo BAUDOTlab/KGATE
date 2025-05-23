@@ -170,7 +170,7 @@ class Architect(Model):
         self.sampler: sampling.NegativeSampler = None
         self.scheduler: lr_scheduler.LRScheduler | None = None
         self.evaluator: KLinkPredictionEvaluator | KTripletClassificationEvaluator = None
-
+        self.node_embeddings: nn.ParameterList | nn.Embedding
 
 
     def initialize_encoder(self, encoder_name: str = "", gnn_layers: int = 0) -> DefaultEncoder | GCNEncoder | GATEncoder:
@@ -222,7 +222,7 @@ class Architect(Model):
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
         return encoder
 
-    def initialize_decoder(self, decoder_name: str = "", dissimilarity: Literal["L1","L2",""] = "", margin: int = 0) -> Tuple[Model, nn.Module]:
+    def initialize_decoder(self, decoder_name: str = "", dissimilarity: Literal["L1","L2",""] = "", margin: int = 0) -> Tuple[Model, MarginLoss | BinaryCrossEntropyLoss]:
         """Create and initialize the decider object according to the configuration or arguments.
 
         The decoders are adapted and inherit from torchKGE decoders to be able to handle heterogeneous data.
@@ -476,38 +476,34 @@ class Architect(Model):
         self.eval_interval: int = training_config["eval_interval"]
         self.save_interval: int = training_config["save_interval"]
 
-        # We make hetero data from our KG. 
-        # If no mapping is provided, there will be only one node type.
-        # logging.info("Creating Hetero Data from KG...")
-        # self.mappings = HeteroMappings(self.kg_train, self.metadata)
-        # self.data = self.mappings.data.to(self.device)
-        # self.mappings.kg_to_node_type = self.mappings.kg_to_node_type.to(self.device)
-        # self.mappings.kg_to_hetero = self.mappings.kg_to_hetero.to(self.device)
-        logging.info("Initializing embeddings...")
-        #self.node_embeddings: nn.Embedding = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
-        self.node_embeddings = nn.ParameterList()
-        ix2nt = {v: k for k,v in self.kg_train.nt2ix}
-        for node_type in self.kg_train.nt2glob:
-            num_nodes = self.kg_train.nt2glob[node_type].size(0)
-            if node_type in attributes:
-                current_attribute: pd.DataFrame = attributes[node_type]
-                assert current_attribute.shape[0] == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
-                input_features = torch.zeros((num_nodes,current_attribute.shape[1]), dtype=torch.double)
-                for node in current_attribute.index:
-                    node_idx = self.kg_train.ent2ix[node]
-                    nt_idx = self.kg_train.node_types[node_idx]
-                    assert nt_idx == self.kg_train.nt2ix[node_type], f"The entity {node} is given as {node_type} but registered as {ix2nt[str(nt_idx)]} in the KG."
-
-                    input_features[node_idx] = tensor(current_attribute[node,:], dtype=torch.double)
-                
-                self.node_embeddings.append(Parameter(input_features).to(self.device))
-            else:
-                emb = init_embedding(num_nodes, self.emb_dim, self.device)
-                self.node_embeddings.append(emb.weight)
-        self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
-
         logging.info("Initializing encoder...")
         self.encoder = self.encoder or self.initialize_encoder()
+
+        logging.info("Initializing embeddings...")
+        if not isinstance(self.encoder, GNN):
+            self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
+        else:
+            self.node_embeddings = nn.ParameterList()
+            ix2nt = {v: k for k,v in self.kg_train.nt2ix.items()}
+            for node_type in self.kg_train.nt2glob:
+                num_nodes = self.kg_train.nt2glob[node_type].size(0)
+                if node_type in attributes:
+                    current_attribute: pd.DataFrame = attributes[node_type]
+                    assert current_attribute.shape[0] == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
+                    input_features = torch.zeros((num_nodes,current_attribute.shape[1]), dtype=torch.double)
+                    for node in current_attribute.index:
+                        node_idx = self.kg_train.ent2ix[node]
+                        nt_idx = self.kg_train.node_types[node_idx]
+                        assert nt_idx == self.kg_train.nt2ix[node_type], f"The entity {node} is given as {node_type} but registered as {ix2nt[str(nt_idx)]} in the KG."
+
+                        input_features[node_idx] = tensor(current_attribute[node,:], dtype=torch.double)
+                    
+                    self.node_embeddings.append(Parameter(input_features).to(self.device))
+                else:
+                    emb = init_embedding(num_nodes, self.emb_dim, self.device)
+                    self.node_embeddings.append(emb.weight)
+        self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
+
 
         # Cannot use short-circuit syntax with tuples
         if self.decoder is None:
@@ -756,11 +752,14 @@ class Architect(Model):
         self.predictions = pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
 
     def load_best_model(self):
-
-        self.node_embeddings = nn.ParameterList([init_embedding(nt_count, self.emb_dim, self.device).weight for _, nt_count in self.kg_train.node_types.unique(return_counts=True)])
+        _, nt_count = self.kg_train.node_types.unique(return_counts=True)
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
+        if isinstance(self.encoder, GNN):
+            self.node_embeddings = nn.ParameterList([init_embedding(count, self.emb_dim, self.device).weight for count in nt_count])
+        else:
+            self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
 
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_dir)
@@ -774,7 +773,8 @@ class Architect(Model):
         self.node_embeddings.load_state_dict(checkpoint["entities"])
         self.rel_emb.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])
-        self.encoder.load_state_dict(checkpoint["encoder"])
+        if "encoder" in checkpoint:
+            self.encoder.load_state_dict(checkpoint["encoder"])
         
         self.node_embeddings.to(self.device)
         self.rel_emb.to(self.device)
@@ -795,13 +795,12 @@ class Architect(Model):
 
         n_batch = self.sampler.corrupt_batch(batch)
         n_batch = n_batch.to(self.device)
-
+        
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triples
         pos, neg = self(batch, n_batch)
         loss = self.criterion(pos, neg)
-        
         loss.backward()
 
         self.optimizer.step()
@@ -857,9 +856,8 @@ class Architect(Model):
             h_embeddings = embeddings[h_idx]
             t_embeddings = embeddings[t_idx]
         else:
-            embeddings = kg.flatten_embeddings(self.node_embeddings)
-            h_embeddings = embeddings[h_idx]
-            t_embeddings = embeddings[t_idx]
+            h_embeddings = self.node_embeddings(h_idx)
+            t_embeddings = self.node_embeddings(t_idx)
         r_embeddings = self.rel_emb(batch[2])  # Relations are unchanged
 
         return self.decoder.score(h_emb = h_embeddings,
@@ -869,13 +867,16 @@ class Architect(Model):
                                   r_idx = r_idx, 
                                   t_idx = t_idx)
 
-    def get_embeddings(self) -> Tuple[nn.ParameterList, Tensor, Any | None]:
+    def get_embeddings(self) -> Tuple[Tensor | nn.ParameterList, Tensor, Any | None]:
         """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.
         
         If the encoder uses heteroData, a dict of {node_type : embedding} is returned for entity embeddings instead of a tensor."""
         self.normalize_parameters()
         
-        ent_emb = self.node_embeddings
+        if isinstance(self.node_embeddings, nn.ParameterList):
+            ent_emb = self.node_embeddings
+        else:
+            ent_emb = self.node_embeddings.weight.data
 
         rel_emb = self.rel_emb.weight.data
 
@@ -895,13 +896,9 @@ class Architect(Model):
         
         
         if not isinstance(self.encoder, GNN):
-            self.node_embeddings[0] = normalize(self.node_embeddings[0], p=2, dim=1)
+                self.node_embeddings.weight.data = normalize(self.node_embeddings.weight.data, p=2, dim=1)
             
         logging.debug(f"Normalized all embeddings")
-
-        # Normaliser les embeddings des relations
-        # self.rel_emb.weight.data = normalize(self.rel_emb.weight.data, p=2, dim=1)
-        # logging.debug("Normalized relation embeddings")
 
     ##### Metrics recording in CSV file
     def log_metrics_to_csv(self, engine: Engine):

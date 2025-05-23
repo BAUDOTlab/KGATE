@@ -13,6 +13,8 @@ from ..utils import HeteroMappings
 class TransE(TransEModel):
     def __init__(self, emb_dim: int, n_entities: int, n_relations: int, dissimilarity_type: str):
         super().__init__(emb_dim, n_entities, n_relations, dissimilarity_type=dissimilarity_type)
+        del self.ent_emb
+        del self.rel_emb
 
     def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, **_) -> Tensor:
         h_norm = normalize(h_emb, p=2, dim=1)

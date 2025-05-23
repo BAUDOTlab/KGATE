@@ -82,7 +82,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
                 encoder: DefaultEncoder | GNN,
                 decoder: Model, 
                 knowledge_graph: KnowledgeGraph, 
-                node_embeddings: nn.ParameterList, 
+                node_embeddings: nn.ParameterList | nn.Embedding, 
                 relation_embeddings: nn.Embedding,
                 verbose: bool=True):
         """
@@ -112,7 +112,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
         self.rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long()
         self.filt_rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long()
         self.filt_rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long()
-        device = node_embeddings[0].device
+        device = relation_embeddings.weight.device
         use_cuda = relation_embeddings.weight.is_cuda
 
         if use_cuda:
@@ -125,7 +125,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
         else:
             dataloader = DataLoader(knowledge_graph, batch_size=b_size)
 
-        embeddings = knowledge_graph.flatten_embeddings(node_embeddings)
+        embeddings = node_embeddings.weight.data
 
         for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                              unit="batch", disable=(not verbose),
