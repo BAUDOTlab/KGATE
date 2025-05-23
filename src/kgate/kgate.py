@@ -860,7 +860,7 @@ class Architect(Model):
         else:
             h_embeddings = self.node_embeddings(h_idx)
             t_embeddings = self.node_embeddings(t_idx)
-        r_embeddings = self.rel_emb(batch[2])  # Relations are unchanged
+        r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
 
         return self.decoder.score(h_emb = h_embeddings,
                                   r_emb = r_embeddings, 

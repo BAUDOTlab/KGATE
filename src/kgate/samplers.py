@@ -165,8 +165,8 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
         return neg_batch
 
 class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
-    def __init__(self, kg, kg_val=None, kg_test=None, n_neg=1):
-        super().__init__(kg, kg_val, kg_test, n_neg)
+    def __init__(self, kg, n_neg=1):
+        super().__init__(kg, n_neg=n_neg)
         self.ix2nt = {v: k for k,v in self.kg.nt2ix.items()}
         self.rel_types = {v: k for k,v in self.kg.rel2ix.items()}
     
@@ -224,8 +224,8 @@ class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
 
     
 class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
-    def __init__(self, kg, kg_val=None, kg_test=None, n_neg=1):
-        super().__init__(kg, kg_val, kg_test, n_neg)
+    def __init__(self, kg, n_neg=1):
+        super().__init__(kg, n_neg=n_neg)
         self.ix2nt = {v: k for k,v in self.kg.nt2ix.items()}
         self.rel_types = {v: k for k,v in self.kg.rel2ix.items()}
 
