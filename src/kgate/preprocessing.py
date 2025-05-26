@@ -44,7 +44,7 @@ def prepare_knowledge_graph(config: dict,
     # Load knowledge graph
     if kg is None and df is None:
         input_file = config["kg_csv"]
-        kg_df: pd.DataFrame
+        kg_df: pd.DataFrame = None
 
         for separator in SUPPORTED_SEPARATORS:
             try:
