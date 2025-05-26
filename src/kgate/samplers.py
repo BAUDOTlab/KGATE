@@ -279,6 +279,7 @@ class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
             ]))
 
         return torch.stack(corrupted_triples, dim=1).long().to(device)
+        
 class MixedNegativeSampler(NegativeSampler):
     """
     A custom negative sampler that combines the BernoulliNegativeSampler
@@ -297,12 +298,12 @@ class MixedNegativeSampler(NegativeSampler):
         Number of negative sample to create from each fact.
     """
     
-    def __init__(self, kg, kg_val=None, kg_test=None, n_neg=1):
-        super().__init__(kg, kg_val, kg_test, n_neg)
+    def __init__(self, kg, n_neg=1):
+        super().__init__(kg, n_neg=n_neg)
         # Initialize both Bernoulli and Positional samplers
-        self.uniform_sampler = UniformNegativeSampler(kg, kg_val, kg_test, n_neg)
-        self.bernoulli_sampler = BernoulliNegativeSampler(kg, kg_val, kg_test, n_neg)
-        self.positional_sampler = PositionalNegativeSampler(kg, kg_val, kg_test)
+        self.uniform_sampler = UniformNegativeSampler(kg, n_neg=n_neg)
+        self.bernoulli_sampler = BernoulliNegativeSampler(kg, n_neg=n_neg)
+        self.positional_sampler = PositionalNegativeSampler(kg)
         
     def corrupt_batch(self, batch: torch.LongTensor, n_neg=None):
         """For each true triplet, produce `n_neg` corrupted ones from the
