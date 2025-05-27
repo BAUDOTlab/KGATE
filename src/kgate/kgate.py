@@ -785,7 +785,7 @@ class Architect(Model):
 
     def forward(self, pos_batch, neg_batch):
         pos: Tensor = self.scoring_function(pos_batch, self.kg_train)
-        n_neg = neg_batch.size(0) // pos_batch.size(0)
+        n_neg = neg_batch.size(1) // pos_batch.size(1)
         pos = pos.repeat(n_neg)
 
         neg: Tensor = self.scoring_function(neg_batch, self.kg_train)

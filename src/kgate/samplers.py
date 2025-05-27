@@ -351,6 +351,6 @@ class MixedNegativeSampler(NegativeSampler):
         )
         
         # Combine results from all samplers
-        combined_neg_batch = cat([uniform_neg_batch, bernoulli_neg_batch, positional_neg_batch])
+        combined_neg_batch = cat([uniform_neg_batch, bernoulli_neg_batch, positional_neg_batch], dim=1)
         
         return combined_neg_batch
