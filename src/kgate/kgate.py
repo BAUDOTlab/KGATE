@@ -222,13 +222,13 @@ class Architect(Model):
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
         return encoder
 
-    def initialize_decoder(self, decoder_name: str = "", dissimilarity: Literal["L1","L2",""] = "", margin: int = 0) -> Tuple[Model, MarginLoss | BinaryCrossEntropyLoss]:
+    def initialize_decoder(self, decoder_name: str = "", dissimilarity: Literal["L1","L2",""] = "", margin: int = 0, n_filters: int = 0) -> Tuple[Model, MarginLoss | BinaryCrossEntropyLoss]:
         """Create and initialize the decider object according to the configuration or arguments.
 
         The decoders are adapted and inherit from torchKGE decoders to be able to handle heterogeneous data.
         Not all torchKGE decoders are already implemented, but all of them and more will eventually be. Currently, 
         the available decoders are **TransE** [1]_, **TransH** [2]_, **TransR** [3]_, **TransD** [4]_,
-        **RESCAL** [5]_ and **DistMult** [6]_. See the description of decoder classes for details about 
+        **RESCAL** [5]_, **DistMult** [6]_ and **ConvKB** [7]_. See the description of decoder classes for details about 
         their implementation, or read their original papers.
 
         Translational models are used with a `torchkge.MarginLoss` while bilinear models are used with a 
@@ -244,6 +244,7 @@ class Architect(Model):
         .. [4] Ji, Guoliang et al. “Knowledge Graph Embedding via Dynamic Mapping Matrix.” Annual Meeting of the Association for Computational Linguistics (2015).
         .. [5] Nickel, Maximilian et al. “A Three-Way Model for Collective Learning on Multi-Relational Data.” International Conference on Machine Learning (2011).
         .. [6] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2014).
+        .. [7] Nguyen, Dai Quoc et al. “A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network.” North American Chapter of the Association for Computational Linguistics (2017).
 
         Parameters
         ----------
@@ -275,6 +276,8 @@ class Architect(Model):
             dissimilarity = decoder_config["dissimilarity"]
         if margin == 0:
             margin = decoder_config["margin"]
+        if n_filters == 0:
+            n_filters = decoder_config["n_filters"]
 
         # Translational models
         match decoder_name:
@@ -296,6 +299,9 @@ class Architect(Model):
                 criterion = BinaryCrossEntropyLoss()
             case "DistMult":
                 decoder = DistMult(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
+                criterion = BinaryCrossEntropyLoss()
+            case "ConvKB":
+                decoder = ConvKB(self.emb_dim, n_filters, self.kg_train.n_ent, self.kg_train.n_rel)
                 criterion = BinaryCrossEntropyLoss()
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
