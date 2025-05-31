@@ -43,10 +43,8 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
 
     Parameters
     ----------
-    model: torchkge.models.interfaces.Model
-        Embedding model inheriting from the right interface.
-    knowledge_graph: torchkge.data_structures.KnowledgeGraph
-        Knowledge graph on which the evaluation will be done.
+    full_edgelist: Tensor
+        Tensor of shape [4,n_triples] containing every true triple. 
 
     Attributes
     ----------
@@ -74,7 +72,8 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
 
     """
 
-    def __init__(self):
+    def __init__(self, full_edgelist: Tensor):
+        self.full_edgelist = full_edgelist
         self.evaluated = False
 
     def evaluate(self, 
@@ -160,7 +159,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             scores = decoder.inference_scoring_function(h_emb, candidates, r_emb)
             filt_scores = filter_scores(
                 scores = scores, 
-                edgelist = batch,
+                edgelist = self.full_edgelist.to(device),
                 missing = "tail",
                 ent_idx=h_idx,
                 r_idx=r_idx,
@@ -172,7 +171,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
             scores = decoder.inference_scoring_function(candidates, t_emb, r_emb)
             filt_scores = filter_scores(
                 scores = scores, 
-                edgelist = batch,
+                edgelist = self.full_edgelist.to(device),
                 missing = "head",
                 ent_idx=t_idx,
                 r_idx=r_idx,
@@ -196,11 +195,14 @@ def filter_scores(scores, edgelist: Tensor, missing: Literal["head","tail"], ent
     e_idx = 0 if missing == "tail" else 1
     m_idx = 1 - e_idx
 
+    ent_mask = torch.isin(edgelist[e_idx], ent_idx)
+    rel_mask = torch.isin(edgelist[2], r_idx)
     for i in range(b_size):
+        true_mask = torch.isin(edgelist[m_idx], true_idx[i])
         true_targets = edgelist[m_idx, 
-                                    (edgelist[e_idx] == ent_idx) & 
-                                    (edgelist[2] == r_idx) & 
-                                    (edgelist[m_idx] != true_idx[i])
+                                    ent_mask & 
+                                    rel_mask & 
+                                    true_mask
                                 ]
         filt_scores[i, true_targets] = - float('Inf')
 

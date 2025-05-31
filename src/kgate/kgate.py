@@ -455,7 +455,12 @@ class Architect(Model):
             The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator."""
         match self.config["evaluation"]["objective"]:
             case "Link Prediction":
-                evaluator = KLinkPredictionEvaluator()
+                full_edgelist = torch.cat([
+                    self.kg_train.edgelist,
+                    self.kg_val.edgelist,
+                    self.kg_test.edgelist
+                ], dim=1)
+                evaluator = KLinkPredictionEvaluator(full_edgelist=full_edgelist)
                 self.validation_metric = "MRR"
             case "Triplet Classification":
                 evaluator = KTripletClassificationEvaluator(architect=self, kg_val = self.kg_val, kg_test=self.kg_test)
