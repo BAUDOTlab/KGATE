@@ -202,7 +202,7 @@ def filter_scores(scores, edgelist: Tensor, missing: Literal["head","tail"], ent
         true_targets = edgelist[m_idx, 
                                     ent_mask & 
                                     rel_mask & 
-                                    true_mask
+                                ~   true_mask
                                 ]
         filt_scores[i, true_targets] = - float('Inf')
 

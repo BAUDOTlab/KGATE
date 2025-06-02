@@ -78,6 +78,9 @@ margin = 1
 # Type of dissimilarity used in the loss function. L1 or L2.
 dissimilarity = "L2"
 
+# Number of convolutional filter used by ConvKB
+n_filters = 3
+
 [sampler]
 # Type of negative sampler to generate false triple during the training.
 # Supported options are :
