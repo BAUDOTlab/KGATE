@@ -19,7 +19,7 @@ class ConvKB(ConvKBModel):
 
         concat = cat((h,r,t), dim=1)
 
-        return self.output(self.convlayer(concat)).reshape(b_size, -1)[:, 1]
+        return self.output(self.convlayer(concat).reshape(b_size, -1))[:, 1]
     
     def get_embeddings(self):
         return None
@@ -47,5 +47,6 @@ class ConvKB(ConvKBModel):
             candidates = relation_embeddings.weight.data
         
         candidates = candidates.unsqueeze(0).expand(b_size, -1, -1)
+        candidates = candidates.view(b_size, -1, 1, self.emb_dim)
 
         return h, t, r, candidates
