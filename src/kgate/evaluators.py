@@ -14,7 +14,7 @@ from tqdm.autonotebook import tqdm
 
 import torch.nn as nn
 
-from torchkge.evaluation import LinkPredictionEvaluator, TripletClassificationEvaluator
+import torchkge.evaluation as eval
 from torchkge.exceptions import NotYetEvaluatedError
 from torchkge.utils import get_rank, filter_scores
 from torchkge.data_structures import SmallKG
@@ -29,7 +29,7 @@ from .encoders import GNN, DefaultEncoder
 
 from typing import Dict, Literal
 
-class KLinkPredictionEvaluator(LinkPredictionEvaluator):
+class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
     """Evaluate performance of given embedding using link prediction method.
 
     References
@@ -85,6 +85,7 @@ class KLinkPredictionEvaluator(LinkPredictionEvaluator):
                 relation_embeddings: nn.Embedding,
                 verbose: bool=True):
         """
+        Run the Link Prediction evaluation.
 
         Parameters
         ----------
@@ -209,7 +210,7 @@ def filter_scores(scores, edgelist: Tensor, missing: Literal["head","tail"], ent
     return filt_scores
 
 
-class KTripletClassificationEvaluator(TripletClassificationEvaluator):
+class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
     """Evaluate performance of given embedding using triplet classification
     method.
 

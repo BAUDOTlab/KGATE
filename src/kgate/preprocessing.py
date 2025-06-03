@@ -137,14 +137,6 @@ def clean_knowledge_graph(kg: KnowledgeGraph, config: dict) -> Tuple[KnowledgeGr
             logging.info(f"Adding {len(rev_duplicates_relations)} anti-synonymous relations ({[id_to_rel_name[rel] for rel in rev_duplicates_relations]}) to the list of known duplicated relations.")
             duplicated_relations_list.extend(rev_duplicates_relations)
     
-    # if config["preprocessing"]["permute_entities"]:
-    #     to_permute_relation_names = config["clean_kg"]["permute_kg_params"]
-    #     if len(to_permute_relation_names) > 1:
-    #         logging.info(f"Making permutations for relations {", ".join([rel for rel in to_permute_relation_names])}...")
-    #     for rel in to_permute_relation_names:
-    #         logging.info(f"Making permutations for relation {rel} with id {kg.rel2ix[rel]}.")
-    #         kg = my_data_redundancy.permute_tails(kg, kg.rel2ix[rel])
-
     if config["preprocessing"]["make_directed"]:
         undirected_relations_names = config["preprocessing"]["make_directed_relations"]
         relation_names = ", ".join([rel for rel in kg.rel2ix.keys()])

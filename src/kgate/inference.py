@@ -1,4 +1,4 @@
-from torchkge.inference import RelationInference, EntityInference, DataLoader_
+import torchkge.inference as infer
 from torchkge.utils import filter_scores
 from torchkge.models import Model
 from tqdm.autonotebook import tqdm
@@ -7,7 +7,7 @@ import torch
 from typing import Dict, Tuple, List
 from .utils import HeteroMappings
 
-class KRelationInference(RelationInference):
+class RelationInference(infer.RelationInference):
     """Use trained embedding model to infer missing relations in triples.
 
     Parameters
@@ -54,10 +54,10 @@ class KRelationInference(RelationInference):
             use_cuda = next(self.model.parameters()).is_cuda
 
             if use_cuda:
-                dataloader = DataLoader_(self.entities1, self.entities2, batch_size=b_size, use_cuda="batch")
+                dataloader = infer.DataLoader_(self.entities1, self.entities2, batch_size=b_size, use_cuda="batch")
                 self.predictions = self.predictions.cuda()
             else:
-                dataloader = DataLoader_(self.entities1, self.entities2, batch_size=b_size)
+                dataloader = infer.DataLoader_(self.entities1, self.entities2, batch_size=b_size)
 
             for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                                 unit="batch", disable=(not verbose),
@@ -79,7 +79,7 @@ class KRelationInference(RelationInference):
                 self.predictions = self.predictions.cpu()
                 self.scores = self.scores.cpu()
 
-class KEntityInference(EntityInference):
+class EntityInference(infer.EntityInference):
     """Use trained embedding model to infer missing entities in triples.
 
         Parameters
@@ -130,10 +130,10 @@ class KEntityInference(EntityInference):
             device = "cuda" if use_cuda else "cpu"
             
             if use_cuda:
-                dataloader = DataLoader_(self.known_entities, self.known_relations, batch_size=b_size, use_cuda="batch")
+                dataloader = infer.DataLoader_(self.known_entities, self.known_relations, batch_size=b_size, use_cuda="batch")
                 self.predictions = self.predictions.cuda()
             else:
-                dataloader = DataLoader_(self.known_entities, self.known_relations, batch_size=b_size)
+                dataloader = infer.DataLoader_(self.known_entities, self.known_relations, batch_size=b_size)
 
             for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                                 unit="batch", disable=(not verbose),
