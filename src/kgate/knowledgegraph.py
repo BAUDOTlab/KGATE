@@ -65,7 +65,8 @@ class KnowledgeGraph(Dataset):
                  triple_types: List[Tuple[str,str,str]] | None = None,
                  ent2ix: Dict[str, int] | None=None, 
                  rel2ix: Dict[str, int] | None=None,
-                 nt2ix: Dict[str, int] | None=None):
+                 nt2ix: Dict[str, int] | None=None,
+                 removed_triples: Tensor | None=None):
         
         if df is None:
             assert edgelist is not None and \
@@ -82,7 +83,13 @@ class KnowledgeGraph(Dataset):
             self.edgelist = edgelist.long()
         else:
             self.edgelist = tensor([], dtype=torch.long)
-        
+
+        if removed_triples is not None:
+            assert removed_triples.size(0) == 4,  "The `removed_triples` parameter must be a 2D tensor of size [4, num_triples]."
+            self.removed_triples = removed_triples
+        else:
+            self.removed_triples = tensor([], dtype=torch.long)
+
         self.triple_types: List[Tuple[str,str,str]] = triple_types or []
 
         self.ent2ix = ent2ix or get_dictionaries(df, ent=True)
@@ -247,7 +254,8 @@ class KnowledgeGraph(Dataset):
                 edgelist = self.edgelist[:, mask_tr], 
                 triple_types=self.triple_types,
                 ent2ix=self.ent2ix, rel2ix=self.rel2ix,
-                nt2ix=self.nt2ix
+                nt2ix=self.nt2ix,
+                removed_triples=self.removed_triples
             ),
             self.__class__(
                 edgelist = self.edgelist[:, mask_val], 
@@ -323,6 +331,7 @@ class KnowledgeGraph(Dataset):
         # Create masks for indices to keep
         mask = torch.zeros(self.n_triples, dtype=torch.bool)
         mask[indices_to_keep] = True
+        removed_triples = self.edgelist[:, ~mask]
 
         # Create a new KnowledgeGraph instance
         return self.__class__(
@@ -330,7 +339,8 @@ class KnowledgeGraph(Dataset):
             triple_types=self.triple_types,
             ent2ix=self.ent2ix,
             rel2ix=self.rel2ix,
-            nt2ix=self.nt2ix
+            nt2ix=self.nt2ix,
+            removed_triples = removed_triples
         )
 
     def remove_triples(self, indices_to_remove: List[int] | torch.Tensor) -> Self:
@@ -351,13 +361,15 @@ class KnowledgeGraph(Dataset):
         # Create masks for indices not to remove
         mask = torch.ones(self.n_triples, dtype=torch.bool)
         mask[indices_to_remove] = False
+        removed_triples = self.edgelist[:, ~mask]
 
         return self.__class__(
             edgelist=self.edgelist[:, mask],
             triple_types=self.triple_types,
             ent2ix=self.ent2ix,
             rel2ix=self.rel2ix,
-            nt2ix=self.nt2ix
+            nt2ix=self.nt2ix,
+            removed_triples=removed_triples
         )
     
     def add_triples(self, new_triples: torch.Tensor) -> Self:
@@ -400,7 +412,8 @@ class KnowledgeGraph(Dataset):
             triple_types=self.triple_types,
             ent2ix=self.ent2ix,
             rel2ix=self.rel2ix,
-            nt2ix=self.nt2ix
+            nt2ix=self.nt2ix,
+            removed_triples=self.removed_triples
         )
 
     def add_inverse_relations(self, undirected_relations: List[int]) -> Tuple[Self, List[int]]:
@@ -500,7 +513,8 @@ class KnowledgeGraph(Dataset):
                 triple_types=self.triple_types,
                 ent2ix=self.ent2ix,
                 rel2ix=self.rel2ix,
-                nt2ix=self.nt2ix
+                nt2ix=self.nt2ix,
+                removed_triples=self.removed_triples
             ), reverse_list
 
     def remove_duplicate_triples(self) -> Self:

@@ -457,8 +457,11 @@ class Architect(Model):
             case "Link Prediction":
                 full_edgelist = torch.cat([
                     self.kg_train.edgelist,
+                    self.kg_train.removed_triples,
                     self.kg_val.edgelist,
-                    self.kg_test.edgelist
+                    self.kg_val.removed_triples,
+                    self.kg_test.edgelist,
+                    self.kg_test.removed_triples
                 ], dim=1)
                 evaluator = KLinkPredictionEvaluator(full_edgelist=full_edgelist)
                 self.validation_metric = "MRR"
