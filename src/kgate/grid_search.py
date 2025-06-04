@@ -1,6 +1,6 @@
 import optuna
 from .kgate import Architect
-from .data_structures import KGATEGraph
+from .knowledgegraph import KnowledgeGraph
 from .utils import parse_config
 import pandas as pd
 from torchkge import KnowledgeGraph
@@ -14,7 +14,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s" 
 )
 
-def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KGATEGraph,KGATEGraph,KGATEGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None):
+def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KnowledgeGraph,KnowledgeGraph,KnowledgeGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None):
     """Run a grid search hyperparameter optimization according to the given configuration.
 
     To register a hyperparameter in the grid search optimization, set it as a list in the configuration.

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch_geometric.data import HeteroData
-from torch import cat
+from torch import cat, Tensor
 import pandas as pd 
 import numpy as np
 from pathlib import Path
@@ -13,7 +13,7 @@ import os
 from importlib.resources import open_binary
 import matplotlib.pyplot as plt
 
-from typing import List, Tuple
+from typing import List, Tuple, Literal
 from .knowledgegraph import KnowledgeGraph
 
 log_level = logging.INFO# if config["common"]["verbose"] else logging.WARNING
@@ -251,6 +251,90 @@ def plot_learning_curves(training_metrics_file: Path, outdir: Path, val_metric: 
     plt.legend()
     plt.savefig(outdir.joinpath("validation_metric_curve.png"))
 
+def filter_scores(scores: Tensor, edgelist: Tensor, missing: Literal["head","tail","rel"], idx_1: Tensor, idx_2: Tensor, true_idx: Tensor | None):
+    """
+    Filter a score tensor to ignore the score attributed to true entity or relation except the ones that are being predicted.
+    Parameters
+    ----------
+    scores: Tensor
+        Tensor of shape [batch_size,n] where n is the number of entities of relation, depending on what is filtered.
+    edgelist: Tensor
+        Tensor of shape [4, n_triples] containing every true triple in the KG.
+    missing: "head", "tail" or "rel"
+        The part of the triple that is currently being predicted.
+    idx_1: Tensor
+        Tensor containing the index of the heads (if missing is "rel" or "tails") or tails (if missing is "head") that are part of the triple being predicted.
+    idx_2: Tensor
+        Tensor containing the index of the tails (if missing is "rel") or the relations (if missing is "head" or "tails") that are part of the triple being predicted.
+    true_idx: Tensor, optional
+        Tensor containing the index of the entities or relations currently being predicted.
+        If omitted, every true index will be filtered out.
+
+    Returns
+    -------
+    filt_scores: Tensor
+        Tensor of shape [batch_size, n] with -Inf values for all true entity/relation index except the ones being predicted.
+    """
+    b_size = scores.shape[0]
+    filt_scores = scores.clone()
+
+    if missing == "rel":
+        mask_1 = torch.isin(edgelist[0], idx_1)
+        mask_2 = torch.isin(edgelist[1], idx_2)
+        m_idx = 2
+    else:
+        e_idx = 0 if missing == "tail" else 1
+        m_idx = 1 - e_idx
+        mask_1 = torch.isin(edgelist[e_idx], idx_1)
+        mask_2 = torch.isin(edgelist[2], idx_2)
+
+    for i in range(b_size):
+        if true_idx is None:
+            true_mask = torch.zeros(edgelist.size(1), dtype=torch.bool)
+        else:
+            true_mask = torch.isin(edgelist[m_idx], true_idx[i])
+
+        true_targets = edgelist[m_idx, 
+                                    mask_1 & 
+                                    mask_2 & 
+                                    ~true_mask
+                                ]
+        filt_scores[i, true_targets] = - float('Inf')
+
+    return filt_scores
+
+def merge_kg(kg_list: List[KnowledgeGraph], complete_edgelist: bool = False) -> KnowledgeGraph:
+    """Merge multiple KnowledgeGraph objects into a unique one.
+    
+    Parameters
+    ----------
+    kg_list: List[Tensor]
+        The list of all KG to be merged
+    complete_edgelist: bool, default to False
+        Whether or not the removed_triples tensor should be integrated into the final KG's edgelist.
+    
+    Returns
+    -------
+    KnowledgeGraph
+        The merged KnowledgeGraph object."""
+    first_kg = kg_list[0]
+    assert all(first_kg.ent2ix == kg.ent2ix for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different ent2ix."
+    assert all(first_kg.rel2ix == kg.rel2ix for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different rel2ix."
+    assert all(first_kg.nt2ix == kg.nt2ix for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different nt2ix."
+    assert all(first_kg.triple_types == kg.triple_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triple_types."
+
+    new_edgelist = cat([kg.edgelist for kg in kg_list], dim=1)
+    if complete_edgelist:
+        removed_edgelist = cat([kg.removed_triples for kg in kg_list], dim=1)
+        new_edgelist = cat([new_edgelist, removed_edgelist], dim=1)
+    
+    return first_kg.__class__(
+        edgelist=new_edgelist,
+        ent2ix=first_kg.ent2ix,
+        rel2ix=first_kg.rel2ix,
+        nt2ix=first_kg.nt2ix,
+        triple_types=first_kg.triple_types
+    )
 
 class HeteroMappings():
     def __init__(self, kg: KnowledgeGraph, metadata:pd.DataFrame | None):

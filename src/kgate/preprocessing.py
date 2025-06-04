@@ -139,12 +139,14 @@ def clean_knowledge_graph(kg: KnowledgeGraph, config: dict) -> Tuple[KnowledgeGr
     
     if config["preprocessing"]["make_directed"]:
         undirected_relations_names = config["preprocessing"]["make_directed_relations"]
-        relation_names = ", ".join([rel for rel in kg.rel2ix.keys()])
-        logging.info(f"Adding reverse triplets for relations {relation_names}...")
-        kg, undirected_relations_list = kg.add_inverse_relations(list(kg.rel2ix.values()))
+        if len(undirected_relations_names) == 0:
+            undirected_relations_names = ", ".join([rel for rel in kg.rel2ix.keys()])
+        logging.info(f"Adding reverse triplets for relations {undirected_relations_names}...")
+        relations_to_process = [kg.rel2ix[rel_name] for rel_name in undirected_relations_names]
+        kg, undirected_relations_list = kg.add_inverse_relations(relations_to_process)
             
         if config["preprocessing"]["flag_near_duplicate_relations"]:
-            logging.info(f"Adding created reverses {[rel for rel in kg.rel2ix.keys()]} to the list of known duplicated relations.")
+            logging.info(f"Adding created reverses {[(relname, relname + "_inv") for relname in undirected_relations_names]} to the list of known duplicated relations.")
             duplicated_relations_list.extend(undirected_relations_list)
 
     logging.info("Splitting the dataset into train, validation and test sets...")

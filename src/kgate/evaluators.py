@@ -16,14 +16,14 @@ import torch.nn as nn
 
 import torchkge.evaluation as eval
 from torchkge.exceptions import NotYetEvaluatedError
-from torchkge.utils import get_rank, filter_scores
+from torchkge.utils import get_rank
 from torchkge.data_structures import SmallKG
 from torchkge.models import Model
 
 from torch_geometric.utils import k_hop_subgraph
 
 from .knowledgegraph import KnowledgeGraph
-from .utils import HeteroMappings
+from .utils import filter_scores
 from .samplers import PositionalNegativeSampler
 from .encoders import GNN, DefaultEncoder
 
@@ -115,16 +115,13 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
         device = relation_embeddings.weight.device
         use_cuda = relation_embeddings.weight.is_cuda
 
-        if use_cuda:
-            dataloader = DataLoader(knowledge_graph, batch_size=b_size)
-            self.rank_true_heads = self.rank_true_heads.cuda()
-            self.rank_true_tails = self.rank_true_tails.cuda()
-            self.filt_rank_true_heads = self.filt_rank_true_heads.cuda()
-            self.filt_rank_true_tails = self.filt_rank_true_tails.cuda()
-            edgelist = knowledge_graph.edgelist.cuda()
-        else:
-            dataloader = DataLoader(knowledge_graph, batch_size=b_size)
-
+        dataloader = DataLoader(knowledge_graph, batch_size=b_size)
+        self.rank_true_heads = self.rank_true_heads.to(device)
+        self.rank_true_tails = self.rank_true_tails.to(device)
+        self.filt_rank_true_heads = self.filt_rank_true_heads.to(device)
+        self.filt_rank_true_tails = self.filt_rank_true_tails.to(device)
+        edgelist = knowledge_graph.edgelist.to(device)
+        
         embeddings = node_embeddings.weight.data
 
         for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
@@ -162,8 +159,8 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 scores = scores, 
                 edgelist = self.full_edgelist.to(device),
                 missing = "tail",
-                ent_idx=h_idx,
-                r_idx=r_idx,
+                idx_1=h_idx,
+                idx_2=r_idx,
                 true_idx=t_idx
             )
             self.rank_true_tails[i * b_size: (i + 1) * b_size] = get_rank(scores, t_idx).detach()
@@ -174,8 +171,8 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 scores = scores, 
                 edgelist = self.full_edgelist.to(device),
                 missing = "head",
-                ent_idx=t_idx,
-                r_idx=r_idx,
+                idx_1=t_idx,
+                idx_2=r_idx,
                 true_idx=h_idx
             )
             self.rank_true_heads[i * b_size: (i + 1) * b_size] = get_rank(scores, h_idx).detach()
@@ -188,26 +185,6 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             self.rank_true_tails = self.rank_true_tails.cpu()
             self.filt_rank_true_heads = self.filt_rank_true_heads.cpu()
             self.filt_rank_true_tails = self.filt_rank_true_tails.cpu()
-
-def filter_scores(scores, edgelist: Tensor, missing: Literal["head","tail"], ent_idx: Tensor, r_idx: Tensor, true_idx: Tensor):
-    b_size = scores.shape[0]
-    filt_scores = scores.clone()
-
-    e_idx = 0 if missing == "tail" else 1
-    m_idx = 1 - e_idx
-
-    ent_mask = torch.isin(edgelist[e_idx], ent_idx)
-    rel_mask = torch.isin(edgelist[2], r_idx)
-    for i in range(b_size):
-        true_mask = torch.isin(edgelist[m_idx], true_idx[i])
-        true_targets = edgelist[m_idx, 
-                                    ent_mask & 
-                                    rel_mask & 
-                                ~   true_mask
-                                ]
-        filt_scores[i, true_targets] = - float('Inf')
-
-    return filt_scores
 
 
 class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):

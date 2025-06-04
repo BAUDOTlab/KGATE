@@ -9,14 +9,14 @@ from torch import tensor, long, stack, Tensor
 from torch.nn import Parameter
 from torch.nn.functional import normalize
 from torch.utils.data import DataLoader
-from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, HeteroMappings, init_embedding, plot_learning_curves
+from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, init_embedding, plot_learning_curves
 from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .encoders import *
 from .decoders import *
 from .knowledgegraph import KnowledgeGraph
 from .samplers import PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
-from .evaluators import KLinkPredictionEvaluator, KTripletClassificationEvaluator
-from .inference import KEntityInference, KRelationInference
+from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
+from .inference import EntityInference, RelationInference
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
 import logging
 import warnings
@@ -169,7 +169,7 @@ class Architect(Model):
         self.optimizer: optim.Optimizer = None
         self.sampler: sampling.NegativeSampler = None
         self.scheduler: lr_scheduler.LRScheduler | None = None
-        self.evaluator: KLinkPredictionEvaluator | KTripletClassificationEvaluator = None
+        self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
         self.node_embeddings: nn.ParameterList | nn.Embedding
 
 
@@ -435,7 +435,7 @@ class Architect(Model):
         logging.info(f"Scheduler '{scheduler_type}' initialized with parameters: {scheduler_params}")
         return scheduler
 
-    def initialize_evaluator(self) -> KLinkPredictionEvaluator | KTripletClassificationEvaluator:
+    def initialize_evaluator(self) -> LinkPredictionEvaluator | TripletClassificationEvaluator:
         """Set the task for which the model will be evaluated on using the validation set.
         
         Options are Link Prediction or Triplet Classification.
@@ -463,10 +463,10 @@ class Architect(Model):
                     self.kg_test.edgelist,
                     self.kg_test.removed_triples
                 ], dim=1)
-                evaluator = KLinkPredictionEvaluator(full_edgelist=full_edgelist)
+                evaluator = LinkPredictionEvaluator(full_edgelist=full_edgelist)
                 self.validation_metric = "MRR"
             case "Triplet Classification":
-                evaluator = KTripletClassificationEvaluator(architect=self, kg_val = self.kg_val, kg_test=self.kg_test)
+                evaluator = TripletClassificationEvaluator(architect=self, kg_val = self.kg_val, kg_test=self.kg_test)
                 self.validation_metric = "Accuracy"
             case _:
                 raise NotImplementedError(f"The requested evaluator {self.config["evaluation"]["objective"]} is not implemented.")
@@ -729,7 +729,7 @@ class Architect(Model):
 
         return results
         
-    def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], topk:int=100):
+    def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], top_k:int=100):
         """Infer missing entities or relations, depending on the given parameters"""
         if not sum([len(arr) > 0 for arr in [heads,rels,tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, relations or tails.")
@@ -740,22 +740,35 @@ class Architect(Model):
 
         infer_heads, infer_rels, infer_tails = len(heads) == 0, len(rels) == 0, len(tails) == 0
 
-        if infer_tails:
-            known_heads = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in heads]).long()
-            known_rels = tensor([idx for rel, idx in self.kg_train.rel2ix.items() if rel in rels]).long()
-            inference = KEntityInference(self.decoder, known_heads, known_rels, missing = "tails", dictionary=self.kg_train.dict_of_heads, top_k=topk)
-        elif infer_heads:
-            known_tails = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in tails])
-            known_rels = tensor([idx for rel, idx in self.kg_train.rel2ix.items() if rel in rels])
-            inference = KEntityInference(self.decoder, known_tails, known_rels, missing = "heads", dictionary=self.kg_train.dict_of_tails, top_k=topk)
-        elif infer_rels:
-            known_heads = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in heads])
-            known_tails = tensor([idx for ent, idx in self.kg_train.ent2ix.items() if ent in tails])
-            inference = KRelationInference(self.decoder, known_heads, known_tails, dictionary=self.kg_train.dict_of_rels, top_k=topk)
-        
-        embeddings = self.encoder.forward(self.node_embeddings, self.mappings)
+        full_kg = merge_kg([self.kg_train, self.kg_val, self.kg_test], True)
 
-        inference.evaluate(self.eval_batch_size, embeddings, self.rel_emb, self.mappings)
+        if infer_tails:
+            known_1 = tensor([self.kg_train.ent2ix[head] for head in heads]).long()
+            known_2 = tensor([self.kg_train.rel2ix[rel] for rel in rels]).long()
+            missing = "tail"
+            inference = EntityInference(full_kg)
+        elif infer_heads:
+            known_1 = tensor([self.kg_train.ent2ix[tail] for tail in tails]).long()
+            known_2 = tensor([self.kg_train.rel2ix[rel] for rel in rels]).long()
+            missing = "head"
+            inference = EntityInference(full_kg)
+        elif infer_rels:
+            known_1 = tensor([self.kg_train.ent2ix[head] for head in heads]).long()
+            known_2 = tensor([self.kg_train.ent2ix[tail] for tail in tails]).long()
+            missing = "rel"
+            inference = RelationInference(full_kg)
+
+        inference.evaluate(
+            known_1,
+            known_2,
+            encoder = self.encoder,
+            decoder = self.decoder,
+            top_k = top_k,
+            missing = missing,
+            b_size = self.eval_batch_size,
+            node_embeddings=self.node_embeddings,   
+            relation_embeddings=self.rel_emb
+        )
 
         ix2ent = {v: k for k, v in self.kg_train.ent2ix.items()}
         pred_idx = inference.predictions.reshape(-1).T
@@ -944,11 +957,11 @@ class Architect(Model):
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
-            if isinstance(self.evaluator,KLinkPredictionEvaluator):
+            if isinstance(self.evaluator,LinkPredictionEvaluator):
                 metric = self.link_pred(self.kg_val) 
                 engine.state.metrics["val_metrics"] = metric 
                 logging.info(f"Validation MRR: {metric}")
-            elif isinstance(self.evaluator, KTripletClassificationEvaluator):
+            elif isinstance(self.evaluator, TripletClassificationEvaluator):
                 metric = self.triplet_classif(self.kg_val, self.kg_test)
                 engine.state.metrics["val_metrics"] = metric
                 logging.info(f"Validation Accuracy: {metric}")
@@ -1044,9 +1057,9 @@ class Architect(Model):
             
             new_kg = kg.keep_triples(indices_to_keep)
 
-            if isinstance(self.evaluator, KLinkPredictionEvaluator):
+            if isinstance(self.evaluator, LinkPredictionEvaluator):
                 test_metrics = self.link_pred(new_kg)
-            elif isinstance(self.evaluator, KTripletClassificationEvaluator):
+            elif isinstance(self.evaluator, TripletClassificationEvaluator):
                 test_metrics = self.triplet_classif(kg_val = self.kg_val, kg_test = new_kg)
             
             # Save each relation's MRR
@@ -1084,10 +1097,10 @@ class Architect(Model):
         kg_infrequent = self.kg_test.keep_triples(infrequent_indices)
         
         # Compute each category's MRR
-        if isinstance(self.evaluator, KLinkPredictionEvaluator):
+        if isinstance(self.evaluator, LinkPredictionEvaluator):
             frequent_metrics = self.link_pred(kg_frequent) if frequent_indices else 0
             infrequent_metrics = self.link_pred(kg_infrequent) if infrequent_indices else 0
-        elif isinstance(self.evaluator, KTripletClassificationEvaluator):
+        elif isinstance(self.evaluator, TripletClassificationEvaluator):
             frequent_metrics = self.triplet_classif(self.kg_val, kg_frequent) if frequent_indices else 0
             infrequent_metrics = self.triplet_classif(self.kg_val, kg_infrequent) if infrequent_indices else 0
         return frequent_metrics, infrequent_metrics
@@ -1095,7 +1108,7 @@ class Architect(Model):
     def link_pred(self, kg: KnowledgeGraph) -> float:
         """Link prediction evaluation on test set."""
         # Test MRR measure
-        if not isinstance(self.evaluator, KLinkPredictionEvaluator):
+        if not isinstance(self.evaluator, LinkPredictionEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Link Prediction method for {type(self.evaluator)} evaluator.")
 
         self.evaluator.evaluate(b_size = self.eval_batch_size,
@@ -1111,7 +1124,7 @@ class Architect(Model):
     
     def triplet_classif(self, kg_val: KnowledgeGraph, kg_test: KnowledgeGraph) -> float:
         """Triplet Classification evaluation"""
-        if not isinstance(self.evaluator, KTripletClassificationEvaluator):
+        if not isinstance(self.evaluator, TripletClassificationEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Triplet Classification method for {type(self.evaluator)} evaluator.")
         
         self.evaluator.evaluate(b_size=self.eval_batch_size, knowledge_graph=kg_val)
