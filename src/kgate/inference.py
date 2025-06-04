@@ -178,11 +178,13 @@ class EntityInference(infer.EntityInference):
             dataloader = DataLoader(inference_kg, batch_size=b_size)
 
             predictions = torch.empty(size=(len(ent_idx), top_k), device=device).long()
+            scores = torch.empty(size=(len(ent_idx), top_k), device=device).long()
             embeddings = node_embeddings.weight.data
 
             for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                                 unit="batch", disable=(not verbose),
                                 desc="Inference"):
+
                 known_ents, known_rels = batch[0], batch[1]
                 
                 if isinstance(encoder, GNN):
@@ -204,28 +206,27 @@ class EntityInference(infer.EntityInference):
 
                 if missing == "head":
                     _, t_emb, rel_emb, candidates = decoder.inference_prepare_candidates(h_idx = tensor([], device=device).long(), 
-                                                                                         t_idx = known_ents,
-                                                                                         r_idx = known_rels,
+                                                                                         t_idx = known_ents.to(device),
+                                                                                         r_idx = known_rels.to(device),
                                                                                          node_embeddings = embeddings,
                                                                                          relation_embeddings = relation_embeddings,
                                                                                          entities=True)
-                    scores = decoder.inference_scoring_function(candidates, t_emb, rel_emb)
+                    batch_scores = decoder.inference_scoring_function(candidates, t_emb, rel_emb)
                 else:
-                    h_emb, _, rel_emb, candidates = decoder.inference_prepare_candidates(h_idx = known_ents, 
+                    h_emb, _, rel_emb, candidates = decoder.inference_prepare_candidates(h_idx = known_ents.to(device), 
                                                                                          t_idx = tensor([], device=device).long(),
-                                                                                         r_idx = known_rels,
+                                                                                         r_idx = known_rels.to(device),
                                                                                          node_embeddings = embeddings,
                                                                                          relation_embeddings = relation_embeddings,
                                                                                          entities=True)
-                    scores = decoder.inference_scoring_function(h_emb, candidates, rel_emb)
+                    batch_scores = decoder.inference_scoring_function(h_emb, candidates, rel_emb)
 
-                scores = filter_scores(scores, self.knowledge_graph.edgelist, missing, known_ents, known_rels, None)
+                batch_scores = filter_scores(batch_scores, self.knowledge_graph.edgelist, missing, known_ents, known_rels, None)
 
-                scores, indices = scores.sort(descending=True)
-                b_size = min(b_size, len(scores))
+                batch_scores, indices = batch_scores.sort(descending=True)
+                b_size = min(b_size, len(batch_scores))
                 
-                predictions[i * b_size: (i+1)*b_size] = indices[:, :top_k]
-                print(scores)
-                scores[i*b_size, (i+1)*b_size] = scores[:, :top_k]
+            predictions[i * b_size: (i+1)*b_size] = indices[:, :top_k]
+            scores[i*b_size: (i+1)*b_size] = batch_scores[:, :top_k]
 
             return predictions.cpu(), scores.cpu()

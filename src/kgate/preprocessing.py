@@ -333,6 +333,7 @@ def clean_datasets(kg_train: KnowledgeGraph, kg2: KnowledgeGraph, known_reverses
         kg2_ht_r1 = kg2.get_pairs(r1, type="ht")
         # Get indices of (h, t) in kg_train that are related by r2
         indices_to_remove_kg_train = [i for i, (h, t) in enumerate(zip(kg_train.tail_idx, kg_train.head_idx)) if (h.item(), t.item()) in kg2_ht_r1 and kg_train.relations[i].item() == r2]
+        indices_to_remove_kg_train.extend([i for i, (h, t) in enumerate(zip(kg_train.head_idx, kg_train.tail_idx)) if (h.item(), t.item()) in kg2_ht_r1 and kg_train.relations[i].item() == r2])
         
         # Remove those (h, t) pairs from kg_train
         kg_train = kg_train.remove_triples(torch.tensor(indices_to_remove_kg_train, dtype=torch.long))
@@ -343,6 +344,7 @@ def clean_datasets(kg_train: KnowledgeGraph, kg2: KnowledgeGraph, known_reverses
         kg2_ht_r2 = kg2.get_pairs(r2, type="ht")
         # Get indices of (h, t) in kg_train that are related by r1
         indices_to_remove_kg_train_reverse = [i for i, (h, t) in enumerate(zip(kg_train.tail_idx, kg_train.head_idx)) if (h.item(), t.item()) in kg2_ht_r2 and kg_train.relations[i].item() == r1]
+        indices_to_remove_kg_train_reverse.extend([i for i, (h, t) in enumerate(zip(kg_train.head_idx, kg_train.tail_idx)) if (h.item(), t.item()) in kg2_ht_r2 and kg_train.relations[i].item() == r1])
 
         # Remove those (h, t) pairs from kg_train
         kg_train = kg_train.remove_triples(torch.tensor(indices_to_remove_kg_train_reverse, dtype=torch.long))

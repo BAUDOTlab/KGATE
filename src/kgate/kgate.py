@@ -758,7 +758,7 @@ class Architect(Model):
             missing = "rel"
             inference = RelationInference(full_kg)
 
-        inference.evaluate(
+        predictions, scores = inference.evaluate(
             known_1,
             known_2,
             encoder = self.encoder,
@@ -771,12 +771,12 @@ class Architect(Model):
         )
 
         ix2ent = {v: k for k, v in self.kg_train.ent2ix.items()}
-        pred_idx = inference.predictions.reshape(-1).T
+        pred_idx = predictions.reshape(-1).T
         pred_names = np.vectorize(ix2ent.get)(pred_idx)
 
-        scores = inference.scores.reshape(-1).T
-
-        self.predictions = pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
+        scores = scores.reshape(-1).T
+        print(pred_idx, scores)
+        return pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
 
     def load_best_model(self):
         _, nt_count = self.kg_train.node_types.unique(return_counts=True)

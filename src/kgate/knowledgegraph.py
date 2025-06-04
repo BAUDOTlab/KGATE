@@ -399,7 +399,6 @@ class KnowledgeGraph(Dataset):
 
         # Concatenate new triples to existing ones
         updated_edgelist = cat([self.edgelist, new_triples], dim=1)
-
         # Update dict_of_heads, dict_of_tails, dict_of_rels
         # for h, t, r in new_triples.tolist():
         #     self.dict_of_heads[(t, r)].add(h)
@@ -440,6 +439,7 @@ class KnowledgeGraph(Dataset):
 
         # New triples lists
         tmp_edgelist = [self.edgelist]
+        tmp_removed = [self.removed_triples]
 
         for relation_id in undirected_relations:
             inverse_relation = f"{ix2rel[relation_id]}_inv"
@@ -463,16 +463,23 @@ class KnowledgeGraph(Dataset):
                 
                 mask = (self.edgelist[3] == triple_id)
                 subset = self.edgelist[:, mask]
-                tmp_edgelist.append(
-                    cat([
+
+                new_triple = cat([
                         subset[1].unsqueeze(0),
                         subset[0].unsqueeze(0),
                         tensor(inverse_relation_id).repeat(subset.size(1)).unsqueeze(0),
                         tensor(inverse_triple_id).repeat(subset.size(1)).unsqueeze(0)
                     ])
-                )
+                tmp_edgelist.append(new_triple)
+                tmp_removed.append(cat([
+                    new_triple[1],
+                    new_triple[0],
+                    new_triple[2],
+                    new_triple[3]
+                ]))
 
-            new_edgelist = torch.cat(tmp_edgelist, dim=1)
+            new_edgelist = cat(tmp_edgelist, dim=1)
+            new_removed = cat(tmp_removed, dim=1)
             reverse_list.append((relation_id, inverse_relation_id))
 
             # # Masks for the original relation
@@ -514,7 +521,7 @@ class KnowledgeGraph(Dataset):
                 ent2ix=self.ent2ix,
                 rel2ix=self.rel2ix,
                 nt2ix=self.nt2ix,
-                removed_triples=self.removed_triples
+                removed_triples=new_removed
             ), reverse_list
 
     def remove_duplicate_triples(self) -> Self:
