@@ -331,7 +331,7 @@ class KnowledgeGraph(Dataset):
         # Create masks for indices to keep
         mask = torch.zeros(self.n_triples, dtype=torch.bool)
         mask[indices_to_keep] = True
-        removed_triples = self.edgelist[:, ~mask]
+        removed_triples = cat([self.removed_triples, self.edgelist[:, ~mask]], dim=1)
 
         # Create a new KnowledgeGraph instance
         return self.__class__(
@@ -361,7 +361,7 @@ class KnowledgeGraph(Dataset):
         # Create masks for indices not to remove
         mask = torch.ones(self.n_triples, dtype=torch.bool)
         mask[indices_to_remove] = False
-        removed_triples = self.edgelist[:, ~mask]
+        removed_triples = cat([self.removed_triples, self.edgelist[:, ~mask]], dim=1)
 
         return self.__class__(
             edgelist=self.edgelist[:, mask],
@@ -471,7 +471,7 @@ class KnowledgeGraph(Dataset):
                         tensor(inverse_triple_id).repeat(subset.size(1)).unsqueeze(0)
                     ])
                 tmp_edgelist.append(new_triple)
-                tmp_removed.append(cat([
+                tmp_removed.append(torch.stack([
                     new_triple[1],
                     new_triple[0],
                     new_triple[2],
@@ -481,39 +481,6 @@ class KnowledgeGraph(Dataset):
             new_edgelist = cat(tmp_edgelist, dim=1)
             new_removed = cat(tmp_removed, dim=1)
             reverse_list.append((relation_id, inverse_relation_id))
-
-            # # Masks for the original relation
-            # mask = (self.relations == relation_id)
-
-            # # Add new inverse triples to the tensors
-            # new_head_idx.append(self.tail_idx[mask])
-            # new_tail_idx.append(self.head_idx[mask])
-            # new_relations.append(torch.full_like(self.relations[mask], inverse_relation_id))
-
-            # # Add facts to the dictionnaries
-            # for i in range(len(mask)):
-            #     if mask[i]:
-            #         h = self.head_idx[i].item()
-            #         t = self.tail_idx[i].item()
-
-            #         # Add original fact (a, r, b)
-            #         self.dict_of_heads.setdefault((t, relation_id), set()).add(h)  # (t, r) -> h
-            #         self.dict_of_tails.setdefault((h, relation_id), set()).add(t)  # (h, r) -> t
-            #         self.dict_of_rels.setdefault((h, t), set()).add(relation_id)  # (h, t) -> r
-
-            #         # Add inverse fact (b, r_inv, a)
-            #         self.dict_of_heads.setdefault((h, inverse_relation_id), set()).add(t)  # (h, r_inv) -> t
-            #         self.dict_of_tails.setdefault((t, inverse_relation_id), set()).add(h)  # (t, r_inv) -> h
-            #         self.dict_of_rels.setdefault((t, h), set()).add(inverse_relation_id)  # (t, h) -> r_inv
-
-            #         # Ajouter les combinaisons supplémentaires (b, r, a) et (a, r_inv, b)
-            #         self.dict_of_heads.setdefault((t, relation_id), set()).add(h)  # (t, r) -> h
-            #         self.dict_of_tails.setdefault((h, relation_id), set()).add(t)  # (h, r) -> t
-            #         self.dict_of_rels.setdefault((t, h), set()).add(relation_id)  # (t, h) -> r
-
-            #         self.dict_of_heads.setdefault((h, inverse_relation_id), set()).add(t)  # (h, r_inv) -> t
-            #         self.dict_of_tails.setdefault((t, inverse_relation_id), set()).add(h)  # (t, r_inv) -> h
-            #         self.dict_of_rels.setdefault((h, t), set()).add(inverse_relation_id)  # (h, t) -> r_inv
 
         return self.__class__(
                 edgelist=new_edgelist,
