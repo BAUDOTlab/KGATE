@@ -508,9 +508,10 @@ class Architect(Model):
                     for node in current_attribute.index:
                         node_idx = self.kg_train.ent2ix[node]
                         nt_idx = self.kg_train.node_types[node_idx]
+                        local_idx = self.kg_train.glob2loc[node_idx]
                         assert nt_idx == self.kg_train.nt2ix[node_type], f"The entity {node} is given as {node_type} but registered as {ix2nt[str(nt_idx)]} in the KG."
 
-                        input_features[node_idx] = tensor(current_attribute.loc[node], dtype=torch.double)
+                        input_features[local_idx] = tensor(current_attribute.loc[node], dtype=torch.double)
                     
                     self.node_embeddings.append(Parameter(input_features).to(self.device))
                 else:
