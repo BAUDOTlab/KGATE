@@ -510,7 +510,7 @@ class Architect(Model):
                         nt_idx = self.kg_train.node_types[node_idx]
                         assert nt_idx == self.kg_train.nt2ix[node_type], f"The entity {node} is given as {node_type} but registered as {ix2nt[str(nt_idx)]} in the KG."
 
-                        input_features[node_idx] = tensor(current_attribute[node,:], dtype=torch.double)
+                        input_features[node_idx] = tensor(current_attribute.loc[node], dtype=torch.double)
                     
                     self.node_embeddings.append(Parameter(input_features).to(self.device))
                 else:
@@ -925,7 +925,7 @@ class Architect(Model):
         
         
         if not isinstance(self.encoder, GNN):
-                self.node_embeddings.weight.data = normalize(self.node_embeddings.weight.data, p=2, dim=1)
+            self.node_embeddings.weight.data = normalize(self.node_embeddings.weight.data, p=2, dim=1)
             
         logging.debug(f"Normalized all embeddings")
 

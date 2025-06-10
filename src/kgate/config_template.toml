@@ -86,7 +86,7 @@ n_filters = 3
 # Supported options are :
 # - Positional : proposed by Socher et al. 2011, replaces either the head or tail of a triplet by another entity in the same place with the same relation.
 # - Uniform : proposed by Bordes et al. 2013, replaces either the head or tail by another entity at random following an uniform distribution.
-# - Bernouilli : proposed by Wang et al. 2014, replaces either the head or tail using probabilities taking relations into account.
+# - Bernoulli : proposed by Wang et al. 2014, replaces either the head or tail using probabilities taking relations into account.
 # - Mixed : proposed by Brière et al. 2025, combines the three negative samplers above, sampling n_neg negative samples for each triplet.
 name = "Positional"
 
