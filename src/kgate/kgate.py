@@ -504,14 +504,14 @@ class Architect(Model):
                 if node_type in attributes:
                     current_attribute: pd.DataFrame = attributes[node_type]
                     assert current_attribute.shape[0] == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
-                    input_features = torch.zeros((num_nodes,current_attribute.shape[1]), dtype=torch.double)
+                    input_features = torch.zeros((num_nodes,current_attribute.shape[1]), dtype=torch.float)
                     for node in current_attribute.index:
                         node_idx = self.kg_train.ent2ix[node]
                         nt_idx = self.kg_train.node_types[node_idx]
                         local_idx = self.kg_train.glob2loc[node_idx]
                         assert nt_idx == self.kg_train.nt2ix[node_type], f"The entity {node} is given as {node_type} but registered as {ix2nt[str(nt_idx)]} in the KG."
 
-                        input_features[local_idx] = tensor(current_attribute.loc[node], dtype=torch.double)
+                        input_features[local_idx] = tensor(current_attribute.loc[node], dtype=torch.float)
                     
                     self.node_embeddings.append(Parameter(input_features).to(self.device))
                 else:
