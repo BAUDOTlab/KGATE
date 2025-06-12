@@ -122,7 +122,6 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
         self.filt_rank_true_tails = self.filt_rank_true_tails.to(device)
         edgelist = knowledge_graph.edgelist.to(device)
         
-        embeddings = node_embeddings.weight.data
 
         for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                              unit="batch", disable=(not verbose),
@@ -143,9 +142,13 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 
                 input = knowledge_graph.get_encoder_input(edgelist[:, edge_mask], node_embeddings)
                 encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
-        
+                
+                embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, decoder.emb_dim), device=device, dtype=torch.float)
+
                 for node_type, idx in input.mapping.items():
                     embeddings[idx] = encoder_output[node_type]
+            else:
+                embeddings = node_embeddings.weight.data
 
             h_emb, t_emb, r_emb, candidates = decoder.inference_prepare_candidates(h_idx = h_idx, 
                                                                                    t_idx = t_idx, 

@@ -1,4 +1,5 @@
 import os
+from glob import glob
 from inspect import signature
 from pathlib import Path
 from torchkge import KnowledgeGraph
@@ -9,7 +10,7 @@ from torch import tensor, long, stack, Tensor
 from torch.nn import Parameter
 from torch.nn.functional import normalize
 from torch.utils.data import DataLoader
-from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, init_embedding, plot_learning_curves
+from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, init_embedding, plot_learning_curves, save_config
 from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .encoders import *
 from .decoders import *
@@ -564,6 +565,17 @@ class Architect(Model):
             trainer = trainer
         )
 
+        # If we find an identical config we resume training from it, otherwise we clean the checkpoints directory.
+        existing_config_path: Path = Path(self.config["output_directory"]).joinpath("kgate_conf.toml")
+        if existing_config_path.exists():
+            existing_config = parse_config(str(existing_config_path), {})
+            if existing_config == self.config:
+                all_checkpoints = glob(f"{self.checkpoints_dir}/checkpoint_*.pt")
+                checkpoint_file = checkpoint_file or Path(max(all_checkpoints, key=os.path.getctime))
+                logging.info("Found previous run with the same parameters in the output folder...   ")
+        elif self.checkpoints_dir.exists() and len(os.listdir(self.checkpoints_dir)) > 0:
+            self.checkpoints_dir.unlink()
+
         # trainer.add_event_handler(Events.EPOCH_STARTED, self.encoder_pass)
 
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.log_metrics_to_csv)
@@ -633,6 +645,7 @@ class Architect(Model):
             to_save
         )
 
+        save_config(self.config)
 
         if checkpoint_file is not None:
             if Path(checkpoint_file).is_file():

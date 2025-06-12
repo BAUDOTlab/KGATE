@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import tomllib
+import tomli_w
 import random
 import logging 
 import pickle
@@ -80,6 +81,23 @@ def set_config_key(key: str, default: dict, config: dict | None = None, inline: 
             return config_value
     else:
         return inline_value
+
+def save_config(config:dict, filename:Path | None = None):
+    """Saves the Architect configuration as a TOML file.
+    
+    If no filename is given, it will be created as config.output_directory/kgate_config.toml.
+    
+    Parameters
+    ----------
+    config: dict
+        The parsed config as a python dictionnary.
+    filename: Path (optional)
+        The complete path to the configuration file. If one already exists, it will be overwritten."""
+        
+    config_path = filename or Path(config["output_directory"]).joinpath("kgate_config.toml")
+
+    with open(config_path, "wb") as f:
+        tomli_w.dump(config,f)
 
 def load_knowledge_graph(pickle_filename: Path) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """Load the knowledge graph from pickle files."""
