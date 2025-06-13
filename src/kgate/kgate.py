@@ -1,5 +1,6 @@
 import os
 from glob import glob
+import shutil
 from inspect import signature
 from pathlib import Path
 from torchkge import KnowledgeGraph
@@ -566,23 +567,21 @@ class Architect(Model):
         )
 
         # If we find an identical config we resume training from it, otherwise we clean the checkpoints directory.
-        existing_config_path: Path = Path(self.config["output_directory"]).joinpath("kgate_conf.toml")
+        existing_config_path: Path = Path(self.config["output_directory"]).joinpath("kgate_config.toml")
         if existing_config_path.exists():
             existing_config = parse_config(str(existing_config_path), {})
             if existing_config == self.config:
                 all_checkpoints = glob(f"{self.checkpoints_dir}/checkpoint_*.pt")
                 checkpoint_file = checkpoint_file or Path(max(all_checkpoints, key=os.path.getctime))
-                logging.info("Found previous run with the same parameters in the output folder...   ")
+                logging.info("Found previous run with the same configuration in the output folder...   ")
         elif self.checkpoints_dir.exists() and len(os.listdir(self.checkpoints_dir)) > 0:
-            self.checkpoints_dir.unlink()
+            shutil.rmtree(self.checkpoints_dir)
 
         # trainer.add_event_handler(Events.EPOCH_STARTED, self.encoder_pass)
 
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.log_metrics_to_csv)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.clean_memory)
-        trainer.add_event_handler(Events.EPOCH_COMPLETED(every=self.eval_interval), self.evaluate)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.update_scheduler)
-        trainer.add_event_handler(Events.EPOCH_COMPLETED(every=self.eval_interval), early_stopping)
 
         trainer.add_event_handler(Events.COMPLETED, self.on_training_completed)
 
@@ -639,6 +638,8 @@ class Architect(Model):
             atomic=True
         )
 
+        trainer.add_event_handler(Events.EPOCH_COMPLETED(every=self.eval_interval), self.evaluate)
+        trainer.add_event_handler(Events.EPOCH_COMPLETED(every=self.eval_interval), early_stopping)
         trainer.add_event_handler(
             Events.EPOCH_COMPLETED(every=self.eval_interval),
             checkpoint_best_handler,
