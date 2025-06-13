@@ -101,7 +101,10 @@ class KnowledgeGraph(Dataset):
 
         if df is None:
             self.n_nodes = cat([self.head_idx, self.tail_idx]).unique().size(0)
-            self.node_types = torch.zeros(self.n_ent, dtype=torch.long)
+            # The mapping is done on the absolute index of nodes. However, subgraphs don't have all the nodes
+            # Thus, we must initialize the tensor at -1 to avoid downstream issue with the node_type 0 being 
+            # broadcasted to missing nodes in subgraphs.
+            self.node_types = torch.ones(self.n_nodes, dtype=torch.long).neg()
 
             for tri_type in self.triples.unique():
                 h_t, t_t = self.triple_types[tri_type][0], self.triple_types[tri_type][2]
