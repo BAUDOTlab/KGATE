@@ -476,22 +476,12 @@ class Architect(Model):
         logging.info(f"Using {self.config["evaluation"]["objective"]} evaluator.")
         return evaluator
 
-    def train_model(self, checkpoint_file: Path | None = None, attributes: Dict[str,pd.DataFrame]={}):
-        """Launch the training procedure of the Architect.
+    def initialize_model(self, attributes: Dict[str,pd.DataFrame]={}):
+        """Initializes every components of the model. This is done automatically by running the train_model method.
         
         Arguments:
-            checkpoint_file: The path to the checkpoint file to load and resume a previous training. If None, the training will start from scratch.
             attributes: dict(node_type, embedding) containing the embedding for each type of node.
-            """
-        use_cuda = "all" if self.device.type == "cuda" else None
-
-        training_config: dict = self.config["training"]
-        self.max_epochs: int = training_config["max_epochs"]
-        self.train_batch_size: int = training_config["train_batch_size"]
-        self.patience: int = training_config["patience"]
-        self.eval_interval: int = training_config["eval_interval"]
-        self.save_interval: int = training_config["save_interval"]
-
+        """
         logging.info("Initializing encoder...")
         self.encoder = self.encoder or self.initialize_encoder()
 
@@ -519,6 +509,9 @@ class Architect(Model):
                 else:
                     emb = init_embedding(num_nodes, self.emb_dim, self.device)
                     self.node_embeddings.append(emb.weight)
+            # The input features are not supposed to change if we use an encoder
+            self.node_embeddings = self.node_embeddings.requires_grad_(False)
+
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
 
@@ -539,6 +532,24 @@ class Architect(Model):
 
         logging.info("Initializing evaluator...")
         self.evaluator = self.evaluator or self.initialize_evaluator()
+
+    def train_model(self, checkpoint_file: Path | None = None, attributes: Dict[str,pd.DataFrame]={}):
+        """Launch the training procedure of the Architect.
+        
+        Arguments:
+            checkpoint_file: The path to the checkpoint file to load and resume a previous training. If None, the training will start from scratch.
+            attributes: dict(node_type, embedding) containing the embedding for each type of node.
+            """
+        use_cuda = "all" if self.device.type == "cuda" else None
+
+        training_config: dict = self.config["training"]
+        self.max_epochs: int = training_config["max_epochs"]
+        self.train_batch_size: int = training_config["train_batch_size"]
+        self.patience: int = training_config["patience"]
+        self.eval_interval: int = training_config["eval_interval"]
+        self.save_interval: int = training_config["save_interval"]
+
+        self.initialize_model(attributes=attributes)
 
         self.training_metrics_file: Path = Path(self.config["output_directory"], "training_metrics.csv")
 
