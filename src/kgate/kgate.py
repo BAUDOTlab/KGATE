@@ -929,7 +929,13 @@ class Architect(Model):
         self.normalize_parameters()
         
         if isinstance(self.node_embeddings, nn.ParameterList):
-            ent_emb = self.node_embeddings
+            input = self.kg_train.get_encoder_input(self.kg_train.edgelist.to(self.device), self.node_embeddings)
+
+            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
+            ent_emb: torch.Tensor = torch.zeros((self.n_ent, self.emb_dim), device=self.device, dtype=torch.float)
+
+            for node_type, idx in input.mapping.items():
+                ent_emb[idx] = encoder_output[node_type]
         else:
             ent_emb = self.node_embeddings.weight.data
 
