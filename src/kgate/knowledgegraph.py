@@ -104,7 +104,7 @@ class KnowledgeGraph(Dataset):
             # The mapping is done on the absolute index of nodes. However, subgraphs don't have all the nodes
             # Thus, we must initialize the tensor at -1 to avoid downstream issue with the node_type 0 being 
             # broadcasted to missing nodes in subgraphs.
-            self.node_types = torch.ones(self.n_nodes, dtype=torch.long).neg()
+            self.node_types = torch.ones(self.n_ent, dtype=torch.long).neg()
 
             for tri_type in self.triples.unique():
                 h_t, t_t = self.triple_types[tri_type][0], self.triple_types[tri_type][2]
@@ -127,7 +127,7 @@ class KnowledgeGraph(Dataset):
 
             i = 0
             self.n_nodes = self.n_ent
-            self.node_types = torch.ones(self.n_nodes, dtype=torch.long).neg()
+            self.node_types = torch.ones(self.n_ent, dtype=torch.long).neg()
 
             for rel, group in mapping_df.groupby("rel"):
                 relation = self.rel2ix[rel]

@@ -581,8 +581,8 @@ class Architect(Model):
         existing_config_path: Path = Path(self.config["output_directory"]).joinpath("kgate_config.toml")
         if existing_config_path.exists():
             existing_config = parse_config(str(existing_config_path), {})
-            if existing_config == self.config:
-                all_checkpoints = glob(f"{self.checkpoints_dir}/checkpoint_*.pt")
+            all_checkpoints = glob(f"{self.checkpoints_dir}/checkpoint_*.pt")
+            if existing_config == self.config and len(all_checkpoints) > 0:
                 checkpoint_file = checkpoint_file or Path(max(all_checkpoints, key=os.path.getctime))
                 logging.info("Found previous run with the same configuration in the output folder...   ")
         elif self.checkpoints_dir.exists() and len(os.listdir(self.checkpoints_dir)) > 0:
@@ -922,7 +922,7 @@ class Architect(Model):
                                   r_idx = r_idx, 
                                   t_idx = t_idx)
 
-    def get_embeddings(self) -> Tuple[Tensor | nn.ParameterList, Tensor, Any | None]:
+    def get_embeddings(self) -> Tuple[Tensor, Tensor, Any | None]:
         """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.
         
         If the encoder uses heteroData, a dict of {node_type : embedding} is returned for entity embeddings instead of a tensor."""
