@@ -701,6 +701,9 @@ class KnowledgeGraph(Dataset):
             h_type, _, t_type = edge_type
 
             mask: Tensor = data[3] == triple_id
+            # Apparently, PyG convolutional layers crash if the edge_index has less than 3 elements.
+            if mask.sum() < 3:
+                continue
             triples = data[:, mask]
 
             src = triples[0]
