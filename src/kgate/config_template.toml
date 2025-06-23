@@ -149,6 +149,10 @@ eval_batch_size = 32
 # Number of epochs between which a checkpoint is saved to retain the training state of a model.
 save_interval = 5
 
+# Either the absolute path toward a pretrained checkpoint, or "auto" to let KGATE find automatically the latest
+# Embeddings in the output_directory.
+pretrained_embeddings = "auto"
+    
 [evaluation]
 # Type of evaluation to be run on the validation and testing set.
 # Supported options are :

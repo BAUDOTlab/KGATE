@@ -1,12 +1,15 @@
 import torch.nn as nn
+import torch
 from torch import Tensor
-from torch_geometric.nn import HeteroConv, GATv2Conv, SAGEConv
+from torch_geometric.nn import HeteroConv, GATv2Conv, SAGEConv, Node2Vec
 from torch_geometric.data import HeteroData
 
 from typing import List, Dict, Tuple
 from .utils import HeteroMappings
 
-from copy import deepcopy
+from pathlib import Path
+import sys
+from tqdm import tqdm
 import logging
 log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
 logging.basicConfig(
@@ -64,3 +67,41 @@ class GCNEncoder(GNN):
                 aggr=self.aggr
             ).to(device)
             self.convs.append(conv)
+
+class Node2VecEncoder:
+    def __init__(self, 
+                 edge_index: Tensor, 
+                 emb_dim: int, 
+                 walk_length: int, 
+                 context_size:int, 
+                 device: torch.device, 
+                 output_dir: Path, 
+                 **node2vec_kwargs):
+        self.device = device
+        self.outdir = output_dir
+        self.model = Node2Vec(
+            edge_index=edge_index,
+            embedding_dim=emb_dim,
+            walk_length=walk_length,
+            context_size=context_size,
+            **node2vec_kwargs
+        ).to(device)
+
+        num_workers = 4 if sys.platform == 'linux' else 0
+        self.loader = self.model.loader(batch_size=128, shuffle=True, num_workers=num_workers)
+        self.optimizer = torch.optim.SparseAdam(list(self.model.parameters()), lr=0.01)
+    
+    def generate_embeddings(self):
+        for epoch in range(1,101):
+            epoch_loss = 0
+            for pos_rw, neg_rw in tqdm(self.loader):
+                self.optimizer.zero_grad()
+                loss = self.model.loss(pos_rw.to(self.device), neg_rw.to(self.device))
+                loss.backward()
+                self.optimizer.step()
+                epoch_loss += loss.item()
+            
+            logging.info(f"Epoch {epoch: 03d}, Embedding Loss: {loss: .4f}")
+
+        torch.save(self.model.embedding, self.outdir.joinpath("embeddings_node2vec.pt"))
+        logging.info(f"Embedding fully generated, saved in {self.outdir}")

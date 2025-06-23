@@ -219,6 +219,8 @@ class Architect(Model):
                 encoder = GCNEncoder(self.kg_train.triple_types, self.emb_dim, gnn_layers)
             case "GAT":
                 encoder = GATEncoder(self.kg_train.triple_types, self.emb_dim, gnn_layers)
+            case "Node2vec":
+                encoder = Node2VecEncoder(self.kg_train.edge_index, self.emb_dim, device=self.device, **encoder_config["params"])
             case _:
                 encoder = DefaultEncoder()
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
@@ -301,6 +303,9 @@ class Architect(Model):
                 criterion = BinaryCrossEntropyLoss()
             case "DistMult":
                 decoder = DistMult(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
+                criterion = BinaryCrossEntropyLoss()
+            case "ComplEx":
+                decoder = ComplEx(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
                 criterion = BinaryCrossEntropyLoss()
             case "ConvKB":
                 decoder = ConvKB(self.emb_dim, n_filters, self.kg_train.n_ent, self.kg_train.n_rel)
@@ -476,17 +481,20 @@ class Architect(Model):
         logging.info(f"Using {self.config["evaluation"]["objective"]} evaluator.")
         return evaluator
 
-    def initialize_model(self, attributes: Dict[str,pd.DataFrame]={}):
+    def initialize_model(self, attributes: Dict[str,pd.DataFrame]={}, pretrained: Path | None = None):
         """Initializes every components of the model. This is done automatically by running the train_model method.
         
         Arguments:
             attributes: dict(node_type, embedding) containing the embedding for each type of node.
+            pretrained: path to the pretrained embeddings
         """
         logging.info("Initializing encoder...")
         self.encoder = self.encoder or self.initialize_encoder()
 
         logging.info("Initializing embeddings...")
-        if not isinstance(self.encoder, GNN):
+        if pretrained is not None and pretrained.exists():
+            self.node_embeddings = torch.load(pretrained)
+        elif not isinstance(self.encoder, GNN):
             self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
         else:
             self.node_embeddings = nn.ParameterList()
@@ -533,12 +541,30 @@ class Architect(Model):
         logging.info("Initializing evaluator...")
         self.evaluator = self.evaluator or self.initialize_evaluator()
 
-    def train_model(self, checkpoint_file: Path | None = None, attributes: Dict[str,pd.DataFrame]={}):
+    def train_model(self, checkpoint_file: Path | None = None, attributes: Dict[str,pd.DataFrame]={}, dry_run = False):
         """Launch the training procedure of the Architect.
         
+        This function runs the whole training from end to end, leaving out only the evaluation on the test set.
+        It uses the `initialize_model` function to prepare the autoencoder as well as the optimizer, negative sampler,
+        learning rate scheduler and evaluator.
+        The training is executed through a `PyTorch Ignite` `Engine` with a collection of events and parameters:
+        - `RunningAverage` to compute the running loss across the batches of the same epoch.
+        - `EarlyStopping` to stop the training if the validation MRR does not progress after a number of epochs
+            set in the configuration parameters.
+        - `Checkpoint` save at a configured interval.
+        - Evaluation on the validation set at a configured interval.
+        - Metrics logging at each epoch, in the `training_metrics.csv` output file.
+
+        Notes
+        -----
+        If there is already a configuration file in the output folder identical to the current configuration, KGATE will
+        automatically attempt to restart the training from the most recent checkpoint in the `checkpoints/` folder. Otherwise,
+        the output folder will be cleaned and the current configuration will be written as `kgate_config.toml`
+
         Arguments:
             checkpoint_file: The path to the checkpoint file to load and resume a previous training. If None, the training will start from scratch.
             attributes: dict(node_type, embedding) containing the embedding for each type of node.
+            dry_run: Initialize every variable and the trainer, but doesn't start the training.
             """
         use_cuda = "all" if self.device.type == "cuda" else None
 
@@ -549,7 +575,16 @@ class Architect(Model):
         self.eval_interval: int = training_config["eval_interval"]
         self.save_interval: int = training_config["save_interval"]
 
-        self.initialize_model(attributes=attributes)
+        match training_config["pretrained_embeddings"]:
+            case "auto":
+                pretrained = Path(self.config["output_directory"]).joinpath("embeddings.pt")
+            case "":
+                pretrained = None
+            case _:
+                pretrained = Path(training_config["pretrained_embeddings"])
+                if not pretrained.exists(): pretrained = None
+        
+        self.initialize_model(attributes=attributes, pretrained=pretrained)
 
         self.training_metrics_file: Path = Path(self.config["output_directory"], "training_metrics.csv")
 
@@ -672,20 +707,19 @@ class Architect(Model):
 
                 if trainer.state.epoch < self.max_epochs:
                     logging.info(f"Starting from epoch {trainer.state.epoch}")
-                    trainer.run(iterator)
+                    if not dry_run:
+                        trainer.run(iterator)
                 else:
                     logging.info(f"Training already completed. Last epoch is {trainer.state.epoch} and max_epochs is set to {self.max_epochs}")
             else:
                 logging.info(f"Checkpoint file {checkpoint_file} does not exist. Starting training from scratch.")
-                trainer.run(iterator, max_epochs=self.max_epochs)
+                if not dry_run:
+                    trainer.run(iterator, max_epochs=self.max_epochs)
         else:
-            self.normalize_parameters()
-            trainer.run(iterator, max_epochs=self.max_epochs)
+            if not dry_run:
+                self.normalize_parameters()
+                trainer.run(iterator, max_epochs=self.max_epochs)
     
-        #################
-        # Report metrics
-        #################
-        plot_learning_curves(self.training_metrics_file, self.config["output_directory"], self.validation_metric)
 
     def test(self):
         torch.cuda.empty_cache()
@@ -805,6 +839,7 @@ class Architect(Model):
         return pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
 
     def load_best_model(self):
+        """Load into memory the checkpoint corresponding to the highest-performing model on the validation set."""
         _, nt_count = self.kg_train.node_types.unique(return_counts=True)
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
@@ -836,8 +871,11 @@ class Architect(Model):
         logging.info("Best model successfully loaded.")
 
 
-    def forward(self, pos_batch, neg_batch):
+    def forward(self, pos_batch, neg_batch) -> Tuple[Tensor,Tensor]:
+        """Forward pass of the Architect"""
         pos: Tensor = self.scoring_function(pos_batch, self.kg_train)
+        # The loss function requires the pos and neg tensors to be of the same size,
+        # Thus we duplicate the pos tensor as needed to match the neg.
         n_neg = neg_batch.size(1) // pos_batch.size(1)
         pos = pos.repeat(n_neg)
 
@@ -1018,7 +1056,10 @@ class Architect(Model):
     
     ##### Late stopping
     def on_training_completed(self, engine: Engine):
+        """Plot the training loss and validation MRR curves once the training is over."""
         logging.info(f"Training completed after {engine.state.epoch} epochs.")
+
+        plot_learning_curves(self.training_metrics_file, self.config["output_directory"], self.validation_metric)
 
     # TODO : create a script to isolate prediction functions. Maybe a Predictor class?
     def categorize_test_nodes(self, relation_name: str, threshold: int) -> Tuple[List[int], List[int]]:
