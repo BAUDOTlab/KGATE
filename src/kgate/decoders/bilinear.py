@@ -1,4 +1,4 @@
-from torchkge.models import DistMultModel, RESCALModel, AnalogyModel
+from torchkge.models import DistMultModel, RESCALModel, AnalogyModel, ComplExModel
 from torch.nn.functional import normalize
 import torch
 from torch import matmul, tensor, Tensor, nn, split
@@ -111,3 +111,50 @@ class DistMult(DistMultModel):
         candidates = candidates.unsqueeze(0).expand(b_size, -1, -1)
         
         return h, t, r, candidates
+
+class ComplEx(ComplExModel):
+    def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
+        super().__init__(emb_dim, n_entities, n_relations)
+        del self.re_ent_emb
+        del self.re_rel_emb
+
+    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, h_idx:Tensor, t_idx:Tensor, r_idx: Tensor, **_):
+        im_h = self.im_ent_emb(h_idx)
+        im_t = self.im_ent_emb(t_idx)
+        im_r = self.im_rel_emb(r_idx)
+
+        return (h_emb * (r_emb * t_emb + im_r * im_t) + 
+                im_h * (r_emb * im_t - im_r * t_emb)).sum(dim=1)
+    
+    def get_embeddings(self):
+        return self.im_ent_emb.weight.data, self.im_rel_emb.weight.data
+    
+    def inference_prepare_candidates(self, *, 
+                                    h_idx: Tensor, 
+                                    t_idx: Tensor, 
+                                    r_idx: Tensor, 
+                                    node_embeddings: Tensor, 
+                                    relation_embeddings: nn.Embedding,
+                                    entities: bool =True) -> Tuple[
+                                        Tuple[Tensor, Tensor], 
+                                        Tuple[Tensor, Tensor],
+                                        Tuple[Tensor, Tensor],
+                                        Tuple[Tensor, Tensor]]:
+        b_size = h_idx.shape[0]
+
+        re_h, im_h = node_embeddings[h_idx], self.im_ent_emb(h_idx)
+        re_t, im_t = node_embeddings[t_idx], self.im_ent_emb(t_idx)
+        re_r, im_r = node_embeddings[r_idx], self.im_ent_emb(r_idx)
+
+        if entities:
+            re_candidates = node_embeddings
+            im_candidates = self.im_ent_emb
+        else:
+            re_candidates = relation_embeddings
+            im_candidates = self.im_rel_emb
+        
+        re_candidates = re_candidates.unsqueeze(0).expand(b_size, -1, -1)
+        im_candidates = im_candidates.unsqueeze(0).expand(b_size, -1, -1)
+
+        return (re_h, im_h), (re_t, im_t), (re_r, im_r), (re_candidates, im_candidates)
+    

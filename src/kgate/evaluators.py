@@ -108,18 +108,15 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             Indicates whether a progress bar should be displayed during
             evaluation.
         """
-        self.rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long()
-        self.rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long()
-        self.filt_rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long()
-        self.filt_rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long()
         device = relation_embeddings.weight.device
         use_cuda = relation_embeddings.weight.is_cuda
 
+        self.rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long().to(device)
+        self.rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long().to(device)
+        self.filt_rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long().to(device)
+        self.filt_rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long().to(device)
+
         dataloader = DataLoader(knowledge_graph, batch_size=b_size)
-        self.rank_true_heads = self.rank_true_heads.to(device)
-        self.rank_true_tails = self.rank_true_tails.to(device)
-        self.filt_rank_true_heads = self.filt_rank_true_heads.to(device)
-        self.filt_rank_true_tails = self.filt_rank_true_tails.to(device)
         edgelist = knowledge_graph.edgelist.to(device)
         
 
