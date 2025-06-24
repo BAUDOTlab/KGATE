@@ -216,15 +216,11 @@ def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tu
     return n_duplicates, n_rev_duplicates
 
 def find_best_model(dir: Path):
-    try:
-        best = max(
-            (f for f in os.listdir(dir) if f.startswith("best_model_checkpoint_val_metrics=") and f.endswith(".pt")),
-            key=lambda f: float(f.split("val_metrics=")[1].rstrip(".pt")),
-            default=None
-        )
-        return best
-    except ValueError:
-        return False
+    return max(
+        (f for f in os.listdir(dir) if f.startswith("best_model_checkpoint_val_metrics=") and f.endswith(".pt")),
+        key=lambda f: float(f.split("val_metrics=")[1].rstrip(".pt")),
+        default=None
+    )
     
 def init_embedding(num_embeddings: int, emb_dim: int, device:str="cpu"):
     embedding = nn.Embedding(num_embeddings, emb_dim, device=device)

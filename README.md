@@ -26,7 +26,7 @@ config_path = "/path/to/your/config.toml"
 architect = Architect(config = config_path)
 
 # Train the model using KG and hyperparameters specified in the configuration
-architect.train()
+architect.train_model()
 
 # Test the trained model, using the best checkpoint
 architect.test()
