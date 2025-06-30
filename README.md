@@ -23,7 +23,7 @@ from kgate import Architect
 
 config_path = "/path/to/your/config.toml"
 
-architect = Architect(config = config_path)
+architect = Architect(config_path = config_path)
 
 # Train the model using KG and hyperparameters specified in the configuration
 architect.train_model()
