@@ -739,11 +739,11 @@ class Architect(Model):
         remaining_relations = all_relations - set(list_rel_1) - set(list_rel_2)
         remaining_relations = list(remaining_relations)
 
-        total_metrics_sum_list_1, fact_count_list_1, individual_metricss_list_1, group_metrics_list_1 = self.calculate_metrics_for_relations(
+        total_metrics_sum_list_1, fact_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_relations(
             self.kg_test, list_rel_1)
-        total_metrics_sum_list_2, fact_count_list_2, individual_metricss_list_2, group_metrics_list_2 = self.calculate_metrics_for_relations(
+        total_metrics_sum_list_2, fact_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_relations(
             self.kg_test, list_rel_2)
-        total_metrics_sum_remaining, fact_count_remaining, individual_metricss_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
+        total_metrics_sum_remaining, fact_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
             self.kg_test, remaining_relations)
 
         global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (fact_count_list_1 + fact_count_list_2 + fact_count_remaining)
@@ -754,15 +754,15 @@ class Architect(Model):
             "Global_metrics": global_metrics,
             "made_directed_relations": {
                 "Global_metrics": group_metrics_list_1,
-                "Individual_metricss": individual_metricss_list_1
+                "Individual_metrics": individual_metrics_list_1
             },
             "target_relations": {
                 "Global_metrics": group_metrics_list_2,
-                "Individual_metricss": individual_metricss_list_2
+                "Individual_metrics": individual_metrics_list_2
             },
             "remaining_relations": {
                 "Global_metrics": group_metrics_remaining,
-                "Individual_metricss": individual_metricss_remaining
+                "Individual_metrics": individual_metrics_remaining
             },
             "target_relations_by_frequency": {}  
         }
@@ -781,6 +781,7 @@ class Architect(Model):
                 "Threshold": threshold
             }
                 
+        self.test_results = results
         
         with open(metrics_file, "w") as file:
             yaml.dump(results, file, default_flow_style=False, sort_keys=False)
