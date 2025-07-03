@@ -702,8 +702,8 @@ class KnowledgeGraph(Dataset):
 
             mask: Tensor = data[3] == triple_id
             # Apparently, PyG convolutional layers crash if the edge_index has less than 3 elements.
-            if mask.sum() < 3:
-                continue
+            # if mask.sum() < 10:
+            #     continue
             triples = data[:, mask]
 
             src = triples[0]
@@ -723,10 +723,17 @@ class KnowledgeGraph(Dataset):
             ], dim=0)
 
             edge_indices[edge_type] = edge_index.to(device)
-            
+        
+        self.glob2loc = self.glob2loc.to(device)
         for ntype, idx in node_ids.items():
-            loc_idx = self.glob2loc.to(device)[idx]
+            loc_idx = self.glob2loc[idx]
             x_dict[ntype] = node_embedding[self.nt2ix[ntype]][loc_idx] #torch.index_select(node_embedding.weight.data, 0, idx)
+            
+            # We add self-loops to each nodes, to make sure they are their own neighbors.
+            edge_type = (ntype, "self", ntype)
+            self_loops = torch.arange(idx.size(0), device=device)
+            edge_index_self = torch.stack([self_loops, self_loops], dim=0)
+            edge_indices[edge_type] = edge_index_self
 
         return EncoderInput(x_dict, edge_indices, node_ids)
 
