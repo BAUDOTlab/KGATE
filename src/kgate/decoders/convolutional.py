@@ -1,6 +1,19 @@
-from torchkge.models import ConvKBModel
+"""
+Convolutional decoder classes for training and inference.
+
+Original code for the samplers from TorchKGE developers
+@author: Armand Boschin <aboschin@enst.fr>
+
+Modifications and additional functionalities added by Benjamin Loire <benjamin.loire@univ-amu.fr>:
+- 
+
+The modifications are licensed under the BSD license according to the source license.
+"""
+
 from torch import Tensor, cat
 import torch.nn as nn
+
+from torchkge.models import ConvKBModel
 
 # Code adapted from torchKGE's implementation
 # 

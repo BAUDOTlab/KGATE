@@ -1,30 +1,29 @@
+"""Collections of encoder classes to embed the graph structure into a latent space."""
+
+import sys
+import logging
+from pathlib import Path
+from typing import List, Dict, Tuple
+
+from tqdm import tqdm
+
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
 from torch import Tensor
+
 from torch_geometric.nn import HeteroConv, GATv2Conv, SAGEConv, Node2Vec
-from torch_geometric.data import HeteroData
 
-from typing import List, Dict, Tuple
-from .utils import HeteroMappings
-
-from pathlib import Path
-import sys
-from tqdm import tqdm
-import logging
 log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
 logging.basicConfig(
     level=log_level,  
     format="%(asctime)s - %(levelname)s - %(message)s" 
 )
+
 class DefaultEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.deep = False
-
-    def forward(self, node_embeddings: nn.ModuleList, node_types: List[str]):
-        device = node_embeddings[0].weight.device
-        return {node_type: embedding.weight.data.to(device) for node_type, embedding in zip(mappings.hetero_node_type, node_embeddings)}
 
 class GNN(nn.Module):
     def __init__(self, edge_types: List[Tuple[str,str,str]], add_self_loops: bool =True, aggr:str="sum"):

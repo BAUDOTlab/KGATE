@@ -1,11 +1,25 @@
-from torch import tensor, bernoulli, randint, ones, rand, cat
+"""
+Negative sampling classes, to generate negative triplets during training.
+
+Original code for the samplers from TorchKGE developers
+@author: Armand Boschin <aboschin@enst.fr>
+
+Modifications and additional functionalities added by Benjamin Loire <benjamin.loire@univ-amu.fr>:
+- 
+
+The modifications are licensed under the BSD license according to the source license.
+"""
+
+from typing import Dict, Set
+
 import torch
-import torchkge
-from torchkge.sampling import get_possible_heads_tails, NegativeSampler
-import torchkge.sampling
-from .knowledgegraph import KnowledgeGraph
-from typing import Tuple, List, Dict, Set
+from torch import tensor, bernoulli, randint, ones, rand, cat
 from torch.types import Number, Tensor
+
+import torchkge
+import torchkge.sampling
+
+from .knowledgegraph import KnowledgeGraph
 
 class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
     """Adaptation of torchKGE's PositionalNegativeSampler to KGATE's edgelist format.
@@ -280,7 +294,7 @@ class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
 
         return torch.stack(corrupted_triples, dim=1).long().to(device)
         
-class MixedNegativeSampler(NegativeSampler):
+class MixedNegativeSampler(torchkge.sampling.NegativeSampler):
     """
     A custom negative sampler that combines the BernoulliNegativeSampler
     and the PositionalNegativeSampler. For each triplet, it samples `n_neg` negative samples

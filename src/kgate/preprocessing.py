@@ -1,14 +1,19 @@
-import pandas as pd
-import pickle
+"""Knowledge Graph preprocessing functions to run before any training procedure."""
+
 from pathlib import Path
 import logging
+import pickle
+from typing import Tuple, List, Set
+
+import pandas as pd
+
 import torch
 from torch import cat
 
+import torchkge
+
 from .utils import set_random_seeds, compute_triplet_proportions
 from .knowledgegraph import KnowledgeGraph
-import torchkge
-from typing import Tuple, List, Set
 
 SUPPORTED_SEPARATORS = [",","\t",";"]
 

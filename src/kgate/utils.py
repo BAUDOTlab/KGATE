@@ -1,23 +1,28 @@
-import torch
-import torch.nn as nn
-from torch_geometric.data import HeteroData
-from torch import cat, Tensor
-import pandas as pd 
-import numpy as np
-from pathlib import Path
+"""Utility functions for Knowledge Graph manipulation, data visualisation or file handling."""
+
+import os
 import tomllib
 import tomli_w
 import random
 import logging 
 import pickle
-import os
+from pathlib import Path
 from importlib.resources import open_binary
+from typing import List, Tuple, Literal
+
+import pandas as pd 
+import numpy as np
 import matplotlib.pyplot as plt
 
-from typing import List, Tuple, Literal
+import torch
+import torch.nn as nn
+from torch import cat, Tensor
+
+from torch_geometric.data import HeteroData
+
 from .knowledgegraph import KnowledgeGraph
 
-log_level = logging.INFO# if config["common"]["verbose"] else logging.WARNING
+log_level = logging.INFO
 logging.basicConfig(
     level=log_level,  
     format="%(asctime)s - %(levelname)s - %(message)s" 

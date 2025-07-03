@@ -1,15 +1,25 @@
-from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel, TorusEModel
-from torch.nn.functional import normalize
-from torch import nn, tensor, split, matmul, Tensor
-from torch.cuda import empty_cache
-import torch
+"""
+Translational decoder classes for training and inference.
+
+Original code for the samplers from TorchKGE developers
+@author: Armand Boschin <aboschin@enst.fr>
+
+Modifications and additional functionalities added by Benjamin Loire <benjamin.loire@univ-amu.fr>:
+- 
+
+The modifications are licensed under the BSD license according to the source license.
+"""
+
+from typing import Tuple
+
 from tqdm import tqdm
 
-from typing import Tuple, List
-from ..utils import HeteroMappings
+from torch.nn.functional import normalize
+from torch import nn, tensor, matmul, Tensor
+from torch.cuda import empty_cache
 
-# Code adapted from torchKGE's implementation
-# https://github.com/torchkge-team/torchkge/blob/3adb9344dec974fc29d158025c014b0dcb48118c/torchkge/models/translation.py#L18
+from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel, TorusEModel
+
 class TransE(TransEModel):
     def __init__(self, emb_dim: int, n_entities: int, n_relations: int, dissimilarity_type: str):
         super().__init__(emb_dim, n_entities, n_relations, dissimilarity_type=dissimilarity_type)

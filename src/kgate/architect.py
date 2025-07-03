@@ -1,16 +1,40 @@
+"""Architect class and methods to run a KGE model training, testing and inference from end to end."""
+
 import os
+import csv
+import gc
 from glob import glob
 import shutil
 from inspect import signature
 from pathlib import Path
+import logging
+import warnings
+import yaml
+import platform
+from typing import Tuple, Dict, List, Any, Set, Literal
+
+import pandas as pd
+import numpy as np
+
 from torchkge import KnowledgeGraph
 from torchkge.models import Model
 import torchkge.sampling as sampling
+from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
+
+from torch_geometric.utils import k_hop_subgraph
+
 import torch
-from torch import tensor, long, stack, Tensor
+from torch import tensor, Tensor
 from torch.nn import Parameter
 from torch.nn.functional import normalize
 from torch.utils.data import DataLoader
+import torch.optim as optim
+from torch.optim import lr_scheduler
+
+from ignite.metrics import RunningAverage
+from ignite.engine import Events, Engine
+from ignite.handlers import EarlyStopping, ModelCheckpoint, Checkpoint, DiskSaver, ProgressBar
+
 from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, init_embedding, plot_learning_curves, save_config
 from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .encoders import *
@@ -19,23 +43,6 @@ from .knowledgegraph import KnowledgeGraph
 from .samplers import PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
 from .inference import EntityInference, RelationInference
-from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
-import logging
-import warnings
-import torch.optim as optim
-from torch.optim import lr_scheduler
-from torch_geometric.data import Data
-from torch_geometric.utils import k_hop_subgraph
-import csv
-import gc
-from ignite.metrics import RunningAverage
-from ignite.engine import Events, Engine
-from ignite.handlers import EarlyStopping, ModelCheckpoint, Checkpoint, DiskSaver, ProgressBar
-import pandas as pd
-import numpy as np
-import yaml
-import platform
-from typing import Tuple, Dict, List, Any, Set, Literal
 
 # Configure logging
 logging.captureWarnings(True)

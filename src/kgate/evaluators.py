@@ -1,21 +1,25 @@
 """
+Evaluator classes to evaluate model performances.
+
 Original code for the predictors from TorchKGE developers
 @author: Armand Boschin <aboschin@enst.fr>
 
 Modifications and additional functionalities added by Benjamin Loire <benjamin.loire@univ-amu.fr>:
 - 
 
-The modifications are licensed under the BSD license according to the source license."""
+The modifications are licensed under the BSD license according to the source license.
+"""
+
+from typing import Dict
+
+from tqdm import tqdm
 
 import torch
-from torch import empty, zeros, cat, Tensor, tensor
-from torch.utils.data import DataLoader
-from tqdm.autonotebook import tqdm
-
+from torch import empty, zeros, cat, Tensor
 import torch.nn as nn
+from torch.utils.data import DataLoader
 
 import torchkge.evaluation as eval
-from torchkge.exceptions import NotYetEvaluatedError
 from torchkge.utils import get_rank
 from torchkge.data_structures import SmallKG
 from torchkge.models import Model
@@ -27,7 +31,6 @@ from .utils import filter_scores
 from .samplers import PositionalNegativeSampler
 from .encoders import GNN, DefaultEncoder
 
-from typing import Dict, Literal
 
 class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
     """Evaluate performance of given embedding using link prediction method.

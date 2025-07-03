@@ -1,27 +1,29 @@
+"""Class to represent a Knowledge Graph in KGATE. Heavily inspired from TorchKGE's Knowledge Graph class, though expanded to take into account triplets and node types."""
+
 from math import ceil
 from collections import defaultdict
+from itertools import combinations
+from typing import Self, Dict, Tuple, List, Set
+import logging
+
 import pandas as pd
 import numpy as np
-from itertools import combinations
+from tqdm import tqdm
+
+import torch
+from torch import tensor, Tensor, cat
+import torch.nn as nn
 from torch.utils.data import Dataset
 from torch.types import Number
-from typing import Self, Dict, Tuple, List, Set
-from tqdm import tqdm
-import logging
+
 import torchkge
+from torchkge.utils.operations import get_dictionaries
 from torch_geometric.data import HeteroData
 
 logging.basicConfig(
     level=logging.INFO,  
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-
-import torch
-import torch.nn as nn
-from torch import tensor, Tensor, cat
-
-from torchkge.utils.operations import get_dictionaries
-
 
 class EncoderInput:
     def __init__(self, x_dict: Dict[str, Tensor], edge_index: Dict[str,Tensor], mapping:Dict[str,Tensor]):

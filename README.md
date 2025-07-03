@@ -6,17 +6,54 @@ This tool relies heavily on the performances of TorchKGE and its numerous implem
 
 ## Installation
 
-To join in the development, clone this repository and install Poetry:
+It is recommended to download the [configuration template](src/kgate/config_template.toml) alongside your installation (see [Usage](#usage) below).
 
-```pip install poetry```
+### With pip
 
-Install the dependencies with:
+```bash
+pip install kgate
+```
 
-```poetry install```
+### From source
+
+Clone this repository and install it in a virtual environment like so:
+
+```bash
+git clone git@github.com:BAUDOTlab/KGATE.git
+python -m venv kge_env
+source kge_env/bin/activate
+```
+
+### Join the development
+
+KGATE is developed using [Poetry](https://python-poetry.org/). If you want to contribute to KGATE or make your own modifications, follow these steps:
+
+#### 1. Install Poetry
+
+```bash
+pip install poetry
+```
+
+#### 2. Clone the repository
+
+```bash
+git clone git@github.com:BAUDOTlab/KGATE.git
+```
+
+#### 3. Install dependencies
+
+```bash
+cd KGATE
+poetry install
+```
 
 ## Usage
 
 KGATE is meant to be a self-sufficient training environment for knowledge graph embedding that requires very little code to work but can easily be expanded or modified. Everything stems from the **Architect** class, which holds all the necessary attributes and methods to fully train and test a KGE model following the autoencoder architecture, as well as run inference.
+
+The configuration file lets you iterate quickly without changing your code. See the [template](src/kgate/config_template.toml) to learn what the different options do.
+
+At the very least, KGATE expects the Knowledge Graph to be given as a pandas dataframe or a CSV file with the columns "from", "to" and "rel", corresponding respectively to the head nodes, tail nodes and relation typesof the triplets, with one triplet per row. Any extra columns are ignored. In addition, a metadata dataframe can be submitted (can also be a CSV) to map each node with their type, requiring the columns "id" and "type". Extra columns are likewise ignored. 
 
 ```python
 from kgate import Architect
