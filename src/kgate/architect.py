@@ -825,7 +825,7 @@ class Architect(Model):
             known_2 = tensor([self.kg_train.ent2ix[tail] for tail in tails]).long()
             missing = "rel"
             inference = RelationInference(full_kg)
-
+            
         predictions, scores = inference.evaluate(
             known_1,
             known_2,
@@ -843,7 +843,7 @@ class Architect(Model):
         pred_names = np.vectorize(ix2ent.get)(pred_idx)
 
         scores = scores.reshape(-1).T
-        print(pred_idx, scores)
+        
         return pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
 
     def load_best_model(self):
@@ -851,7 +851,7 @@ class Architect(Model):
         _, nt_count = self.kg_train.node_types.unique(return_counts=True)
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
-        self.encoder = self.initialize_encoder()
+        self.encoder = self.encoder or self.initialize_encoder()
         if isinstance(self.encoder, GNN):
             self.node_embeddings = nn.ParameterList([init_embedding(count, self.emb_dim, self.device).weight for count in nt_count])
         else:

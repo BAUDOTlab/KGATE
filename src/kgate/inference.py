@@ -78,7 +78,6 @@ class RelationInference(infer.RelationInference):
                  **_):
         
         with torch.no_grad():
-            use_cuda = relation_embeddings.weight.is_cuda
             device = relation_embeddings.weight.device
 
             inference_kg = Inference_KG(h_idx, t_idx)
