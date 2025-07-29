@@ -851,7 +851,7 @@ class Architect(Model):
         _, nt_count = self.kg_train.node_types.unique(return_counts=True)
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
-        self.encoder = self.encoder or self.initialize_encoder()
+        self.encoder = self.initialize_encoder()
         if isinstance(self.encoder, GNN):
             self.node_embeddings = nn.ParameterList([init_embedding(count, self.emb_dim, self.device).weight for count in nt_count])
         else:
