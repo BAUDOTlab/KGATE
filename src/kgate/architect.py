@@ -219,13 +219,16 @@ class Architect(Model):
         if gnn_layers == 0:
             gnn_layers = encoder_config["gnn_layer_number"]
 
+        last_triple_type = self.kg_train.triples[-1]
+        edge_types = self.kg_train.triple_types[:last_triple_type + 1]
+
         match encoder_name:
             case "Default":
                 encoder = DefaultEncoder()
             case "GCN": 
-                encoder = GCNEncoder(self.kg_train.triple_types, self.emb_dim, gnn_layers)
+                encoder = GCNEncoder(edge_types, self.emb_dim, gnn_layers)
             case "GAT":
-                encoder = GATEncoder(self.kg_train.triple_types, self.emb_dim, gnn_layers)
+                encoder = GATEncoder(edge_types, self.emb_dim, gnn_layers)
             case "Node2vec":
                 encoder = Node2VecEncoder(self.kg_train.edge_index, self.emb_dim, device=self.device, **encoder_config["params"])
             case _:
