@@ -10,7 +10,7 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 The modifications are licensed under the BSD license according to the source license.
 """
 
-from typing import Tuple
+from typing import Tuple, Dict          
 
 from torch import matmul, Tensor, nn
 from torch.nn.functional import normalize
@@ -22,7 +22,7 @@ from ..utils import init_embedding
 class RESCAL(RESCALModel):
     def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(emb_dim, n_entities, n_relations)
-
+        del self.ent_emb
         self.rel_mat = init_embedding(self.n_rel, self.emb_dim * self.emb_dim)
 
     def score(self, *, h_emb: Tensor, t_emb: Tensor, r_idx: Tensor, **_) -> Tensor:
@@ -32,8 +32,8 @@ class RESCAL(RESCALModel):
         hr = matmul(h_norm.view(-1, 1, self.emb_dim), r)
         return (hr.view(-1, self.emb_dim) * t_norm).sum(dim=1)
     
-    def get_embeddings(self) -> Tensor:
-        return self.rel_mat.weight.data.view(-1, self.emb_dim, self.emb_dim)
+    def get_embeddings(self) -> Dict[str,Tensor]:
+        return {"rel_mat" : self.rel_mat.weight.data.view(-1, self.emb_dim, self.emb_dim)}
     
     def inference_prepare_candidates(self, *, 
                                     h_idx: Tensor, 
@@ -140,8 +140,9 @@ class ComplEx(ComplExModel):
         return (h_emb * (r_emb * t_emb + im_r * im_t) + 
                 im_h * (r_emb * im_t - im_r * t_emb)).sum(dim=1)
     
-    def get_embeddings(self):
-        return self.im_ent_emb.weight.data, self.im_rel_emb.weight.data
+    def get_embeddings(self) -> Dict[str, Tensor]:
+        return {"im_ent": self.im_ent_emb.weight.data, 
+                "im_rel": self.im_rel_emb.weight.data}
     
     def inference_prepare_candidates(self, *, 
                                     h_idx: Tensor, 

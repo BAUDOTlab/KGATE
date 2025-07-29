@@ -10,7 +10,7 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 The modifications are licensed under the BSD license according to the source license.
 """
 
-from typing import Tuple
+from typing import Tuple, Dict
 
 from tqdm import tqdm
 
@@ -103,8 +103,8 @@ class TransH(TransHModel):
         self.norm_vect.weight.data = normalize(self.norm_vect.weight.data,
                                                p=2, dim=1)
 
-    def get_embeddings(self) -> Tensor:
-        return self.norm_vect.weight.data
+    def get_embeddings(self) -> Dict[str,Tensor]:
+        return {"norm_vect": self.norm_vect.weight.data}
     
     def inference_prepare_candidates(self, *, 
                                     h_idx: Tensor, 
@@ -184,10 +184,10 @@ class TransR(TransRModel):
         rel_emb.weight.data = normalize(rel_emb.weight.data, p=2, dim=1)
         return False
     
-    def get_embeddings(self) -> Tensor:
-        return self.proj_mat.weight.data.view(-1,
+    def get_embeddings(self) -> Dict[str, Tensor]:
+        return {"proj_mat": self.proj_mat.weight.data.view(-1,
                                               self.rel_emb_dim,
-                                              self.ent_emb_dim)
+                                              self.ent_emb_dim)}
     
     def inference_prepare_candidates(self, *, 
                                     h_idx: Tensor, 
@@ -264,8 +264,9 @@ class TransD(TransDModel):
         self.ent_proj_vect.weight.data = normalize(self.ent_proj_vect.weight.data, p=2, dim=1)
         self.rel_proj_vect.weight.data = normalize(self.rel_proj_vect.weight.data, p=2, dim=1)
 
-    def get_embeddings(self) -> Tuple[Tensor, Tensor]:
-        return self.ent_proj_vect.weight.data, self.rel_proj_vect.weight.data
+    def get_embeddings(self) -> Dict[str, Tensor]:
+        return {"ent_proj_vect": self.ent_proj_vect.weight.data,
+                "rel_proj_vect": self.rel_proj_vect.weight.data}
     
     def inference_prepare_candidates(self, *, 
                                     h_idx: Tensor, 
