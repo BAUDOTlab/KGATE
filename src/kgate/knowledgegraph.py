@@ -75,7 +75,7 @@ class KnowledgeGraph(Dataset):
                    ent2ix is not None and \
                    rel2ix is not None and \
                    triple_types is not None and \
-                   nt2ix is not None, "If df is not given, `edgelist`, `ent2ix`, `rel2ix` and `nt2ix` must be provided."
+                   nt2ix is not None, "If df is not given, `edgelist`, `triple_types` and `ent2ix`, `rel2ix` and `nt2ix` must be provided."
             self.n_triples = edgelist.size(1)
         else:
             self.n_triples = len(df)

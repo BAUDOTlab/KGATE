@@ -855,10 +855,6 @@ class Architect(Model):
         self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
-        if isinstance(self.encoder, GNN):
-            self.node_embeddings = nn.ParameterList([init_embedding(count, self.emb_dim, self.device).weight for count in nt_count])
-        else:
-            self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
 
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_dir)
@@ -869,7 +865,14 @@ class Architect(Model):
         
         logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
         checkpoint = torch.load(self.checkpoints_dir.joinpath(best_model), map_location=self.device, weights_only=False)
-        self.node_embeddings.load_state_dict(checkpoint["entities"])
+
+        if isinstance(self.encoder, GNN):
+            self.node_embeddings = nn.ParameterList()
+            for nt in checkpoint["entities"]:
+                self.node_embeddings.append(checkpoint["entities"][nt].to(self.device))
+        else:
+            self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
+
         self.rel_emb.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])
         if "encoder" in checkpoint:
