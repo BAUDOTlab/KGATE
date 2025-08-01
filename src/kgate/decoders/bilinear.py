@@ -163,10 +163,10 @@ class ComplEx(ComplExModel):
 
         if entities:
             re_candidates = node_embeddings
-            im_candidates = self.im_ent_emb
+            im_candidates = self.im_ent_emb.weight.data
         else:
             re_candidates = relation_embeddings
-            im_candidates = self.im_rel_emb
+            im_candidates = self.im_rel_emb.weight.data
         
         re_candidates = re_candidates.unsqueeze(0).expand(b_size, -1, -1)
         im_candidates = im_candidates.unsqueeze(0).expand(b_size, -1, -1)
