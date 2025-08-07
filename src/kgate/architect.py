@@ -129,10 +129,10 @@ class Architect(Model):
 
         set_random_seeds(self.config["seed"])
 
-        self.emb_dim: int = self.config["model"]["emb_dim"]
-        self.rel_emb_dim: int = self.config["model"]["rel_emb_dim"]
-        if self.rel_emb_dim == -1:
-            self.rel_emb_dim = self.emb_dim
+        self._emb_dim: int = self.config["model"]["emb_dim"]
+        self._rel_emb_dim: int = self.config["model"]["rel_emb_dim"]
+        if self._rel_emb_dim == -1:
+            self._rel_emb_dim = self._emb_dim
         self.eval_batch_size: int = self.config["training"]["eval_batch_size"]
 
         if metadata is not None and not set(["id","type"]).issubset(metadata.keys()):
@@ -180,6 +180,20 @@ class Architect(Model):
         self.scheduler: lr_scheduler.LRScheduler | None = None
         self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
         self.node_embeddings: nn.ParameterList | nn.Embedding
+
+    @property
+    def emb_dim(self):
+        if self.decoder is not None and self.decoder.hasattr("embedding_spaces"):
+            return self._emb_dim * self.decoder.embedding_spaces
+        else:
+            return self._emb_dim
+
+    @property
+    def rel_emb_dim(self):
+        if self.decoder is not None and self.decoder.hasattr("embedding_spaces"):
+            return self._rel_emb_dim * self.decoder.embedding_spaces
+        else:
+            return self._rel_emb_dim
 
 
     def initialize_encoder(self, encoder_name: str = "", gnn_layers: int = 0) -> DefaultEncoder | GCNEncoder | GATEncoder:
@@ -498,14 +512,25 @@ class Architect(Model):
             attributes: dict(node_type, embedding) containing the embedding for each type of node.
             pretrained: path to the pretrained embeddings
         """
+        # Cannot use short-circuit syntax with tuples
+        logging.info("Initializing decoder...")
+        if self.decoder is None:
+            self.decoder, self.criterion = self.initialize_decoder()
+            self.decoder.to(self.device)
+
         logging.info("Initializing encoder...")
         self.encoder = self.encoder or self.initialize_encoder()
 
         logging.info("Initializing embeddings...")
+        
+        # If we have been given a pretrained embedding file (such as the output of a node2vec), we use that in priority
         if pretrained is not None and pretrained.exists():
             self.node_embeddings = torch.load(pretrained)
+        # If not, and we don't use a deep encoder, the embeddings are initialized at random
         elif not isinstance(self.encoder, GNN):
             self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
+        # If we do have a deep encoder, we check for each node type if we have been supplied input features 
+        # if not, they too are initialized at random
         else:
             self.node_embeddings = nn.ParameterList()
             ix2nt = {v: k for k,v in self.kg_train.nt2ix.items()}
@@ -532,12 +557,6 @@ class Architect(Model):
 
         self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
-
-        # Cannot use short-circuit syntax with tuples
-        if self.decoder is None:
-            logging.info("Initializing decoder...")
-            self.decoder, self.criterion = self.initialize_decoder()
-            self.decoder.to(self.device)
 
         logging.info("Initializing optimizer...")
         self.optimizer = self.optimizer or self.initialize_optimizer()
@@ -957,15 +976,23 @@ class Architect(Model):
 
             embeddings: torch.Tensor = torch.zeros((kg.n_ent, self.emb_dim), device=self.device, dtype=torch.float)
 
+            #TODO: AAAAAAAAAAAAAAAAAAAAH
             for node_type, idx in input.mapping.items():
                 embeddings[idx] = encoder_output[node_type]
 
-            h_embeddings = embeddings[h_idx]
-            t_embeddings = embeddings[t_idx]
         else:
-            h_embeddings = self.node_embeddings(h_idx)
-            t_embeddings = self.node_embeddings(t_idx)
+            embeddings = self.node_embeddings.weight
+        
+        
+        h_embeddings = embeddings[h_idx]
+        t_embeddings = embeddings[t_idx]
         r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
+
+        # If we have more than one embedding space, we concatenate them in one tensor. 
+        # The decoder will do the separation job
+        if self.decoder.hasattr("embedding_spaces"):
+            for i in range(self.decoder.embedding_spaces):
+                torch.cat(h_embeddings, embeddings[])
 
         return self.decoder.score(h_emb = h_embeddings,
                                   r_emb = r_embeddings, 

@@ -133,12 +133,15 @@ class ComplEx(ComplExModel):
         del self.re_rel_emb
 
     def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, h_idx:Tensor, t_idx:Tensor, r_idx: Tensor, **_):
-        im_h = self.im_ent_emb(h_idx)
-        im_t = self.im_ent_emb(t_idx)
-        im_r = self.im_rel_emb(r_idx)
+        re_h = h_emb[:self.emb_dim]
+        re_r = r_emb[:self.emb_dim]
+        re_t = t_emb[:self.emb_dim]
+        im_h = h_emb[self.emb_dim:]
+        im_r = r_emb[self.emb_dim:]
+        im_t = t_emb[self.emb_dim:]
 
-        return (h_emb * (r_emb * t_emb + im_r * im_t) + 
-                im_h * (r_emb * im_t - im_r * t_emb)).sum(dim=1)
+        return (re_h * (re_r * re_t + im_r * im_t) + 
+                im_h * (re_r * im_t - im_r * re_t)).sum(dim=1)
     
     def get_embeddings(self) -> Dict[str, Tensor]:
         return {"im_ent": self.im_ent_emb.weight.data, 

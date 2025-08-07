@@ -1,11 +1,14 @@
 import optuna
-from .kgate import Architect
+from .architect import Architect
 from .knowledgegraph import KnowledgeGraph
 from .utils import parse_config
 import pandas as pd
 from torchkge import KnowledgeGraph
 from typing import Tuple, Any
 import logging 
+
+from pathlib import Path
+import os
 
 logging.captureWarnings(True)
 log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
@@ -30,7 +33,7 @@ def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KnowledgeGra
         config = parse_config(config_path=config_path, config_dict={})
 
         config = {key: suggest_value(trial, key, config[key]) for key in config}
-
+        
         architect = Architect(kg=kg, df=df, **config)
 
         architect.train_model()
