@@ -129,15 +129,16 @@ class DistMult(DistMultModel):
 class ComplEx(ComplExModel):
     def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
         super().__init__(emb_dim, n_entities, n_relations)
+        self.embedding_spaces = 2
         del self.re_ent_emb
         del self.re_rel_emb
         del self.im_ent_emb
         del self.im_rel_emb
 
     def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, **_):
-        re_h, im_h = tensor_split(h_emb, self.emb_dim, dim=1)
-        re_r, im_r = tensor_split(r_emb, self.emb_dim, dim=1)
-        re_t, im_t = tensor_split(t_emb, self.emb_dim, dim=1)
+        re_h, im_h = tensor_split(h_emb, 2, dim=1)
+        re_r, im_r = tensor_split(r_emb, 2, dim=1)
+        re_t, im_t = tensor_split(t_emb, 2, dim=1)
         
         return (re_h * (re_r * re_t + im_r * im_t) + 
                 im_h * (re_r * im_t - im_r * re_t)).sum(dim=1)

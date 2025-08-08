@@ -551,12 +551,12 @@ class Architect(Model):
                     
                     self.node_embeddings.append(Parameter(input_features).to(self.device))
                 else:
-                    emb = init_embedding(num_nodes, self.enc_emb_dim, self.device)
+                    emb = init_embedding(num_nodes, self.emb_dim, self.device)
                     self.node_embeddings.append(emb.weight)
             # The input features are not supposed to change if we use an encoder
             self.node_embeddings = self.node_embeddings.requires_grad_(False)
 
-        self.rel_emb = init_embedding(self.kg_train.n_rel, self.enc_rel_emb_dim, self.device)
+        self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
 
 
         logging.info("Initializing optimizer...")
