@@ -183,17 +183,15 @@ class Architect(Model):
 
     @property
     def enc_emb_dim(self):
-        if self.decoder is not None and self.decoder.hasattr("embedding_spaces"):
+        if self.decoder is not None and hasattr(self.decoder,"embedding_spaces"):
             return self.emb_dim * self.decoder.embedding_spaces
-        else:
-            return self.emb_dim
+        return self.emb_dim
 
     @property
     def enc_rel_emb_dim(self):
-        if self.decoder is not None and self.decoder.hasattr("embedding_spaces"):
+        if self.decoder is not None and hasattr(self.decoder,"embedding_spaces"):
             return self.rel_emb_dim * self.decoder.embedding_spaces
-        else:
-            return self.rel_emb_dim
+        return self.rel_emb_dim
 
 
     def initialize_encoder(self, encoder_name: str = "", gnn_layers: int = 0) -> DefaultEncoder | GCNEncoder | GATEncoder:
