@@ -12,7 +12,7 @@ The modifications are licensed under the BSD license according to the source lic
 
 from typing import Tuple, Dict          
 
-from torch import matmul, Tensor, nn
+from torch import matmul, Tensor, nn, tensor_split
 from torch.nn.functional import normalize
 
 from torchkge.models import DistMultModel, RESCALModel, AnalogyModel, ComplExModel
@@ -131,21 +131,19 @@ class ComplEx(ComplExModel):
         super().__init__(emb_dim, n_entities, n_relations)
         del self.re_ent_emb
         del self.re_rel_emb
+        del self.im_ent_emb
+        del self.im_rel_emb
 
-    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, h_idx:Tensor, t_idx:Tensor, r_idx: Tensor, **_):
-        re_h = h_emb[:self.emb_dim]
-        re_r = r_emb[:self.emb_dim]
-        re_t = t_emb[:self.emb_dim]
-        im_h = h_emb[self.emb_dim:]
-        im_r = r_emb[self.emb_dim:]
-        im_t = t_emb[self.emb_dim:]
-
+    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, **_):
+        re_h, im_h = tensor_split(h_emb, self.emb_dim, dim=1)
+        re_r, im_r = tensor_split(r_emb, self.emb_dim, dim=1)
+        re_t, im_t = tensor_split(t_emb, self.emb_dim, dim=1)
+        
         return (re_h * (re_r * re_t + im_r * im_t) + 
                 im_h * (re_r * im_t - im_r * re_t)).sum(dim=1)
     
     def get_embeddings(self) -> Dict[str, Tensor]:
-        return {"im_ent": self.im_ent_emb.weight.data, 
-                "im_rel": self.im_rel_emb.weight.data}
+        return None
     
     def inference_prepare_candidates(self, *, 
                                     h_idx: Tensor, 
@@ -160,9 +158,9 @@ class ComplEx(ComplExModel):
                                         Tuple[Tensor, Tensor]]:
         b_size = h_idx.shape[0]
 
-        re_h, im_h = node_embeddings[h_idx], self.im_ent_emb(h_idx)
-        re_t, im_t = node_embeddings[t_idx], self.im_ent_emb(t_idx)
-        re_r, im_r = node_embeddings[r_idx], self.im_ent_emb(r_idx)
+        re_h, im_h = tensor_split(node_embeddings[h_idx], self.emb_dim, dim=1)
+        re_r, im_r = tensor_split(relation_embeddings[r_idx], self.emb_dim, dim=1)
+        re_t, im_t = tensor_split(node_embeddings[t_idx], self.emb_dim, dim=1)
 
         if entities:
             re_candidates = node_embeddings
