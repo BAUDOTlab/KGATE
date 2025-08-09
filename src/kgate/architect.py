@@ -238,11 +238,11 @@ class Architect(Model):
             case "Default":
                 encoder = DefaultEncoder()
             case "GCN": 
-                encoder = GCNEncoder(edge_types, self.emb_dim, gnn_layers)
+                encoder = GCNEncoder(edge_types, self.enc_emb_dim, gnn_layers)
             case "GAT":
-                encoder = GATEncoder(edge_types, self.emb_dim, gnn_layers)
+                encoder = GATEncoder(edge_types, self.enc_emb_dim, gnn_layers)
             case "Node2vec":
-                encoder = Node2VecEncoder(self.kg_train.edge_index, self.emb_dim, device=self.device, **encoder_config["params"])
+                encoder = Node2VecEncoder(self.kg_train.edge_index, self.enc_emb_dim, device=self.device, **encoder_config["params"])
             case _:
                 encoder = DefaultEncoder()
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
