@@ -556,7 +556,7 @@ class Architect(Model):
             # The input features are not supposed to change if we use an encoder
             self.node_embeddings = self.node_embeddings.requires_grad_(False)
 
-        self.rel_emb = init_embedding(self.kg_train.n_rel, self.rel_emb_dim, self.device)
+        self.rel_emb = init_embedding(self.kg_train.n_rel, self.enc_rel_emb_dim, self.device)
 
 
         logging.info("Initializing optimizer...")
