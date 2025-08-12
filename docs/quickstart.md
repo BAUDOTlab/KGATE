@@ -35,3 +35,48 @@ architect.train_model()
 
 architect.test()
 ```
+
+This code will generate the following files in the folder specified in the `output_directory` of the configuration (by default, the working directory):
+  
+- `checkpoints`: a folder containing:
+  - `checkpoint_XX.pt`: the checkpoints of the last two saved epochs (by default, a checkpoint is saved every 5 epochs).
+  - `best_model_checkpoint.pt`: the checkpoint of the model with the best performances on the validation set.
+- `evaluation_metics.yaml`: YAML file containing the result of the evaluation on the test set, for all relations at once and individual relations.
+- `kgate_config.toml`: TOML file of the exact configuration used for the training, including explicit default parameters.
+- `kg.pkl`: only if you did not start from an already existing pickle file. Stores the KGATE representation of a knowledge graph.
+- `training_metrics.csv`: CSV file keeping track of the metrics at each epoch, with 4 columns:
+  - **Epoch**: the epoch number.
+  - **Training Loss**: the mean loss across all batches of this epoch.
+  - **Validation Metric**: typically MRR, the result of the latest evaluation on the validation set. By default, updates every 10 epochs.
+  - **Learning Rate**: if using a learning rate scheduler, keeps track of the evolution throughout the epochs.
+- `validation_metric_curve.png`: plot of the **training loss over epochs** and the **validation metric over epochs** (typically MRR).
+
+With the fully trained model, you can then use it to infer new link:
+
+```python
+from kgate import Architect
+
+# Load the model if it is not already in memory:
+config_path = "/path/to/output_dir/kgate_config.toml"
+architect = Architect(config_path=config_path)
+architect.load_best_model()
+
+# Find the most probable tail to complete the triplet (p53,INTERACTS,?)
+result_df = architect.infer(heads="p53",rels="INTERACTS", top_k=5)
+result_df.to_csv("inference_results.csv")
+
+# The output dataframe has 2 columns: "Prediction" with the predicted missing element's name and "Score" with its confidence score.
+```
+
+Or get the embeddings for other applications such as node classification:
+
+```python
+from kgate import Architect
+
+# Load the model if it is not already in memory:
+config_path = "/path/to/output_dir/kgate_config.toml"
+architect = Architect(config_path=config_path)
+architect.load_best_model()
+
+# Get the embedding dict
+embeddings = architect.get_embeddings()
