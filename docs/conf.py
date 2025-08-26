@@ -15,15 +15,20 @@ release = '0.1.13'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = ["sphinx.ext.autodoc",
+              "sphinx.ext.doctest",
               "sphinx.ext.napoleon",
               "sphinx.ext.apidoc",
               "sphinx.ext.coverage",
               "sphinx.ext.napoleon",
+              "sphinx.ext.autosummary",
               "myst_parser"]
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+autosummary_generate = True  # Enable autosummary to generate pages
+autodoc_default_flags = ['members']  # Automatically document class members
+epub_show_urls = "footnote"
 
 
 # -- Options for HTML output -------------------------------------------------

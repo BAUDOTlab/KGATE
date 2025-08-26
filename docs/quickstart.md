@@ -1,3 +1,5 @@
+# Quickstart
+
 ## Definitions
 
 For the rest of this document, we will consider some terms to be equivalent (in reality, their definition is slightly different, in a way that doesn't matter here):
@@ -51,6 +53,8 @@ This code will generate the following files in the folder specified in the `outp
   - **Learning Rate**: if using a learning rate scheduler, keeps track of the evolution throughout the epochs.
 - `validation_metric_curve.png`: plot of the **training loss over epochs** and the **validation metric over epochs** (typically MRR).
 
+## Use the trained model
+
 With the fully trained model, you can then use it to infer new link:
 
 ```python
@@ -80,3 +84,24 @@ architect.load_best_model()
 
 # Get the embedding dict
 embeddings = architect.get_embeddings()
+
+# Get mapping dictionaries to keep track of which embedding corresponds to what
+mapping_ix2ent = {v: k for k,v in architect.kg_train.ent2ix.items()}
+mapping_ix2rel = {v: k for k,v in architect.kg_train.ent2ix.items()}
+
+# And run downstream tasks with the pretrained embeddings
+```
+
+### The embedding dictionary
+
+The object returned by `architect.get_embeddings()` is a python dictionary with at least two elements:
+
+- `entities` containing the entity embeddings as a pytorch tensor of size (n_ent, ent_emb_dim)
+- `relations` containing the relation embeddings as a pytorch tensor of size (n_rel, rel_emb_dim)
+- `decoder`, containing any additionnal embedding that is required for a decoder, such as RESCAL's relation matrix.
+
+```{warning}
+When using decoders with more than one embedding space (such as ComplEx which uses a real space and an imaginary space), they will
+both be concatenated in the `entities` tensor, which will then be of size (n_ent, ent_emb_dim * n_embedding_spaces). To retrieve them
+separately, split the tensor in part of equal size using `torch.tensor_split(embedding_tensor, n_embedding_spaces, dim=1)`.
+```

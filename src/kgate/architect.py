@@ -995,7 +995,7 @@ class Architect(Model):
                                   r_idx = r_idx, 
                                   t_idx = t_idx)
 
-    def get_embeddings(self) -> Dict[str,Tensor | None]:
+    def get_embeddings(self) -> Dict[str,Tensor]:
         """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.
         
         If the encoder uses heteroData, a dict of {node_type : embedding} is returned for entity embeddings instead of a tensor."""
@@ -1016,9 +1016,12 @@ class Architect(Model):
 
         decoder_emb = self.decoder.get_embeddings()
 
-        return {"entities": ent_emb, 
-                "relations": rel_emb,
-                "decoder": decoder_emb}
+        embedding_dict = {"entities": ent_emb, "relations": rel_emb,}
+
+        if decoder_emb is not None:
+            embedding_dict.update({"decoder": decoder_emb})
+
+        return embedding_dict
 
     def normalize_parameters(self):
         # Some decoders should not normalize parameters or do so in a different way.
