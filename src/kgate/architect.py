@@ -727,6 +727,7 @@ class Architect(Model):
         if checkpoint_file is not None:
             if Path(checkpoint_file).is_file():
                 logging.info(f"Resuming training from checkpoint: {checkpoint_file}")
+                logging.info(f"rel_emb size : {self.rel_emb.weight.size()}")
                 checkpoint = torch.load(checkpoint_file, weights_only=False)
                 Checkpoint.load_objects(to_load=to_save, checkpoint=checkpoint)
 
@@ -872,9 +873,9 @@ class Architect(Model):
     def load_best_model(self):
         """Load into memory the checkpoint corresponding to the highest-performing model on the validation set."""
         _, nt_count = self.kg_train.node_types.unique(return_counts=True)
-        self.rel_emb = init_embedding(self.n_rel, self.rel_emb_dim, self.device)
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
+        self.rel_emb = init_embedding(self.n_rel, self.enc_rel_emb_dim, self.device)
 
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_dir)
@@ -891,7 +892,8 @@ class Architect(Model):
             for nt in checkpoint["entities"]:
                 self.node_embeddings.append(checkpoint["entities"][nt].to(self.device))
         else:
-            self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
+            self.node_embeddings = init_embedding(self.n_ent, self.enc_emb_dim, self.device)
+            self.node_embeddings.load_state_dict(checkpoint["entities"])
 
         self.rel_emb.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])

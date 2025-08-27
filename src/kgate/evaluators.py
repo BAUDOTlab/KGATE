@@ -121,7 +121,10 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
 
         dataloader = DataLoader(knowledge_graph, batch_size=b_size)
         edgelist = knowledge_graph.edgelist.to(device)
-        
+        if decoder is not None and hasattr(decoder,"embedding_spaces"):
+            enc_emb_dim = decoder.emb_dim * decoder.embedding_spaces
+        else:
+            enc_emb_dim = decoder.emb_dim
 
         for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                              unit="batch", disable=(not verbose),

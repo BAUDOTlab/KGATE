@@ -159,16 +159,14 @@ class ComplEx(ComplExModel):
                                         Tuple[Tensor, Tensor]]:
         b_size = h_idx.shape[0]
 
-        re_h, im_h = tensor_split(node_embeddings[h_idx], self.emb_dim, dim=1)
-        re_r, im_r = tensor_split(relation_embeddings[r_idx], self.emb_dim, dim=1)
-        re_t, im_t = tensor_split(node_embeddings[t_idx], self.emb_dim, dim=1)
+        re_h, im_h = tensor_split(node_embeddings[h_idx], 2, dim=1)
+        re_r, im_r = tensor_split(relation_embeddings(r_idx), 2, dim=1)
+        re_t, im_t = tensor_split(node_embeddings[t_idx], 2, dim=1)
 
         if entities:
-            re_candidates = node_embeddings
-            im_candidates = self.im_ent_emb.weight.data
+            re_candidates, im_candidates = tensor_split(node_embeddings, 2, dim=1)
         else:
-            re_candidates = relation_embeddings
-            im_candidates = self.im_rel_emb.weight.data
+            re_candidates, im_candidates = tensor_split(relation_embeddings, 2, dim=1)
         
         re_candidates = re_candidates.unsqueeze(0).expand(b_size, -1, -1)
         im_candidates = im_candidates.unsqueeze(0).expand(b_size, -1, -1)
