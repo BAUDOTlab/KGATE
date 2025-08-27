@@ -63,7 +63,7 @@ class EncoderInput:
 class KnowledgeGraph(Dataset):
     def __init__(self, df: pd.DataFrame | None=None,
                  edgelist: Tensor | None=None,
-                 metadata: pd.DataFrame | None=None, 
+                 metadata: pd.DataFrame | None=None,
                  triple_types: List[Tuple[str,str,str]] | None = None,
                  ent2ix: Dict[str, int] | None=None, 
                  rel2ix: Dict[str, int] | None=None,

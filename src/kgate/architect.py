@@ -43,6 +43,7 @@ from .knowledgegraph import KnowledgeGraph
 from .samplers import PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
 from .inference import EntityInference, RelationInference
+from .data_leakage import permute_tails
 
 # Configure logging
 logging.captureWarnings(True)
@@ -1241,3 +1242,18 @@ class Architect(Model):
         
         self.evaluator.evaluate(b_size=self.eval_batch_size, knowledge_graph=kg_val)
         return self.evaluator.accuracy(self.eval_batch_size, kg_test = kg_test)
+
+    def run_dl(self, attributes: Dict[str, pd.DataFrame] ={}):
+        logging.info("Preparing KG for DL evaluation pocedure...")
+        dl_config = self.config["data_leakage"]
+
+        kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
+
+        for rel in dl_config["permuted_relations"]:
+            if rel not in self.kg.rel2ix:
+                raise ValueError(f"Relation name {rel} was not found in the knowledge graph.")
+            kg = permute_tails(kg, kg.rel2ix[rel])
+
+        self.kg_train, self.kg_val, self.kg_test = kg.split_kg(shares=self.config["preprocessing"]["split"])
+
+        self.train_model(attributes=attributes)
