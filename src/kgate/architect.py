@@ -937,7 +937,6 @@ class Architect(Model):
         logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
         checkpoint = self.load_checkpoint(self.checkpoints_dir.joinpath(best_model))
 
-
         self.node_embeddings = nn.ParameterList()
         for nt in checkpoint["entities"]:
             self.node_embeddings.append(checkpoint["entities"][nt].to(self.device))
