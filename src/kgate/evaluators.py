@@ -121,7 +121,10 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
 
         dataloader = DataLoader(knowledge_graph, batch_size=b_size)
         edgelist = knowledge_graph.edgelist.to(device)
-        
+        if decoder is not None and hasattr(decoder,"embedding_spaces"):
+            enc_emb_dim = decoder.emb_dim * decoder.embedding_spaces
+        else:
+            enc_emb_dim = decoder.emb_dim
 
         for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                              unit="batch", disable=(not verbose),
@@ -143,7 +146,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 input = knowledge_graph.get_encoder_input(edgelist[:, edge_mask], node_embeddings)
                 encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
                 
-                embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, decoder.emb_dim), device=device, dtype=torch.float)
+                embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, enc_emb_dim), device=device, dtype=torch.float)
 
                 for node_type, idx in input.mapping.items():
                     embeddings[idx] = encoder_output[node_type]
