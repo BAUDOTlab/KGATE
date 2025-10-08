@@ -870,6 +870,24 @@ class Architect(Model):
         
         return pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
 
+    def load_checkpoint(self, path: Path) -> dict:
+        """Parse a checkpoint to ensure it can properly be loaded"""
+        checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+
+        # Check entity and relation dict size
+        assert len(checkpoint["relations"]["weights"]) == self.n_rel, f"Mismatch between the number of relations in the checkpoint ({len(checkpoint['relations']['weights'])} and the current configuration ({self.n_rel})!"
+
+        if isinstance(self.encoder, GNN):
+            assert len(checkpoint["entities"]) == len(self.kg_train.nt2ix), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['entities'])} and the current configuration ({len(self.kg_train.nt2ix)})!"
+        else:
+            assert len(checkpoint["entities"]["weights"]) != self.n_ent, f"Mismatch between the number of entities in the checkpoint ({len(checkpoint['entities'])} and the current configuration ({self.n_ent})!"
+
+        if "encoder" in checkpoint:
+            assert checkpoint["encoder"].keys() == self.encoder.state_dict().keys(), "Mismatch between the checkpoint convolution layers and the current configuration's."
+
+        return checkpoint
+
+
     def load_best_model(self):
         """Load into memory the checkpoint corresponding to the highest-performing model on the validation set."""
         _, nt_count = self.kg_train.node_types.unique(return_counts=True)
@@ -885,7 +903,8 @@ class Architect(Model):
             return
         
         logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
-        checkpoint = torch.load(self.checkpoints_dir.joinpath(best_model), map_location=self.device, weights_only=False)
+        checkpoint = self.load_checkpoint(self.checkpoints_dir.joinpath(best_model))
+
 
         if isinstance(self.encoder, GNN):
             self.node_embeddings = nn.ParameterList()
