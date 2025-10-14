@@ -146,7 +146,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 input = knowledge_graph.get_encoder_input(edgelist[:, edge_mask], node_embeddings)
                 encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
                 
-                embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, decoder.enc_emb_dim), device=device, dtype=torch.float)
+                embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, enc_emb_dim), device=device, dtype=torch.float)
 
                 for node_type, idx in input.mapping.items():
                     embeddings[idx] = encoder_output[node_type]

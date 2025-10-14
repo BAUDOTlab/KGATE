@@ -43,6 +43,7 @@ from .knowledgegraph import KnowledgeGraph
 from .samplers import PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
 from .inference import EntityInference, RelationInference
+from .data_leakage import permute_tails
 
 # Configure logging
 logging.captureWarnings(True)
@@ -154,7 +155,7 @@ class Architect(Model):
 
         run_kg_prep: bool = self.config["run_kg_preprocess"]
 
-        if run_kg_prep or df is not None:
+        if run_kg_prep:
             logging.info(f"Preparing KG...")
             self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config, kg, df, self.metadata)
             logging.info("KG preprocessed.")
@@ -232,7 +233,7 @@ class Architect(Model):
             gnn_layers = encoder_config["gnn_layer_number"]
 
         last_triple_type = self.kg_train.triples[-1]
-        edge_types = self.kg_train.triple_types[:last_triple_type + 1]
+        edge_types = self.kg_train.triple_types#[:last_triple_type + 1]
 
         match encoder_name:
             case "Default":
@@ -1263,3 +1264,19 @@ class Architect(Model):
         
         self.evaluator.evaluate(b_size=self.eval_batch_size, knowledge_graph=kg_val)
         return self.evaluator.accuracy(self.eval_batch_size, kg_test = kg_test)
+
+    def run_dl(self, attributes: Dict[str, pd.DataFrame] ={}):
+        logging.info("Preparing KG for DL evaluation pocedure...")
+        dl_config = self.config["data_leakage"]
+
+        kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
+
+        for rel in dl_config["permuted_relations"]:
+            if rel not in self.kg_train.rel2ix:
+                raise ValueError(f"Relation name {rel} was not found in the knowledge graph.")
+            logging.info(f"Permutting tails of relation {rel}")
+            self.kg_train = permute_tails(self.kg_train, rel)
+
+        self.kg_train, self.kg_val, self.kg_test = kg.split_kg(shares=self.config["preprocessing"]["split"])
+
+        self.train_model(attributes=attributes)

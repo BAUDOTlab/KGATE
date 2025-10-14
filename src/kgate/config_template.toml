@@ -163,3 +163,10 @@ objective = "Link Prediction"
 made_directed_relations = []
 target_relations = [] 
 thresholds = [10]
+
+[data_leakage]
+# Set of options to run data leakage examination
+
+# The name of relations to permute so that each tail of these relations 
+# is replaced by a different, random tail from the KG
+permuted_relations = []
