@@ -86,7 +86,7 @@ class KnowledgeGraph(Dataset):
         else:
             self.edgelist = tensor([], dtype=torch.long)
 
-        if removed_triples is not None:
+        if removed_triples is not None and removed_triples.numel() > 0:
             assert removed_triples.size(0) == 4,  "The `removed_triples` parameter must be a 2D tensor of size [4, num_triples]."
             self.removed_triples = removed_triples
         else:

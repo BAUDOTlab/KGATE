@@ -155,7 +155,7 @@ class Architect(Model):
 
         run_kg_prep: bool = self.config["run_kg_preprocess"]
 
-        if run_kg_prep or df is not None:
+        if run_kg_prep:
             logging.info(f"Preparing KG...")
             self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config, kg, df, self.metadata)
             logging.info("KG preprocessed.")
@@ -233,7 +233,7 @@ class Architect(Model):
             gnn_layers = encoder_config["gnn_layer_number"]
 
         last_triple_type = self.kg_train.triples[-1]
-        edge_types = self.kg_train.triple_types[:last_triple_type + 1]
+        edge_types = self.kg_train.triple_types#[:last_triple_type + 1]
 
         match encoder_name:
             case "Default":
@@ -1250,9 +1250,10 @@ class Architect(Model):
         kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
 
         for rel in dl_config["permuted_relations"]:
-            if rel not in self.kg.rel2ix:
+            if rel not in self.kg_train.rel2ix:
                 raise ValueError(f"Relation name {rel} was not found in the knowledge graph.")
-            kg = permute_tails(kg, kg.rel2ix[rel])
+            logging.info(f"Permutting tails of relation {rel}")
+            self.kg_train = permute_tails(self.kg_train, rel)
 
         self.kg_train, self.kg_val, self.kg_test = kg.split_kg(shares=self.config["preprocessing"]["split"])
 
