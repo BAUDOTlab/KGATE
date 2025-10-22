@@ -52,4 +52,5 @@ All KGATE decoders are built from [TorchKGE's decoders](https://github.com/torch
 
 - `score`: Method called by the Architect's {#kgate.architect.Architect.scoring_function} method. Given the current batch embeddings and indices, it will output the score computed by the decoder as a tensor.
 - `get_embeddings`: While the main embeddings are stored in the {#kgate.architect.Architect} object, some decoders use additionnal embeddings that are not encoded by GNN beforehands. Decoders with no additionnal embeddings should return `None`.
+- `normalize_params`: a function taking the related embedding tensors as argument. When used from within the Architect, the entity and relation embeddings will be passed to this function, which normalizes them in addition to potential decoder-specific embeddings, before returning both. If the decoder requires no normalization, this method can be omitted or return the embeddings without alteration.
 - `inference_prepare_candidates`: Helper function for the link prediction evaluation. Given the current batch indices and full embeddings, returns the batch embedding as well as all possible candidates to evaluate link prediction against.
