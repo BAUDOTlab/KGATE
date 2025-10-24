@@ -52,4 +52,5 @@ All KGATE decoders are built from [TorchKGE's decoders](https://github.com/torch
 
 - `score`: Method called by the Architect's {#kgate.architect.Architect.scoring_function} method. Given the current batch embeddings and indices, it will output the score computed by the decoder as a tensor.
 - `get_embeddings`: While the main embeddings are stored in the {#kgate.architect.Architect} object, some decoders use additionnal embeddings that are not encoded by GNN beforehands. Decoders with no additionnal embeddings should return `None`.
-- `inference_prepare_candidates`: Helper function for the link prediction evaluation. Given the current batch indices and full embeddings, returns the batch embedding as well as all possible candidates to evaluate link prediction against.
+- `inference_prepare_candidates`: Helper method for the link prediction evaluation. Given the current batch indices and full embeddings, returns the batch embedding as well as all possible candidates to evaluate link prediction against.
+- `inference_scoring_function`: Method that takes as input the output of `inference_prepare_candidates` and assign a score for each possible candidate of a missing triple.
