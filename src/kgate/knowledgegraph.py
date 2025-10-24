@@ -748,6 +748,9 @@ class KnowledgeGraph(Dataset):
         
         return embeddings
 
+    def clean(self):
+        self.triple_types = [triple for triple in self.triple_types if triple[1] != "self"]
+
     @staticmethod
     def from_hetero_data(hetero_data: HeteroData):
         pass

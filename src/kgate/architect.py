@@ -871,17 +871,29 @@ class Architect(Model):
         
         return pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
 
-    def load_checkpoint(self, path: Path) -> dict:
-        """Parse a checkpoint to ensure it can properly be loaded"""
+    def load_checkpoint(self, path: Path, loose=False) -> dict:
+        """Parse an Architect checkpoint to ensure it can properly be loaded.
+        
+        Arguments
+        ---------
+        path: pathlib.Path
+            The path to the checkpoint that will be loaded
+        loose: bool, default to False
+            If true, will try to change the current configuration to match the checkpoint's and avoid errors.
+            
+        Returns
+        -------
+        checkpoint: dict
+            The loaded checkpoint as a dictionnary."""
         checkpoint = torch.load(path, map_location=self.device, weights_only=False)
 
         # Check entity and relation dict size
-        assert len(checkpoint["relations"]["weights"]) == self.n_rel, f"Mismatch between the number of relations in the checkpoint ({len(checkpoint['relations']['weights'])} and the current configuration ({self.n_rel})!"
+        assert len(checkpoint["relations"]["weight"]) == self.n_rel, f"Mismatch between the number of relations in the checkpoint ({len(checkpoint['relations']['weight'])}) and the current configuration ({self.n_rel})!"
 
         if isinstance(self.encoder, GNN):
-            assert len(checkpoint["entities"]) == len(self.kg_train.nt2ix), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['entities'])} and the current configuration ({len(self.kg_train.nt2ix)})!"
+            assert len(checkpoint["entities"]) == len(self.kg_train.nt2ix), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({len(self.kg_train.nt2ix)})!"
         else:
-            assert len(checkpoint["entities"]["weights"]) != self.n_ent, f"Mismatch between the number of entities in the checkpoint ({len(checkpoint['entities'])} and the current configuration ({self.n_ent})!"
+            assert len(checkpoint["entities"]["weight"]) != self.n_ent, f"Mismatch between the number of entities in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({self.n_ent})!"
 
         if "encoder" in checkpoint:
             assert checkpoint["encoder"].keys() == self.encoder.state_dict().keys(), "Mismatch between the checkpoint convolution layers and the current configuration's."
@@ -997,6 +1009,10 @@ class Architect(Model):
 
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
+            # As I understand it, this tensor is larger than needs to be because it needs to account for every possible
+            # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
+            # which corresponds to the indices that are filled here.
+            # TODO: See if making it a sparse tensor can spare memory
             embeddings: torch.Tensor = torch.zeros((kg.n_ent, self.enc_emb_dim), device=self.device, dtype=torch.float)
 
             for node_type, idx in input.mapping.items():

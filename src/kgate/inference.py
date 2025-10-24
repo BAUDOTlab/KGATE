@@ -165,7 +165,7 @@ class EntityInference(infer.EntityInference):
                  b_size: int,
                  encoder: DefaultEncoder | GNN,
                  decoder: Model,
-                 node_embeddings: nn.Embedding | nn.ParameterList, 
+                 node_embeddings: nn.ParameterList, 
                  relation_embeddings: nn.Embedding,
                  verbose:bool=True,
                  **_):
@@ -178,7 +178,7 @@ class EntityInference(infer.EntityInference):
 
             predictions = torch.empty(size=(len(ent_idx), top_k), device=device).long()
             scores = torch.empty(size=(len(ent_idx), top_k), device=device).long()
-            embeddings = node_embeddings.weight.data
+
 
             for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                                 unit="batch", disable=(not verbose),
@@ -197,11 +197,15 @@ class EntityInference(infer.EntityInference):
                         edge_index = edge_index
                         )
                     
+                    embeddings: torch.Tensor = torch.zeros(node_embeddings[0].size(), device=device, dtype=torch.float)
+
                     input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.edgelist[:, edge_mask], node_embeddings)
                     encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
             
                     for node_type, idx in input.mapping.items():
                         embeddings[idx] = encoder_output[node_type]
+                else:
+                    embeddings = node_embeddings[0][known_ents]
 
                 if missing == "head":
                     _, t_emb, rel_emb, candidates = decoder.inference_prepare_candidates(h_idx = tensor([], device=device).long(), 

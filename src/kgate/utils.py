@@ -337,6 +337,8 @@ def merge_kg(kg_list: List[KnowledgeGraph], complete_edgelist: bool = False) -> 
     KnowledgeGraph
         The merged KnowledgeGraph object."""
     first_kg = kg_list[0]
+    for kg in kg_list:
+        kg.clean()
     assert all(first_kg.ent2ix == kg.ent2ix for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different ent2ix."
     assert all(first_kg.rel2ix == kg.rel2ix for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different rel2ix."
     assert all(first_kg.nt2ix == kg.nt2ix for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different nt2ix."
