@@ -35,6 +35,32 @@ class RESCAL(RESCALModel):
     def get_embeddings(self) -> Dict[str,Tensor]:
         return {"rel_mat" : self.rel_mat.weight.data.view(-1, self.emb_dim, self.emb_dim)}
     
+    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
+        """Normalize parameters for the RESCAL model.
+        
+        According to the original paper, the entity embeddings should be normalized.
+        
+        Arguments
+        ---------
+            ent_emb: torch.nn.ParameterList
+                The entity embedding as a ParameterList containing one Parameter by node type,
+                or only one if there is no node type. All Parameters should be of the same size
+                (n_ent,emb_dim)
+            rel_emb: torch.nn.Embedding
+                The relation embeddings, of size (n_rel, rel_emb_dim)
+        
+        Returns
+        -------
+            ent_emb : torch.nn.ParameterList
+                The normalized entity embedding object.
+            rel_emb : torch.nn.Embedding
+                The normalized relations embedding object.
+        """
+
+        for emb in ent_emb:
+            emb.data = normalize(emb.data, p=2, dim=1)
+        return ent_emb, rel_emb
+
     def inference_prepare_candidates(self, *, 
                                     h_idx: Tensor, 
                                     t_idx: Tensor, 
@@ -73,6 +99,31 @@ class DistMult(DistMultModel):
         h_norm = normalize(h_emb, p=2, dim=1)
         t_norm = normalize(t_emb, p=2, dim=1)
         return (h_norm * r_emb * t_norm).sum(dim=1)
+    
+    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
+        """Normalize parameters for the DistMult model.
+        
+        According to the original paper, the entity embeddings should be normalized.
+        
+        Arguments
+        ---------
+            ent_emb: torch.nn.ParameterList
+                The entity embedding as a ParameterList containing one Parameter by node type,
+                or only one if there is no node type. All Parameters should be of the same size
+                (n_ent,emb_dim)
+            rel_emb: torch.nn.Embedding
+                The relation embeddings, of size (n_rel, rel_emb_dim)
+        
+        Returns
+        -------
+            ent_emb : torch.nn.ParameterList
+                The normalized entity embedding object.
+            rel_emb : torch.nn.Embedding
+                The normalized relations embedding object.
+        """
+        for emb in ent_emb:
+            emb.data = normalize(emb.data, p=2, dim=1)
+        return ent_emb, rel_emb
     
     def inference_prepare_candidates(self, *, 
                                     h_idx: Tensor, 

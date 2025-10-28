@@ -12,6 +12,7 @@ import warnings
 import yaml
 import platform
 from typing import Tuple, Dict, List, Any, Set, Literal
+from collections.abc import Callable
 
 import pandas as pd
 import numpy as np
@@ -179,7 +180,7 @@ class Architect(Model):
         self.sampler: sampling.NegativeSampler = None
         self.scheduler: lr_scheduler.LRScheduler | None = None
         self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
-        self.node_embeddings: nn.ParameterList | nn.Embedding
+        self.node_embeddings: nn.ParameterList
 
 
     def initialize_encoder(self, encoder_name: str = "", gnn_layers: int = 0) -> DefaultEncoder | GCNEncoder | GATEncoder:
@@ -504,9 +505,11 @@ class Architect(Model):
         logging.info("Initializing embeddings...")
         if pretrained is not None and pretrained.exists():
             self.node_embeddings = torch.load(pretrained)
-        elif not isinstance(self.encoder, GNN):
-            self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
+        # elif not isinstance(self.encoder, GNN):
+        #     self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
         else:
+            assert isinstance(self.encoder, GNN) or len(self.kg_train.nt2ix) == 1, "When using a GNN as encoder, the node_type shouldn't be supplied."
+
             self.node_embeddings = nn.ParameterList()
             ix2nt = {v: k for k,v in self.kg_train.nt2ix.items()}
             for node_type in self.kg_train.nt2glob:
@@ -866,13 +869,10 @@ class Architect(Model):
         logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
         checkpoint = torch.load(self.checkpoints_dir.joinpath(best_model), map_location=self.device, weights_only=False)
 
-        if isinstance(self.encoder, GNN):
-            self.node_embeddings = nn.ParameterList()
-            for nt in checkpoint["entities"]:
-                self.node_embeddings.append(checkpoint["entities"][nt].to(self.device))
-        else:
-            self.node_embeddings = init_embedding(self.n_ent, self.emb_dim, self.device)
-
+        self.node_embeddings = nn.ParameterList()
+        for nt in checkpoint["entities"]:
+            self.node_embeddings.append(checkpoint["entities"][nt].to(self.device))
+        
         self.rel_emb.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])
         if "encoder" in checkpoint:
@@ -1002,16 +1002,13 @@ class Architect(Model):
     def normalize_parameters(self):
         # Some decoders should not normalize parameters or do so in a different way.
         # In this case, they should implement the function themselves and we return it.
-        normalize_func = getattr(self.decoder, "normalize_params", None)
+        normalize_func: Callable[..., Tuple[nn.ParameterList, nn.Embedding]] | None = getattr(self.decoder, "normalize_params", None)
         # If the function only accept one parameter, it is the base torchKGE one,
         # we don't want that.
         if callable(normalize_func) and len(signature(normalize_func).parameters) > 1:
-            stop_norm = normalize_func(rel_emb = self.rel_emb, ent_emb = self.node_embeddings)
-            if stop_norm: return
-        
-        
-        if not isinstance(self.encoder, GNN):
-            self.node_embeddings.weight.data = normalize(self.node_embeddings.weight.data, p=2, dim=1)
+            normalized_embeddings = normalize_func(ent_emb = self.node_embeddings, rel_emb = self.rel_emb)
+            assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the entity embedding and the relation embedding."
+            self.node_embeddings, self.rel_emb = normalized_embeddings
             
         logging.debug(f"Normalized all embeddings")
 

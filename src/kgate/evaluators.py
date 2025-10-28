@@ -84,7 +84,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 encoder: DefaultEncoder | GNN,
                 decoder: Model, 
                 knowledge_graph: KnowledgeGraph, 
-                node_embeddings: nn.ParameterList | nn.Embedding, 
+                node_embeddings: nn.ParameterList, 
                 relation_embeddings: nn.Embedding,
                 verbose: bool=True):
         """
@@ -148,7 +148,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 for node_type, idx in input.mapping.items():
                     embeddings[idx] = encoder_output[node_type]
             else:
-                embeddings = node_embeddings.weight.data
+                embeddings = node_embeddings[0].data
 
             h_emb, t_emb, r_emb, candidates = decoder.inference_prepare_candidates(h_idx = h_idx, 
                                                                                    t_idx = t_idx, 
