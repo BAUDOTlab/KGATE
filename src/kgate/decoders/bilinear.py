@@ -196,7 +196,7 @@ class ComplEx(ComplExModel):
         return (re_h * (re_r * re_t + im_r * im_t) + 
                 im_h * (re_r * im_t - im_r * re_t)).sum(dim=1)
     
-    def get_embeddings(self) -> Dict[str, Tensor]:
+    def get_embeddings(self) -> None:
         return None
     
     def inference_prepare_candidates(self, *, 
@@ -219,7 +219,7 @@ class ComplEx(ComplExModel):
         if entities:
             re_candidates, im_candidates = tensor_split(node_embeddings, 2, dim=1)
         else:
-            re_candidates, im_candidates = tensor_split(relation_embeddings, 2, dim=1)
+            re_candidates, im_candidates = tensor_split(relation_embeddings.weight.data, 2, dim=1)
         
         re_candidates = re_candidates.unsqueeze(0).expand(b_size, -1, -1)
         im_candidates = im_candidates.unsqueeze(0).expand(b_size, -1, -1)
