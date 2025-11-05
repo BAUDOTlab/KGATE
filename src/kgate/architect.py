@@ -162,7 +162,7 @@ class Architect(Model):
         else:
             if kg is not None:
                 logging.info("Using given KG...")
-                if isinstance(kg, tuple):
+                if isinstance(kg, tuple) and len(kg) == 3:
                     self.kg_train, self.kg_val, self.kg_test = kg
                 else:
                     raise ValueError("Given KG needs to be a tuple of training, validation and test KG if it is preprocessed.")
