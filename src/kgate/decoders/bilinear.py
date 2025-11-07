@@ -71,7 +71,7 @@ class DistMult(DistMultModel):
         del self.ent_emb
         del self.rel_emb
     
-    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, r_idx: Tensor, **_) -> Tensor:
+    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, **_) -> Tensor:
         h_norm = normalize(h_emb, p=2, dim=1)
         t_norm = normalize(t_emb, p=2, dim=1)
         return (h_norm * r_emb * t_norm).sum(dim=1)

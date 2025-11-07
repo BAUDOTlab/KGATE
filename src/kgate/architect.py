@@ -130,10 +130,13 @@ class Architect(Model):
 
         set_random_seeds(self.config["seed"])
 
+        # For most models, the embedding dimensions of the relation must be same as the node embedding dimension.
+        # Only a few model allow a difference between the two
         self.emb_dim: int = self.config["model"]["emb_dim"]
         self.rel_emb_dim: int = self.config["model"]["rel_emb_dim"]
         if self.rel_emb_dim == -1:
             self.rel_emb_dim = self.emb_dim
+
         self.eval_batch_size: int = self.config["training"]["eval_batch_size"]
 
         if metadata is not None and not set(["id","type"]).issubset(metadata.keys()):
@@ -156,6 +159,8 @@ class Architect(Model):
         run_kg_prep: bool = self.config["run_kg_preprocess"]
 
         if run_kg_prep:
+            # Mandatory step when using a fresh KG. The preparation step runs the data leakage detection procedure
+            # and applies a smart split on the KG.
             logging.info(f"Preparing KG...")
             self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config, kg, df, self.metadata)
             logging.info("KG preprocessed.")
@@ -184,12 +189,22 @@ class Architect(Model):
 
     @property
     def enc_emb_dim(self):
+        """Returns the embedding dimensions of the encoder, equal to `self.emb_dim * self.decoder.embedding_spaces`.
+        
+        For most decoders, this will be the same as the `self.emb_dim`. However, a few decoders
+        use multiple embedding spaces, in which case the encoder output will have twice as many
+        embedding dimensions, which will then be split into as much embedding spaces as required."""
         if self.decoder is not None and hasattr(self.decoder,"embedding_spaces"):
             return self.emb_dim * self.decoder.embedding_spaces
         return self.emb_dim
 
     @property
     def enc_rel_emb_dim(self):
+        """Returns the embedding dimensions of the encoder, equal to `self.emb_dim * self.decoder.embedding_spaces`.
+        
+        For most decoders, this will be the same as the `self.emb_dim`. However, a few decoders
+        use multiple embedding spaces, in which case the encoder output will have twice as many
+        embedding dimensions, which will then be split into as much embedding spaces as required."""
         if self.decoder is not None and hasattr(self.decoder,"embedding_spaces"):
             return self.rel_emb_dim * self.decoder.embedding_spaces
         return self.rel_emb_dim
@@ -216,8 +231,8 @@ class Architect(Model):
         gnn_layers: int, optional
             Number of hidden layers for the encoder. Only used for deep learning encoders.
 
-        Warns
-        -----
+        Warnings
+        --------
         If the provided encoder name is not supported, it will default to a random initialization and warn the user.
 
         Returns
@@ -232,7 +247,8 @@ class Architect(Model):
         if gnn_layers == 0:
             gnn_layers = encoder_config["gnn_layer_number"]
 
-        last_triple_type = self.kg_train.triples[-1]
+        # Make sure last_triple_type is really not useful
+        #last_triple_type = self.kg_train.triples[-1]
         edge_types = self.kg_train.triple_types#[:last_triple_type + 1]
 
         match encoder_name:
@@ -297,17 +313,13 @@ class Architect(Model):
         
         decoder_config: dict = self.config["model"]["decoder"]
 
-        if decoder_name == "":
-            decoder_name = decoder_config["name"]
-        if dissimilarity == "":
-            dissimilarity = decoder_config["dissimilarity"]
-        if margin == 0:
-            margin = decoder_config["margin"]
-        if n_filters == 0:
-            n_filters = decoder_config["n_filters"]
+        decoder_name = decoder_name or decoder_config["name"]
+        dissimilarity = dissimilarity or decoder_config["dissimilarity"]
+        margin = margin or decoder_config["margin"]
+        n_filters = n_filters or decoder_config["n_filters"]
 
-        # Translational models
         match decoder_name:
+            # Translational models
             case "TransE":
                 decoder = TransE(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel,
                             dissimilarity_type=dissimilarity)
@@ -321,6 +333,7 @@ class Architect(Model):
             case "TransD":
                 decoder = TransD(self.emb_dim, self.rel_emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
                 criterion = MarginLoss(margin)
+            # Bilinear models
             case "RESCAL":
                 decoder = RESCAL(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
                 criterion = BinaryCrossEntropyLoss()
@@ -330,6 +343,7 @@ class Architect(Model):
             case "ComplEx":
                 decoder = ComplEx(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
                 criterion = BinaryCrossEntropyLoss()
+            # Convolutional models
             case "ConvKB":
                 decoder = ConvKB(self.emb_dim, n_filters, self.kg_train.n_ent, self.kg_train.n_rel)
                 criterion = BinaryCrossEntropyLoss()
@@ -597,8 +611,6 @@ class Architect(Model):
             attributes: dict(node_type, embedding) containing the embedding for each type of node.
             dry_run: Initialize every variable and the trainer, but doesn't start the training.
             """
-        use_cuda = "all" if self.device.type == "cuda" else None
-
         training_config: dict = self.config["training"]
         self.max_epochs: int = training_config["max_epochs"]
         self.train_batch_size: int = training_config["train_batch_size"]
@@ -754,6 +766,15 @@ class Architect(Model):
     
 
     def test(self):
+        """Load the best model after training and evaluate it on the test set.
+        
+        The evaluation is ran both on the integral KG as well as each relation type. The results of the evaluation
+        are stored in a file at `self.config["output_directory"]/evaluation_metrics.yaml` in addition to being returned.
+        
+        Returns
+        -------
+        results: dict
+            A dictionnary containing the evaluation metrics."""
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -771,13 +792,17 @@ class Architect(Model):
         remaining_relations = all_relations - set(list_rel_1) - set(list_rel_2)
         remaining_relations = list(remaining_relations)
 
+        # Get the metrics for the relations we created inverse for
         total_metrics_sum_list_1, fact_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_relations(
             self.kg_test, list_rel_1)
+        # Get the metrics for user-defined relations of interest
         total_metrics_sum_list_2, fact_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_relations(
             self.kg_test, list_rel_2)
+        # Get the metrics for all the remaining relations
         total_metrics_sum_remaining, fact_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
             self.kg_test, remaining_relations)
 
+        # Compute the global metrics, which is just the average of all previous metrics
         global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (fact_count_list_1 + fact_count_list_2 + fact_count_remaining)
 
         logging.info(f"Final Test metrics with best model: {global_metrics}")
@@ -823,7 +848,7 @@ class Architect(Model):
         return results
         
     def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], top_k:int=100):
-        """Infer missing entities or relations, depending on the given parameters"""
+        """Infer missing entities or relations to complete the given triplets."""
         if not sum([len(arr) > 0 for arr in [heads,rels,tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, relations or tails.")
         torch.cuda.empty_cache()
