@@ -15,9 +15,17 @@ The **knowledge graph** can be given as a csv file with at least the columns `fr
 
 If a data structure is not supported yet, you can ask for it to be added or implement it yourself and submit a pull request on the [repository](https://github.com/BAUDOTlab/KGATE).
 
-## Filtering reverse triples
+## Filtering out duplicate triples
 
-For every relation, if a triple *(a,r,b)* also has its reverse *(b,r,a)* in the **knowledge graph**, the second instance is removed from the dataset. Indeed, some models cannot handle symmetric relationships, and the reverse relation might have a slightly different semantic meaning.
+*related parameter: preprocessing.remove_duplicate_triples*
+
+Sometimes, most commonly when a **knowledge graph** is built using an automated system, the exact same triple *(a,r,b)*. The presence of duplicates brings a lot of possible biases, so they are detected and entirely removed from the dataset.
+
+## Filtering out reverse triples
+
+*related parameters: preprocessing.flag_near_duplicate_relations
+
+For every relation, if a triple *(a,r,b)* also has its reverse *(b,r,a)* in the **knowledge graph**, the second instance is flagged and taken out of the dataset. Indeed, some models cannot handle symmetric relationships, and the reverse relation might have a slightly different semantic meaning.
 
 ```{note}
 No data is ever truly removed. In reality, these triples are stored in the `knowledge_graph.removed_triples` attribute, but they are not used at all during training. However, they are considered true information when running the inference module on the knowledge graph. The original knowledge graph (including all flagged triples) can be recovered at any time using the `utils.merge_kg()` function.
@@ -29,4 +37,6 @@ Next, the automated **data leakage** checks run sequentially to ensure the best 
 
 ## Adding directionality
 
-Most **knowledge graph embedding models** need a fully directed graph 
+Most **knowledge graph embedding models** need a fully directed graph to operate properly. However, relations in biomedical knowledge graphs are often undirected. The best example is the PPI relation, indicating an interaction of any kind between two proteins. When an undirected relation is only present as a triplet *(a,r,b)*, **KGATE** will create the reverse relation *(b,r_inv,a)*, where *r_inv* has the same semantical meaning as *r*.
+
+ [Filtering out reverse triples](#filtering-out-reverse-triples)
