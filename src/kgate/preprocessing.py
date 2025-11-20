@@ -137,7 +137,31 @@ def load_knowledge_graph(pickle_filename: Path) -> Tuple[KnowledgeGraph,Knowledg
     return kg_train, kg_val, kg_test
 
 def clean_knowledge_graph(kg: KnowledgeGraph, config: dict) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
-    """Clean and prepare the knowledge graph according to the configuration."""
+    """Clean and prepare the knowledge graph according to the configuration.
+    
+    Every step of the preprocessing is optional. For a more detailed explanation, please refer to the documentation.
+    The preprocessing does the following:
+    - Duplicate removal
+    - Near duplicate relation flagging
+    - Transformation of undirected relation to directed one
+    - Split into train, validation and test datasets
+    - Data Leakage control procedure
+    
+    Arguments
+    ---------
+    kg: KnowledgeGraph
+        The input, raw knowledge graph
+    config: dict
+        The configuration dict
+        
+    Returns
+    -------
+    kg_train: KnowledgeGraph
+        The training dataset
+    kg_val: KnowledgeGraph
+        The validation dataset
+    kg_test: KnowledgeGraph
+        The test dataset."""
 
     set_random_seeds(config["seed"])
 
