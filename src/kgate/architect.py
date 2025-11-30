@@ -819,8 +819,30 @@ class Architect(Model):
 
         return results
         
-    def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], top_k:int=100):
-        """Infer missing entities or relations, depending on the given parameters"""
+    def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], top_k:int=100, identity:str=""):
+        """Infer missing entities or relations, depending on the given parameters.
+        
+        Only two of heads, rels and tails must be given, and the other one will be inferred. For example, when inferring tails,
+        for each couple `heads[n]` and `rels[n]`, `top_k` tails will be predicted. The values in those list must correspond to
+        the `identity` of the metadata, by default the current identity. If there is no metadata, the node ID is used.
+        
+        Arguments
+        ---------
+            heads: List[str], optional
+                List of known head entities
+            rels: List[str], optional
+                List of known relations
+            tails: List[str], optional
+                List of known tail entities
+            top_k: int, optional
+                Number of prediction to return for each couple in the list.
+            identity: str, optional
+                The identity to use to predict links. Default is the current identity.
+                
+        Returns
+        -------
+            predictions: pd.DataFrame
+                A DataFrame containing the prediction alongside their score."""
         if not sum([len(arr) > 0 for arr in [heads,rels,tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, relations or tails.")
         torch.cuda.empty_cache()
