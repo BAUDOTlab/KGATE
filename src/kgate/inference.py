@@ -93,7 +93,7 @@ class EdgeInference:
                 batch_size: int,
                 encoder: DefaultEncoder | GNN,
                 decoder: TranslationalDecoder | BilinearDecoder | ConvolutionalDecoder,
-                node_embeddings: nn.ParameterList | nn.Embedding, 
+                node_embeddings: nn.ParameterList, 
                 edge_embeddings: nn.Embedding, 
                 verbose: bool = True,
                 **_):
@@ -139,7 +139,7 @@ class EdgeInference:
             dataloader = DataLoader(inference_kg, batch_size = batch_size)
 
             predictions = torch.empty(size = (len(head_indices), top_k), device = device).long()   
-            node_embeddings = node_embeddings.weight.data
+            node_embeddings = node_embeddings[0].data
 
             for i, batch in tqdm(enumerate(dataloader),
                                 total = len(dataloader),
@@ -147,7 +147,8 @@ class EdgeInference:
                                 disable = (not verbose),
                                 desc = "Inference"):
                 head_indices, tail_indices = batch[0], batch[1]
-                
+                embeddings = torch.zeros(len(head_indices), node_embeddings[0].shape[1], device=device, dtype=torch.float)
+
                 if isinstance(encoder, GNN):
                     seed_nodes = batch.unique()
                     hop_count = encoder.n_layers
@@ -159,7 +160,7 @@ class EdgeInference:
                         edge_index = edge_list
                         )
                     
-                    input = self.kg.get_encoder_input(self.kg.graphindices[:, edge_mask], node_embeddings)
+                    input = self.kg.get_encoder_input(self.kg.graphindices[:, edge_mask].to(device), node_embeddings)
                     encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
             
                     for node_type, index in input.mapping.items():
@@ -172,6 +173,7 @@ class EdgeInference:
                                                                                                         edge_embeddings = edge_embeddings, 
                                                                                                         node_inference = False)
                 scores = decoder.inference_score(head_embeddings, tail_embeddings, candidates)
+
 
                 scores = filter_scores(scores, self.kg.graphindices, "edge", head_indices, tail_indices, None)
 
@@ -325,7 +327,7 @@ class NodeInference:
                 batch_scores, indices = batch_scores.sort(descending = True)
                 batch_size = min(batch_size, len(batch_scores))
                 
-            predictions[i * batch_size: (i+1) * batch_size] = indices[:, :top_k]
-            scores[i * batch_size: (i+1) * batch_size] = batch_scores[:, :top_k]
+                predictions[i * batch_size: (i+1) * batch_size] = indices[:, :top_k]
+                scores[i * batch_size: (i+1) * batch_size] = batch_scores[:, :top_k]
 
             return predictions.cpu(), scores.cpu()
