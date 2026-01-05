@@ -406,7 +406,13 @@ class KnowledgeGraph(Dataset):
         return self.n_triples
 
     @property
-    def identity(self) -> pd.DataFrame:
+    def identity(self) -> str:
+        """Get the name of the current identity"""
+
+        return self._identity
+
+    @property
+    def identities(self) -> pd.DataFrame:
         """Get the DataFrame containing all the identity of the knowledge graph nodes.
         
         The default identity is the node ID, but different values can be set using the `set_identity` method."""
