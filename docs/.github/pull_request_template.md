@@ -6,7 +6,7 @@
 Make sure your title matches the https://www.conventionalcommits.org/en/v1.0.0/ format.
 Ideally the title is less than or equal to 72 characters (GitHub cuts off commit titles longer than this length).
 
-PLACEHOLDER: See https://github.com/BAUDOTlab/KGATE/blob/dev/CONTRIBUTING.md#-submitting-a-pull-request
+TODO, rework/add: See https://github.com/BAUDOTlab/KGATE/blob/dev/CONTRIBUTING.md#-submitting-a-pull-request
 for more information on the allowed scopes and prefixes.
 
 Example:
@@ -56,7 +56,7 @@ Ex: What files have been changed? What classes/functions/variables/etc have been
 ## How to test the changes?
 <!--
 How can a reviewer test your changes once they check out on your branch?
-PLACEHOLDER: Did you make use of the `src/overrides.ts` file?
+TODO, rework/add: Did you make use of the `utils.ts` file?
 Did you introduce any automated tests?
 Do the reviewers need to do something special in order to test your changes?
 -->
@@ -72,7 +72,7 @@ Do the reviewers need to do something special in order to test your changes?
 - [ ] I have tested the changes manually
 
 <!--
-PLACEHOLDER: for when the project has tests
+TODO, rework/add: for when the project has tests
 - [ ] The full test suite still passes (`pnpm test:silent`)
-  - [ ] I have created new automated tests (`pnpm test:create`) or updated existing tests related to the PR's changes
+  - [ ] I have created new automated tests (`pytest tests/`) or updated existing tests related to the PR's changes
 -->
