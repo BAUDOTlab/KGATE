@@ -56,7 +56,7 @@ Ex: What files have been changed? What classes/functions/variables/etc have been
 ## How to test the changes?
 <!--
 How can a reviewer test your changes once they check out on your branch?
-TODO, rework/add: Did you make use of the `utils.ts` file?
+TODO, rework/add: Did you make use of the `utils.py` file?
 Did you introduce any automated tests?
 Do the reviewers need to do something special in order to test your changes?
 -->
