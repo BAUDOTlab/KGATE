@@ -14,6 +14,7 @@ from glob import glob
 from inspect import signature
 from pathlib import Path
 from typing import Tuple, Dict, List, Any, Set, Literal
+from collections.abc import Callable
 
 import pandas as pd
 import numpy as np
