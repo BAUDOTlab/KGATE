@@ -169,8 +169,8 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGrap
     return proportions
 
 def concat_kgs(kg_tr: KnowledgeGraph, kg_val: KnowledgeGraph, kg_te: KnowledgeGraph):
-    h = cat((kg_tr.head_idx, kg_val.head_idx, kg_te.head_idx))
-    t = cat((kg_tr.tail_idx, kg_val.tail_idx, kg_te.tail_idx))
+    h = cat((kg_tr.head_indices, kg_val.head_indices, kg_te.head_indices))
+    t = cat((kg_tr.tail_indices, kg_val.tail_indices, kg_te.tail_indices))
     r = cat((kg_tr.relations, kg_val.relations, kg_te.relations))
     return h, t, r
 
@@ -339,21 +339,21 @@ def merge_kg(kg_list: List[KnowledgeGraph], complete_edgelist: bool = False) -> 
     first_kg = kg_list[0]
     for kg in kg_list:
         kg.clean()
-    assert all(first_kg.ent2ix == kg.ent2ix for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different ent2ix."
-    assert all(first_kg.rel2ix == kg.rel2ix for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different rel2ix."
-    assert all(first_kg.nt2ix == kg.nt2ix for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different nt2ix."
+    assert all(first_kg.node_to_index == kg.node_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different ent2ix."
+    assert all(first_kg.edge_to_index == kg.edge_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different rel2ix."
+    assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different nt2ix."
     assert all(first_kg.triple_types == kg.triple_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triple_types."
 
     new_edgelist = cat([kg.edgelist for kg in kg_list], dim=1)
     if complete_edgelist:
-        removed_edgelist = cat([kg.removed_triples for kg in kg_list], dim=1)
+        removed_edgelist = cat([kg.removed_triplets for kg in kg_list], dim=1)
         new_edgelist = cat([new_edgelist, removed_edgelist], dim=1)
     
     return first_kg.__class__(
         edgelist=new_edgelist,
-        ent2ix=first_kg.ent2ix,
-        rel2ix=first_kg.rel2ix,
-        nt2ix=first_kg.nt2ix,
+        ent2ix=first_kg.node_to_index,
+        rel2ix=first_kg.edge_to_index,
+        nt2ix=first_kg.node_type_to_index,
         triple_types=first_kg.triple_types
     )
 
@@ -406,7 +406,7 @@ class HeteroMappings():
             self.hetero_to_df[ntype] = {v: k for k, v in node_dict[ntype].items()}  # Mapping HeteroData -> DataFrame
             
             # Correspondings between DataFrame and KnowledgeGraph (use kg_train.ent2ix)
-            self.df_to_kg[ntype] = {node: kg.ent2ix[node] for node in nodes}  # DataFrame -> KG
+            self.df_to_kg[ntype] = {node: kg.node_to_index[node] for node in nodes}  # DataFrame -> KG
             self.kg_to_df[ntype] = {v: k for k, v in self.df_to_kg[ntype].items()}  # KG -> DataFrame
             
             # Mapping KG -> HeteroData via DataFrame

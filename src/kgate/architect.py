@@ -30,7 +30,7 @@ from torch.nn import Parameter
 from torch.nn.functional import normalize
 from torch.utils.data import DataLoader
 import torch.optim as optim
-from torch.optim import lr_scheduler
+from torch.optim import lr_scheduler as learning_rate_scheduler
 
 from ignite.metrics import RunningAverage
 from ignite.engine import Events, Engine
@@ -68,7 +68,7 @@ class Architect(Model):
         Either a knowledge graph that has already been preprocessed by KGATE and split accordingly, or an unprocessed KnowledgeGraph object.
         In the first case, the knowledge graph won't be preprocessed even if `config.run_kg_preprocess` is set to True.
         In the second case, an error is thrown if the `config.run_kg_preprocess` is set to False.
-    df : pd.DataFrame, optional
+    dataframe : pd.DataFrame, optional
         The knowledge graph as a pandas dataframe containing at least the columns from, to and rel
     metadata : pd.DataFrame, optional
         The metadata as a pandas dataframe, with at least the columns id and type, where id is the name of the node as it is in the
@@ -76,7 +76,7 @@ class Architect(Model):
         all nodes will be considered to be the same node type.
     cuddn_benchmark : bool, default to True
         Benchmark different convolution algorithms to chose the optimal one. Initialization is slightly longer when it is enabled, and only if cuda is available.
-    num_cores : int, default to 0
+    number_of_cores : int, default to 0
         Set the number of cpu cores used by KGATE. If set to 0, the maximum number of available cores is used.
     kwargs: dict
         Inline configuration parameters. The name of the arguments must match the parameters found in `config_template.toml`.
@@ -99,9 +99,9 @@ class Architect(Model):
     While it is possible to give any part of the configuration, even everything, as kwargs, it is recommended
     to use a separated configuration file to ensure reproducibility of training.
     """
-    def __init__(self, config_path: str = "", kg: Tuple[KnowledgeGraph,KnowledgeGraph,KnowledgeGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None, metadata: pd.DataFrame | None = None, cudnn_benchmark: bool = True, num_cores:int = 0, **kwargs):
+    def __init__(self, config_path: str = "", kg: Tuple[KnowledgeGraph,KnowledgeGraph,KnowledgeGraph] | KnowledgeGraph | None = None, dataframe: pd.DataFrame | None = None, metadata: pd.DataFrame | None = None, cudnn_benchmark: bool = True, number_of_cores:int = 0, **kwargs):
         # kg should be of type KnowledgeGraph, if exists use it instead of the one in config
-        # df should have columns from, rel and to
+        # dataframe should have columns from, rel and to
         self.config: dict = parse_config(config_path, kwargs)
 
         if torch.cuda.is_available():
@@ -113,17 +113,17 @@ class Architect(Model):
         # Otherwise, use all the cores the process has access to.
             
         if platform.system() == "Windows":
-            num_cores: int = num_cores if num_cores > 0 else os.cpu_count()
+            number_of_cores: int = number_of_cores if number_of_cores > 0 else os.cpu_count()
         else:
-            num_cores: int = num_cores if num_cores > 0 else len(os.sched_getaffinity(0))
-        logging.info(f"Setting number of threads to {num_cores}")
-        torch.set_num_threads(num_cores)
+            number_of_cores: int = number_of_cores if number_of_cores > 0 else len(os.sched_getaffinity(0))
+        logging.info(f"Setting number of threads to {number_of_cores}")
+        torch.set_num_threads(number_of_cores)
 
-        outdir: Path = Path(self.config["output_directory"])
+        output_directory: Path = Path(self.config["output_directory"])
         # Create output folder if it doesn't exist
-        logging.info(f"Output folder: {outdir}")
-        outdir.mkdir(parents=True, exist_ok=True)
-        self.checkpoints_dir: Path = outdir.joinpath("checkpoints")
+        logging.info(f"Output folder: {output_directory}")
+        output_directory.mkdir(parents=True, exist_ok=True)
+        self.checkpoints_directory: Path = output_directory.joinpath("checkpoints")
 
 
         self.device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -131,11 +131,11 @@ class Architect(Model):
 
         set_random_seeds(self.config["seed"])
 
-        self.emb_dim: int = self.config["model"]["emb_dim"]
-        self.rel_emb_dim: int = self.config["model"]["rel_emb_dim"]
-        if self.rel_emb_dim == -1:
-            self.rel_emb_dim = self.emb_dim
-        self.eval_batch_size: int = self.config["training"]["eval_batch_size"]
+        self.embedding_dimensions: int = self.config["model"]["emb_dim"]
+        self.edge_embedding_dimensions: int = self.config["model"]["rel_emb_dim"]
+        if self.edge_embedding_dimensions == -1:
+            self.edge_embedding_dimensions = self.embedding_dimensions
+        self.evaluation_batch_size: int = self.config["training"]["eval_batch_size"]
 
         if metadata is not None and not set(["id","type"]).issubset(metadata.keys()):
             raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
@@ -154,46 +154,46 @@ class Architect(Model):
                 raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
 
-        run_kg_prep: bool = self.config["run_kg_preprocess"]
+        run_kg_preprocessing: bool = self.config["run_kg_preprocess"]
 
-        if run_kg_prep:
+        if run_kg_preprocessing:
             logging.info(f"Preparing KG...")
-            self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config, kg, df, self.metadata)
+            self.kg_train, self.kg_validation, self.kg_test = prepare_knowledge_graph(self.config, kg, dataframe, self.metadata)
             logging.info("KG preprocessed.")
         else:
             if kg is not None:
                 logging.info("Using given KG...")
                 if isinstance(kg, tuple):
-                    self.kg_train, self.kg_val, self.kg_test = kg
+                    self.kg_train, self.kg_validation, self.kg_test = kg
                 else:
                     raise ValueError("Given KG needs to be a tuple of training, validation and test KG if it is preprocessed.")
             else:
                 logging.info("Loading KG...")
-                self.kg_train, self.kg_val, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
+                self.kg_train, self.kg_validation, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
                 logging.info("Done")
 
-        super().__init__(self.kg_train.n_ent, self.kg_train.n_rel)
+        super().__init__(self.kg_train.n_ent, self.kg_train.edge_count)
         # Initialize attributes
         self.encoder: DefaultEncoder | GNN = None
         self.decoder: Model = None
-        self.criterion: MarginLoss | BinaryCrossEntropyLoss = None
+        self.decoder_loss: MarginLoss | BinaryCrossEntropyLoss = None
         self.optimizer: optim.Optimizer = None
         self.sampler: sampling.NegativeSampler = None
-        self.scheduler: lr_scheduler.LRScheduler | None = None
+        self.scheduler: learning_rate_scheduler.LRScheduler | None = None
         self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
         self.node_embeddings: nn.ParameterList
 
     @property
-    def enc_emb_dim(self):
+    def encoder_node_embedding_dimensions(self):
         if self.decoder is not None and hasattr(self.decoder,"embedding_spaces"):
-            return self.emb_dim * self.decoder.embedding_spaces
-        return self.emb_dim
+            return self.embedding_dimensions * self.decoder.embedding_spaces
+        return self.embedding_dimensions
 
     @property
-    def enc_rel_emb_dim(self):
+    def encoder_edge_embedding_dimensions(self):
         if self.decoder is not None and hasattr(self.decoder,"embedding_spaces"):
-            return self.rel_emb_dim * self.decoder.embedding_spaces
-        return self.rel_emb_dim
+            return self.edge_embedding_dimensions * self.decoder.embedding_spaces
+        return self.edge_embedding_dimensions
 
 
     def initialize_encoder(self, encoder_name: str = "", gnn_layers: int = 0) -> DefaultEncoder | GCNEncoder | GATEncoder:
@@ -240,17 +240,17 @@ class Architect(Model):
             case "Default":
                 encoder = DefaultEncoder()
             case "GCN": 
-                encoder = GCNEncoder(edge_types, self.enc_emb_dim, gnn_layers)
+                encoder = GCNEncoder(edge_types, self.encoder_node_embedding_dimensions, gnn_layers)
             case "GAT":
-                encoder = GATEncoder(edge_types, self.enc_emb_dim, gnn_layers)
+                encoder = GATEncoder(edge_types, self.encoder_node_embedding_dimensions, gnn_layers)
             case "Node2vec":
-                encoder = Node2VecEncoder(self.kg_train.edge_index, self.enc_emb_dim, device=self.device, **encoder_config["params"])
+                encoder = Node2VecEncoder(self.kg_train.edge_index, self.encoder_node_embedding_dimensions, device=self.device, **encoder_config["params"])
             case _:
                 encoder = DefaultEncoder()
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
         return encoder
 
-    def initialize_decoder(self, decoder_name: str = "", dissimilarity: Literal["L1","L2",""] = "", margin: int = 0, n_filters: int = 0) -> Tuple[Model, MarginLoss | BinaryCrossEntropyLoss]:
+    def initialize_decoder(self, decoder_name: str = "", dissimilarity: Literal["L1","L2",""] = "", margin: int = 0, filter_count: int = 0) -> Tuple[Model, MarginLoss | BinaryCrossEntropyLoss]:
         """Create and initialize the decider object according to the configuration or arguments.
 
         The decoders are adapted and inherit from torchKGE decoders to be able to handle heterogeneous data.
@@ -292,7 +292,7 @@ class Architect(Model):
         -------
         decoder
             The decoder object
-        criterion
+        decoder_loss
             The loss object
         """
         
@@ -304,40 +304,40 @@ class Architect(Model):
             dissimilarity = decoder_config["dissimilarity"]
         if margin == 0:
             margin = decoder_config["margin"]
-        if n_filters == 0:
-            n_filters = decoder_config["n_filters"]
+        if filter_count == 0:
+            filter_count = decoder_config["n_filters"]
 
         # Translational models
         match decoder_name:
             case "TransE":
-                decoder = TransE(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel,
+                decoder = TransE(self.embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count,
                             dissimilarity_type=dissimilarity)
-                criterion = MarginLoss(margin)
+                decoder_loss = MarginLoss(margin)
             case "TransH":
-                decoder = TransH(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
-                criterion = MarginLoss(margin)
+                decoder = TransH(self.embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder_loss = MarginLoss(margin)
             case "TransR":
-                decoder = TransR(self.emb_dim, self.rel_emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
-                criterion = MarginLoss(margin)
+                decoder = TransR(self.embedding_dimensions, self.edge_embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder_loss = MarginLoss(margin)
             case "TransD":
-                decoder = TransD(self.emb_dim, self.rel_emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
-                criterion = MarginLoss(margin)
+                decoder = TransD(self.embedding_dimensions, self.edge_embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder_loss = MarginLoss(margin)
             case "RESCAL":
-                decoder = RESCAL(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
-                criterion = BinaryCrossEntropyLoss()
+                decoder = RESCAL(self.embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder_loss = BinaryCrossEntropyLoss()
             case "DistMult":
-                decoder = DistMult(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
-                criterion = BinaryCrossEntropyLoss()
+                decoder = DistMult(self.embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder_loss = BinaryCrossEntropyLoss()
             case "ComplEx":
-                decoder = ComplEx(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
-                criterion = BinaryCrossEntropyLoss()
+                decoder = ComplEx(self.embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder_loss = BinaryCrossEntropyLoss()
             case "ConvKB":
-                decoder = ConvKB(self.emb_dim, n_filters, self.kg_train.n_ent, self.kg_train.n_rel)
-                criterion = BinaryCrossEntropyLoss()
+                decoder = ConvKB(self.embedding_dimensions, filter_count, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder_loss = BinaryCrossEntropyLoss()
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
 
-        return decoder, criterion
+        return decoder, decoder_loss
 
     def initialize_optimizer(self) -> optim.Optimizer:
         """
@@ -384,7 +384,7 @@ class Architect(Model):
         logging.info(f"Optimizer '{optimizer_name}' initialized with parameters: {optimizer_params}")
         return optimizer
 
-    def initialize_sampler(self) -> sampling.NegativeSampler:
+    def initialize_negative_sampler(self) -> sampling.NegativeSampler:
         """Initialize the sampler according to the configuration.
         
             Supported samplers are Positional, Uniform, Bernoulli and Mixed.
@@ -401,25 +401,25 @@ class Architect(Model):
             sampler
                 The initialized sampler"""
         
-        sampler_config: dict = self.config["sampler"]
-        sampler_name: str = sampler_config["name"]
-        n_neg: int = sampler_config["n_neg"]
+        negative_sampler_config: dict = self.config["sampler"]
+        negative_sampler_name: str = negative_sampler_config["name"]
+        negative_triplet_count: int = negative_sampler_config["n_neg"]
 
-        match sampler_name:
+        match negative_sampler_name:
             case "Positional":
-                sampler = PositionalNegativeSampler(self.kg_train)
+                negative_sampler = PositionalNegativeSampler(self.kg_train)
             case "Uniform":
-                sampler = UniformNegativeSampler(self.kg_train, n_neg)
+                negative_sampler = UniformNegativeSampler(self.kg_train, negative_triplet_count)
             case "Bernoulli":
-                sampler = BernoulliNegativeSampler(self.kg_train, n_neg)
+                negative_sampler = BernoulliNegativeSampler(self.kg_train, negative_triplet_count)
             case "Mixed":
-                sampler = MixedNegativeSampler(self.kg_train, n_neg)
+                negative_sampler = MixedNegativeSampler(self.kg_train, negative_triplet_count)
             case _:
-                raise NotImplementedError(f"Sampler type '{sampler_name}' is not supported. Please check the configuration.")
+                raise NotImplementedError(f"Sampler type '{negative_sampler_name}' is not supported. Please check the configuration.")
             
-        return sampler
+        return negative_sampler
     
-    def initialize_scheduler(self) -> lr_scheduler.LRScheduler | None:
+    def initialize_learning_rate_scheduler(self) -> learning_rate_scheduler.LRScheduler | None:
         """
         Initializes the learning rate scheduler based on the provided configuration.
                 
@@ -430,41 +430,41 @@ class Architect(Model):
         Raises:
             ValueError: If the scheduler type is unsupported or required parameters are missing.
         """
-        scheduler_config: dict = self.config["lr_scheduler"]
+        learning_rate_scheduler_config: dict = self.config["lr_scheduler"]
         
-        if scheduler_config["type"] == "":
+        if learning_rate_scheduler_config["type"] == "":
             warnings.warn("No learning rate scheduler specified in the configuration, none will be used.")
             return None
     
-        scheduler_type: str = scheduler_config["type"]
-        scheduler_params: dict = scheduler_config["params"]
+        learning_rate_scheduler_type: str = learning_rate_scheduler_config["type"]
+        learning_rate_scheduler_params: dict = learning_rate_scheduler_config["params"]
         # Mapping of scheduler names to their corresponding PyTorch classes
-        scheduler_mapping = {
-            "StepLR": lr_scheduler.StepLR,
-            "MultiStepLR": lr_scheduler.MultiStepLR,
-            "ExponentialLR": lr_scheduler.ExponentialLR,
-            "CosineAnnealingLR": lr_scheduler.CosineAnnealingLR,
-            "CosineAnnealingWarmRestarts": lr_scheduler.CosineAnnealingWarmRestarts,
-            "ReduceLROnPlateau": lr_scheduler.ReduceLROnPlateau,
-            "LambdaLR": lr_scheduler.LambdaLR,
-            "OneCycleLR": lr_scheduler.OneCycleLR,
-            "CyclicLR": lr_scheduler.CyclicLR,
+        learning_rate_scheduler_mapping = {
+            "StepLR": learning_rate_scheduler.StepLR,
+            "MultiStepLR": learning_rate_scheduler.MultiStepLR,
+            "ExponentialLR": learning_rate_scheduler.ExponentialLR,
+            "CosineAnnealingLR": learning_rate_scheduler.CosineAnnealingLR,
+            "CosineAnnealingWarmRestarts": learning_rate_scheduler.CosineAnnealingWarmRestarts,
+            "ReduceLROnPlateau": learning_rate_scheduler.ReduceLROnPlateau,
+            "LambdaLR": learning_rate_scheduler.LambdaLR,
+            "OneCycleLR": learning_rate_scheduler.OneCycleLR,
+            "CyclicLR": learning_rate_scheduler.CyclicLR,
         }
 
         # Verify that the scheduler type is supported
-        if scheduler_type not in scheduler_mapping:
-            raise ValueError(f"Scheduler type '{scheduler_type}' is not supported. Please check the configuration.")
-        scheduler_class = scheduler_mapping[scheduler_type]
+        if learning_rate_scheduler_type not in learning_rate_scheduler_mapping:
+            raise ValueError(f"Scheduler type '{learning_rate_scheduler_type}' is not supported. Please check the configuration.")
+        learning_rate_scheduler_class = learning_rate_scheduler_mapping[learning_rate_scheduler_type]
         
         # Initialize the scheduler based on its type
         try:
-                scheduler: lr_scheduler.LRScheduler = scheduler_class(self.optimizer, **scheduler_params)
+                learning_rate_scheduler: learning_rate_scheduler.LRScheduler = learning_rate_scheduler_class(self.optimizer, **learning_rate_scheduler_params)
         except TypeError as e:
-            raise ValueError(f"Error initializing '{scheduler_type}': {e}")
+            raise ValueError(f"Error initializing '{learning_rate_scheduler_type}': {e}")
 
         
-        logging.info(f"Scheduler '{scheduler_type}' initialized with parameters: {scheduler_params}")
-        return scheduler
+        logging.info(f"Scheduler '{learning_rate_scheduler_type}' initialized with parameters: {learning_rate_scheduler_params}")
+        return learning_rate_scheduler
 
     def initialize_evaluator(self) -> LinkPredictionEvaluator | TripletClassificationEvaluator:
         """Set the task for which the model will be evaluated on using the validation set.
@@ -488,16 +488,16 @@ class Architect(Model):
             case "Link Prediction":
                 full_edgelist = torch.cat([
                     self.kg_train.edgelist,
-                    self.kg_train.removed_triples,
-                    self.kg_val.edgelist,
-                    self.kg_val.removed_triples,
+                    self.kg_train.removed_triplets,
+                    self.kg_validation.edgelist,
+                    self.kg_validation.removed_triplets,
                     self.kg_test.edgelist,
-                    self.kg_test.removed_triples
+                    self.kg_test.removed_triplets
                 ], dim=1)
                 evaluator = LinkPredictionEvaluator(full_edgelist=full_edgelist)
                 self.validation_metric = "MRR"
             case "Triplet Classification":
-                evaluator = TripletClassificationEvaluator(architect=self, kg_val = self.kg_val, kg_test=self.kg_test)
+                evaluator = TripletClassificationEvaluator(architect=self, kg_validation = self.kg_validation, kg_test=self.kg_test)
                 self.validation_metric = "Accuracy"
             case _:
                 raise NotImplementedError(f"The requested evaluator {self.config["evaluation"]["objective"]} is not implemented.")
@@ -515,7 +515,7 @@ class Architect(Model):
         # Cannot use short-circuit syntax with tuples
         logging.info("Initializing decoder...")
         if self.decoder is None:
-            self.decoder, self.criterion = self.initialize_decoder()
+            self.decoder, self.decoder_loss = self.initialize_decoder()
             self.decoder.to(self.device)
 
         logging.info("Initializing encoder...")
@@ -529,42 +529,42 @@ class Architect(Model):
         # elif not isinstance(self.encoder, GNN):
         #     self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
         else:
-            assert isinstance(self.encoder, GNN) or len(self.kg_train.nt2ix) == 1, "When using a GNN as encoder, the node_type shouldn't be supplied."
+            assert isinstance(self.encoder, GNN) or len(self.kg_train.node_type_to_index) == 1, "When using a GNN as encoder, the node_type shouldn't be supplied."
 
             self.node_embeddings = nn.ParameterList()
-            ix2nt = {v: k for k,v in self.kg_train.nt2ix.items()}
-            for node_type in self.kg_train.nt2glob:
-                num_nodes = self.kg_train.nt2glob[node_type].size(0)
+            index_to_node_type = {value: key for key,value in self.kg_train.node_type_to_index.items()}
+            for node_type in self.kg_train.node_type_to_global:
+                node_count = self.kg_train.node_type_to_global[node_type].size(0)
                 if node_type in attributes:
                     current_attribute: pd.DataFrame = attributes[node_type]
-                    assert current_attribute.shape[0] == num_nodes, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({num_nodes})."
-                    input_features = torch.zeros((num_nodes,current_attribute.shape[1]), dtype=torch.float)
+                    assert current_attribute.shape[0] == node_count, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({node_count})."
+                    input_features = torch.zeros((node_count,current_attribute.shape[1]), dtype=torch.float)
                     for node in current_attribute.index:
-                        node_idx = self.kg_train.ent2ix[node]
-                        nt_idx = self.kg_train.node_types[node_idx]
-                        local_idx = self.kg_train.glob2loc[node_idx]
-                        assert nt_idx == self.kg_train.nt2ix[node_type], f"The entity {node} is given as {node_type} but registered as {ix2nt[str(nt_idx)]} in the KG."
+                        node_index = self.kg_train.node_to_index[node]
+                        node_type_index = self.kg_train.node_types[node_index]
+                        local_idx = self.kg_train.global_to_local_indices[node_index]
+                        assert node_type_index == self.kg_train.node_type_to_index[node_type], f"The entity {node} is given as {node_type} but registered as {index_to_node_type[str(node_type_index)]} in the KG."
 
                         input_features[local_idx] = tensor(current_attribute.loc[node], dtype=torch.float)
                     
                     self.node_embeddings.append(Parameter(input_features).to(self.device))
                 else:
-                    emb = init_embedding(num_nodes, self.emb_dim, self.device)
-                    self.node_embeddings.append(emb.weight)
+                    embeddings = init_embedding(node_count, self.embedding_dimensions, self.device)
+                    self.node_embeddings.append(embeddings.weight)
             # The input features are not supposed to change if we use an encoder
             self.node_embeddings = self.node_embeddings.requires_grad_(False)
 
-        self.rel_emb = init_embedding(self.kg_train.n_rel, self.enc_rel_emb_dim, self.device)
+        self.edge_embeddings = init_embedding(self.kg_train.edge_count, self.encoder_edge_embedding_dimensions, self.device)
 
 
         logging.info("Initializing optimizer...")
         self.optimizer = self.optimizer or self.initialize_optimizer()
 
         logging.info("Initializing sampler...")
-        self.sampler = self.sampler or self.initialize_sampler()
+        self.sampler = self.sampler or self.initialize_negative_sampler()
 
         logging.info("Initializing lr scheduler...")
-        self.scheduler = self.scheduler or self.initialize_scheduler()
+        self.scheduler = self.scheduler or self.initialize_learning_rate_scheduler()
 
         logging.info("Initializing evaluator...")
         self.evaluator = self.evaluator or self.initialize_evaluator()
@@ -596,43 +596,43 @@ class Architect(Model):
             """
         use_cuda = "all" if self.device.type == "cuda" else None
 
-        training_config: dict = self.config["training"]
-        self.max_epochs: int = training_config["max_epochs"]
-        self.train_batch_size: int = training_config["train_batch_size"]
-        self.patience: int = training_config["patience"]
-        self.eval_interval: int = training_config["eval_interval"]
-        self.save_interval: int = training_config["save_interval"]
+        train_config: dict = self.config["training"]
+        self.max_epochs: int = train_config["max_epochs"]
+        self.train_batch_size: int = train_config["train_batch_size"]
+        self.patience: int = train_config["patience"]
+        self.eval_interval: int = train_config["eval_interval"]
+        self.save_interval: int = train_config["save_interval"]
 
-        match training_config["pretrained_embeddings"]:
+        match train_config["pretrained_embeddings"]:
             case "auto":
                 pretrained = Path(self.config["output_directory"]).joinpath("embeddings.pt")
             case "":
                 pretrained = None
             case _:
-                pretrained = Path(training_config["pretrained_embeddings"])
+                pretrained = Path(train_config["pretrained_embeddings"])
                 if not pretrained.exists(): pretrained = None
         
         self.initialize_model(attributes=attributes, pretrained=pretrained)
 
-        self.training_metrics_file: Path = Path(self.config["output_directory"], "training_metrics.csv")
+        self.train_metrics_file: Path = Path(self.config["output_directory"], "training_metrics.csv")
 
         if checkpoint_file is None:
-            with open(self.training_metrics_file, mode="w", newline="") as file:
+            with open(self.train_metrics_file, mode="w", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow(["Epoch", "Training Loss", f"Validation {self.validation_metric}", "Learning Rate"])
         
         self.train_losses: List[float] = []
-        self.val_metrics: List[float] = []
+        self.validation_metric_value: List[float] = []
         self.learning_rates: List[float] = []
 
-        iterator: DataLoader = DataLoader(self.kg_train, self.train_batch_size)
-        logging.info(f"Number of training batches: {len(iterator)}")
+        data_loader: DataLoader = DataLoader(self.kg_train, self.train_batch_size)
+        logging.info(f"Number of training batches: {len(data_loader)}")
 
         trainer: Engine = Engine(self.process_batch)
         RunningAverage(output_transform=lambda x: x).attach(trainer, "loss_ra")
 
-        pbar = ProgressBar()
-        pbar.attach(trainer)
+        progress_bar = ProgressBar()
+        progress_bar.attach(trainer)
 
         early_stopping: EarlyStopping = EarlyStopping(
             patience = self.patience,
@@ -644,12 +644,12 @@ class Architect(Model):
         existing_config_path: Path = Path(self.config["output_directory"]).joinpath("kgate_config.toml")
         if existing_config_path.exists():
             existing_config = parse_config(str(existing_config_path), {})
-            all_checkpoints = glob(f"{self.checkpoints_dir}/checkpoint_*.pt")
+            all_checkpoints = glob(f"{self.checkpoints_directory}/checkpoint_*.pt")
             if existing_config == self.config and len(all_checkpoints) > 0:
                 checkpoint_file = checkpoint_file or Path(max(all_checkpoints, key=os.path.getctime))
                 logging.info("Found previous run with the same configuration in the output folder...   ")
-        elif self.checkpoints_dir.exists() and len(os.listdir(self.checkpoints_dir)) > 0:
-            shutil.rmtree(self.checkpoints_dir)
+        elif self.checkpoints_directory.exists() and len(os.listdir(self.checkpoints_directory)) > 0:
+            shutil.rmtree(self.checkpoints_directory)
 
         # trainer.add_event_handler(Events.EPOCH_STARTED, self.encoder_pass)
 
@@ -660,7 +660,7 @@ class Architect(Model):
         trainer.add_event_handler(Events.COMPLETED, self.on_training_completed)
 
         to_save = {
-            "relations": self.rel_emb,
+            "relations": self.edge_embeddings,
             "entities": self.node_embeddings,
             "decoder": self.decoder,
             "optimizer": self.optimizer,
@@ -674,7 +674,7 @@ class Architect(Model):
         
         checkpoint_handler = Checkpoint(
             to_save,    # Dict of objects to save
-            DiskSaver(dirname=self.checkpoints_dir, require_empty=False, create_dir=True), # Save manager
+            DiskSaver(dirname=self.checkpoints_directory, require_empty=False, create_dir=True), # Save manager
             n_saved=2,      # Only keep last 2 checkpoints
             global_step_transform=lambda *_: trainer.state.epoch     # Include epoch number
         )
@@ -685,7 +685,7 @@ class Architect(Model):
             if self.encoder.deep:
                 self.encoder.to("cpu")
             self.decoder.to("cpu")
-            self.rel_emb.to("cpu")
+            self.edge_embeddings.to("cpu")
             self.node_embeddings.to("cpu")
 
             # Save the checkpoint
@@ -695,14 +695,14 @@ class Architect(Model):
             if self.encoder.deep:
                 self.encoder.to(self.device)
             self.decoder.to(self.device)
-            self.rel_emb.to(self.device)
+            self.edge_embeddings.to(self.device)
             self.node_embeddings.to(self.device)
 
         # Attach checkpoint handler to trainer and call save_checkpoint_to_cpu
         trainer.add_event_handler(Events.EPOCH_COMPLETED(every=self.save_interval), save_checkpoint_to_cpu)
     
         checkpoint_best_handler: ModelCheckpoint = ModelCheckpoint(
-            dirname=self.checkpoints_dir,
+            dirname=self.checkpoints_directory,
             filename_prefix="best_model",
             n_saved=1,
             score_function=self.get_val_metrics,
@@ -725,29 +725,29 @@ class Architect(Model):
         if checkpoint_file is not None:
             if Path(checkpoint_file).is_file():
                 logging.info(f"Resuming training from checkpoint: {checkpoint_file}")
-                logging.info(f"rel_emb size : {self.rel_emb.weight.size()}")
+                logging.info(f"rel_emb size : {self.edge_embeddings.weight.size()}")
                 checkpoint = torch.load(checkpoint_file, weights_only=False)
                 Checkpoint.load_objects(to_load=to_save, checkpoint=checkpoint)
 
                 logging.info("Checkpoint loaded successfully.")
-                with open(self.training_metrics_file, mode="a", newline="") as file:
+                with open(self.train_metrics_file, mode="a", newline="") as file:
                     writer = csv.writer(file)
                     writer.writerow(["CHECKPOINT RESTART", "CHECKPOINT RESTART", "CHECKPOINT RESTART", "CHECKPOINT RESTART"])
 
                 if trainer.state.epoch < self.max_epochs:
                     logging.info(f"Starting from epoch {trainer.state.epoch}")
                     if not dry_run:
-                        trainer.run(iterator)
+                        trainer.run(data_loader)
                 else:
                     logging.info(f"Training already completed. Last epoch is {trainer.state.epoch} and max_epochs is set to {self.max_epochs}")
             else:
                 logging.info(f"Checkpoint file {checkpoint_file} does not exist. Starting training from scratch.")
                 if not dry_run:
-                    trainer.run(iterator, max_epochs=self.max_epochs)
+                    trainer.run(data_loader, max_epochs=self.max_epochs)
         else:
             if not dry_run:
                 self.normalize_parameters()
-                trainer.run(iterator, max_epochs=self.max_epochs)
+                trainer.run(data_loader, max_epochs=self.max_epochs)
     
 
     def test(self):
@@ -764,16 +764,16 @@ class Architect(Model):
         thresholds: List[int] = self.config["evaluation"]["thresholds"]
         metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.yaml")
 
-        all_relations: Set[Any] = set(self.kg_test.rel2ix.keys())
-        remaining_relations = all_relations - set(list_rel_1) - set(list_rel_2)
-        remaining_relations = list(remaining_relations)
+        all_edges: Set[Any] = set(self.kg_test.edge_to_index.keys())
+        remaining_edges = all_edges - set(list_rel_1) - set(list_rel_2)
+        remaining_edges = list(remaining_edges)
 
         total_metrics_sum_list_1, fact_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_relations(
             self.kg_test, list_rel_1)
         total_metrics_sum_list_2, fact_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_relations(
             self.kg_test, list_rel_2)
         total_metrics_sum_remaining, fact_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
-            self.kg_test, remaining_relations)
+            self.kg_test, remaining_edges)
 
         global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (fact_count_list_1 + fact_count_list_2 + fact_count_remaining)
 
@@ -797,14 +797,14 @@ class Architect(Model):
         }
 
         for i in range(len(list_rel_2)):
-            relation: str = list_rel_2[i]
+            edge: str = list_rel_2[i]
             threshold: int = thresholds[i]
-            frequent_indices, infrequent_indices = self.categorize_test_nodes(relation, threshold)
+            frequent_indices, infrequent_indices = self.categorize_test_nodes(edge, threshold)
             frequent_metrics, infrequent_metrics = self.calculate_metrics_for_categories(frequent_indices, infrequent_indices)
-            logging.info(f"Metrics for frequent nodes (threshold={threshold}) in relation {relation}: {frequent_metrics}")
-            logging.info(f"Metrics for infrequent nodes (threshold={threshold}) in relation {relation}: {infrequent_metrics}")
+            logging.info(f"Metrics for frequent nodes (threshold={threshold}) in relation {edge}: {frequent_metrics}")
+            logging.info(f"Metrics for infrequent nodes (threshold={threshold}) in relation {edge}: {infrequent_metrics}")
 
-            results["target_relations_by_frequency"][relation] = {
+            results["target_relations_by_frequency"][edge] = {
                 "Frequent_metrics": frequent_metrics,
                 "Infrequent_metrics": infrequent_metrics,
                 "Threshold": threshold
@@ -819,7 +819,7 @@ class Architect(Model):
 
         return results
         
-    def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], top_k:int=100, identity:str=""):
+    def infer(self, heads:List[str]=[], edges:List[str]=[], tails:List[str]=[], top_k:int=100, identity:str=""):
         """Infer missing entities or relations, depending on the given parameters.
         
         Only two of heads, rels and tails must be given, and the other one will be inferred. For example, when inferring tails,
@@ -843,52 +843,52 @@ class Architect(Model):
         -------
             predictions: pd.DataFrame
                 A DataFrame containing the prediction alongside their score."""
-        if not sum([len(arr) > 0 for arr in [heads,rels,tails]]) == 2:
+        if not sum([len(arr) > 0 for arr in [heads,edges,tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, relations or tails.")
         torch.cuda.empty_cache()
         gc.collect()
 
         self.load_best_model()
 
-        infer_heads, infer_rels, infer_tails = len(heads) == 0, len(rels) == 0, len(tails) == 0
+        do_heads_inference, do_edges_inference, do_tails_inference = len(heads) == 0, len(edges) == 0, len(tails) == 0
 
-        full_kg = merge_kg([self.kg_train, self.kg_val, self.kg_test], True)
+        full_kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test], True)
 
-        if infer_tails:
-            known_1 = tensor([self.kg_train.ent2ix[head] for head in heads]).long()
-            known_2 = tensor([self.kg_train.rel2ix[rel] for rel in rels]).long()
-            missing = "tail"
+        if do_tails_inference:
+            first_known_triplet_part = tensor([self.kg_train.node_to_index[head] for head in heads]).long()
+            second_known_triplet_part = tensor([self.kg_train.edge_to_index[rel] for rel in edges]).long()
+            missing_triplet_part = "tail"
             inference = EntityInference(full_kg)
-        elif infer_heads:
-            known_1 = tensor([self.kg_train.ent2ix[tail] for tail in tails]).long()
-            known_2 = tensor([self.kg_train.rel2ix[rel] for rel in rels]).long()
-            missing = "head"
+        elif do_heads_inference:
+            first_known_triplet_part = tensor([self.kg_train.node_to_index[tail] for tail in tails]).long()
+            second_known_triplet_part = tensor([self.kg_train.edge_to_index[rel] for rel in edges]).long()
+            missing_triplet_part = "head"
             inference = EntityInference(full_kg)
-        elif infer_rels:
-            known_1 = tensor([self.kg_train.ent2ix[head] for head in heads]).long()
-            known_2 = tensor([self.kg_train.ent2ix[tail] for tail in tails]).long()
-            missing = "rel"
+        elif do_edges_inference:
+            first_known_triplet_part = tensor([self.kg_train.node_to_index[head] for head in heads]).long()
+            second_known_triplet_part = tensor([self.kg_train.node_to_index[tail] for tail in tails]).long()
+            missing_triplet_part = "rel"
             inference = RelationInference(full_kg)
             
         predictions, scores = inference.evaluate(
-            known_1,
-            known_2,
+            first_known_triplet_part,
+            second_known_triplet_part,
             encoder = self.encoder,
             decoder = self.decoder,
             top_k = top_k,
-            missing = missing,
-            b_size = self.eval_batch_size,
+            missing = missing_triplet_part,
+            b_size = self.evaluation_batch_size,
             node_embeddings=self.node_embeddings,   
-            relation_embeddings=self.rel_emb
+            relation_embeddings=self.edge_embeddings
         )
 
-        ix2ent = {v: k for k, v in self.kg_train.ent2ix.items()}
-        pred_idx = predictions.reshape(-1).T
-        pred_names = np.vectorize(ix2ent.get)(pred_idx)
+        index_to_node = {value: key for key, value in self.kg_train.node_to_index.items()}
+        prediction_index = predictions.reshape(-1).T
+        prediction_names = np.vectorize(index_to_node.get)(prediction_index)
 
         scores = scores.reshape(-1).T
         
-        return pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
+        return pd.DataFrame([prediction_names,scores], columns= ["Prediction","Score"])
 
     def load_checkpoint(self, path: Path, loose=False) -> dict:
         """Parse an Architect checkpoint to ensure it can properly be loaded.
@@ -910,7 +910,7 @@ class Architect(Model):
         assert len(checkpoint["relations"]["weight"]) == self.n_rel, f"Mismatch between the number of relations in the checkpoint ({len(checkpoint['relations']['weight'])}) and the current configuration ({self.n_rel})!"
 
         if isinstance(self.encoder, GNN):
-            assert len(checkpoint["entities"]) == len(self.kg_train.nt2ix), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({len(self.kg_train.nt2ix)})!"
+            assert len(checkpoint["entities"]) == len(self.kg_train.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({len(self.kg_train.node_type_to_index)})!"
         else:
             assert len(checkpoint["entities"]["weight"]) != self.n_ent, f"Mismatch between the number of entities in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({self.n_ent})!"
 
@@ -925,58 +925,58 @@ class Architect(Model):
         _, nt_count = self.kg_train.node_types.unique(return_counts=True)
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
-        self.rel_emb = init_embedding(self.n_rel, self.enc_rel_emb_dim, self.device)
+        self.edge_embeddings = init_embedding(self.n_rel, self.encoder_edge_embedding_dimensions, self.device)
 
         logging.info("Loading best model.")
-        best_model = find_best_model(self.checkpoints_dir)
+        best_model = find_best_model(self.checkpoints_directory)
 
         if not best_model:
-            logging.error(f"No best model was found in {self.checkpoints_dir}. Make sure to run the training first and not rename checkpoint files before running evaluation.")
+            logging.error(f"No best model was found in {self.checkpoints_directory}. Make sure to run the training first and not rename checkpoint files before running evaluation.")
             return
         
-        logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
-        checkpoint = self.load_checkpoint(self.checkpoints_dir.joinpath(best_model))
+        logging.info(f"Best model is {self.checkpoints_directory.joinpath(best_model)}")
+        checkpoint = self.load_checkpoint(self.checkpoints_directory.joinpath(best_model))
 
 
         self.node_embeddings = nn.ParameterList()
-        for nt in checkpoint["entities"]:
-            self.node_embeddings.append(checkpoint["entities"][nt].to(self.device))
+        for node_type in checkpoint["entities"]:
+            self.node_embeddings.append(checkpoint["entities"][node_type].to(self.device))
         
-        self.rel_emb.load_state_dict(checkpoint["relations"])
+        self.edge_embeddings.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])
         if "encoder" in checkpoint:
             self.encoder.load_state_dict(checkpoint["encoder"])
         
         self.node_embeddings.to(self.device)
-        self.rel_emb.to(self.device)
+        self.edge_embeddings.to(self.device)
         self.decoder.to(self.device)
         self.encoder.to(self.device)
         logging.info("Best model successfully loaded.")
 
 
-    def forward(self, pos_batch, neg_batch) -> Tuple[Tensor,Tensor]:
+    def forward(self, positive_triplets_batch, negative_triplets_batch) -> Tuple[Tensor,Tensor]:
         """Forward pass of the Architect"""
-        pos: Tensor = self.scoring_function(pos_batch, self.kg_train)
+        positive_triplet: Tensor = self.scoring_function(positive_triplets_batch, self.kg_train)
         # The loss function requires the pos and neg tensors to be of the same size,
         # Thus we duplicate the pos tensor as needed to match the neg.
-        n_neg = neg_batch.size(1) // pos_batch.size(1)
-        pos = pos.repeat(n_neg)
+        negative_triplet_count = negative_triplets_batch.size(1) // positive_triplets_batch.size(1)
+        positive_triplet = positive_triplet.repeat(negative_triplet_count)
 
-        neg: Tensor = self.scoring_function(neg_batch, self.kg_train)
+        negative_triplet: Tensor = self.scoring_function(negative_triplets_batch, self.kg_train)
 
-        return pos, neg
+        return positive_triplet, negative_triplet
 
     def process_batch(self, engine: Engine, batch: Tensor) -> torch.types.Number:
         batch = batch.T.to(self.device)
 
-        n_batch = self.sampler.corrupt_batch(batch)
-        n_batch = n_batch.to(self.device)
+        batch_count = self.sampler.corrupt_batch(batch)
+        batch_count = batch_count.to(self.device)
         
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triples
-        pos, neg = self(batch, n_batch)
-        loss = self.criterion(pos, neg)
+        pos, neg = self(batch, batch_count)
+        loss = self.decoder_loss(pos, neg)
         loss.backward()
 
         self.optimizer.step()
@@ -1007,16 +1007,16 @@ class Architect(Model):
         score: Tensor
             The score given by the decoder for the batch..
         """
-        h_idx, t_idx, r_idx = batch[0], batch[1], batch[2]
+        head_indices, tail_indices, edge_indices = batch[0], batch[1], batch[2]
         
         if isinstance(self.encoder, GNN):
             seed_nodes = batch[:2].unique()
-            num_hops = self.encoder.n_layers
+            hop_count = self.encoder.n_layers
             edge_index = kg.edge_index
             
             _,_,_, edge_mask = k_hop_subgraph(
                 node_idx = seed_nodes,
-                num_hops = num_hops,
+                num_hops = hop_count,
                 edge_index = edge_index
                 )
                 
@@ -1028,25 +1028,25 @@ class Architect(Model):
             # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
             # which corresponds to the indices that are filled here.
             # TODO: See if making it a sparse tensor can spare memory
-            embeddings: torch.Tensor = torch.zeros((kg.n_ent, self.enc_emb_dim), device=self.device, dtype=torch.float)
+            embeddings: torch.Tensor = torch.zeros((kg.n_ent, self.encoder_node_embedding_dimensions), device=self.device, dtype=torch.float)
 
-            for node_type, idx in input.mapping.items():
-                embeddings[idx] = encoder_output[node_type]
+            for node_type, index in input.mapping.items():
+                embeddings[index] = encoder_output[node_type]
 
         else:
             embeddings = self.node_embeddings.weight
         
         
-        h_embeddings = embeddings[h_idx]
-        t_embeddings = embeddings[t_idx]
-        r_embeddings = self.rel_emb(r_idx)  # Relations are unchanged
+        head_embeddings = embeddings[head_indices]
+        tail_embeddings = embeddings[tail_indices]
+        edge_embeddings = self.edge_embeddings(edge_indices)  # Relations are unchanged
 
-        return self.decoder.score(h_emb = h_embeddings,
-                                  r_emb = r_embeddings, 
-                                  t_emb = t_embeddings, 
-                                  h_idx = h_idx, 
-                                  r_idx = r_idx, 
-                                  t_idx = t_idx)
+        return self.decoder.score(h_emb = head_embeddings,
+                                  r_emb = edge_embeddings, 
+                                  t_emb = tail_embeddings, 
+                                  h_idx = head_indices, 
+                                  r_idx = edge_indices, 
+                                  t_idx = tail_indices)
 
     def get_embeddings(self) -> Dict[str,Tensor]:
         """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.
@@ -1058,34 +1058,34 @@ class Architect(Model):
             input = self.kg_train.get_encoder_input(self.kg_train.edgelist.to(self.device), self.node_embeddings)
 
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
-            ent_emb: torch.Tensor = torch.zeros((self.n_ent, self.enc_emb_dim), device=self.device, dtype=torch.float)
+            node_embeddings: torch.Tensor = torch.zeros((self.n_ent, self.encoder_node_embedding_dimensions), device=self.device, dtype=torch.float)
 
             for node_type, idx in input.mapping.items():
-                ent_emb[idx] = encoder_output[node_type]
+                node_embeddings[idx] = encoder_output[node_type]
         else:
-            ent_emb = self.node_embeddings.weight.data
+            node_embeddings = self.node_embeddings.weight.data
 
-        rel_emb = self.rel_emb.weight.data
+        edge_embeddings = self.edge_embeddings.weight.data
 
-        decoder_emb = self.decoder.get_embeddings()
+        decoder_embeddings = self.decoder.get_embeddings()
 
-        embedding_dict = {"entities": ent_emb, "relations": rel_emb,}
+        embedding_dictionnary = {"entities": node_embeddings, "relations": edge_embeddings,}
 
-        if decoder_emb is not None:
-            embedding_dict.update({"decoder": decoder_emb})
+        if decoder_embeddings is not None:
+            embedding_dictionnary.update({"decoder": decoder_embeddings})
 
-        return embedding_dict
+        return embedding_dictionnary
 
     def normalize_parameters(self):
         # Some decoders should not normalize parameters or do so in a different way.
         # In this case, they should implement the function themselves and we return it.
-        normalize_func: Callable[..., Tuple[nn.ParameterList, nn.Embedding]] | None = getattr(self.decoder, "normalize_params", None)
+        normalize_function: Callable[..., Tuple[nn.ParameterList, nn.Embedding]] | None = getattr(self.decoder, "normalize_params", None)
         # If the function only accept one parameter, it is the base torchKGE one,
         # we don't want that.
-        if callable(normalize_func) and len(signature(normalize_func).parameters) > 1:
-            normalized_embeddings = normalize_func(ent_emb = self.node_embeddings, rel_emb = self.rel_emb)
+        if callable(normalize_function) and len(signature(normalize_function).parameters) > 1:
+            normalized_embeddings = normalize_function(ent_emb = self.node_embeddings, rel_emb = self.edge_embeddings)
             assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the entity embedding and the relation embedding."
-            self.node_embeddings, self.rel_emb = normalized_embeddings
+            self.node_embeddings, self.edge_embeddings = normalized_embeddings
             
         logging.debug(f"Normalized all embeddings")
 
@@ -1093,18 +1093,18 @@ class Architect(Model):
     def log_metrics_to_csv(self, engine: Engine):
         epoch = engine.state.epoch
         train_loss = engine.state.metrics["loss_ra"]
-        val_metrics = engine.state.metrics.get("val_metrics", 0)
-        lr = self.optimizer.param_groups[0]["lr"]
+        validation_metric_value = engine.state.metrics.get("val_metrics", 0)
+        learning_rate = self.optimizer.param_groups[0]["lr"]
 
         self.train_losses.append(train_loss)
-        self.val_metrics.append(val_metrics)
-        self.learning_rates.append(lr)
+        self.validation_metric_value.append(validation_metric_value)
+        self.learning_rates.append(learning_rate)
 
-        with open(self.training_metrics_file, mode="a", newline="") as file:
+        with open(self.train_metrics_file, mode="a", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow([epoch, train_loss, val_metrics, lr])
+            writer.writerow([epoch, train_loss, validation_metric_value, learning_rate])
 
-        logging.info(f"Epoch {epoch} - Train Loss: {train_loss}, Validation {self.validation_metric}: {val_metrics}, Learning Rate: {lr}")
+        logging.info(f"Epoch {epoch} - Train Loss: {train_loss}, Validation {self.validation_metric}: {validation_metric_value}, Learning Rate: {learning_rate}")
 
     ##### Memory cleaning
     def clean_memory(self, engine:Engine):
@@ -1118,22 +1118,22 @@ class Architect(Model):
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             if isinstance(self.evaluator,LinkPredictionEvaluator):
-                metric = self.link_pred(self.kg_val) 
-                engine.state.metrics["val_metrics"] = metric 
-                logging.info(f"Validation MRR: {metric}")
+                validation_score = self.link_pred(self.kg_validation) 
+                engine.state.metrics["val_metrics"] = validation_score 
+                logging.info(f"Validation MRR: {validation_score}")
             elif isinstance(self.evaluator, TripletClassificationEvaluator):
-                metric = self.triplet_classif(self.kg_val, self.kg_test)
-                engine.state.metrics["val_metrics"] = metric
-                logging.info(f"Validation Accuracy: {metric}")
-        if self.scheduler and isinstance(self.scheduler, lr_scheduler.ReduceLROnPlateau):
-            self.scheduler.step(metric)
+                validation_score = self.triplet_classif(self.kg_validation, self.kg_test)
+                engine.state.metrics["val_metrics"] = validation_score
+                logging.info(f"Validation Accuracy: {validation_score}")
+        if self.scheduler and isinstance(self.scheduler, learning_rate_scheduler.ReduceLROnPlateau):
+            self.scheduler.step(validation_score)
             logging.info("Stepping scheduler ReduceLROnPlateau.")
 
         self.train() # Set the model back to training mode
 
     ##### Scheduler update
     def update_scheduler(self, engine: Engine):
-        if self.scheduler is not None and not isinstance(self.scheduler, lr_scheduler.ReduceLROnPlateau):
+        if self.scheduler is not None and not isinstance(self.scheduler, learning_rate_scheduler.ReduceLROnPlateau):
             self.scheduler.step()
 
     ##### Early stopping score function
@@ -1149,10 +1149,10 @@ class Architect(Model):
         """Plot the training loss and validation MRR curves once the training is over."""
         logging.info(f"Training completed after {engine.state.epoch} epochs.")
 
-        plot_learning_curves(self.training_metrics_file, self.config["output_directory"], self.validation_metric)
+        plot_learning_curves(self.train_metrics_file, self.config["output_directory"], self.validation_metric)
 
     # TODO : create a script to isolate prediction functions. Maybe a Predictor class?
-    def categorize_test_nodes(self, relation_name: str, threshold: int) -> Tuple[List[int], List[int]]:
+    def categorize_test_nodes(self, edge_name: str, threshold: int) -> Tuple[List[int], List[int]]:
         """
         Categorizes test triples with the specified relation in the test set 
         based on whether their entities have been seen with that relation in the training set,
@@ -1173,26 +1173,26 @@ class Architect(Model):
             Indices of triples in the test set with the specified relation where entities have been seen fewer than or equal to `threshold` times with that relation in the training set.
         """
         # Get the index of the specified relation in the training graph
-        if relation_name not in self.kg_train.rel2ix:
-            raise ValueError(f"The relation '{relation_name}' does not exist in the training knowledge graph.")
-        relation_idx = self.kg_train.rel2ix[relation_name]
+        if edge_name not in self.kg_train.edge_to_index:
+            raise ValueError(f"The relation '{edge_name}' does not exist in the training knowledge graph.")
+        edge_index = self.kg_train.edge_to_index[edge_name]
 
         # Count occurrences of nodes with the specified relation in the training set
         train_node_counts = {}
-        for i in range(self.kg_train.n_triples):
-            if self.kg_train.relations[i].item() == relation_idx:
-                head = self.kg_train.head_idx[i].item()
-                tail = self.kg_train.tail_idx[i].item()
+        for i in range(self.kg_train.triplet_count):
+            if self.kg_train.relations[i].item() == edge_index:
+                head = self.kg_train.head_indices[i].item()
+                tail = self.kg_train.tail_indices[i].item()
                 train_node_counts[head] = train_node_counts.get(head, 0) + 1
                 train_node_counts[tail] = train_node_counts.get(tail, 0) + 1
 
         # Separate test triples with the specified relation based on the threshold
         frequent_indices = []
         infrequent_indices = []
-        for i in range(self.kg_test.n_triples):
-            if self.kg_test.relations[i].item() == relation_idx:  # Only consider triples with the specified relation
-                head = self.kg_test.head_idx[i].item()
-                tail = self.kg_test.tail_idx[i].item()
+        for i in range(self.kg_test.triplet_count):
+            if self.kg_test.relations[i].item() == edge_index:  # Only consider triples with the specified relation
+                head = self.kg_test.head_indices[i].item()
+                tail = self.kg_test.tail_indices[i].item()
                 head_count = train_node_counts.get(head, 0)
                 tail_count = train_node_counts.get(tail, 0)
 
@@ -1204,15 +1204,15 @@ class Architect(Model):
 
         return frequent_indices, infrequent_indices
     
-    def calculate_metrics_for_relations(self, kg: KnowledgeGraph, relations: List[str]) -> Tuple[float, int, Dict[str, float], float]:
+    def calculate_metrics_for_relations(self, kg: KnowledgeGraph, edge_indices: List[str]) -> Tuple[float, int, Dict[str, float], float]:
         # MRR computed by ponderating for each relation
         metrics_sum = 0.0
         fact_count = 0
         individual_metrics = {} 
 
-        for relation_name in relations:
+        for edge_name in edge_indices:
             # Get triples associated with index
-            relation_index = kg.rel2ix.get(relation_name)
+            relation_index = kg.edge_to_index.get(edge_name)
             indices_to_keep = torch.nonzero(kg.relations == relation_index, as_tuple=False).squeeze()
 
             if indices_to_keep.numel() == 0:
@@ -1223,10 +1223,10 @@ class Architect(Model):
             if isinstance(self.evaluator, LinkPredictionEvaluator):
                 test_metrics = self.link_pred(new_kg)
             elif isinstance(self.evaluator, TripletClassificationEvaluator):
-                test_metrics = self.triplet_classif(kg_val = self.kg_val, kg_test = new_kg)
+                test_metrics = self.triplet_classif(kg_validation = self.kg_validation, kg_test = new_kg)
             
             # Save each relation's MRR
-            individual_metrics[relation_name] = test_metrics
+            individual_metrics[edge_name] = test_metrics
             
             metrics_sum += test_metrics * indices_to_keep.numel()
             fact_count += indices_to_keep.numel()
@@ -1264,8 +1264,8 @@ class Architect(Model):
             frequent_metrics = self.link_pred(kg_frequent) if frequent_indices else 0
             infrequent_metrics = self.link_pred(kg_infrequent) if infrequent_indices else 0
         elif isinstance(self.evaluator, TripletClassificationEvaluator):
-            frequent_metrics = self.triplet_classif(self.kg_val, kg_frequent) if frequent_indices else 0
-            infrequent_metrics = self.triplet_classif(self.kg_val, kg_infrequent) if infrequent_indices else 0
+            frequent_metrics = self.triplet_classif(self.kg_validation, kg_frequent) if frequent_indices else 0
+            infrequent_metrics = self.triplet_classif(self.kg_validation, kg_infrequent) if infrequent_indices else 0
         return frequent_metrics, infrequent_metrics
 
     def link_pred(self, kg: KnowledgeGraph) -> float:
@@ -1274,37 +1274,37 @@ class Architect(Model):
         if not isinstance(self.evaluator, LinkPredictionEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Link Prediction method for {type(self.evaluator)} evaluator.")
 
-        self.evaluator.evaluate(b_size = self.eval_batch_size,
+        self.evaluator.evaluate(b_size = self.evaluation_batch_size,
                         encoder=self.encoder,
                         decoder =self.decoder,
                         knowledge_graph=kg,
                         node_embeddings=self.node_embeddings, 
-                        relation_embeddings=self.rel_emb,
+                        relation_embeddings=self.edge_embeddings,
                         verbose=True)
         
         test_mrr = self.evaluator.mrr()[1]
         return test_mrr
     
-    def triplet_classif(self, kg_val: KnowledgeGraph, kg_test: KnowledgeGraph) -> float:
+    def triplet_classif(self, kg_validation: KnowledgeGraph, kg_test: KnowledgeGraph) -> float:
         """Triplet Classification evaluation"""
         if not isinstance(self.evaluator, TripletClassificationEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Triplet Classification method for {type(self.evaluator)} evaluator.")
         
-        self.evaluator.evaluate(b_size=self.eval_batch_size, knowledge_graph=kg_val)
-        return self.evaluator.accuracy(self.eval_batch_size, kg_test = kg_test)
+        self.evaluator.evaluate(b_size=self.evaluation_batch_size, knowledge_graph=kg_validation)
+        return self.evaluator.accuracy(self.evaluation_batch_size, kg_test = kg_test)
 
     def run_dl(self, attributes: Dict[str, pd.DataFrame] ={}):
         logging.info("Preparing KG for DL evaluation pocedure...")
-        dl_config = self.config["data_leakage"]
+        data_leakage_config = self.config["data_leakage"]
 
-        kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
+        kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test])
 
-        for rel in dl_config["permuted_relations"]:
-            if rel not in self.kg_train.rel2ix:
-                raise ValueError(f"Relation name {rel} was not found in the knowledge graph.")
-            logging.info(f"Permutting tails of relation {rel}")
-            self.kg_train = permute_tails(self.kg_train, rel)
+        for edge in data_leakage_config["permuted_relations"]:
+            if edge not in self.kg_train.edge_to_index:
+                raise ValueError(f"Relation name {edge} was not found in the knowledge graph.")
+            logging.info(f"Permutting tails of relation {edge}")
+            self.kg_train = permute_tails(self.kg_train, edge)
 
-        self.kg_train, self.kg_val, self.kg_test = kg.split_kg(shares=self.config["preprocessing"]["split"])
+        self.kg_train, self.kg_validation, self.kg_test = kg.split_kg(shares=self.config["preprocessing"]["split"])
 
         self.train_model(attributes=attributes)

@@ -25,17 +25,17 @@ def permute_tails(kg: KnowledgeGraph, relation: str, preserve_node_degree=True) 
     node_types = kg.node_types
     triple_types = kg.triple_types
 
-    ix2nt = {v: k for k,v in kg.nt2ix.items()}
-    relation_id = kg.rel2ix[relation]
+    ix2nt = {v: k for k,v in kg.node_type_to_index.items()}
+    relation_id = kg.edge_to_index[relation]
 
     # Mask only the target relation
     mask = (kg.relations == relation_id)
 
     # Get head and tail indices for this relation
-    heads_for_relation = kg.head_idx[mask].tolist()
-    tails_for_relation = kg.tail_idx[mask].tolist()
+    heads_for_relation = kg.head_indices[mask].tolist()
+    tails_for_relation = kg.tail_indices[mask].tolist()
 
-    triples = [0] * len(tails_for_relation) if len(kg.nt2ix)==1 else []
+    triples = [0] * len(tails_for_relation) if len(kg.node_type_to_index)==1 else []
 
     # Count the occurence of each tail in the relation
     tails_count = Counter(tails_for_relation)
@@ -69,7 +69,7 @@ def permute_tails(kg: KnowledgeGraph, relation: str, preserve_node_degree=True) 
                         permuted_tails[i], permuted_tails[j] = permuted_tails[j], permuted_tails[i]
                         break
 
-        if len(kg.nt2ix) > 1:
+        if len(kg.node_type_to_index) > 1:
             perm_tri = (
                     ix2nt[node_types[heads_for_relation[i]].item()],
                     relation,
@@ -83,15 +83,15 @@ def permute_tails(kg: KnowledgeGraph, relation: str, preserve_node_degree=True) 
                 triple = triple_types.index(perm_tri)
             triples.append(triple)
 
-    permuted_tails = torch.tensor(permuted_tails, dtype=kg.tail_idx.dtype, device=kg.edgelist.device)
+    permuted_tails = torch.tensor(permuted_tails, dtype=kg.tail_indices.dtype, device=kg.edgelist.device)
     new_triples = torch.tensor(triples, device=kg.edgelist.device)
 
-    kg.tail_idx[mask] = permuted_tails
+    kg.tail_indices[mask] = permuted_tails
     kg.triples[mask] = new_triples
 
     if preserve_node_degree:
         # Check if node degree is correctly preserved
-        assert Counter(kg.tail_idx[mask].tolist()) == tails_count, "`tails` node degree is not conserved after permutation."
-        assert all(kg.head_idx[i] != kg.tail_idx[i] for i in range(len(kg.head_idx))), "Self-loops introduced after permutation."
+        assert Counter(kg.tail_indices[mask].tolist()) == tails_count, "`tails` node degree is not conserved after permutation."
+        assert all(kg.head_indices[i] != kg.tail_indices[i] for i in range(len(kg.head_indices))), "Self-loops introduced after permutation."
 
     return kg

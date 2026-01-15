@@ -114,10 +114,10 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
         device = relation_embeddings.weight.device
         use_cuda = relation_embeddings.weight.is_cuda
 
-        self.rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long().to(device)
-        self.rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long().to(device)
-        self.filt_rank_true_heads = empty(size=(knowledge_graph.n_triples,)).long().to(device)
-        self.filt_rank_true_tails = empty(size=(knowledge_graph.n_triples,)).long().to(device)
+        self.rank_true_heads = empty(size=(knowledge_graph.triplet_count,)).long().to(device)
+        self.rank_true_tails = empty(size=(knowledge_graph.triplet_count,)).long().to(device)
+        self.filt_rank_true_heads = empty(size=(knowledge_graph.triplet_count,)).long().to(device)
+        self.filt_rank_true_tails = empty(size=(knowledge_graph.triplet_count,)).long().to(device)
 
         dataloader = DataLoader(knowledge_graph, batch_size=b_size)
         edgelist = knowledge_graph.edgelist.to(device)
@@ -232,9 +232,9 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
 
     """
 
-    def __init__(self, architect, kg_val, kg_test):
+    def __init__(self, architect, kg_validation, kg_test):
         self.architect = architect
-        self.kg_val = kg_val
+        self.kg_val = kg_validation
         self.kg_test = kg_test
         self.is_cuda = self.architect.device.type == "cuda"
 
@@ -335,8 +335,8 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
         neg_heads, neg_tails = sampler.corrupt_kg(b_size,
                                                 self.is_cuda,
                                                 which="main")
-        scores = self.get_scores(kg_test.head_idx,
-                                 kg_test.tail_idx,
+        scores = self.get_scores(kg_test.head_indices,
+                                 kg_test.tail_indices,
                                  r_idx,
                                  b_size)
         neg_scores = self.get_scores(neg_heads, neg_tails, r_idx, b_size)
