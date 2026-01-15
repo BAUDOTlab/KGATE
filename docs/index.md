@@ -1,4 +1,6 @@
 ```{include} ../README.md
+:relative-docs: src/
+:relative-images:
 ```
 
 ## Contents
@@ -9,3 +11,9 @@ Home <self>
 quickstart
 decoders
 ```
+
+```{toctree}
+:maxdepth: 1
+:caption: References:
+
+reference/architect

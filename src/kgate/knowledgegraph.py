@@ -63,7 +63,7 @@ class EncoderInput:
 class KnowledgeGraph(Dataset):
     def __init__(self, df: pd.DataFrame | None=None,
                  edgelist: Tensor | None=None,
-                 metadata: pd.DataFrame | None=None, 
+                 metadata: pd.DataFrame | None=None,
                  triple_types: List[Tuple[str,str,str]] | None = None,
                  ent2ix: Dict[str, int] | None=None, 
                  rel2ix: Dict[str, int] | None=None,
@@ -86,7 +86,7 @@ class KnowledgeGraph(Dataset):
         else:
             self.edgelist = tensor([], dtype=torch.long)
 
-        if removed_triples is not None:
+        if removed_triples is not None and removed_triples.numel() > 0:
             assert removed_triples.size(0) == 4,  "The `removed_triples` parameter must be a 2D tensor of size [4, num_triples]."
             self.removed_triples = removed_triples
         else:
@@ -100,6 +100,10 @@ class KnowledgeGraph(Dataset):
 
         self.n_ent = max(self.ent2ix.values()) + 1
         self.n_rel = max(self.rel2ix.values()) + 1
+
+        self.metadata = None
+        if metadata is not None:
+            self.add_metadata(metadata)
 
         if df is None:
             self.n_nodes = cat([self.head_idx, self.tail_idx]).unique().size(0)
@@ -116,14 +120,13 @@ class KnowledgeGraph(Dataset):
 
         else:
             if metadata is not None:
-                assert not set(["type","id"]).isdisjoint(list(metadata.columns)), f"The mapping dataframe must have at least the columns `type` and `id`, but found only {",".join(list(metadata.columns))}"
-
                 mapping_df = pd.merge(df, metadata.add_prefix("from_"), how="left", left_on="from", right_on="from_id")
                 mapping_df = pd.merge(mapping_df, metadata.add_prefix("to_"), how="left", left_on="to", right_on="to_id", suffixes=(None, "_to"))
                 mapping_df.drop([i for i in mapping_df.columns if "id" in i],axis=1, inplace=True)
 
                 df_node_types = list(set(mapping_df['from_type'].unique()).union(set(mapping_df['to_type'].unique())))
                 self.nt2ix = {nt: i for i, nt in enumerate(sorted(df_node_types))}
+                self._identity = "id"
             else:
                 mapping_df = df
 
@@ -217,6 +220,62 @@ class KnowledgeGraph(Dataset):
     @property
     def n_facts(self) -> int:
         return self.n_triples
+
+    @property
+    def identity(self) -> pd.DataFrame:
+        """Get the DataFrame containing all the identity of the knowledge graph nodes.
+        
+        The default identity is the node ID, but different values can be set using the `set_identity` method."""
+        if self.metadata is not None:
+            return self.metadata[self._identity]
+        else:
+            return pd.DataFrame([])
+
+    def set_identity(self, new_identity: str):
+        """Set the identity of the knowledge graph nodes.
+        
+        To set an identity, there must be a metadata dataframe given to the knowledge graph, and the identity must correspond to a
+        column name of this metadata dataframe. Identities are useful to explore the knowledge graph without relying solely on meaningless
+        identifiers but on node names instead, for example.
+        
+        It is best if all values of an identity are unique in order to identify an individual node, though that is not strictly enforced.
+        If that is not the case, functions using identities might have unexpected behavior. To get the dataframe corresponding to the current
+        identity, call the `identity` property.
+        
+        Argument
+        --------
+            new_identity: str
+                The name of the new identity, which must exist in the metadata.
+        
+        Warning
+        -------
+            If all values are not unique in the new identity, a warning will be issued."""
+        assert self.metadata is not None, "You need to add metadata in order to set an identity."
+        assert new_identity in self.metadata, f"The given identity is not a valid metadata name. Valid names are: {self.metadata.columns}."
+
+        if not self.metadata[new_identity].is_unique():
+            logging.warn(f"All values are not unique across identity {new_identity}, which may introduce ambiguities. Unexpected output may come from inference.")
+        
+        self._identity = new_identity
+
+    def add_metadata(self, metadata: pd.DataFrame):
+        """Add a new metadata dataframe to the existing one or create it.
+        
+        If there is already a metadata dataframe associated with the knowledge graph, the new one must have an identical "id" column to be valid.
+        If there is no metadata, then the given dataframe must contain at least the columns "id" and "type".
+
+        Argument
+        --------
+            metadata: pd.DataFrame
+                The metadata dataframe to associate to the knowledge graph.
+        """
+        if self.metadata is None:
+            assert not set(["type","id"]).isdisjoint(list(metadata.columns)), f"The metadata dataframe must have at least the columns `type` and `id`, but found only {",".join(list(metadata.columns))}"
+            assert metadata.shape[0] == self.n_ent, f"The number of rows in the metadata dataframe must match the number of entities in the graph, but found {metadata.shape[0]} rows for {self.n_ent} entities."
+            self.metadata = metadata
+        else:
+            assert "id" in metadata.columns and metadata["id"] == self.metadata["id"], "The metadata dataframe must have an id column identical to the existing metadata."
+            self.metadata = pd.merge(self.metadata, metadata, on="id")
 
     def get_df(self):
         """
@@ -747,6 +806,9 @@ class KnowledgeGraph(Dataset):
             embeddings[mask] = node_embeddings[nt_idx][self.glob2loc[mask]]
         
         return embeddings
+
+    def clean(self):
+        self.triple_types = [triple for triple in self.triple_types if triple[1] != "self"]
 
     @staticmethod
     def from_hetero_data(hetero_data: HeteroData):

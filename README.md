@@ -6,7 +6,7 @@ This tool relies heavily on the performances of TorchKGE and its numerous implem
 
 ## Installation
 
-It is recommended to download the [configuration template](src/kgate/config_template.toml) alongside your installation (see [Usage](#usage) below).
+It is recommended to download the [configuration template](src/kgate/config_template.toml) alongside your installation (see [Usage](usage) below).
 
 ### With pip
 
@@ -47,6 +47,7 @@ cd KGATE
 poetry install
 ```
 
+(usage)=
 ## Usage
 
 KGATE is meant to be a self-sufficient training environment for knowledge graph embedding that requires very little code to work but can easily be expanded or modified. Everything stems from the **Architect** class, which holds all the necessary attributes and methods to fully train and test a KGE model following the autoencoder architecture, as well as run inference.
@@ -79,4 +80,4 @@ For a more detailed example and specific methods that are available in the packa
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](#license) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

@@ -12,6 +12,7 @@ import warnings
 import yaml
 import platform
 from typing import Tuple, Dict, List, Any, Set, Literal
+from collections.abc import Callable
 
 import pandas as pd
 import numpy as np
@@ -43,6 +44,7 @@ from .knowledgegraph import KnowledgeGraph
 from .samplers import PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
 from .inference import EntityInference, RelationInference
+from .data_leakage import permute_tails
 
 # Configure logging
 logging.captureWarnings(True)
@@ -154,7 +156,7 @@ class Architect(Model):
 
         run_kg_prep: bool = self.config["run_kg_preprocess"]
 
-        if run_kg_prep or df is not None:
+        if run_kg_prep:
             logging.info(f"Preparing KG...")
             self.kg_train, self.kg_val, self.kg_test = prepare_knowledge_graph(self.config, kg, df, self.metadata)
             logging.info("KG preprocessed.")
@@ -179,7 +181,7 @@ class Architect(Model):
         self.sampler: sampling.NegativeSampler = None
         self.scheduler: lr_scheduler.LRScheduler | None = None
         self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
-        self.node_embeddings: nn.ParameterList | nn.Embedding
+        self.node_embeddings: nn.ParameterList
 
     @property
     def enc_emb_dim(self):
@@ -232,7 +234,7 @@ class Architect(Model):
             gnn_layers = encoder_config["gnn_layer_number"]
 
         last_triple_type = self.kg_train.triples[-1]
-        edge_types = self.kg_train.triple_types[:last_triple_type + 1]
+        edge_types = self.kg_train.triple_types#[:last_triple_type + 1]
 
         match encoder_name:
             case "Default":
@@ -524,15 +526,11 @@ class Architect(Model):
         # If we have been given a pretrained embedding file (such as the output of a node2vec), we use that in priority
         if pretrained is not None and pretrained.exists():
             self.node_embeddings = torch.load(pretrained)
-            if not isinstance(self.encoder, GNN) and self.node_embeddings.size(1) != self.enc_emb_dim:
-                raise ValueError(f"The pretrained embedding has an embedding size of {self.node_embeddings.size(1)} which is not compatible with decoder {self.decoder}. Use a different decoder or an embedding size of {self.enc_emb_dim}.")
-                
-        # If not, and we don't use a deep encoder, the embeddings are initialized at random
-        elif not isinstance(self.encoder, GNN):
-            self.node_embeddings = init_embedding(self.kg_train.n_ent, self.enc_emb_dim, self.device)
-        # If we do have a deep encoder, we check for each node type if we have been supplied input features 
-        # if not, they too are initialized at random
+        # elif not isinstance(self.encoder, GNN):
+        #     self.node_embeddings = init_embedding(self.kg_train.n_ent, self.emb_dim, self.device)
         else:
+            assert isinstance(self.encoder, GNN) or len(self.kg_train.nt2ix) == 1, "When using a GNN as encoder, the node_type shouldn't be supplied."
+
             self.node_embeddings = nn.ParameterList()
             ix2nt = {v: k for k,v in self.kg_train.nt2ix.items()}
             for node_type in self.kg_train.nt2glob:
@@ -821,8 +819,30 @@ class Architect(Model):
 
         return results
         
-    def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], top_k:int=100):
-        """Infer missing entities or relations, depending on the given parameters"""
+    def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], top_k:int=100, identity:str=""):
+        """Infer missing entities or relations, depending on the given parameters.
+        
+        Only two of heads, rels and tails must be given, and the other one will be inferred. For example, when inferring tails,
+        for each couple `heads[n]` and `rels[n]`, `top_k` tails will be predicted. The values in those list must correspond to
+        the `identity` of the metadata, by default the current identity. If there is no metadata, the node ID is used.
+        
+        Arguments
+        ---------
+            heads: List[str], optional
+                List of known head entities
+            rels: List[str], optional
+                List of known relations
+            tails: List[str], optional
+                List of known tail entities
+            top_k: int, optional
+                Number of prediction to return for each couple in the list.
+            identity: str, optional
+                The identity to use to predict links. Default is the current identity.
+                
+        Returns
+        -------
+            predictions: pd.DataFrame
+                A DataFrame containing the prediction alongside their score."""
         if not sum([len(arr) > 0 for arr in [heads,rels,tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, relations or tails.")
         torch.cuda.empty_cache()
@@ -870,6 +890,36 @@ class Architect(Model):
         
         return pd.DataFrame([pred_names,scores], columns= ["Prediction","Score"])
 
+    def load_checkpoint(self, path: Path, loose=False) -> dict:
+        """Parse an Architect checkpoint to ensure it can properly be loaded.
+        
+        Arguments
+        ---------
+        path: pathlib.Path
+            The path to the checkpoint that will be loaded
+        loose: bool, default to False
+            If true, will try to change the current configuration to match the checkpoint's and avoid errors.
+            
+        Returns
+        -------
+        checkpoint: dict
+            The loaded checkpoint as a dictionnary."""
+        checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+
+        # Check entity and relation dict size
+        assert len(checkpoint["relations"]["weight"]) == self.n_rel, f"Mismatch between the number of relations in the checkpoint ({len(checkpoint['relations']['weight'])}) and the current configuration ({self.n_rel})!"
+
+        if isinstance(self.encoder, GNN):
+            assert len(checkpoint["entities"]) == len(self.kg_train.nt2ix), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({len(self.kg_train.nt2ix)})!"
+        else:
+            assert len(checkpoint["entities"]["weight"]) != self.n_ent, f"Mismatch between the number of entities in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({self.n_ent})!"
+
+        if "encoder" in checkpoint:
+            assert checkpoint["encoder"].keys() == self.encoder.state_dict().keys(), "Mismatch between the checkpoint convolution layers and the current configuration's."
+
+        return checkpoint
+
+
     def load_best_model(self):
         """Load into memory the checkpoint corresponding to the highest-performing model on the validation set."""
         _, nt_count = self.kg_train.node_types.unique(return_counts=True)
@@ -885,16 +935,13 @@ class Architect(Model):
             return
         
         logging.info(f"Best model is {self.checkpoints_dir.joinpath(best_model)}")
-        checkpoint = torch.load(self.checkpoints_dir.joinpath(best_model), map_location=self.device, weights_only=False)
+        checkpoint = self.load_checkpoint(self.checkpoints_dir.joinpath(best_model))
 
-        if isinstance(self.encoder, GNN):
-            self.node_embeddings = nn.ParameterList()
-            for nt in checkpoint["entities"]:
-                self.node_embeddings.append(checkpoint["entities"][nt].to(self.device))
-        else:
-            self.node_embeddings = init_embedding(self.n_ent, self.enc_emb_dim, self.device)
-            self.node_embeddings.load_state_dict(checkpoint["entities"])
 
+        self.node_embeddings = nn.ParameterList()
+        for nt in checkpoint["entities"]:
+            self.node_embeddings.append(checkpoint["entities"][nt].to(self.device))
+        
         self.rel_emb.load_state_dict(checkpoint["relations"])
         self.decoder.load_state_dict(checkpoint["decoder"])
         if "encoder" in checkpoint:
@@ -977,6 +1024,10 @@ class Architect(Model):
 
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
+            # As I understand it, this tensor is larger than needs to be because it needs to account for every possible
+            # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
+            # which corresponds to the indices that are filled here.
+            # TODO: See if making it a sparse tensor can spare memory
             embeddings: torch.Tensor = torch.zeros((kg.n_ent, self.enc_emb_dim), device=self.device, dtype=torch.float)
 
             for node_type, idx in input.mapping.items():
@@ -1028,16 +1079,13 @@ class Architect(Model):
     def normalize_parameters(self):
         # Some decoders should not normalize parameters or do so in a different way.
         # In this case, they should implement the function themselves and we return it.
-        normalize_func = getattr(self.decoder, "normalize_params", None)
+        normalize_func: Callable[..., Tuple[nn.ParameterList, nn.Embedding]] | None = getattr(self.decoder, "normalize_params", None)
         # If the function only accept one parameter, it is the base torchKGE one,
         # we don't want that.
         if callable(normalize_func) and len(signature(normalize_func).parameters) > 1:
-            stop_norm = normalize_func(rel_emb = self.rel_emb, ent_emb = self.node_embeddings)
-            if stop_norm: return
-        
-        
-        if not isinstance(self.encoder, GNN):
-            self.node_embeddings.weight.data = normalize(self.node_embeddings.weight.data, p=2, dim=1)
+            normalized_embeddings = normalize_func(ent_emb = self.node_embeddings, rel_emb = self.rel_emb)
+            assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the entity embedding and the relation embedding."
+            self.node_embeddings, self.rel_emb = normalized_embeddings
             
         logging.debug(f"Normalized all embeddings")
 
@@ -1244,3 +1292,19 @@ class Architect(Model):
         
         self.evaluator.evaluate(b_size=self.eval_batch_size, knowledge_graph=kg_val)
         return self.evaluator.accuracy(self.eval_batch_size, kg_test = kg_test)
+
+    def run_dl(self, attributes: Dict[str, pd.DataFrame] ={}):
+        logging.info("Preparing KG for DL evaluation pocedure...")
+        dl_config = self.config["data_leakage"]
+
+        kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
+
+        for rel in dl_config["permuted_relations"]:
+            if rel not in self.kg_train.rel2ix:
+                raise ValueError(f"Relation name {rel} was not found in the knowledge graph.")
+            logging.info(f"Permutting tails of relation {rel}")
+            self.kg_train = permute_tails(self.kg_train, rel)
+
+        self.kg_train, self.kg_val, self.kg_test = kg.split_kg(shares=self.config["preprocessing"]["split"])
+
+        self.train_model(attributes=attributes)
