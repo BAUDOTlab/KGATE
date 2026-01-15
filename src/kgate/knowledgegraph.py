@@ -98,7 +98,7 @@ class KnowledgeGraph(Dataset):
         self.node_type_to_index: Dict[str,int] = nt2ix or {"Node": 0}
         self.edge_to_index = rel2ix or get_dictionaries(df, ent=False)
 
-        self.n_ent = max(self.node_to_index.values()) + 1
+        self.node_count = max(self.node_to_index.values()) + 1
         self.edge_count = max(self.edge_to_index.values()) + 1
 
         self.metadata = None
@@ -110,11 +110,11 @@ class KnowledgeGraph(Dataset):
             # The mapping is done on the absolute index of nodes. However, subgraphs don't have all the nodes
             # Thus, we must initialize the tensor at -1 to avoid downstream issue with the node_type 0 being 
             # broadcasted to missing nodes in subgraphs.
-            self.node_types = torch.ones(self.n_ent, dtype=torch.long).neg()
+            self.node_types = torch.ones(self.node_count, dtype=torch.long).neg()
 
-            for tri_type in self.triples.unique():
+            for tri_type in self.triplets.unique():
                 h_t, t_t = self.triple_types[tri_type][0], self.triple_types[tri_type][2]
-                triple_edgelist = self.edgelist[:, self.triples == tri_type]
+                triple_edgelist = self.edgelist[:, self.triplets == tri_type]
                 self.node_types[triple_edgelist[0]] = self.node_type_to_index[h_t]
                 self.node_types[triple_edgelist[1]] = self.node_type_to_index[t_t]
 
@@ -131,8 +131,8 @@ class KnowledgeGraph(Dataset):
                 mapping_df = df
 
             i = 0
-            self.n_nodes = self.n_ent
-            self.node_types = torch.ones(self.n_ent, dtype=torch.long).neg()
+            self.n_nodes = self.node_count
+            self.node_types = torch.ones(self.node_count, dtype=torch.long).neg()
 
             for rel, group in mapping_df.groupby("rel"):
                 relation = self.edge_to_index[rel]
@@ -182,7 +182,7 @@ class KnowledgeGraph(Dataset):
                         i+=1
         
         self.node_type_to_global: Dict[str, Tensor] = {}
-        self.global_to_local_indices = torch.ones(self.n_ent, dtype=torch.long).neg()
+        self.global_to_local_indices = torch.ones(self.node_count, dtype=torch.long).neg()
 
         for i, node_type in enumerate(self.node_type_to_index):
             glob_idx = (self.node_types == i).nonzero(as_tuple=True)[0]
@@ -205,11 +205,11 @@ class KnowledgeGraph(Dataset):
         return self.edgelist[1]
     
     @property
-    def relations(self) -> Tensor:
+    def edges(self) -> Tensor:
         return self.edgelist[2]
 
     @property
-    def triples(self) -> Tensor:
+    def triplets(self) -> Tensor:
         return self.edgelist[3]
 
     @property
@@ -271,7 +271,7 @@ class KnowledgeGraph(Dataset):
         """
         if self.metadata is None:
             assert not set(["type","id"]).isdisjoint(list(metadata.columns)), f"The metadata dataframe must have at least the columns `type` and `id`, but found only {",".join(list(metadata.columns))}"
-            assert metadata.shape[0] == self.n_ent, f"The number of rows in the metadata dataframe must match the number of entities in the graph, but found {metadata.shape[0]} rows for {self.n_ent} entities."
+            assert metadata.shape[0] == self.node_count, f"The number of rows in the metadata dataframe must match the number of entities in the graph, but found {metadata.shape[0]} rows for {self.node_count} entities."
             self.metadata = metadata
         else:
             assert "id" in metadata.columns and metadata["id"] == self.metadata["id"], "The metadata dataframe must have an id column identical to the existing metadata."
@@ -286,7 +286,7 @@ class KnowledgeGraph(Dataset):
 
         df = pd.DataFrame(cat((self.head_indices.view(1, -1),
                             self.tail_indices.view(1, -1),
-                            self.relations.view(1, -1))).transpose(0, 1).numpy(),
+                            self.edges.view(1, -1))).transpose(0, 1).numpy(),
                        columns=['from', 'to', 'rel'])
 
         df['from'] = df['from'].apply(lambda x: ix2ent[x])
@@ -336,16 +336,16 @@ class KnowledgeGraph(Dataset):
         )
             
     def get_mask(self, shares):
-        uniques_r, counts_r = self.relations.unique(return_counts=True)
-        uniques_e = np.arange(self.n_ent)
+        uniques_r, counts_r = self.edges.unique(return_counts=True)
+        uniques_e = np.arange(self.node_count)
 
-        train_mask = torch.zeros_like(self.relations).bool()
-        val_mask = torch.zeros_like(self.relations).bool()
+        train_mask = torch.zeros_like(self.edges).bool()
+        val_mask = torch.zeros_like(self.edges).bool()
         for i,r in enumerate(uniques_r):
             count = counts_r[i].item()
             rand = torch.randperm(count)
 
-            sub_mask = torch.eq(self.relations, r).nonzero(as_tuple=False)[:, 0]
+            sub_mask = torch.eq(self.edges, r).nonzero(as_tuple=False)[:, 0]
 
             assert len(sub_mask) == count
             
@@ -359,7 +359,7 @@ class KnowledgeGraph(Dataset):
             val_mask[sub_mask[rand[train_size:train_size + val_size]]] = True
 
         u = cat([self.head_indices[train_mask], self.tail_indices[train_mask]]).unique()
-        if len(u) < self.n_ent:
+        if len(u) < self.node_count:
             missing_entities = tensor(list(set(uniques_e.tolist()) - set(u.tolist())),
                                       dtype=torch.long)
             for e in missing_entities:
@@ -456,8 +456,8 @@ class KnowledgeGraph(Dataset):
         max_ent_idx = max(new_triples[0].max().item(), new_triples[1].max().item())
         max_triple_idx = new_triples[3].max().item()
 
-        if max_ent_idx >= self.n_ent:
-            raise ValueError(f"The maximum entity index ({max_ent_idx}) is superior to the number of entities ({self.n_ent}).")
+        if max_ent_idx >= self.node_count:
+            raise ValueError(f"The maximum entity index ({max_ent_idx}) is superior to the number of entities ({self.node_count}).")
         if max_triple_idx >= len(self.triple_types):
             raise ValueError(f"The maximum triple index ({max_triple_idx}) is superior to the number of relations ({len(self.triple_types)}).")
 
@@ -572,7 +572,7 @@ class KnowledgeGraph(Dataset):
         T = {}  # Dictionary to store pairs for each relation
         keep = torch.tensor([], dtype=torch.long)  # Tensor to store indices of triples to keep
 
-        h, t, r = self.head_indices, self.tail_indices, self.relations
+        h, t, r = self.head_indices, self.tail_indices, self.edges
 
         # Process each relation
         for r_ in tqdm(range(self.edge_count)):
@@ -609,7 +609,7 @@ class KnowledgeGraph(Dataset):
         return self.keep_triples(keep)
 
     def get_pairs(self, r: int, type:str="ht") -> Set[Tuple[Number, Number]]:
-        mask = (self.relations == r)
+        mask = (self.edges == r)
 
         if type == "ht":
             return set((i.item(), j.item()) for i, j in cat(
@@ -665,7 +665,7 @@ class KnowledgeGraph(Dataset):
         T_inv = dict()
         lengths = dict()
 
-        h, t, r = self.head_indices, self.tail_indices, self.relations
+        h, t, r = self.head_indices, self.tail_indices, self.edges
 
         for r_ in tqdm(range(self.edge_count)):
             mask = (r == r_)
@@ -729,7 +729,7 @@ class KnowledgeGraph(Dataset):
         """
         selected_relations = []
 
-        h, t, r = self.head_indices, self.tail_indices, self.relations
+        h, t, r = self.head_indices, self.tail_indices, self.edges
 
         S = dict()
         O = dict()
@@ -799,7 +799,7 @@ class KnowledgeGraph(Dataset):
         return EncoderInput(x_dict, edge_indices, node_ids)
 
     def flatten_embeddings(self, node_embeddings: nn.ParameterList) -> Tensor:
-        embeddings: torch.Tensor = torch.zeros((self.n_ent, node_embeddings[0].size(1)), device=node_embeddings[0].device, dtype=torch.float)
+        embeddings: torch.Tensor = torch.zeros((self.node_count, node_embeddings[0].size(1)), device=node_embeddings[0].device, dtype=torch.float)
 
         for nt_idx in self.node_type_to_index.values():
             mask = (self.node_types == nt_idx)

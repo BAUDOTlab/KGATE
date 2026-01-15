@@ -146,7 +146,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 input = knowledge_graph.get_encoder_input(edgelist[:, edge_mask], node_embeddings)
                 encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
                 
-                embeddings: torch.Tensor = torch.zeros((knowledge_graph.n_ent, enc_emb_dim), device=device, dtype=torch.float)
+                embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count, enc_emb_dim), device=device, dtype=torch.float)
 
                 for node_type, idx in input.mapping.items():
                     embeddings[idx] = encoder_output[node_type]
@@ -291,7 +291,7 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
             Batch size.
         """
         sampler = PositionalNegativeSampler(knowledge_graph)
-        r_idx = knowledge_graph.relations
+        r_idx = knowledge_graph.edges
 
         neg_heads, neg_tails = sampler.corrupt_kg(b_size, self.is_cuda,
                                                        which="main")
@@ -330,7 +330,7 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
             self.evaluate(b_size=b_size, knowledge_graph=kg_to_eval)
 
         sampler = PositionalNegativeSampler(kg_test)
-        r_idx = kg_test.relations
+        r_idx = kg_test.edges
 
         neg_heads, neg_tails = sampler.corrupt_kg(b_size,
                                                 self.is_cuda,

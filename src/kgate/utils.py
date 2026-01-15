@@ -146,15 +146,15 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGrap
     """
      
     # Concatenate relations from all KGs
-    all_relations = torch.cat((kg_train.triples, kg_test.triples, kg_val.triples))
+    all_relations = torch.cat((kg_train.triplets, kg_test.triplets, kg_val.triplets))
 
     # Compute the number of triples for all relations
     total_counts = torch.bincount(all_relations)
 
     # Compute occurences of each relations
-    train_counts = torch.bincount(kg_train.triples, minlength=len(total_counts))
-    test_counts = torch.bincount(kg_test.triples, minlength=len(total_counts))
-    val_counts = torch.bincount(kg_val.triples, minlength=len(total_counts))
+    train_counts = torch.bincount(kg_train.triplets, minlength=len(total_counts))
+    test_counts = torch.bincount(kg_test.triplets, minlength=len(total_counts))
+    val_counts = torch.bincount(kg_val.triplets, minlength=len(total_counts))
 
     # Compute proportions for each KG
     proportions = {}
@@ -171,7 +171,7 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGrap
 def concat_kgs(kg_tr: KnowledgeGraph, kg_val: KnowledgeGraph, kg_te: KnowledgeGraph):
     h = cat((kg_tr.head_indices, kg_val.head_indices, kg_te.head_indices))
     t = cat((kg_tr.tail_indices, kg_val.tail_indices, kg_te.tail_indices))
-    r = cat((kg_tr.relations, kg_val.relations, kg_te.relations))
+    r = cat((kg_tr.edges, kg_val.edges, kg_te.edges))
     return h, t, r
 
 def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tuple[int, int]], rev_duplicates: List[Tuple[int, int]]):
@@ -386,8 +386,8 @@ class HeteroMappings():
             node_types = ["Node"]
         # 3. Create mappings for node IDs by type.
         node_dict = {}
-        kg_to_nt = torch.zeros(kg.n_ent, dtype=torch.int64)
-        kg_to_het = torch.zeros(kg.n_ent, dtype=torch.int64)
+        kg_to_nt = torch.zeros(kg.node_count, dtype=torch.int64)
+        kg_to_het = torch.zeros(kg.node_count, dtype=torch.int64)
         
         for i, ntype in enumerate(node_types):
             # Extract all unique identifiers for each type

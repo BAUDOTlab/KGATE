@@ -4,7 +4,7 @@ import torch
 
 from .knowledgegraph import KnowledgeGraph
 
-def permute_tails(kg: KnowledgeGraph, relation: str, preserve_node_degree=True) -> KnowledgeGraph:
+def permute_tails(kg: KnowledgeGraph, edge: str, preserve_node_degree=True) -> KnowledgeGraph:
     """
     Randomly permutes the `tails` for a given relation while maintaining the original degree
     of `heads` and `tails`, ensuring there are no triples of the form (a, rel, a) where `head == tail`.
@@ -23,41 +23,41 @@ def permute_tails(kg: KnowledgeGraph, relation: str, preserve_node_degree=True) 
         A new instance of KnowledgeGraph with the `tails` permuted.
     """
     node_types = kg.node_types
-    triple_types = kg.triple_types
+    triplets_types = kg.triple_types
 
-    ix2nt = {v: k for k,v in kg.node_type_to_index.items()}
-    relation_id = kg.edge_to_index[relation]
+    index_to_node_type = {value: key for key,value in kg.node_type_to_index.items()}
+    edge_index = kg.edge_to_index[edge]
 
     # Mask only the target relation
-    mask = (kg.relations == relation_id)
+    mask = (kg.edges == edge_index)
 
     # Get head and tail indices for this relation
-    heads_for_relation = kg.head_indices[mask].tolist()
-    tails_for_relation = kg.tail_indices[mask].tolist()
+    heads_for_this_edge = kg.head_indices[mask].tolist()
+    tails_for_this_edge = kg.tail_indices[mask].tolist()
 
-    triples = [0] * len(tails_for_relation) if len(kg.node_type_to_index)==1 else []
+    triplets = [0] * len(tails_for_this_edge) if len(kg.node_type_to_index)==1 else []
 
     # Count the occurence of each tail in the relation
-    tails_count = Counter(tails_for_relation)
+    tails_count = Counter(tails_for_this_edge)
 
     if preserve_node_degree:
         # Shuffle tails randomly. This might create self-loops
-        permuted_tails = tails_for_relation[:] # Creating an integral slice is functionnally the same as deepcopy somehow
+        permuted_tails = tails_for_this_edge[:] # Creating an integral slice is functionnally the same as deepcopy somehow
         random.shuffle(permuted_tails)
     else:
-        num_tails = len(tails_for_relation)
-        num_nodes = kg.n_ent
-        permuted_tails = [random.randrange(num_nodes) for _ in range(num_tails)]
+        tail_count = len(tails_for_this_edge)
+        node_count = kg.node_count
+        permuted_tails = [random.randrange(node_count) for _ in range(tail_count)]
 
 
 
     # Fix self loop and correct node degree
     for i in range(len(permuted_tails)):
-        if heads_for_relation[i] == permuted_tails[i]:
+        if heads_for_this_edge[i] == permuted_tails[i]:
             # It is a self-loop
             found = False
             for j in range(i + 1, len(permuted_tails)):
-                if heads_for_relation[j] != permuted_tails[i] and heads_for_relation[i] != permuted_tails[j]:
+                if heads_for_this_edge[j] != permuted_tails[i] and heads_for_this_edge[i] != permuted_tails[j]:
                     # Swap the two permuted tails
                     permuted_tails[i], permuted_tails[j] = permuted_tails[j], permuted_tails[i]
                     found = True
@@ -65,29 +65,29 @@ def permute_tails(kg: KnowledgeGraph, relation: str, preserve_node_degree=True) 
             # If no valid swap has been found, start again from the beginning
             if not found:
                 for j in range(0, i):
-                    if heads_for_relation[j] != permuted_tails[i] and heads_for_relation[i] != permuted_tails[j]:
+                    if heads_for_this_edge[j] != permuted_tails[i] and heads_for_this_edge[i] != permuted_tails[j]:
                         permuted_tails[i], permuted_tails[j] = permuted_tails[j], permuted_tails[i]
                         break
 
         if len(kg.node_type_to_index) > 1:
-            perm_tri = (
-                    ix2nt[node_types[heads_for_relation[i]].item()],
-                    relation,
-                    ix2nt[node_types[permuted_tails[i]].item()]
+            permuted_triplet = (
+                    index_to_node_type[node_types[heads_for_this_edge[i]].item()],
+                    edge,
+                    index_to_node_type[node_types[permuted_tails[i]].item()]
                 )
             # Add it if it doesn't already exists
-            if not perm_tri in triple_types:
-                triple_types.append(perm_tri)
-                triple = len(triple_types)
+            if not permuted_triplet in triplets_types:
+                triplets_types.append(permuted_triplet)
+                triplet = len(triplets_types)
             else:
-                triple = triple_types.index(perm_tri)
-            triples.append(triple)
+                triplet = triplets_types.index(permuted_triplet)
+            triplets.append(triplet)
 
     permuted_tails = torch.tensor(permuted_tails, dtype=kg.tail_indices.dtype, device=kg.edgelist.device)
-    new_triples = torch.tensor(triples, device=kg.edgelist.device)
+    new_triplets = torch.tensor(triplets, device=kg.edgelist.device)
 
     kg.tail_indices[mask] = permuted_tails
-    kg.triples[mask] = new_triples
+    kg.triplets[mask] = new_triplets
 
     if preserve_node_degree:
         # Check if node degree is correctly preserved

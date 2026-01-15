@@ -337,8 +337,8 @@ def clean_datasets(kg_train: KnowledgeGraph, kg2: KnowledgeGraph, known_reverses
         # Get (h, t) pairs in kg2 related by r1
         kg2_ht_r1 = kg2.get_pairs(r1, type="ht")
         # Get indices of (h, t) in kg_train that are related by r2
-        indices_to_remove_kg_train = [i for i, (h, t) in enumerate(zip(kg_train.tail_indices, kg_train.head_indices)) if (h.item(), t.item()) in kg2_ht_r1 and kg_train.relations[i].item() == r2]
-        indices_to_remove_kg_train.extend([i for i, (h, t) in enumerate(zip(kg_train.head_indices, kg_train.tail_indices)) if (h.item(), t.item()) in kg2_ht_r1 and kg_train.relations[i].item() == r2])
+        indices_to_remove_kg_train = [i for i, (h, t) in enumerate(zip(kg_train.tail_indices, kg_train.head_indices)) if (h.item(), t.item()) in kg2_ht_r1 and kg_train.edges[i].item() == r2]
+        indices_to_remove_kg_train.extend([i for i, (h, t) in enumerate(zip(kg_train.head_indices, kg_train.tail_indices)) if (h.item(), t.item()) in kg2_ht_r1 and kg_train.edges[i].item() == r2])
         
         # Remove those (h, t) pairs from kg_train
         kg_train = kg_train.remove_triples(torch.tensor(indices_to_remove_kg_train, dtype=torch.long))
@@ -348,8 +348,8 @@ def clean_datasets(kg_train: KnowledgeGraph, kg2: KnowledgeGraph, known_reverses
         # Get (h, t) pairs in kg2 related by r2
         kg2_ht_r2 = kg2.get_pairs(r2, type="ht")
         # Get indices of (h, t) in kg_train that are related by r1
-        indices_to_remove_kg_train_reverse = [i for i, (h, t) in enumerate(zip(kg_train.tail_indices, kg_train.head_indices)) if (h.item(), t.item()) in kg2_ht_r2 and kg_train.relations[i].item() == r1]
-        indices_to_remove_kg_train_reverse.extend([i for i, (h, t) in enumerate(zip(kg_train.head_indices, kg_train.tail_indices)) if (h.item(), t.item()) in kg2_ht_r2 and kg_train.relations[i].item() == r1])
+        indices_to_remove_kg_train_reverse = [i for i, (h, t) in enumerate(zip(kg_train.tail_indices, kg_train.head_indices)) if (h.item(), t.item()) in kg2_ht_r2 and kg_train.edges[i].item() == r1]
+        indices_to_remove_kg_train_reverse.extend([i for i, (h, t) in enumerate(zip(kg_train.head_indices, kg_train.tail_indices)) if (h.item(), t.item()) in kg2_ht_r2 and kg_train.edges[i].item() == r1])
 
         # Remove those (h, t) pairs from kg_train
         kg_train = kg_train.remove_triples(torch.tensor(indices_to_remove_kg_train_reverse, dtype=torch.long))
@@ -391,13 +391,13 @@ def clean_cartesians(kg1: KnowledgeGraph, kg2: KnowledgeGraph, known_cartesian: 
     
     for r in known_cartesian:
         # Find all entities in test set that participate in the cartesian relation
-        mask = (kg2.relations == r)
+        mask = (kg2.edges == r)
         if entity_type == "head":
             cartesian_entities = kg2.head_indices[mask].view(-1,1)
             # Find matching triplets in training set with same head and relation
             all_indices_to_move = []
             for entity in cartesian_entities:
-                mask = (kg1.head_indices == entity) & (kg1.relations == r)
+                mask = (kg1.head_indices == entity) & (kg1.edges == r)
                 indices = mask.nonzero().squeeze()
                 if indices.dim() == 0:
                     indices = indices.unsqueeze(0)
@@ -407,7 +407,7 @@ def clean_cartesians(kg1: KnowledgeGraph, kg2: KnowledgeGraph, known_cartesian: 
             # Find matching triplets in training set with same tail and relation
             all_indices_to_move = []
             for entity in cartesian_entities:
-                mask = (kg1.tail_indices == entity) & (kg1.relations == r)
+                mask = (kg1.tail_indices == entity) & (kg1.edges == r)
                 indices = mask.nonzero().squeeze()
                 if indices.dim() == 0:
                     indices = indices.unsqueeze(0)
@@ -417,7 +417,7 @@ def clean_cartesians(kg1: KnowledgeGraph, kg2: KnowledgeGraph, known_cartesian: 
             # Extract the triplets to be transferred
             triplets_to_move = torch.stack([
                 kg1.head_indices[all_indices_to_move],
-                kg1.relations[all_indices_to_move],
+                kg1.edges[all_indices_to_move],
                 kg1.tail_indices[all_indices_to_move]
             ], dim=1)
             
@@ -428,7 +428,7 @@ def clean_cartesians(kg1: KnowledgeGraph, kg2: KnowledgeGraph, known_cartesian: 
             kg2_dict = {
                 "heads": torch.cat([kg2.head_indices, triplets_to_move[:, 0]]),
                 "tails": torch.cat([kg2.tail_indices, triplets_to_move[:, 2]]),
-                "relations": torch.cat([kg2.relations, triplets_to_move[:, 1]]),
+                "relations": torch.cat([kg2.edges, triplets_to_move[:, 1]]),
             }
             
             kg2 = kg2.__class__(

@@ -48,9 +48,9 @@ from .data_leakage import permute_tails
 
 # Configure logging
 logging.captureWarnings(True)
-log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
+logging_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
 logging.basicConfig(
-    level=log_level,  
+    level=logging_level,  
     format="%(asctime)s - %(levelname)s - %(message)s" 
 )
 
@@ -172,7 +172,7 @@ class Architect(Model):
                 self.kg_train, self.kg_validation, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
                 logging.info("Done")
 
-        super().__init__(self.kg_train.n_ent, self.kg_train.edge_count)
+        super().__init__(self.kg_train.node_count, self.kg_train.edge_count)
         # Initialize attributes
         self.encoder: DefaultEncoder | GNN = None
         self.decoder: Model = None
@@ -233,7 +233,7 @@ class Architect(Model):
         if gnn_layers == 0:
             gnn_layers = encoder_config["gnn_layer_number"]
 
-        last_triple_type = self.kg_train.triples[-1]
+        last_triple_type = self.kg_train.triplets[-1]
         edge_types = self.kg_train.triple_types#[:last_triple_type + 1]
 
         match encoder_name:
@@ -310,29 +310,29 @@ class Architect(Model):
         # Translational models
         match decoder_name:
             case "TransE":
-                decoder = TransE(self.embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count,
+                decoder = TransE(self.embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count,
                             dissimilarity_type=dissimilarity)
                 decoder_loss = MarginLoss(margin)
             case "TransH":
-                decoder = TransH(self.embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder = TransH(self.embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransR":
-                decoder = TransR(self.embedding_dimensions, self.edge_embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder = TransR(self.embedding_dimensions, self.edge_embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransD":
-                decoder = TransD(self.embedding_dimensions, self.edge_embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder = TransD(self.embedding_dimensions, self.edge_embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "RESCAL":
-                decoder = RESCAL(self.embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder = RESCAL(self.embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "DistMult":
-                decoder = DistMult(self.embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder = DistMult(self.embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "ComplEx":
-                decoder = ComplEx(self.embedding_dimensions, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder = ComplEx(self.embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "ConvKB":
-                decoder = ConvKB(self.embedding_dimensions, filter_count, self.kg_train.n_ent, self.kg_train.edge_count)
+                decoder = ConvKB(self.embedding_dimensions, filter_count, self.kg_train.node_count, self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
@@ -1028,7 +1028,7 @@ class Architect(Model):
             # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
             # which corresponds to the indices that are filled here.
             # TODO: See if making it a sparse tensor can spare memory
-            embeddings: torch.Tensor = torch.zeros((kg.n_ent, self.encoder_node_embedding_dimensions), device=self.device, dtype=torch.float)
+            embeddings: torch.Tensor = torch.zeros((kg.node_count, self.encoder_node_embedding_dimensions), device=self.device, dtype=torch.float)
 
             for node_type, index in input.mapping.items():
                 embeddings[index] = encoder_output[node_type]
@@ -1180,7 +1180,7 @@ class Architect(Model):
         # Count occurrences of nodes with the specified relation in the training set
         train_node_counts = {}
         for i in range(self.kg_train.triplet_count):
-            if self.kg_train.relations[i].item() == edge_index:
+            if self.kg_train.edges[i].item() == edge_index:
                 head = self.kg_train.head_indices[i].item()
                 tail = self.kg_train.tail_indices[i].item()
                 train_node_counts[head] = train_node_counts.get(head, 0) + 1
@@ -1190,7 +1190,7 @@ class Architect(Model):
         frequent_indices = []
         infrequent_indices = []
         for i in range(self.kg_test.triplet_count):
-            if self.kg_test.relations[i].item() == edge_index:  # Only consider triples with the specified relation
+            if self.kg_test.edges[i].item() == edge_index:  # Only consider triples with the specified relation
                 head = self.kg_test.head_indices[i].item()
                 tail = self.kg_test.tail_indices[i].item()
                 head_count = train_node_counts.get(head, 0)
@@ -1213,7 +1213,7 @@ class Architect(Model):
         for edge_name in edge_indices:
             # Get triples associated with index
             relation_index = kg.edge_to_index.get(edge_name)
-            indices_to_keep = torch.nonzero(kg.relations == relation_index, as_tuple=False).squeeze()
+            indices_to_keep = torch.nonzero(kg.edges == relation_index, as_tuple=False).squeeze()
 
             if indices_to_keep.numel() == 0:
                 continue  # Skip to next relation if no triples found
