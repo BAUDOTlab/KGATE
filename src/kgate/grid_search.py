@@ -30,7 +30,7 @@ def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KnowledgeGra
     as running `Architect(config_path).train_model()`"""
 
     def objective(trial: optuna.trial.Trial):
-        config = parse_config(config_path=config_path, config_dict={})
+        config = parse_config(config_path=config_path, config_dictionnary={})
 
         config = {key: suggest_value(trial, key, config[key]) for key in config}
         

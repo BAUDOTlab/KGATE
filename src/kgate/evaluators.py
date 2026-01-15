@@ -165,9 +165,9 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 scores = scores, 
                 edgelist = self.full_edgelist.to(device),
                 missing = "tail",
-                idx_1=h_idx,
-                idx_2=r_idx,
-                true_idx=t_idx
+                first_index=h_idx,
+                second_index=r_idx,
+                true_index=t_idx
             )
             self.rank_true_tails[i * b_size: (i + 1) * b_size] = get_rank(scores, t_idx).detach()
             self.filt_rank_true_tails[i * b_size: (i + 1) * b_size] = get_rank(filt_scores, t_idx).detach()
@@ -177,9 +177,9 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 scores = scores, 
                 edgelist = self.full_edgelist.to(device),
                 missing = "head",
-                idx_1=t_idx,
-                idx_2=r_idx,
-                true_idx=h_idx
+                first_index=t_idx,
+                second_index=r_idx,
+                true_index=h_idx
             )
             self.rank_true_heads[i * b_size: (i + 1) * b_size] = get_rank(scores, h_idx).detach()
             self.filt_rank_true_heads[i * b_size: (i + 1) * b_size] = get_rank(filt_scores, h_idx).detach()

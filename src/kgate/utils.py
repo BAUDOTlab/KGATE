@@ -22,13 +22,13 @@ from torch_geometric.data import HeteroData
 
 from .knowledgegraph import KnowledgeGraph
 
-log_level = logging.INFO
+logging_level = logging.INFO
 logging.basicConfig(
-    level=log_level,  
+    level=logging_level,  
     format="%(asctime)s - %(levelname)s - %(message)s" 
 )
 
-def parse_config(config_path: str, config_dict: dict) -> dict:
+def parse_config(config_path: str, config_dictionnary: dict) -> dict:
     if config_path != "" and not Path(config_path).exists():
         raise FileNotFoundError(f"Configuration file {config_path} not found.")
 
@@ -47,7 +47,7 @@ def parse_config(config_path: str, config_dict: dict) -> dict:
     # 2. Configuration file (config)
     # 3. Default configuration (default_config)
     # If a default value is None, consider it required and not defaultable
-    config = {key: set_config_key(key, default_config, config, config_dict) for key in default_config}
+    config = {key: set_config_key(key, default_config, config, config_dictionnary) for key in default_config}
 
     return config
 
@@ -109,9 +109,9 @@ def load_knowledge_graph(pickle_filename: Path) -> Tuple[KnowledgeGraph, Knowled
     logging.info(f"Will not run the preparation step. Using KG stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:
         kg_train = pickle.load(file)
-        kg_val = pickle.load(file)
+        kg_validation = pickle.load(file)
         kg_test = pickle.load(file)
-    return kg_train, kg_val, kg_test
+    return kg_train, kg_validation, kg_test
 
 def set_random_seeds(seed: int) -> None:
     """Set random seeds for reproducibility."""
@@ -124,7 +124,7 @@ def extract_node_type(node_name: str):
     """Extracts the node type from the node name, based on the string before the first underscore."""
     return node_name.split("_")[0]
 
-def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGraph, kg_val: KnowledgeGraph):
+def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGraph, kg_validation: KnowledgeGraph):
     """
     Computes the proportion of triples for each relation in each of the KnowledgeGraphs
     (train, test, val) relative to the total number of triples for that relation.
@@ -146,35 +146,35 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGrap
     """
      
     # Concatenate relations from all KGs
-    all_relations = torch.cat((kg_train.triplets, kg_test.triplets, kg_val.triplets))
+    all_edges = torch.cat((kg_train.triplets, kg_test.triplets, kg_validation.triplets))
 
     # Compute the number of triples for all relations
-    total_counts = torch.bincount(all_relations)
+    total_counts = torch.bincount(all_edges)
 
     # Compute occurences of each relations
-    train_counts = torch.bincount(kg_train.triplets, minlength=len(total_counts))
-    test_counts = torch.bincount(kg_test.triplets, minlength=len(total_counts))
-    val_counts = torch.bincount(kg_val.triplets, minlength=len(total_counts))
+    train_count = torch.bincount(kg_train.triplets, minlength=len(total_counts))
+    test_count = torch.bincount(kg_test.triplets, minlength=len(total_counts))
+    validation_count = torch.bincount(kg_validation.triplets, minlength=len(total_counts))
 
     # Compute proportions for each KG
     proportions = {}
-    for rel_id in range(len(total_counts)):
-        if total_counts[rel_id] > 0:
-            proportions[rel_id] = {
-                "train": train_counts[rel_id].item() / total_counts[rel_id].item(),
-                "test": test_counts[rel_id].item() / total_counts[rel_id].item(),
-                "val": val_counts[rel_id].item() / total_counts[rel_id].item()
+    for edge_index in range(len(total_counts)):
+        if total_counts[edge_index] > 0:
+            proportions[edge_index] = {
+                "train": train_count[edge_index].item() / total_counts[edge_index].item(),
+                "test": test_count[edge_index].item() / total_counts[edge_index].item(),
+                "val": validation_count[edge_index].item() / total_counts[edge_index].item()
             }
 
     return proportions
 
-def concat_kgs(kg_tr: KnowledgeGraph, kg_val: KnowledgeGraph, kg_te: KnowledgeGraph):
-    h = cat((kg_tr.head_indices, kg_val.head_indices, kg_te.head_indices))
-    t = cat((kg_tr.tail_indices, kg_val.tail_indices, kg_te.tail_indices))
-    r = cat((kg_tr.edges, kg_val.edges, kg_te.edges))
-    return h, t, r
+def concat_kgs(kg_train: KnowledgeGraph, kg_validation: KnowledgeGraph, kg_test: KnowledgeGraph):
+    head = cat((kg_train.head_indices, kg_validation.head_indices, kg_test.head_indices))
+    tail = cat((kg_train.tail_indices, kg_validation.tail_indices, kg_test.tail_indices))
+    edge = cat((kg_train.edges, kg_validation.edges, kg_test.edges))
+    return head, tail, edge
 
-def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tuple[int, int]], rev_duplicates: List[Tuple[int, int]]):
+def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tuple[int, int]], reverse_duplicates: List[Tuple[int, int]]):
     """
     Parameters
     ----------
@@ -194,83 +194,83 @@ def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tu
         Number of triplets in kg2 that have their reverse duplicate
         triplet in kg1.
     """
-    n_duplicates = 0
-    for r1, r2 in duplicates:
-        ht_tr = kg1.get_pairs(r2, type="ht")
-        ht_te = kg2.get_pairs(r1, type="ht")
+    duplicate_count = 0
+    for first_edge_type, second_edge_type in duplicates:
+        head_tail_train = kg1.get_pairs(second_edge_type, type="ht")
+        head_tail_test = kg2.get_pairs(first_edge_type, type="ht")
 
-        n_duplicates += len(ht_te.intersection(ht_tr))
+        duplicate_count += len(head_tail_test.intersection(head_tail_train))
 
-        ht_tr = kg1.get_pairs(r1, type="ht")
-        ht_te = kg2.get_pairs(r2, type="ht")
+        head_tail_train = kg1.get_pairs(first_edge_type, type="ht")
+        head_tail_test = kg2.get_pairs(second_edge_type, type="ht")
 
-        n_duplicates += len(ht_te.intersection(ht_tr))
+        duplicate_count += len(head_tail_test.intersection(head_tail_train))
 
-    n_rev_duplicates = 0
-    for r1, r2 in rev_duplicates:
-        th_tr = kg1.get_pairs(r2, type="th")
-        ht_te = kg2.get_pairs(r1, type="ht")
+    reverse_duplicate_count = 0
+    for first_edge_type, second_edge_type in reverse_duplicates:
+        tail_head_train = kg1.get_pairs(second_edge_type, type="th")
+        head_tail_test = kg2.get_pairs(first_edge_type, type="ht")
 
-        n_rev_duplicates += len(ht_te.intersection(th_tr))
+        reverse_duplicate_count += len(head_tail_test.intersection(tail_head_train))
 
-        th_tr = kg1.get_pairs(r1, type="th")
-        ht_te = kg2.get_pairs(r2, type="ht")
+        tail_head_train = kg1.get_pairs(first_edge_type, type="th")
+        head_tail_test = kg2.get_pairs(second_edge_type, type="ht")
 
-        n_rev_duplicates += len(ht_te.intersection(th_tr))
+        reverse_duplicate_count += len(head_tail_test.intersection(tail_head_train))
 
-    return n_duplicates, n_rev_duplicates
+    return duplicate_count, reverse_duplicate_count
 
 def find_best_model(dir: Path):
     return max(
-        (f for f in os.listdir(dir) if f.startswith("best_model_checkpoint_val_metrics=") and f.endswith(".pt")),
-        key=lambda f: float(f.split("val_metrics=")[1].rstrip(".pt")),
+        (filename for filename in os.listdir(dir) if filename.startswith("best_model_checkpoint_val_metrics=") and filename.endswith(".pt")),
+        key=lambda filename: float(filename.split("val_metrics=")[1].rstrip(".pt")),
         default=None
     )
     
-def init_embedding(num_embeddings: int, emb_dim: int, device:str="cpu"):
-    embedding = nn.Embedding(num_embeddings, emb_dim, device=device)
+def init_embedding(embedding_count: int, embedding_dimensions: int, device:str="cpu"):
+    embedding = nn.Embedding(embedding_count, embedding_dimensions, device=device)
     nn.init.xavier_uniform_(embedding.weight.data)
     return embedding
 
-def read_training_metrics(training_metrics_file: Path):
-    df = pd.read_csv(training_metrics_file)
+def read_train_metrics(train_metrics_file: Path):
+    dataframe = pd.read_csv(train_metrics_file)
 
-    df = df[~df["Epoch"].astype(str).str.contains("CHECKPOINT RESTART")]
+    dataframe = dataframe[~dataframe["Epoch"].astype(str).str.contains("CHECKPOINT RESTART")]
 
-    df["Epoch"] = df["Epoch"].astype(int)
-    df = df.sort_values(by="Epoch")
+    dataframe["Epoch"] = dataframe["Epoch"].astype(int)
+    dataframe = dataframe.sort_values(by="Epoch")
 
-    df = df.drop_duplicates(subset=["Epoch"], keep="last")
+    dataframe = dataframe.drop_duplicates(subset=["Epoch"], keep="last")
 
-    return df
+    return dataframe
 
-def plot_learning_curves(training_metrics_file: Path, outdir: Path, val_metric: str):
-    outdir = Path(outdir)
-    df = read_training_metrics(training_metrics_file)
-    df["Training Loss"] = pd.to_numeric(df["Training Loss"], errors="coerce")
-    df[f"Validation {val_metric}"] = pd.to_numeric(df[f"Validation {val_metric}"], errors="coerce")
+def plot_learning_curves(train_metrics_file: Path, output_directory: Path, validation_metric_value: str):
+    output_directory = Path(output_directory)
+    dataframe = read_train_metrics(train_metrics_file)
+    dataframe["Training Loss"] = pd.to_numeric(dataframe["Training Loss"], errors="coerce")
+    dataframe[f"Validation {validation_metric_value}"] = pd.to_numeric(dataframe[f"Validation {validation_metric_value}"], errors="coerce")
     
     plt.figure(figsize=(12, 5))
 
     # Plot pour la perte d"entraînement
     plt.subplot(1, 2, 1)
-    plt.plot(df["Epoch"], df["Training Loss"], label="Training Loss")
+    plt.plot(dataframe["Epoch"], dataframe["Training Loss"], label="Training Loss")
     plt.xlabel("Epoch")
     plt.ylabel("Training Loss")
     plt.title("Training Loss over Epochs")
     plt.legend()
-    plt.savefig(outdir.joinpath("training_loss_curve.png"))
+    plt.savefig(output_directory.joinpath("training_loss_curve.png"))
 
     # Plot pour le MRR de validation
     plt.subplot(1, 2, 2)
-    plt.plot(df["Epoch"], df[f"Validation {val_metric}"], label=f"Validation {val_metric}")
+    plt.plot(dataframe["Epoch"], dataframe[f"Validation {validation_metric_value}"], label=f"Validation {validation_metric_value}")
     plt.xlabel("Epoch")
-    plt.ylabel(f"Validation {val_metric}")
+    plt.ylabel(f"Validation {validation_metric_value}")
     plt.title("Validation Metric over Epochs")
     plt.legend()
-    plt.savefig(outdir.joinpath("validation_metric_curve.png"))
+    plt.savefig(output_directory.joinpath("validation_metric_curve.png"))
 
-def filter_scores(scores: Tensor, edgelist: Tensor, missing: Literal["head","tail","rel"], idx_1: Tensor, idx_2: Tensor, true_idx: Tensor | None):
+def filter_scores(scores: Tensor, edgelist: Tensor, missing: Literal["head","tail","rel"], first_index: Tensor, second_index: Tensor, true_index: Tensor | None):
     """
     Filter a score tensor to ignore the score attributed to true entity or relation except the ones that are being predicted.
     Parameters
@@ -294,33 +294,33 @@ def filter_scores(scores: Tensor, edgelist: Tensor, missing: Literal["head","tai
     filt_scores: Tensor
         Tensor of shape [batch_size, n] with -Inf values for all true entity/relation index except the ones being predicted.
     """
-    b_size = scores.shape[0]
-    filt_scores = scores.clone()
+    batch_size = scores.shape[0]
+    filtered_scores = scores.clone()
 
     if missing == "rel":
-        mask_1 = torch.isin(edgelist[0], idx_1)
-        mask_2 = torch.isin(edgelist[1], idx_2)
-        m_idx = 2
+        first_mask = torch.isin(edgelist[0], first_index)
+        second_mask = torch.isin(edgelist[1], second_index)
+        missing_index = 2
     else:
         e_idx = 0 if missing == "tail" else 1
-        m_idx = 1 - e_idx
-        mask_1 = torch.isin(edgelist[e_idx], idx_1)
-        mask_2 = torch.isin(edgelist[2], idx_2)
+        missing_index = 1 - e_idx
+        first_mask = torch.isin(edgelist[e_idx], first_index)
+        second_mask = torch.isin(edgelist[2], second_index)
 
-    for i in range(b_size):
-        if true_idx is None:
+    for i in range(batch_size):
+        if true_index is None:
             true_mask = torch.zeros(edgelist.size(1), dtype=torch.bool)
         else:
-            true_mask = torch.isin(edgelist[m_idx], true_idx[i])
+            true_mask = torch.isin(edgelist[missing_index], true_index[i])
 
-        true_targets = edgelist[m_idx, 
-                                    mask_1 & 
-                                    mask_2 & 
+        true_targets = edgelist[missing_index, 
+                                    first_mask & 
+                                    second_mask & 
                                     ~true_mask
                                 ]
-        filt_scores[i, true_targets] = - float('Inf')
+        filtered_scores[i, true_targets] = - float('Inf')
 
-    return filt_scores
+    return filtered_scores
 
 def merge_kg(kg_list: List[KnowledgeGraph], complete_edgelist: bool = False) -> KnowledgeGraph:
     """Merge multiple KnowledgeGraph objects into a unique one.
@@ -359,7 +359,7 @@ def merge_kg(kg_list: List[KnowledgeGraph], complete_edgelist: bool = False) -> 
 
 class HeteroMappings():
     def __init__(self, kg: KnowledgeGraph, metadata:pd.DataFrame | None):
-        df = kg.get_df()
+        dataframe = kg.get_df()
         
         self.data = HeteroData()
         
@@ -376,12 +376,12 @@ class HeteroMappings():
 
         if metadata is not None:
             # 1. Parse node types and IDs
-            df = pd.merge(df, metadata.add_prefix("from_"), how="left", left_on="from", right_on="from_id")
-            df = pd.merge(df, metadata.add_prefix("to_"), how="left", left_on="to", right_on="to_id", suffixes=(None, "_to"))
-            df.drop([i for i in df.columns if "id" in i],axis=1, inplace=True)
+            dataframe = pd.merge(dataframe, metadata.add_prefix("from_"), how="left", left_on="from", right_on="from_id")
+            dataframe = pd.merge(dataframe, metadata.add_prefix("to_"), how="left", left_on="to", right_on="to_id", suffixes=(None, "_to"))
+            dataframe.drop([i for i in dataframe.columns if "id" in i],axis=1, inplace=True)
 
             # 2. Identify all unique node types
-            node_types = pd.unique(df[["from_type", "to_type"]].values.ravel("K"))
+            node_types = pd.unique(dataframe[["from_type", "to_type"]].values.ravel("K"))
         else:
             node_types = ["Node"]
         # 3. Create mappings for node IDs by type.
@@ -393,11 +393,11 @@ class HeteroMappings():
             # Extract all unique identifiers for each type
             if metadata is not None:
                 nodes = pd.concat([
-                    df[df["from_type"] == ntype]["from"],
-                    df[df["to_type"] == ntype]["to"]
+                    dataframe[dataframe["from_type"] == ntype]["from"],
+                    dataframe[dataframe["to_type"] == ntype]["to"]
                 ]).unique()
             else:
-                nodes = pd.concat([df["from"], df["to"]], ignore_index=True).unique()
+                nodes = pd.concat([dataframe["from"], dataframe["to"]], ignore_index=True).unique()
 
             node_dict[ntype] = {node: i for i, node in enumerate(nodes)}   
             
@@ -427,7 +427,7 @@ class HeteroMappings():
 
         self.relations = []
         # 4. Build edge_index for each relation type
-        for rel, group in df.groupby("rel"):
+        for rel, group in dataframe.groupby("rel"):
             self.relations.append(rel)
             # Identify source and target node type for this group
             if metadata is not None:
