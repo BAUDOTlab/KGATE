@@ -1232,7 +1232,6 @@ class TransD(TranslationalDecoder):
         return node_embeddings, edge_embeddings
 
 
-
     def get_embeddings(self) -> Dict[str, Tensor]:
         """
         Return the embeddings of nodes and edges along with edge normal vectors.

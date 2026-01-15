@@ -104,10 +104,6 @@ class EncoderInput:
 
 
 class KnowledgeGraph(Dataset):
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 12ebc5e ([Dev] Naming consistency & TorchKGE rewriting (#20))
     """
     KGATE representation of a Knowledge Graph.
 
@@ -203,19 +199,6 @@ class KnowledgeGraph(Dataset):
                         | None = None,
                 removed_triplets: Tensor
                         | None = None):
-<<<<<<< HEAD
-=======
-    def __init__(self, df: pd.DataFrame | None=None,
-                 edgelist: Tensor | None=None,
-                 metadata: pd.DataFrame | None=None,
-                 triple_types: List[Tuple[str,str,str]] | None = None,
-                 ent2ix: Dict[str, int] | None=None, 
-                 rel2ix: Dict[str, int] | None=None,
-                 nt2ix: Dict[str, int] | None=None,
-                 removed_triples: Tensor | None=None):
->>>>>>> 41e3a18 ([GitHub] Update `dev` to include the changes from `main` (#19))
-=======
->>>>>>> 12ebc5e ([Dev] Naming consistency & TorchKGE rewriting (#20))
         
         if dataframe is None:
             assert  graphindices is not None and \
@@ -233,21 +216,9 @@ class KnowledgeGraph(Dataset):
         else:
             self.graphindices = tensor([], dtype = torch.long)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
         if removed_triplets is not None and removed_triplets.numel() > 0:
             assert removed_triplets.size(0) == 4, "The `removed_triplets` parameter must be a 2D tensor of size [4, triplet_count]."
             self.removed_triplets = removed_triplets
-=======
-        if removed_triples is not None and removed_triples.numel() > 0:
-            assert removed_triples.size(0) == 4,  "The `removed_triples` parameter must be a 2D tensor of size [4, num_triples]."
-            self.removed_triples = removed_triples
->>>>>>> 41e3a18 ([GitHub] Update `dev` to include the changes from `main` (#19))
-=======
-        if removed_triplets is not None and removed_triplets.numel() > 0:
-            assert removed_triplets.size(0) == 4, "The `removed_triplets` parameter must be a 2D tensor of size [4, triplet_count]."
-            self.removed_triplets = removed_triplets
->>>>>>> 12ebc5e ([Dev] Naming consistency & TorchKGE rewriting (#20))
         else:
             self.removed_triplets = tensor([], dtype = torch.long)
 
@@ -264,16 +235,7 @@ class KnowledgeGraph(Dataset):
         if metadata is not None:
             self.add_metadata(metadata)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
         if dataframe is None:
-=======
-        if df is None:
-            self.n_nodes = cat([self.head_idx, self.tail_idx]).unique().size(0)
->>>>>>> 41e3a18 ([GitHub] Update `dev` to include the changes from `main` (#19))
-=======
-        if dataframe is None:
->>>>>>> 12ebc5e ([Dev] Naming consistency & TorchKGE rewriting (#20))
             # The mapping is done on the absolute index of nodes. However, subgraphs don't have all the nodes
             # Thus, we must initialize the tensor at -1 to avoid downstream issue with the node_type 0 being 
             # broadcasted to missing nodes in subgraphs.
@@ -287,10 +249,6 @@ class KnowledgeGraph(Dataset):
 
         else:
             if metadata is not None:
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 12ebc5e ([Dev] Naming consistency & TorchKGE rewriting (#20))
                 mapping_dataframe = pd.merge(dataframe,
                                             metadata.add_prefix("head_"),
                                             how = "left",
@@ -303,28 +261,10 @@ class KnowledgeGraph(Dataset):
                                             right_on = "tail_id",
                                             suffixes = (None, "_tail"))
                 mapping_dataframe.drop([i for i in mapping_dataframe.columns if "id" in i], axis = 1, inplace=True)
-<<<<<<< HEAD
 
                 dataframe_node_types = list(set(mapping_dataframe['head_type'].unique()).union(set(mapping_dataframe['tail_type'].unique())))
                 self.node_type_to_index = {node_type: i for i, node_type in enumerate(sorted(dataframe_node_types))}
                 self._identity = "id" # private attribute, for more info refer to identity property
-                
-=======
-                mapping_df = pd.merge(df, metadata.add_prefix("from_"), how="left", left_on="from", right_on="from_id")
-                mapping_df = pd.merge(mapping_df, metadata.add_prefix("to_"), how="left", left_on="to", right_on="to_id", suffixes=(None, "_to"))
-                mapping_df.drop([i for i in mapping_df.columns if "id" in i],axis=1, inplace=True)
-
-                df_node_types = list(set(mapping_df['from_type'].unique()).union(set(mapping_df['to_type'].unique())))
-                self.nt2ix = {nt: i for i, nt in enumerate(sorted(df_node_types))}
-                self._identity = "id"
->>>>>>> 41e3a18 ([GitHub] Update `dev` to include the changes from `main` (#19))
-=======
-
-                dataframe_node_types = list(set(mapping_dataframe['head_type'].unique()).union(set(mapping_dataframe['tail_type'].unique())))
-                self.node_type_to_index = {node_type: i for i, node_type in enumerate(sorted(dataframe_node_types))}
-                self._identity = "id" # private attribute, for more info refer to identity property
-                
->>>>>>> 12ebc5e ([Dev] Naming consistency & TorchKGE rewriting (#20))
             else:
                 mapping_dataframe = dataframe
 
@@ -462,104 +402,6 @@ class KnowledgeGraph(Dataset):
     
     @property
     def n_facts(self) -> int:
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-        return self.n_triples
-=======
-        """
-        TorchKGE alias for `triplet_count`. Property for compatibility.
-            
-        """
-        return self.triplet_count
-
->>>>>>> 12ebc5e ([Dev] Naming consistency & TorchKGE rewriting (#20))
-
-    @property
-    def identity(self) -> pd.DataFrame:
-        """
-        Get the DataFrame containing all the identity of the knowledge graph nodes.
-        
-        The default identity is the node ID, but different values can be set using the `set_identity` method.
-        
-        """
-        if self.metadata is not None:
-            return self.metadata[self._identity]
-        else:
-            return pd.DataFrame([])
-
-
-    def set_identity(self, new_identity: str):
-        """
-        Set the identity of the knowledge graph nodes.
-        
-        To set an identity, there must be a metadata dataframe given to the knowledge graph, and the identity must correspond to a
-        column name of this metadata dataframe. Identities are useful to explore the knowledge graph without relying solely on meaningless
-        identifiers but on node names instead, for example.
-        
-        It is best if all values of an identity are unique in order to identify an individual node, though that is not strictly enforced.
-        If that is not the case, functions using identities might have unexpected behavior. To get the dataframe corresponding to the current
-        identity, call the `identity` property.
-        
-        Arguments
-        ---------
-        new_identity: str
-            The name of the new identity, which must exist in the metadata.
-        
-        Raises
-        ------
-        AssertionError #1
-            Metadata is required to set an identity.
-        AssertionError #2
-            The given identity is not a valid data name.
-        
-        Warns
-        -----
-        If all values are not unique in the new identity, a warning will be issued.
-            
-        """
-        assert self.metadata is not None, "You need to add metadata in order to set an identity."
-        assert new_identity in self.metadata, f"The given identity is not a valid metadata name. Valid names are: {self.metadata.columns}."
-
-        if not self.metadata[new_identity].is_unique():
-            logging.warning(f"All values are not unique across identity {new_identity}, which may introduce ambiguities. Unexpected output may come from inference.")
-        
-        self._identity = new_identity
-
-
-    def add_metadata(self, metadata: pd.DataFrame):
-        """
-        Add a new metadata dataframe to the existing one or create it.
-        
-        If there is already a metadata dataframe associated with the knowledge graph, the new one must have an identical "id" column to be valid.
-        If there is no metadata, then the given dataframe must contain at least the columns "id" and "type".
-
-        Arguments
-        ---------
-        metadata: pd.DataFrame
-            The metadata dataframe to associate to the knowledge graph.
-        
-        Raises
-        ------
-        AssertionError #1
-            The metadata dataframe must have at least the columns `type` and `id`.
-        AssertionError #2
-            The number of rows in the metadata dataframe must match the number of nodes in the graph.
-        AssertionError #3
-            The metadata dataframe must have an `id` column identical to the existing metadata.
-        
-        """
-        if self.metadata is None:
-            assert not set(["type", "id"]).isdisjoint(list(metadata.columns)), f"The metadata dataframe must have at least the columns `type` and `id`, but found only {",".join(list(metadata.columns))}"
-            assert metadata.shape[0] == self.node_count, f"The number of rows in the metadata dataframe must match the number of nodes in the graph, but found {metadata.shape[0]} rows for {self.node_count} nodes."
-            self.metadata = metadata
-        else:
-            assert "id" in metadata.columns and metadata["id"] == self.metadata["id"], "The metadata dataframe must have an `id` column identical to the existing metadata."
-            self.metadata = pd.merge(self.metadata, metadata, on = "id")
-
-<<<<<<< HEAD
-    def get_df(self):
->>>>>>> 41e3a18 ([GitHub] Update `dev` to include the changes from `main` (#19))
         """
         TorchKGE alias for `triplet_count`. Property for compatibility.
             
@@ -703,62 +545,6 @@ class KnowledgeGraph(Dataset):
             3 new instances of KnowledgeGraph: train, validation, test.
             
         """
-=======
-
-    def get_dataframe(self):
-        """
-        Returns a Pandas DataFrame with columns ['head', 'tail', 'edge'].
-
-        Returns
-        -------
-        dataframe: pd.DataFrame
-            Dataframe with columns ['head', 'tail', 'edge'].
-        
-        """
-        index_to_node = {value: key for key, value in self.node_to_index.items()}
-        index_to_edge = {value: key for key, value in self.edge_to_index.items()}
-
-        dataframe = pd.DataFrame(cat((self.head_indices.view(1, -1),
-                            self.tail_indices.view(1, -1),
-                            self.edge_indices.view(1, -1))).transpose(0, 1).numpy(),
-                            columns = ['head', 'tail', 'edge'])
-
-        dataframe['head'] = dataframe['head'].apply(lambda x: index_to_node[x])
-        dataframe['tail'] = dataframe['tail'].apply(lambda x: index_to_node[x])
-        dataframe['edge'] = dataframe['edge'].apply(lambda x: index_to_edge[x])
-
-        return dataframe
-    
-
-    def split_kg(self,
-                split_proportions: Tuple[float, float, float] = (0.8, 0.1, 0.1), 
-                sizes: Tuple[int, int, int] | None = None
-                ) -> Tuple[Self, Self, Self]:
-        """
-        Split a knowledge graph into 3 subsets: train, validation, test
-
-        Arguments
-        ---------
-        split_proportions: Tuple[float, float, float], optional, default to (0.8, 0.1, 0.1)
-            Proportions of the given knowledge graph data that must be attributed
-            respectively to the subsets train, validation and test.
-        sizes: Tuple[int, int, int], optional, default to None
-            Sizes of respectively to the subsets train, validation and test.
-
-        Raises
-        ------
-        AssertionError #1
-            The sum of provided sizes must match the number of triplets.
-        AssertionError #2
-            The sum of provided shares (`split_proportions`) must be equal to 1.
-
-        Returns
-        -------
-        kgs: Tuple[Self, Self, Self]
-            3 new instances of KnowledgeGraph: train, validation, test.
-            
-        """
->>>>>>> 12ebc5e ([Dev] Naming consistency & TorchKGE rewriting (#20))
         if sizes is not None:
             assert sum(sizes) == self.triplet_count, "The sum of provided sizes must match the number of triplets."
             
@@ -1450,9 +1236,7 @@ class KnowledgeGraph(Dataset):
             embeddings[mask] = node_embeddings[node_type_index][self.global_to_local_indices[mask]]
         
         return embeddings
-
-<<<<<<< HEAD
-<<<<<<< HEAD
+    
 
     def clean(self):
         """
@@ -1461,10 +1245,6 @@ class KnowledgeGraph(Dataset):
         """
         self.triplet_types = [triplet for triplet in self.triplet_types if triplet[1] != "self"]
 
-=======
-=======
-
->>>>>>> 12ebc5e ([Dev] Naming consistency & TorchKGE rewriting (#20))
     def clean(self):
         """
         Clean the KnowledgeGraph object by removing all self loops with "self" as their edge type.
@@ -1491,11 +1271,9 @@ class KnowledgeGraph(Dataset):
         """
         # TODO for PyTorch Geometric compatibility
         pass
->>>>>>> 41e3a18 ([GitHub] Update `dev` to include the changes from `main` (#19))
 
 
     @staticmethod
-<<<<<<< HEAD
     def from_hetero_data(hetero_data: HeteroData):
         """
         Create a new KGATE KnowledgeGraph instance from the PyTorch Geometric HeteroData object.
@@ -1524,16 +1302,6 @@ class KnowledgeGraph(Dataset):
         
         Arguments
         ---------
-=======
-    def from_torchkge(  torchkge_kg: torchkge.KnowledgeGraph,
-                        metadata: pd.DataFrame | None = None
-                        ) -> Self:
-        """
-        Create a new KGATE KnowledgeGraph instance from the TorchKGE KnowledgeGraph object.
-        
-        Arguments
-        ---------
->>>>>>> 12ebc5e ([Dev] Naming consistency & TorchKGE rewriting (#20))
         torchkge_kg : torchKGE.KnowledgeGraph
             The knowledge graph as a torchKGE KnowledgeGraph object.
         metadata : pd.DataFrame, optional
