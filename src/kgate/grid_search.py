@@ -11,13 +11,13 @@ from pathlib import Path
 import os
 
 logging.captureWarnings(True)
-log_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
+logging_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
 logging.basicConfig(
-    level=log_level,  
+    level=logging_level,  
     format="%(asctime)s - %(levelname)s - %(message)s" 
 )
 
-def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KnowledgeGraph,KnowledgeGraph,KnowledgeGraph] | KnowledgeGraph | None = None, df: pd.DataFrame | None = None):
+def run_grid_search(config_path: str, number_of_trials: int = 10, kg: Tuple[KnowledgeGraph,KnowledgeGraph,KnowledgeGraph] | KnowledgeGraph | None = None, dataframe: pd.DataFrame | None = None):
     """Run a grid search hyperparameter optimization according to the given configuration.
 
     To register a hyperparameter in the grid search optimization, set it as a list in the configuration.
@@ -34,15 +34,15 @@ def run_grid_search(config_path: str, n_trials: int = 10, kg: Tuple[KnowledgeGra
 
         config = {key: suggest_value(trial, key, config[key]) for key in config}
         
-        architect = Architect(kg=kg, df=df, **config)
+        architect = Architect(kg=kg, df=dataframe, **config)
 
         architect.train_model()
 
-        res = architect.test()
-        return res["Global_metrics"]
+        result = architect.test()
+        return result["Global_metrics"]
 
     study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner())
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(objective, n_trials=number_of_trials)
 
     best_trial = study.best_trial
     logging.info(f"Best trial score: {best_trial.value}")

@@ -43,7 +43,7 @@ from .decoders import *
 from .knowledgegraph import KnowledgeGraph
 from .samplers import PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
-from .inference import EntityInference, RelationInference
+from .inference import NodeInference, EdgeInference
 from .data_leakage import permute_tails
 
 # Configure logging
@@ -858,17 +858,17 @@ class Architect(Model):
             first_known_triplet_part = tensor([self.kg_train.node_to_index[head] for head in heads]).long()
             second_known_triplet_part = tensor([self.kg_train.edge_to_index[rel] for rel in edges]).long()
             missing_triplet_part = "tail"
-            inference = EntityInference(full_kg)
+            inference = NodeInference(full_kg)
         elif do_heads_inference:
             first_known_triplet_part = tensor([self.kg_train.node_to_index[tail] for tail in tails]).long()
             second_known_triplet_part = tensor([self.kg_train.edge_to_index[rel] for rel in edges]).long()
             missing_triplet_part = "head"
-            inference = EntityInference(full_kg)
+            inference = NodeInference(full_kg)
         elif do_edges_inference:
             first_known_triplet_part = tensor([self.kg_train.node_to_index[head] for head in heads]).long()
             second_known_triplet_part = tensor([self.kg_train.node_to_index[tail] for tail in tails]).long()
             missing_triplet_part = "rel"
-            inference = RelationInference(full_kg)
+            inference = EdgeInference(full_kg)
             
         predictions, scores = inference.evaluate(
             first_known_triplet_part,

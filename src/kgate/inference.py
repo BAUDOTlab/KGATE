@@ -1,4 +1,4 @@
-import torchkge.inference as infer
+import torchkge.inference as torchkge_inference
 from torchkge.models import Model
 from tqdm.autonotebook import tqdm
 from torch import tensor, nn, Tensor
@@ -11,19 +11,20 @@ from torch.utils.data import DataLoader, Dataset
 from torch_geometric.utils import k_hop_subgraph
 
 class Inference_KG(Dataset):
-    def __init__(self, idx_1:Tensor, idx_2:Tensor):
-        assert idx_1.size() == idx_2.size(), "Both index tensors must be of the same size for inference."
-        self.id1 = idx_1
-        self.id2 = idx_2
+    def __init__(self, first_tensor_index:Tensor, second_tensor_index:Tensor):
+        # Either both tensors nodes, or they are node and edge
+        assert first_tensor_index.size() == second_tensor_index.size(), "Both index tensors must be of the same size for inference."
+        self.first_tensor_index = first_tensor_index
+        self.second_tensor_index = second_tensor_index
 
     def __len__(self):
-        return self.id1.size(0)
+        return self.first_tensor_index.size(0)
 
-    def __getitem__(self, idx: int):
-        return (self.id1[idx], self.id2[idx])
+    def __getitem__(self, index: int):
+        return (self.first_tensor_index[index], self.second_tensor_index[index])
 
 
-class RelationInference(infer.RelationInference):
+class EdgeInference(torchkge_inference.RelationInference):
     """Use trained embedding model to infer missing relations in triples.
 
     Parameters
@@ -65,70 +66,70 @@ class RelationInference(infer.RelationInference):
         self.knowledge_graph = knowledge_graph
 
     def evaluate(self, 
-                 h_idx: Tensor,
-                 t_idx: Tensor,
+                 head_index: Tensor,
+                 tail_index: Tensor,
                  *,
                  top_k: int,
-                 b_size: int,
+                 batch_size: int,
                  encoder: DefaultEncoder | GNN,
                  decoder: Model,
                  node_embeddings: nn.ParameterList | nn.Embedding, 
-                 relation_embeddings: nn.Embedding, 
+                 edge_embeddings: nn.Embedding, 
                  verbose:bool=True,
                  **_):
         
         with torch.no_grad():
-            device = relation_embeddings.weight.device
+            device = edge_embeddings.weight.device
 
-            inference_kg = Inference_KG(h_idx, t_idx)
+            inference_kg = Inference_KG(head_index, tail_index)
 
-            dataloader = DataLoader(inference_kg, batch_size=b_size)
+            dataloader = DataLoader(inference_kg, batch_size=batch_size)
 
-            predictions = torch.empty(size=(len(h_idx), top_k), device=device).long()   
+            predictions = torch.empty(size=(len(head_index), top_k), device=device).long()   
             embeddings = node_embeddings.weight.data
 
             for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                                 unit="batch", disable=(not verbose),
                                 desc="Inference"):
-                h_idx, t_idx = batch[0], batch[1]
+                head_index, tail_index = batch[0], batch[1]
                 
                 if isinstance(encoder, GNN):
                     seed_nodes = batch.unique()
-                    num_hops = encoder.n_layers
+                    hop_count = encoder.n_layers
                     edge_index = self.knowledge_graph.edge_index
 
                     _,_,_, edge_mask = k_hop_subgraph(
                         node_idx = seed_nodes,
-                        num_hops = num_hops,
+                        num_hops = hop_count,
                         edge_index = edge_index
                         )
                     
                     input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.edgelist[:, edge_mask], node_embeddings)
                     encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
             
-                    for node_type, idx in input.mapping.items():
-                        embeddings[idx] = encoder_output[node_type]
+                    for node_type, index in input.mapping.items():
+                        embeddings[index] = encoder_output[node_type]
 
 
 
-                h_emb, t_emb, _, candidates = decoder.inference_prepare_candidates(h_idx = h_idx,
-                                                                                        t_idx = t_idx, 
+                head_embeddings, tail_embeddings, _, candidates = decoder.inference_prepare_candidates(h_idx = head_index,
+                                                                                        t_idx = tail_index, 
                                                                                         r_idx = tensor([]).long(),
                                                                                         node_embeddings = embeddings, 
-                                                                                        relation_embeddings = relation_embeddings, 
+                                                                                        relation_embeddings = edge_embeddings, 
                                                                                         entities=False)
-                scores = decoder.inference_scoring_function(h_emb, t_emb, candidates)
+                scores = decoder.inference_scoring_function(head_embeddings, tail_embeddings, candidates)
 
-                scores = filter_scores(scores, self.knowledge_graph.edgelist, "rel", h_idx, t_idx, None)
+                scores = filter_scores(scores, self.knowledge_graph.edgelist, "rel", head_index, tail_index, None)
 
                 scores, indices = scores.sort(descending=True)
 
-                predictions[i * b_size: (i + 1) * b_size] = indices[:, :top_k]
-                scores[i * b_size, (i + 1) * b_size] = scores[:, :top_k]
+                predictions[i * batch_size: (i + 1) * batch_size] = indices[:, :top_k]
+                scores[i * batch_size, (i + 1) * batch_size] = scores[:, :top_k]
 
             return predictions.cpu(), scores.cpu()
 
-class EntityInference(infer.EntityInference):
+class NodeInference(torchkge_inference.EntityInference):
     """Use trained embedding model to infer missing entities in triples.
 
         Attributes
@@ -157,12 +158,12 @@ class EntityInference(infer.EntityInference):
         self.knowledge_graph = knowledge_graph
 
     def evaluate(self,
-                 ent_idx: Tensor,
-                 rel_idx: Tensor,
+                 node_index: Tensor,
+                 edge_index: Tensor,
                  *,
                  top_k: int,
                  missing: Literal["head","tail"],
-                 b_size: int,
+                 batch_size: int,
                  encoder: DefaultEncoder | GNN,
                  decoder: Model,
                  node_embeddings: nn.ParameterList, 
@@ -172,22 +173,22 @@ class EntityInference(infer.EntityInference):
         with torch.no_grad():
             device = relation_embeddings.weight.device
 
-            inference_kg = Inference_KG(ent_idx, rel_idx)
+            inference_kg = Inference_KG(node_index, edge_index)
 
-            dataloader = DataLoader(inference_kg, batch_size=b_size)
+            dataloader = DataLoader(inference_kg, batch_size=batch_size)
 
-            predictions = torch.empty(size=(len(ent_idx), top_k), device=device).long()
-            scores = torch.empty(size=(len(ent_idx), top_k), device=device).long()
+            predictions = torch.empty(size=(len(node_index), top_k), device=device).long()
+            scores = torch.empty(size=(len(node_index), top_k), device=device).long()
 
 
             for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
                                 unit="batch", disable=(not verbose),
                                 desc="Inference"):
 
-                known_ents, known_rels = batch[0], batch[1]
+                known_nodes, known_edges = batch[0], batch[1]
                 
                 if isinstance(encoder, GNN):
-                    seed_nodes = known_ents.unique()
+                    seed_nodes = known_nodes.unique()
                     num_hops = encoder.n_layers
                     edge_index = self.knowledge_graph.edge_index
 
@@ -202,34 +203,34 @@ class EntityInference(infer.EntityInference):
                     input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.edgelist[:, edge_mask], node_embeddings)
                     encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
             
-                    for node_type, idx in input.mapping.items():
-                        embeddings[idx] = encoder_output[node_type]
+                    for node_type, index in input.mapping.items():
+                        embeddings[index] = encoder_output[node_type]
                 else:
-                    embeddings = node_embeddings[0][known_ents]
+                    embeddings = node_embeddings[0][known_nodes]
 
                 if missing == "head":
-                    _, t_emb, rel_emb, candidates = decoder.inference_prepare_candidates(h_idx = tensor([], device=device).long(), 
-                                                                                         t_idx = known_ents.to(device),
-                                                                                         r_idx = known_rels.to(device),
+                    _, tail_embeddings, edge_embeddings, candidates = decoder.inference_prepare_candidates(h_idx = tensor([], device=device).long(), 
+                                                                                         t_idx = known_nodes.to(device),
+                                                                                         r_idx = known_edges.to(device),
                                                                                          node_embeddings = embeddings,
                                                                                          relation_embeddings = relation_embeddings,
                                                                                          entities=True)
-                    batch_scores = decoder.inference_scoring_function(candidates, t_emb, rel_emb)
+                    batch_scores = decoder.inference_scoring_function(candidates, tail_embeddings, edge_embeddings)
                 else:
-                    h_emb, _, rel_emb, candidates = decoder.inference_prepare_candidates(h_idx = known_ents.to(device), 
+                    head_embeddings, _, edge_embeddings, candidates = decoder.inference_prepare_candidates(h_idx = known_nodes.to(device), 
                                                                                          t_idx = tensor([], device=device).long(),
-                                                                                         r_idx = known_rels.to(device),
+                                                                                         r_idx = known_edges.to(device),
                                                                                          node_embeddings = embeddings,
                                                                                          relation_embeddings = relation_embeddings,
                                                                                          entities=True)
-                    batch_scores = decoder.inference_scoring_function(h_emb, candidates, rel_emb)
+                    batch_scores = decoder.inference_scoring_function(head_embeddings, candidates, edge_embeddings)
 
-                batch_scores = filter_scores(batch_scores, self.knowledge_graph.edgelist, missing, known_ents, known_rels, None)
+                batch_scores = filter_scores(batch_scores, self.knowledge_graph.edgelist, missing, known_nodes, known_edges, None)
 
                 batch_scores, indices = batch_scores.sort(descending=True)
-                b_size = min(b_size, len(batch_scores))
+                batch_size = min(batch_size, len(batch_scores))
                 
-            predictions[i * b_size: (i+1)*b_size] = indices[:, :top_k]
-            scores[i*b_size: (i+1)*b_size] = batch_scores[:, :top_k]
+            predictions[i * batch_size: (i+1)*batch_size] = indices[:, :top_k]
+            scores[i*batch_size: (i+1)*batch_size] = batch_scores[:, :top_k]
 
             return predictions.cpu(), scores.cpu()
