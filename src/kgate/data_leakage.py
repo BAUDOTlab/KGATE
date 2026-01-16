@@ -83,8 +83,8 @@ def permute_tails(kg: KnowledgeGraph, edge: str, preserve_node_degree=True) -> K
                 triplet = triplets_types.index(permuted_triplet)
             triplets.append(triplet)
 
-    permuted_tails = torch.tensor(permuted_tails, dtype=kg.tail_indices.dtype, device=kg.edgelist.device)
-    new_triplets = torch.tensor(triplets, device=kg.edgelist.device)
+    permuted_tails = torch.tensor(permuted_tails, dtype=kg.tail_indices.dtype, device=kg.graphindices.device)
+    new_triplets = torch.tensor(triplets, device=kg.graphindices.device)
 
     kg.tail_indices[mask] = permuted_tails
     kg.triplets[mask] = new_triplets

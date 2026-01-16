@@ -120,7 +120,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
         self.filtered_rank_true_tails = empty(size=(knowledge_graph.triplet_count,)).long().to(device)
 
         dataloader = DataLoader(knowledge_graph, batch_size=batch_size)
-        edgelist = knowledge_graph.edgelist.to(device)
+        edgelist = knowledge_graph.graphindices.to(device)
         if decoder is not None and hasattr(decoder,"embedding_spaces"):
             encoder_node_embedding_dimensions = decoder.emb_dim * decoder.embedding_spaces
         else:
@@ -144,7 +144,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                     )
                 
                 input = knowledge_graph.get_encoder_input(edgelist[:, edge_mask], node_embeddings)
-                encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
+                encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
                 
                 embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count, encoder_node_embedding_dimensions), device=device, dtype=torch.float)
 

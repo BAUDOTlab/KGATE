@@ -26,9 +26,9 @@ logging.basicConfig(
 )
 
 class EncoderInput:
-    def __init__(self, x_dict: Dict[str, Tensor], edge_index: Dict[str,Tensor], mapping:Dict[str,Tensor]):
+    def __init__(self, x_dict: Dict[str, Tensor], edge_list: Dict[str,Tensor], mapping:Dict[str,Tensor]):
         self.x_dict = x_dict
-        self.edge_index = edge_index
+        self.edge_list = edge_list
         self.mapping = mapping
 
     def __repr__(self):
@@ -38,7 +38,7 @@ class EncoderInput:
             ])
         edge_repr = "\n\t".join([
             f"{edge}: {edge_index}"
-            for edge, edge_index in self.edge_index.items()
+            for edge, edge_index in self.edge_list.items()
         ])
         mapping_repr = "\n\t".join([
             f"{node_type}: {index}"
@@ -62,7 +62,7 @@ class EncoderInput:
 
 class KnowledgeGraph(Dataset):
     def __init__(self, dataframe: pd.DataFrame | None=None,
-                 edgelist: Tensor | None=None,
+                 graphindices: Tensor | None=None,
                  metadata: pd.DataFrame | None=None,
                  triplet_types: List[Tuple[str,str,str]] | None = None,
                  node_to_index: Dict[str, int] | None=None, 
@@ -71,20 +71,20 @@ class KnowledgeGraph(Dataset):
                  removed_triplets: Tensor | None=None):
         
         if dataframe is None:
-            assert edgelist is not None and \
+            assert graphindices is not None and \
                    node_to_index is not None and \
                    edge_to_index is not None and \
                    triplet_types is not None and \
                    node_type_to_index is not None, "If df is not given, `edgelist`, `triple_types` and `ent2ix`, `rel2ix` and `nt2ix` must be provided."
-            self.triplet_count = edgelist.size(1)
+            self.triplet_count = graphindices.size(1)
         else:
             self.triplet_count = len(dataframe)
 
-        if edgelist is not None:
-            assert edgelist.size(0) == 4, "The `edgelist` parameter must be a 2D tensor of size [4, num_triples]."
-            self.edgelist = edgelist.long()
+        if graphindices is not None:
+            assert graphindices.size(0) == 4, "The `edgelist` parameter must be a 2D tensor of size [4, num_triples]."
+            self.graphindices = graphindices.long()
         else:
-            self.edgelist = tensor([], dtype=torch.long)
+            self.graphindices = tensor([], dtype=torch.long)
 
         if removed_triplets is not None and removed_triplets.numel() > 0:
             assert removed_triplets.size(0) == 4,  "The `removed_triples` parameter must be a 2D tensor of size [4, num_triples]."
@@ -114,7 +114,7 @@ class KnowledgeGraph(Dataset):
 
             for triplet_type in self.triplets.unique():
                 head_node_type, tail_node_type = self.triplet_types[triplet_type][0], self.triplet_types[triplet_type][2]
-                triple_edgelist = self.edgelist[:, self.triplets == triplet_type]
+                triple_edgelist = self.graphindices[:, self.triplets == triplet_type]
                 self.node_types[triple_edgelist[0]] = self.node_type_to_index[head_node_type]
                 self.node_types[triple_edgelist[1]] = self.node_type_to_index[tail_node_type]
 
@@ -169,8 +169,8 @@ class KnowledgeGraph(Dataset):
                             tensor(triplet_type_counter).repeat(len(subset)).unsqueeze(0)
                         ], dim=0)
 
-                        self.edgelist = torch.cat([
-                            self.edgelist,
+                        self.graphindices = torch.cat([
+                            self.graphindices,
                             triplets
                         ], dim=1)
 
@@ -194,27 +194,27 @@ class KnowledgeGraph(Dataset):
         return self.triplet_count
     
     def __getitem__(self, index) -> Tensor:
-        return self.edgelist[:, index]
+        return self.graphindices[:, index]
     
     @property
     def head_indices(self) -> Tensor:
-        return self.edgelist[0]
+        return self.graphindices[0]
     
     @property
     def tail_indices(self) -> Tensor:
-        return self.edgelist[1]
+        return self.graphindices[1]
     
     @property
     def edge_indices(self) -> Tensor:
-        return self.edgelist[2]
+        return self.graphindices[2]
 
     @property
     def triplets(self) -> Tensor:
-        return self.edgelist[3]
+        return self.graphindices[3]
 
     @property
     def edge_index(self) -> Tensor:
-        return self.edgelist[:2]
+        return self.graphindices[:2]
     
     # torchkge compatibility
     @property
@@ -315,20 +315,20 @@ class KnowledgeGraph(Dataset):
             
         return (
             self.__class__(
-                edgelist = self.edgelist[:, mask_train], 
+                graphindices = self.graphindices[:, mask_train], 
                 triplet_types=self.triplet_types,
                 node_to_index=self.node_to_index, edge_to_index=self.edge_to_index,
                 node_type_to_index=self.node_type_to_index,
                 removed_triples=self.removed_triplets
             ),
             self.__class__(
-                edgelist = self.edgelist[:, mask_validation], 
+                graphindices = self.graphindices[:, mask_validation], 
                 triplet_types=self.triplet_types,
                 node_to_index=self.node_to_index, edge_to_index=self.edge_to_index,
                 node_type_to_index=self.node_type_to_index
             ),
             self.__class__(
-                edgelist = self.edgelist[:, mask_test], 
+                graphindices = self.graphindices[:, mask_test], 
                 triplet_types=self.triplet_types,
                 node_to_index=self.node_to_index, edge_to_index=self.edge_to_index,
                 node_type_to_index=self.node_type_to_index
@@ -395,11 +395,11 @@ class KnowledgeGraph(Dataset):
         # Create masks for indices to keep
         mask = torch.zeros(self.triplet_count, dtype=torch.bool)
         mask[indices_to_keep] = True
-        removed_triplets = cat([self.removed_triplets, self.edgelist[:, ~mask]], dim=1)
+        removed_triplets = cat([self.removed_triplets, self.graphindices[:, ~mask]], dim=1)
 
         # Create a new KnowledgeGraph instance
         return self.__class__(
-            edgelist=self.edgelist[:, mask],
+            graphindices=self.graphindices[:, mask],
             triplet_types=self.triplet_types,
             node_to_index=self.node_to_index,
             edge_to_index=self.edge_to_index,
@@ -425,10 +425,10 @@ class KnowledgeGraph(Dataset):
         # Create masks for indices not to remove
         mask = torch.ones(self.triplet_count, dtype=torch.bool)
         mask[indices_to_remove] = False
-        removed_triplets = cat([self.removed_triplets, self.edgelist[:, ~mask]], dim=1)
+        removed_triplets = cat([self.removed_triplets, self.graphindices[:, ~mask]], dim=1)
 
         return self.__class__(
-            edgelist=self.edgelist[:, mask],
+            graphindices=self.graphindices[:, mask],
             triplet_types=self.triplet_types,
             node_to_index=self.node_to_index,
             edge_to_index=self.edge_to_index,
@@ -462,7 +462,7 @@ class KnowledgeGraph(Dataset):
             raise ValueError(f"The maximum triple index ({max_triplet_index}) is superior to the number of relations ({len(self.triplet_types)}).")
 
         # Concatenate new triples to existing ones
-        updated_edgelist = cat([self.edgelist, new_triplets], dim=1)
+        updated_graphindices = cat([self.graphindices, new_triplets], dim=1)
         # Update dict_of_heads, dict_of_tails, dict_of_rels
         # for h, t, r in new_triples.tolist():
         #     self.dict_of_heads[(t, r)].add(h)
@@ -471,7 +471,7 @@ class KnowledgeGraph(Dataset):
 
         # Create a new instance of the class with updated triples
         return self.__class__(
-            edgelist=updated_edgelist,
+            graphindices=updated_graphindices,
             triplet_types=self.triplet_types,
             node_to_index=self.node_to_index,
             edge_to_index=self.edge_to_index,
@@ -502,7 +502,7 @@ class KnowledgeGraph(Dataset):
         reverse_list = []
 
         # New triples lists
-        edgelist = [self.edgelist]
+        graphindices = [self.graphindices]
         removed_triplets = [self.removed_triplets]
 
         for edge_index in undirected_edges:
@@ -513,7 +513,7 @@ class KnowledgeGraph(Dataset):
                 logging.info(f"Relation {edge_index} not found in knowledge graph. Skipping...")
                 continue
 
-            edge_triplets = self.edgelist[:, self.edgelist[2] == edge_index]
+            edge_triplets = self.graphindices[:, self.graphindices[2] == edge_index]
             triplets_indices = edge_triplets[3].unique()
             # Create a new ID for the inverse relation
             reverse_edge_index = len(self.edge_to_index)
@@ -525,8 +525,8 @@ class KnowledgeGraph(Dataset):
 
                 self.triplet_types.append((original_triplet[2], reverse_edge, original_triplet[0]))
                 
-                mask = (self.edgelist[3] == triplet_index)
-                subset = self.edgelist[:, mask]
+                mask = (self.graphindices[3] == triplet_index)
+                subset = self.graphindices[:, mask]
 
                 new_triplet = cat([
                         subset[1].unsqueeze(0),
@@ -534,7 +534,7 @@ class KnowledgeGraph(Dataset):
                         tensor(reverse_edge_index).repeat(subset.size(1)).unsqueeze(0),
                         tensor(reverse_triplet_index).repeat(subset.size(1)).unsqueeze(0)
                     ])
-                edgelist.append(new_triplet)
+                graphindices.append(new_triplet)
                 removed_triplets.append(torch.stack([
                     new_triplet[1],
                     new_triplet[0],
@@ -542,12 +542,12 @@ class KnowledgeGraph(Dataset):
                     new_triplet[3]
                 ]))
 
-            new_edgelist = cat(edgelist, dim=1)
+            new_graphindices = cat(graphindices, dim=1)
             new_removed_triplets = cat(removed_triplets, dim=1)
             reverse_list.append((edge_index, reverse_edge_index))
 
         return self.__class__(
-                edgelist=new_edgelist,
+                graphindices=new_graphindices,
                 triplet_types=self.triplet_types,
                 node_to_index=self.node_to_index,
                 edge_to_index=self.edge_to_index,
@@ -608,8 +608,8 @@ class KnowledgeGraph(Dataset):
         # Return a new KnowledgeGraph instance with only unique triples retained
         return self.keep_triplets(indices_to_keep)
 
-    def get_pairs(self, edge: int, type:str="ht") -> Set[Tuple[Number, Number]]:
-        mask = (self.edge_indices == edge)
+    def get_pairs(self, edge_type_index: int, type:str="ht") -> Set[Tuple[Number, Number]]:
+        mask = (self.edge_indices == edge_type_index)
 
         if type == "ht":
             return set((i.item(), j.item()) for i, j in cat(
@@ -815,7 +815,7 @@ class KnowledgeGraph(Dataset):
         pass
 
     @staticmethod
-    def from_torchkge(kg: torchkge.KnowledgeGraph, metadata: pd.DataFrame | None = None) -> Self:
+    def from_torchkge(torchkge_kg: torchkge.KnowledgeGraph, metadata: pd.DataFrame | None = None) -> Self:
         """Create a new KGATE Knowledge Graph instance from the torchKGE format.
         
         Parameters
@@ -831,10 +831,10 @@ class KnowledgeGraph(Dataset):
             The knowledge graph as a KGATE KnowledgeGraph object.
         """
         if metadata is None:
-            edgelist = torch.stack([kg.head_idx, kg.tail_idx, kg.relations, tensor(0).repeat(kg.n_facts)], dim=0).long()
+            graphindices = torch.stack([torchkge_kg.head_idx, torchkge_kg.tail_idx, torchkge_kg.relations, tensor(0).repeat(torchkge_kg.n_facts)], dim=0).long()
             node_type_to_index = {"Node":0}
-            triplet_types = [("Node", edge, "Node") for edge in kg.rel2ix]
+            triplet_types = [("Node", edge, "Node") for edge in torchkge_kg.rel2ix]
 
-            return KnowledgeGraph(edgelist=edgelist, triplet_types=triplet_types, node_to_index=kg.ent2ix, edge_to_index=kg.rel2ix, node_type_to_index=node_type_to_index)
+            return KnowledgeGraph(graphindices=graphindices, triplet_types=triplet_types, node_to_index=torchkge_kg.ent2ix, edge_to_index=torchkge_kg.rel2ix, node_type_to_index=node_type_to_index)
         else:
-            return KnowledgeGraph(dataframe=kg.get_df(), metadata=metadata, node_to_index=kg.ent2ix, edge_to_index=kg.rel2ix)
+            return KnowledgeGraph(dataframe=torchkge_kg.get_df(), metadata=metadata, node_to_index=torchkge_kg.ent2ix, edge_to_index=torchkge_kg.rel2ix)

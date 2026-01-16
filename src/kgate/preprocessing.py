@@ -280,7 +280,7 @@ def ensure_entity_coverage(kg_train: KnowledgeGraph, kg_val: KnowledgeGraph, kg_
         if mask.any():
             # Extract the indices and corresponding triplets
             indices = torch.nonzero(mask, as_tuple=True)[0]
-            triplets = source_kg.edgelist[:, indices]
+            triplets = source_kg.graphindices[:, indices]
             logging.info(triplets)
             # Add the found triplets to kg_train
             kg_train = kg_train.add_triplets(triplets)

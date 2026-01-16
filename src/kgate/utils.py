@@ -344,13 +344,13 @@ def merge_kg(kg_list: List[KnowledgeGraph], complete_edgelist: bool = False) -> 
     assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different nt2ix."
     assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triple_types."
 
-    new_edgelist = cat([kg.edgelist for kg in kg_list], dim=1)
+    new_edgelist = cat([kg.graphindices for kg in kg_list], dim=1)
     if complete_edgelist:
         removed_edgelist = cat([kg.removed_triplets for kg in kg_list], dim=1)
         new_edgelist = cat([new_edgelist, removed_edgelist], dim=1)
     
     return first_kg.__class__(
-        edgelist=new_edgelist,
+        graphindices=new_edgelist,
         node_to_index=first_kg.node_to_index,
         edge_to_index=first_kg.edge_to_index,
         node_type_to_index=first_kg.node_type_to_index,

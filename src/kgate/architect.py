@@ -487,11 +487,11 @@ class Architect(Model):
         match self.config["evaluation"]["objective"]:
             case "Link Prediction":
                 full_edgelist = torch.cat([
-                    self.kg_train.edgelist,
+                    self.kg_train.graphindices,
                     self.kg_train.removed_triplets,
-                    self.kg_validation.edgelist,
+                    self.kg_validation.graphindices,
                     self.kg_validation.removed_triplets,
-                    self.kg_test.edgelist,
+                    self.kg_test.graphindices,
                     self.kg_test.removed_triplets
                 ], dim=1)
                 evaluator = LinkPredictionEvaluator(full_edgelist=full_edgelist)
@@ -1020,9 +1020,9 @@ class Architect(Model):
                 edge_index = edge_index
                 )
                 
-            input = kg.get_encoder_input(kg.edgelist[:, edge_mask].to(self.device), self.node_embeddings)
+            input = kg.get_encoder_input(kg.graphindices[:, edge_mask].to(self.device), self.node_embeddings)
 
-            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
+            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_list)
 
             # As I understand it, this tensor is larger than needs to be because it needs to account for every possible
             # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
@@ -1055,9 +1055,9 @@ class Architect(Model):
         self.normalize_parameters()
         
         if isinstance(self.node_embeddings, nn.ParameterList):
-            input = self.kg_train.get_encoder_input(self.kg_train.edgelist.to(self.device), self.node_embeddings)
+            input = self.kg_train.get_encoder_input(self.kg_train.graphindices.to(self.device), self.node_embeddings)
 
-            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
+            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_list)
             node_embeddings: torch.Tensor = torch.zeros((self.n_ent, self.encoder_node_embedding_dimensions), device=self.device, dtype=torch.float)
 
             for node_type, idx in input.mapping.items():

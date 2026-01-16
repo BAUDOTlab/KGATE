@@ -104,8 +104,8 @@ class EdgeInference(torchkge_inference.RelationInference):
                         edge_index = edge_index
                         )
                     
-                    input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.edgelist[:, edge_mask], node_embeddings)
-                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
+                    input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.graphindices[:, edge_mask], node_embeddings)
+                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
             
                     for node_type, index in input.mapping.items():
                         embeddings[index] = encoder_output[node_type]
@@ -120,7 +120,7 @@ class EdgeInference(torchkge_inference.RelationInference):
                                                                                         entities=False)
                 scores = decoder.inference_scoring_function(head_embeddings, tail_embeddings, candidates)
 
-                scores = filter_scores(scores, self.knowledge_graph.edgelist, "rel", head_index, tail_index, None)
+                scores = filter_scores(scores, self.knowledge_graph.graphindices, "rel", head_index, tail_index, None)
 
                 scores, indices = scores.sort(descending=True)
 
@@ -200,8 +200,8 @@ class NodeInference(torchkge_inference.EntityInference):
                     
                     embeddings: torch.Tensor = torch.zeros(node_embeddings[0].size(), device=device, dtype=torch.float)
 
-                    input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.edgelist[:, edge_mask], node_embeddings)
-                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
+                    input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.graphindices[:, edge_mask], node_embeddings)
+                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
             
                     for node_type, index in input.mapping.items():
                         embeddings[index] = encoder_output[node_type]
@@ -225,7 +225,7 @@ class NodeInference(torchkge_inference.EntityInference):
                                                                                          entities=True)
                     batch_scores = decoder.inference_scoring_function(head_embeddings, candidates, edge_embeddings)
 
-                batch_scores = filter_scores(batch_scores, self.knowledge_graph.edgelist, missing_triplet_part, known_nodes, known_edges, None)
+                batch_scores = filter_scores(batch_scores, self.knowledge_graph.graphindices, missing_triplet_part, known_nodes, known_edges, None)
 
                 batch_scores, indices = batch_scores.sort(descending=True)
                 batch_size = min(batch_size, len(batch_scores))
