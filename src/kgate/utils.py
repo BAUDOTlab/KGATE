@@ -270,7 +270,7 @@ def plot_learning_curves(train_metrics_file: Path, output_directory: Path, valid
     plt.legend()
     plt.savefig(output_directory.joinpath("validation_metric_curve.png"))
 
-def filter_scores(scores: Tensor, edgelist: Tensor, missing: Literal["head","tail","rel"], first_index: Tensor, second_index: Tensor, true_index: Tensor | None):
+def filter_scores(scores: Tensor, graphindices: Tensor, missing: Literal["head","tail","rel"], first_index: Tensor, second_index: Tensor, true_index: Tensor | None):
     """
     Filter a score tensor to ignore the score attributed to true entity or relation except the ones that are being predicted.
     Parameters
@@ -298,22 +298,22 @@ def filter_scores(scores: Tensor, edgelist: Tensor, missing: Literal["head","tai
     filtered_scores = scores.clone()
 
     if missing == "rel":
-        first_mask = torch.isin(edgelist[0], first_index)
-        second_mask = torch.isin(edgelist[1], second_index)
+        first_mask = torch.isin(graphindices[0], first_index)
+        second_mask = torch.isin(graphindices[1], second_index)
         missing_index = 2
     else:
         e_idx = 0 if missing == "tail" else 1
         missing_index = 1 - e_idx
-        first_mask = torch.isin(edgelist[e_idx], first_index)
-        second_mask = torch.isin(edgelist[2], second_index)
+        first_mask = torch.isin(graphindices[e_idx], first_index)
+        second_mask = torch.isin(graphindices[2], second_index)
 
     for i in range(batch_size):
         if true_index is None:
-            true_mask = torch.zeros(edgelist.size(1), dtype=torch.bool)
+            true_mask = torch.zeros(graphindices.size(1), dtype=torch.bool)
         else:
-            true_mask = torch.isin(edgelist[missing_index], true_index[i])
+            true_mask = torch.isin(graphindices[missing_index], true_index[i])
 
-        true_targets = edgelist[missing_index, 
+        true_targets = graphindices[missing_index, 
                                     first_mask & 
                                     second_mask & 
                                     ~true_mask
