@@ -23,13 +23,13 @@ def permute_tails(kg: KnowledgeGraph, edge: str, preserve_node_degree=True) -> K
         A new instance of KnowledgeGraph with the `tails` permuted.
     """
     node_types = kg.node_types
-    triplets_types = kg.triple_types
+    triplets_types = kg.triplet_types
 
     index_to_node_type = {value: key for key,value in kg.node_type_to_index.items()}
     edge_index = kg.edge_to_index[edge]
 
     # Mask only the target relation
-    mask = (kg.edges == edge_index)
+    mask = (kg.edge_indices == edge_index)
 
     # Get head and tail indices for this relation
     heads_for_this_edge = kg.head_indices[mask].tolist()

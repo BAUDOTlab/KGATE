@@ -171,7 +171,7 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGrap
 def concat_kgs(kg_train: KnowledgeGraph, kg_validation: KnowledgeGraph, kg_test: KnowledgeGraph):
     head = cat((kg_train.head_indices, kg_validation.head_indices, kg_test.head_indices))
     tail = cat((kg_train.tail_indices, kg_validation.tail_indices, kg_test.tail_indices))
-    edge = cat((kg_train.edges, kg_validation.edges, kg_test.edges))
+    edge = cat((kg_train.edge_indices, kg_validation.edge_indices, kg_test.edge_indices))
     return head, tail, edge
 
 def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tuple[int, int]], reverse_duplicates: List[Tuple[int, int]]):
@@ -342,7 +342,7 @@ def merge_kg(kg_list: List[KnowledgeGraph], complete_edgelist: bool = False) -> 
     assert all(first_kg.node_to_index == kg.node_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different ent2ix."
     assert all(first_kg.edge_to_index == kg.edge_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different rel2ix."
     assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different nt2ix."
-    assert all(first_kg.triple_types == kg.triple_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triple_types."
+    assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triple_types."
 
     new_edgelist = cat([kg.edgelist for kg in kg_list], dim=1)
     if complete_edgelist:
@@ -351,15 +351,15 @@ def merge_kg(kg_list: List[KnowledgeGraph], complete_edgelist: bool = False) -> 
     
     return first_kg.__class__(
         edgelist=new_edgelist,
-        ent2ix=first_kg.node_to_index,
-        rel2ix=first_kg.edge_to_index,
-        nt2ix=first_kg.node_type_to_index,
-        triple_types=first_kg.triple_types
+        node_to_index=first_kg.node_to_index,
+        edge_to_index=first_kg.edge_to_index,
+        node_type_to_index=first_kg.node_type_to_index,
+        triplet_types=first_kg.triplet_types
     )
 
 class HeteroMappings():
     def __init__(self, kg: KnowledgeGraph, metadata:pd.DataFrame | None):
-        dataframe = kg.get_df()
+        dataframe = kg.get_dataframe()
         
         self.data = HeteroData()
         

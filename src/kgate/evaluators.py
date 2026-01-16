@@ -291,7 +291,7 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
             Batch size.
         """
         sampler = PositionalNegativeSampler(knowledge_graph)
-        edge_indices = knowledge_graph.edges
+        edge_indices = knowledge_graph.edge_indices
 
         negative_heads, negative_tails = sampler.corrupt_kg(batch_size, self.is_cuda,
                                                        which="main")
@@ -330,7 +330,7 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
             self.evaluate(batch_size=batch_size, knowledge_graph=kg_to_evaluate)
 
         sampler = PositionalNegativeSampler(kg_test)
-        edge_indices = kg_test.edges
+        edge_indices = kg_test.edge_indices
 
         negative_heads, negative_tails = sampler.corrupt_kg(batch_size,
                                                 self.is_cuda,

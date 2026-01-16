@@ -162,7 +162,7 @@ class NodeInference(torchkge_inference.EntityInference):
                  edge_index: Tensor,
                  *,
                  top_k: int,
-                 missing: Literal["head","tail"],
+                 missing_triplet_part: Literal["head","tail"],
                  batch_size: int,
                  encoder: DefaultEncoder | GNN,
                  decoder: Model,
@@ -208,7 +208,7 @@ class NodeInference(torchkge_inference.EntityInference):
                 else:
                     embeddings = node_embeddings[0][known_nodes]
 
-                if missing == "head":
+                if missing_triplet_part == "head":
                     _, tail_embeddings, edge_embeddings, candidates = decoder.inference_prepare_candidates(h_idx = tensor([], device=device).long(), 
                                                                                          t_idx = known_nodes.to(device),
                                                                                          r_idx = known_edges.to(device),
@@ -225,7 +225,7 @@ class NodeInference(torchkge_inference.EntityInference):
                                                                                          entities=True)
                     batch_scores = decoder.inference_scoring_function(head_embeddings, candidates, edge_embeddings)
 
-                batch_scores = filter_scores(batch_scores, self.knowledge_graph.edgelist, missing, known_nodes, known_edges, None)
+                batch_scores = filter_scores(batch_scores, self.knowledge_graph.edgelist, missing_triplet_part, known_nodes, known_edges, None)
 
                 batch_scores, indices = batch_scores.sort(descending=True)
                 batch_size = min(batch_size, len(batch_scores))

@@ -234,7 +234,7 @@ class Architect(Model):
             gnn_layers = encoder_config["gnn_layer_number"]
 
         last_triple_type = self.kg_train.triplets[-1]
-        edge_types = self.kg_train.triple_types#[:last_triple_type + 1]
+        edge_types = self.kg_train.triplet_types#[:last_triple_type + 1]
 
         match encoder_name:
             case "Default":
@@ -1180,7 +1180,7 @@ class Architect(Model):
         # Count occurrences of nodes with the specified relation in the training set
         train_node_counts = {}
         for i in range(self.kg_train.triplet_count):
-            if self.kg_train.edges[i].item() == edge_index:
+            if self.kg_train.edge_indices[i].item() == edge_index:
                 head = self.kg_train.head_indices[i].item()
                 tail = self.kg_train.tail_indices[i].item()
                 train_node_counts[head] = train_node_counts.get(head, 0) + 1
@@ -1190,7 +1190,7 @@ class Architect(Model):
         frequent_indices = []
         infrequent_indices = []
         for i in range(self.kg_test.triplet_count):
-            if self.kg_test.edges[i].item() == edge_index:  # Only consider triples with the specified relation
+            if self.kg_test.edge_indices[i].item() == edge_index:  # Only consider triples with the specified relation
                 head = self.kg_test.head_indices[i].item()
                 tail = self.kg_test.tail_indices[i].item()
                 head_count = train_node_counts.get(head, 0)
@@ -1213,12 +1213,12 @@ class Architect(Model):
         for edge_name in edge_indices:
             # Get triples associated with index
             relation_index = kg.edge_to_index.get(edge_name)
-            indices_to_keep = torch.nonzero(kg.edges == relation_index, as_tuple=False).squeeze()
+            indices_to_keep = torch.nonzero(kg.edge_indices == relation_index, as_tuple=False).squeeze()
 
             if indices_to_keep.numel() == 0:
                 continue  # Skip to next relation if no triples found
             
-            new_kg = kg.keep_triples(indices_to_keep)
+            new_kg = kg.keep_triplets(indices_to_keep)
 
             if isinstance(self.evaluator, LinkPredictionEvaluator):
                 test_metrics = self.link_pred(new_kg)
@@ -1256,8 +1256,8 @@ class Architect(Model):
         """
 
         # Create subgraph for frequent and infrequent categories
-        kg_frequent = self.kg_test.keep_triples(frequent_indices)
-        kg_infrequent = self.kg_test.keep_triples(infrequent_indices)
+        kg_frequent = self.kg_test.keep_triplets(frequent_indices)
+        kg_infrequent = self.kg_test.keep_triplets(infrequent_indices)
         
         # Compute each category's MRR
         if isinstance(self.evaluator, LinkPredictionEvaluator):
@@ -1305,6 +1305,6 @@ class Architect(Model):
             logging.info(f"Permutting tails of relation {edge}")
             self.kg_train = permute_tails(self.kg_train, edge)
 
-        self.kg_train, self.kg_validation, self.kg_test = kg.split_kg(shares=self.config["preprocessing"]["split"])
+        self.kg_train, self.kg_validation, self.kg_test = kg.split_kg(split_proportions=self.config["preprocessing"]["split"])
 
         self.train_model(attributes=attributes)
