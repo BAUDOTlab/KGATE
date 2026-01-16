@@ -75,8 +75,8 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
 
     """
 
-    def __init__(self, full_edgelist: Tensor):
-        self.full_edgelist = full_edgelist
+    def __init__(self, full_graphindices: Tensor):
+        self.full_graphindices = full_graphindices
         self.evaluated = False
 
     def evaluate(self, 
@@ -135,7 +135,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             if isinstance(encoder, GNN):
                 seed_nodes = batch[:2].unique()
                 hop_count = encoder.n_layers
-                edge_index = knowledge_graph.edge_index
+                edge_index = knowledge_graph.edge_list
 
                 _,_,_, edge_mask = k_hop_subgraph(
                     node_idx = seed_nodes,
@@ -163,7 +163,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             scores = decoder.inference_scoring_function(head_embeddings, candidates, edge_embeddings)
             filtered_scores = filter_scores(
                 scores = scores, 
-                edgelist = self.full_edgelist.to(device),
+                edgelist = self.full_graphindices.to(device),
                 missing = "tail",
                 first_index=head_index,
                 second_index=edge_index,
@@ -175,7 +175,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             scores = decoder.inference_scoring_function(candidates, tail_embeddings, edge_embeddings)
             filtered_scores = filter_scores(
                 scores = scores, 
-                edgelist = self.full_edgelist.to(device),
+                edgelist = self.full_graphindices.to(device),
                 missing = "head",
                 first_index=tail_index,
                 second_index=edge_index,

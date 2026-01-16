@@ -213,7 +213,7 @@ class KnowledgeGraph(Dataset):
         return self.graphindices[3]
 
     @property
-    def edge_index(self) -> Tensor:
+    def edge_list(self) -> Tensor:
         return self.graphindices[:2]
     
     # torchkge compatibility

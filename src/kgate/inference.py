@@ -96,7 +96,7 @@ class EdgeInference(torchkge_inference.RelationInference):
                 if isinstance(encoder, GNN):
                     seed_nodes = batch.unique()
                     hop_count = encoder.n_layers
-                    edge_index = self.knowledge_graph.edge_index
+                    edge_index = self.knowledge_graph.edge_list
 
                     _,_,_, edge_mask = k_hop_subgraph(
                         node_idx = seed_nodes,
@@ -167,11 +167,11 @@ class NodeInference(torchkge_inference.EntityInference):
                  encoder: DefaultEncoder | GNN,
                  decoder: Model,
                  node_embeddings: nn.ParameterList, 
-                 relation_embeddings: nn.Embedding,
+                 edge_embeddings: nn.Embedding,
                  verbose:bool=True,
                  **_):
         with torch.no_grad():
-            device = relation_embeddings.weight.device
+            device = edge_embeddings.weight.device
 
             inference_kg = Inference_KG(node_index, edge_index)
 
@@ -190,7 +190,7 @@ class NodeInference(torchkge_inference.EntityInference):
                 if isinstance(encoder, GNN):
                     seed_nodes = known_nodes.unique()
                     num_hops = encoder.n_layers
-                    edge_index = self.knowledge_graph.edge_index
+                    edge_index = self.knowledge_graph.edge_list
 
                     _,_,_, edge_mask = k_hop_subgraph(
                         node_idx = seed_nodes,
@@ -213,7 +213,7 @@ class NodeInference(torchkge_inference.EntityInference):
                                                                                          t_idx = known_nodes.to(device),
                                                                                          r_idx = known_edges.to(device),
                                                                                          node_embeddings = embeddings,
-                                                                                         relation_embeddings = relation_embeddings,
+                                                                                         relation_embeddings = edge_embeddings,
                                                                                          entities=True)
                     batch_scores = decoder.inference_scoring_function(candidates, tail_embeddings, edge_embeddings)
                 else:
@@ -221,7 +221,7 @@ class NodeInference(torchkge_inference.EntityInference):
                                                                                          t_idx = tensor([], device=device).long(),
                                                                                          r_idx = known_edges.to(device),
                                                                                          node_embeddings = embeddings,
-                                                                                         relation_embeddings = relation_embeddings,
+                                                                                         relation_embeddings = edge_embeddings,
                                                                                          entities=True)
                     batch_scores = decoder.inference_scoring_function(head_embeddings, candidates, edge_embeddings)
 

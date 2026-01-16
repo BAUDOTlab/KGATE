@@ -244,7 +244,7 @@ class Architect(Model):
             case "GAT":
                 encoder = GATEncoder(edge_types, self.encoder_node_embedding_dimensions, gnn_layers)
             case "Node2vec":
-                encoder = Node2VecEncoder(self.kg_train.edge_index, self.encoder_node_embedding_dimensions, device=self.device, **encoder_config["params"])
+                encoder = Node2VecEncoder(self.kg_train.edge_list, self.encoder_node_embedding_dimensions, device=self.device, **encoder_config["params"])
             case _:
                 encoder = DefaultEncoder()
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
@@ -486,7 +486,7 @@ class Architect(Model):
             The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator."""
         match self.config["evaluation"]["objective"]:
             case "Link Prediction":
-                full_edgelist = torch.cat([
+                full_graphindices = torch.cat([
                     self.kg_train.graphindices,
                     self.kg_train.removed_triplets,
                     self.kg_validation.graphindices,
@@ -494,7 +494,7 @@ class Architect(Model):
                     self.kg_test.graphindices,
                     self.kg_test.removed_triplets
                 ], dim=1)
-                evaluator = LinkPredictionEvaluator(full_edgelist=full_edgelist)
+                evaluator = LinkPredictionEvaluator(full_graphindices=full_graphindices)
                 self.validation_metric = "MRR"
             case "Triplet Classification":
                 evaluator = TripletClassificationEvaluator(architect=self, kg_validation = self.kg_validation, kg_test=self.kg_test)
@@ -542,10 +542,10 @@ class Architect(Model):
                     for node in current_attribute.index:
                         node_index = self.kg_train.node_to_index[node]
                         node_type_index = self.kg_train.node_types[node_index]
-                        local_idx = self.kg_train.global_to_local_indices[node_index]
+                        local_index = self.kg_train.global_to_local_indices[node_index]
                         assert node_type_index == self.kg_train.node_type_to_index[node_type], f"The entity {node} is given as {node_type} but registered as {index_to_node_type[str(node_type_index)]} in the KG."
 
-                        input_features[local_idx] = tensor(current_attribute.loc[node], dtype=torch.float)
+                        input_features[local_index] = tensor(current_attribute.loc[node], dtype=torch.float)
                     
                     self.node_embeddings.append(Parameter(input_features).to(self.device))
                 else:
@@ -876,10 +876,10 @@ class Architect(Model):
             encoder = self.encoder,
             decoder = self.decoder,
             top_k = top_k,
-            missing = missing_triplet_part,
-            b_size = self.evaluation_batch_size,
+            missing_triplet_part = missing_triplet_part,
+            batch_size = self.evaluation_batch_size,
             node_embeddings=self.node_embeddings,   
-            relation_embeddings=self.edge_embeddings
+            edge_embeddings=self.edge_embeddings
         )
 
         index_to_node = {value: key for key, value in self.kg_train.node_to_index.items()}
@@ -907,12 +907,12 @@ class Architect(Model):
         checkpoint = torch.load(path, map_location=self.device, weights_only=False)
 
         # Check entity and relation dict size
-        assert len(checkpoint["relations"]["weight"]) == self.n_rel, f"Mismatch between the number of relations in the checkpoint ({len(checkpoint['relations']['weight'])}) and the current configuration ({self.n_rel})!"
+        assert len(checkpoint["relations"]["weight"]) == self.edge_count, f"Mismatch between the number of relations in the checkpoint ({len(checkpoint['relations']['weight'])}) and the current configuration ({self.edge_count})!"
 
         if isinstance(self.encoder, GNN):
             assert len(checkpoint["entities"]) == len(self.kg_train.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({len(self.kg_train.node_type_to_index)})!"
         else:
-            assert len(checkpoint["entities"]["weight"]) != self.n_ent, f"Mismatch between the number of entities in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({self.n_ent})!"
+            assert len(checkpoint["entities"]["weight"]) != self.node_count, f"Mismatch between the number of entities in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({self.node_count})!"
 
         if "encoder" in checkpoint:
             assert checkpoint["encoder"].keys() == self.encoder.state_dict().keys(), "Mismatch between the checkpoint convolution layers and the current configuration's."
@@ -922,10 +922,10 @@ class Architect(Model):
 
     def load_best_model(self):
         """Load into memory the checkpoint corresponding to the highest-performing model on the validation set."""
-        _, nt_count = self.kg_train.node_types.unique(return_counts=True)
+        _, node_type_count = self.kg_train.node_types.unique(return_counts=True)
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
-        self.edge_embeddings = init_embedding(self.n_rel, self.encoder_edge_embedding_dimensions, self.device)
+        self.edge_embeddings = init_embedding(self.edge_count, self.encoder_edge_embedding_dimensions, self.device)
 
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_directory)
@@ -975,8 +975,8 @@ class Architect(Model):
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triples
-        pos, neg = self(batch, batch_count)
-        loss = self.decoder_loss(pos, neg)
+        positive_triplet, negative_triplet = self(batch, batch_count)
+        loss = self.decoder_loss(positive_triplet, negative_triplet)
         loss.backward()
 
         self.optimizer.step()
@@ -1012,12 +1012,12 @@ class Architect(Model):
         if isinstance(self.encoder, GNN):
             seed_nodes = batch[:2].unique()
             hop_count = self.encoder.n_layers
-            edge_index = kg.edge_index
+            edge_list = kg.edge_list
             
             _,_,_, edge_mask = k_hop_subgraph(
                 node_idx = seed_nodes,
                 num_hops = hop_count,
-                edge_index = edge_index
+                edge_list = edge_list
                 )
                 
             input = kg.get_encoder_input(kg.graphindices[:, edge_mask].to(self.device), self.node_embeddings)
@@ -1041,12 +1041,12 @@ class Architect(Model):
         tail_embeddings = embeddings[tail_indices]
         edge_embeddings = self.edge_embeddings(edge_indices)  # Relations are unchanged
 
-        return self.decoder.score(h_emb = head_embeddings,
-                                  r_emb = edge_embeddings, 
-                                  t_emb = tail_embeddings, 
-                                  h_idx = head_indices, 
-                                  r_idx = edge_indices, 
-                                  t_idx = tail_indices)
+        return self.decoder.score(head_embeddings = head_embeddings,
+                                  edge_embeddings = edge_embeddings, 
+                                  tail_embeddings = tail_embeddings, 
+                                  head_indices = head_indices, 
+                                  edge_indices = edge_indices, 
+                                  tail_indices = tail_indices)
 
     def get_embeddings(self) -> Dict[str,Tensor]:
         """Returns the embeddings of entities and relations, as well as decoder-specific embeddings.
@@ -1060,8 +1060,8 @@ class Architect(Model):
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_list)
             node_embeddings: torch.Tensor = torch.zeros((self.n_ent, self.encoder_node_embedding_dimensions), device=self.device, dtype=torch.float)
 
-            for node_type, idx in input.mapping.items():
-                node_embeddings[idx] = encoder_output[node_type]
+            for node_type, index in input.mapping.items():
+                node_embeddings[index] = encoder_output[node_type]
         else:
             node_embeddings = self.node_embeddings.weight.data
 
@@ -1083,7 +1083,7 @@ class Architect(Model):
         # If the function only accept one parameter, it is the base torchKGE one,
         # we don't want that.
         if callable(normalize_function) and len(signature(normalize_function).parameters) > 1:
-            normalized_embeddings = normalize_function(ent_emb = self.node_embeddings, rel_emb = self.edge_embeddings)
+            normalized_embeddings = normalize_function(node_embeddings = self.node_embeddings, edge_embeddings = self.edge_embeddings)
             assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the entity embedding and the relation embedding."
             self.node_embeddings, self.edge_embeddings = normalized_embeddings
             
@@ -1118,11 +1118,11 @@ class Architect(Model):
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
             if isinstance(self.evaluator,LinkPredictionEvaluator):
-                validation_score = self.link_pred(self.kg_validation) 
+                validation_score = self.link_prediction(self.kg_validation) 
                 engine.state.metrics["val_metrics"] = validation_score 
                 logging.info(f"Validation MRR: {validation_score}")
             elif isinstance(self.evaluator, TripletClassificationEvaluator):
-                validation_score = self.triplet_classif(self.kg_validation, self.kg_test)
+                validation_score = self.triplet_classification(self.kg_validation, self.kg_test)
                 engine.state.metrics["val_metrics"] = validation_score
                 logging.info(f"Validation Accuracy: {validation_score}")
         if self.scheduler and isinstance(self.scheduler, learning_rate_scheduler.ReduceLROnPlateau):
@@ -1221,9 +1221,9 @@ class Architect(Model):
             new_kg = kg.keep_triplets(indices_to_keep)
 
             if isinstance(self.evaluator, LinkPredictionEvaluator):
-                test_metrics = self.link_pred(new_kg)
+                test_metrics = self.link_prediction(new_kg)
             elif isinstance(self.evaluator, TripletClassificationEvaluator):
-                test_metrics = self.triplet_classif(kg_validation = self.kg_validation, kg_test = new_kg)
+                test_metrics = self.triplet_classification(kg_validation = self.kg_validation, kg_test = new_kg)
             
             # Save each relation's MRR
             individual_metrics[edge_name] = test_metrics
@@ -1261,31 +1261,31 @@ class Architect(Model):
         
         # Compute each category's MRR
         if isinstance(self.evaluator, LinkPredictionEvaluator):
-            frequent_metrics = self.link_pred(kg_frequent) if frequent_indices else 0
-            infrequent_metrics = self.link_pred(kg_infrequent) if infrequent_indices else 0
+            frequent_metrics = self.link_prediction(kg_frequent) if frequent_indices else 0
+            infrequent_metrics = self.link_prediction(kg_infrequent) if infrequent_indices else 0
         elif isinstance(self.evaluator, TripletClassificationEvaluator):
-            frequent_metrics = self.triplet_classif(self.kg_validation, kg_frequent) if frequent_indices else 0
-            infrequent_metrics = self.triplet_classif(self.kg_validation, kg_infrequent) if infrequent_indices else 0
+            frequent_metrics = self.triplet_classification(self.kg_validation, kg_frequent) if frequent_indices else 0
+            infrequent_metrics = self.triplet_classification(self.kg_validation, kg_infrequent) if infrequent_indices else 0
         return frequent_metrics, infrequent_metrics
 
-    def link_pred(self, kg: KnowledgeGraph) -> float:
+    def link_prediction(self, kg: KnowledgeGraph) -> float:
         """Link prediction evaluation on test set."""
         # Test MRR measure
         if not isinstance(self.evaluator, LinkPredictionEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Link Prediction method for {type(self.evaluator)} evaluator.")
 
-        self.evaluator.evaluate(b_size = self.evaluation_batch_size,
+        self.evaluator.evaluate(batch_size = self.evaluation_batch_size,
                         encoder=self.encoder,
                         decoder =self.decoder,
                         knowledge_graph=kg,
                         node_embeddings=self.node_embeddings, 
-                        relation_embeddings=self.edge_embeddings,
+                        edge_embeddings=self.edge_embeddings,
                         verbose=True)
         
         test_mrr = self.evaluator.mrr()[1]
         return test_mrr
     
-    def triplet_classif(self, kg_validation: KnowledgeGraph, kg_test: KnowledgeGraph) -> float:
+    def triplet_classification(self, kg_validation: KnowledgeGraph, kg_test: KnowledgeGraph) -> float:
         """Triplet Classification evaluation"""
         if not isinstance(self.evaluator, TripletClassificationEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Triplet Classification method for {type(self.evaluator)} evaluator.")
@@ -1293,7 +1293,7 @@ class Architect(Model):
         self.evaluator.evaluate(b_size=self.evaluation_batch_size, knowledge_graph=kg_validation)
         return self.evaluator.accuracy(self.evaluation_batch_size, kg_test = kg_test)
 
-    def run_dl(self, attributes: Dict[str, pd.DataFrame] ={}):
+    def run_data_leakage(self, attributes: Dict[str, pd.DataFrame] ={}):
         logging.info("Preparing KG for DL evaluation pocedure...")
         data_leakage_config = self.config["data_leakage"]
 
