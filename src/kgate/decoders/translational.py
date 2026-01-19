@@ -22,20 +22,20 @@ from torch.cuda import empty_cache
 from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel, TorusEModel
 
 class TransE(TransEModel):
-    def __init__(self, emb_dim: int, n_entities: int, n_relations: int, dissimilarity_type: str):
-        super().__init__(emb_dim, n_entities, n_relations, dissimilarity_type=dissimilarity_type)
+    def __init__(self, embedding_dimensions: int, node_count: int, edge_count: int, dissimilarity_type: str):
+        super().__init__(embedding_dimensions, node_count, edge_count, dissimilarity_type=dissimilarity_type)
         del self.ent_emb
         del self.rel_emb
 
-    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, **_) -> Tensor:
-        h_norm = normalize(h_emb, p=2, dim=1)
-        t_norm = normalize(t_emb, p=2, dim=1)
-        return -self.dissimilarity(h_norm + r_emb, t_norm)
+    def score(self, *, head_embeddings: Tensor, edge_embeddings: Tensor, tail_embeddings: Tensor, **_) -> Tensor:
+        head_normalized_embeddings = normalize(head_embeddings, p=2, dim=1)
+        tail_normalized_embeddings = normalize(tail_embeddings, p=2, dim=1)
+        return -self.dissimilarity(head_normalized_embeddings + edge_embeddings, tail_normalized_embeddings)
     
     def get_embeddings(self):
         return None
     
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
+    def normalize_parameters(self, node_embeddings: nn.ParameterList, edge_embeddings: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
         """Normalize parameters for the TransE model.
         
         According to the original paper, the entity embeddings should be normalized.
@@ -56,17 +56,17 @@ class TransE(TransEModel):
             rel_emb : torch.nn.Embedding
                 The normalized relations embedding object.
         """
-        for emb in ent_emb:
-            emb.data = normalize(emb.data, p=2, dim=1)
-        return ent_emb, rel_emb
+        for embedding in node_embeddings:
+            embedding.data = normalize(embedding.data, p=2, dim=1)
+        return node_embeddings, edge_embeddings
 
     def inference_prepare_candidates(self, *, 
-                                    h_idx: Tensor, 
-                                    t_idx: Tensor, 
-                                    r_idx: Tensor, 
+                                    head_indices: Tensor, 
+                                    tail_indices: Tensor, 
+                                    edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
-                                    relation_embeddings: nn.Embedding,
-                                    entities: bool=True
+                                    edge_embeddings: nn.Embedding,
+                                    node_inference: bool=True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get entities embeddings
@@ -95,37 +95,37 @@ class TransE(TransEModel):
         candidates: torch.Tensor
             Candidate embeddings for entities or relations.
         """
-        b_size = h_idx.shape[0]
+        batch_size = head_indices.shape[0]
 
         # Get head, tail and relation embeddings
-        h = node_embeddings[h_idx]
-        t = node_embeddings[t_idx]
-        r = relation_embeddings(r_idx)
+        head_embeddings = node_embeddings[head_indices]
+        tail_embeddings = node_embeddings[tail_indices]
+        edge_embeddings_inference = edge_embeddings(edge_indices)
 
-        if entities:
+        if node_inference:
             # Prepare candidates for every entities
             candidates = node_embeddings
         else:
             # Prepare candidates for every relations
-            candidates = relation_embeddings.weight.data
+            candidates = edge_embeddings.weight.data
         
-        candidates = candidates.unsqueeze(0).expand(b_size, -1, -1)
+        candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
 
-        return h, t, r, candidates
+        return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
     
 class TransH(TransHModel):
-    def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
-        super().__init__(emb_dim, n_entities, n_relations)
+    def __init__(self, embedding_dimensions: int, node_count: int, edge_count: int):
+        super().__init__(embedding_dimensions, node_count, edge_count)
 
-    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, r_idx: Tensor, **_) -> Tensor:
-        h_norm = normalize(h_emb, p=2, dim=1)
-        t_norm = normalize(t_emb, p=2, dim=1)
+    def score(self, *, head_embeddings: Tensor, edge_embeddings: Tensor, tail_embeddings: Tensor, edge_indices: Tensor, **_) -> Tensor:
+        head_normalized_embeddings = normalize(head_embeddings, p=2, dim=1)
+        tail_normalized_embeddings = normalize(tail_embeddings, p=2, dim=1)
         self.evaluated_projections = False
-        norm_vect = normalize(self.norm_vect(r_idx), p=2, dim=1)
-        return - self.dissimilarity(self.project(h_norm, norm_vect) + r_emb,
-                                    self.project(t_norm, norm_vect))
+        normalized_vector = normalize(self.norm_vect(edge_indices), p=2, dim=1)
+        return - self.dissimilarity(self.project(head_normalized_embeddings, normalized_vector) + edge_embeddings,
+                                    self.project(tail_normalized_embeddings, normalized_vector))
     
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
+    def normalize_parameters(self, node_embeddings: nn.ParameterList, edge_embeddings: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
         """Normalize parameters for the TransH model.
         
         According to the original paper, the entity embeddings, relation embeddings
@@ -147,46 +147,46 @@ class TransH(TransHModel):
             rel_emb : torch.nn.Embedding
                 The normalized relations embedding object.
         """
-        for emb in ent_emb:
-            emb.data = normalize(emb.data, p=2, dim=1)
-        rel_emb.weight.data = normalize(rel_emb.weight.data, p=2, dim=1)
+        for embedding in node_embeddings:
+            embedding.data = normalize(embedding.data, p=2, dim=1)
+        edge_embeddings.weight.data = normalize(edge_embeddings.weight.data, p=2, dim=1)
         self.norm_vect.weight.data = normalize(self.norm_vect.weight.data,
                                                p=2, dim=1)
-        return ent_emb, rel_emb
+        return node_embeddings, edge_embeddings
 
     def get_embeddings(self) -> Dict[str,Tensor]:
         return {"norm_vect": self.norm_vect.weight.data}
     
     def inference_prepare_candidates(self, *, 
-                                    h_idx: Tensor, 
-                                    t_idx: Tensor, 
-                                    r_idx: Tensor, 
+                                    head_indices: Tensor, 
+                                    tail_indices: Tensor, 
+                                    edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
-                                    relation_embeddings: nn.Embedding,
-                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    edge_embeddings: nn.Embedding,
+                                    node_inference: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """Link prediction evaluation helper function. Get entities embeddings
         and relations embeddings. The output will be fed to the
         `inference_scoring_function` method. See torchkge.models.interfaces.Models for
         more details on the API.
 
         """
-        b_size = h_idx.shape[0]
+        batch_size = head_indices.shape[0]
 
         if not self.evaluated_projections:
             self.evaluate_projections(node_embeddings)
 
-        r = relation_embeddings(r_idx)
+        edge_embeddings_inference = edge_embeddings(edge_indices)
 
-        if entities:
-            proj_h = self.projected_entities[r_idx, h_idx]  # shape: (b_size, emb_dim)
-            proj_t = self.projected_entities[r_idx, t_idx]  # shape: (b_size, emb_dim)
-            candidates = self.projected_entities[r_idx]  # shape: (b_size, self.n_rel, self.emb_dim)
+        if node_inference:
+            projected_heads = self.projected_entities[edge_indices, head_indices]  # shape: (b_size, emb_dim)
+            projected_tails = self.projected_entities[edge_indices, tail_indices]  # shape: (b_size, emb_dim)
+            candidates = self.projected_entities[edge_indices]  # shape: (b_size, self.n_rel, self.emb_dim)
         else:
-            proj_h = self.projected_entities[:, h_idx].transpose(0, 1)  # shape: (b_size, n_rel, emb_dim)
-            proj_t = self.projected_entities[:, t_idx].transpose(0, 1)  # shape: (b_size, n_rel, emb_dim)
-            candidates = relation_embeddings.weight.data.unsqueeze(0).expand(b_size, self.n_rel, self.emb_dim)
+            projected_heads = self.projected_entities[:, head_indices].transpose(0, 1)  # shape: (b_size, n_rel, emb_dim)
+            projected_tails = self.projected_entities[:, tail_indices].transpose(0, 1)  # shape: (b_size, n_rel, emb_dim)
+            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, self.n_rel, self.emb_dim)
 
-        return proj_h, proj_t, r, candidates
+        return projected_heads, projected_tails, edge_embeddings_inference, candidates
 
     def evaluate_projections(self, node_embeddings: Tensor):
         """Link prediction evaluation helper function. Project all entities
@@ -200,38 +200,39 @@ class TransH(TransHModel):
 
         for i in tqdm(range(self.n_ent), unit="entities", desc="Projecting entities"):
 
-            norm_vect = self.norm_vect.weight.data.view(self.n_rel, self.emb_dim)
-            mask = tensor([i], device=norm_vect.device).long()
+            normalized_vector = self.norm_vect.weight.data.view(self.n_rel, self.emb_dim)
+            mask = tensor([i], device=normalized_vector.device).long()
 
-            if norm_vect.is_cuda:
+            if normalized_vector.is_cuda:
                 empty_cache()
 
-            ent = node_embeddings[mask]
+            # TODO: find better name
+            masked_node_embeddings = node_embeddings[mask]
 
-            norm_components = (ent.view(1, -1) * norm_vect).sum(dim=1)
-            self.projected_entities[:, i, :] = (ent.view(1, -1) - norm_components.view(-1, 1) * norm_vect)
+            normalized_components = (masked_node_embeddings.view(1, -1) * normalized_vector).sum(dim=1)
+            self.projected_entities[:, i, :] = (masked_node_embeddings.view(1, -1) - normalized_components.view(-1, 1) * normalized_vector)
 
-            del norm_components
+            del normalized_components
 
         self.evaluated_projections = True
 
 class TransR(TransRModel):
-    def __init__(self, ent_emb_dim: int, rel_emb_dim: int, n_entities: int, n_relations: int):
-        super().__init__(ent_emb_dim, rel_emb_dim, n_entities, n_relations)
+    def __init__(self, node_embedding_dimensions: int, edge_embedding_dimensions: int, node_count: int, edge_count: int):
+        super().__init__(node_embedding_dimensions, edge_embedding_dimensions, node_count, edge_count)
 
-    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, r_idx: Tensor, **_) -> Tensor:
-        h_norm = normalize(h_emb, p=2, dim=1)
-        t_norm = normalize(t_emb, p=2, dim=1)
+    def score(self, *, head_embeddings: Tensor, edge_embeddings: Tensor, tail_embeddings: Tensor, edge_indices: Tensor, **_) -> Tensor:
+        head_normalized_embeddings = normalize(head_embeddings, p=2, dim=1)
+        tail_normalized_embeddings = normalize(tail_embeddings, p=2, dim=1)
         self.evaluated_projections = False
-        b_size = h_norm.shape[0]
+        batch_size = head_normalized_embeddings.shape[0]
 
-        proj_mat = self.proj_mat(r_idx).view(b_size,
+        projected_matrix = self.proj_mat(edge_indices).view(batch_size,
                                              self.rel_emb_dim,
                                              self.ent_emb_dim)
-        return - self.dissimilarity(self.project(h_norm, proj_mat) + r_emb,
-                                    self.project(t_norm, proj_mat))
+        return - self.dissimilarity(self.project(head_normalized_embeddings, projected_matrix) + edge_embeddings,
+                                    self.project(tail_normalized_embeddings, projected_matrix))
     
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
+    def normalize_parameters(self, node_embeddings: nn.ParameterList, edge_embeddings: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
         """Normalize parameters for the RESCAL model.
         
         According to the original paper, the entity embeddings and relation embeddings
@@ -253,11 +254,11 @@ class TransR(TransRModel):
             rel_emb : torch.nn.Embedding
                 The normalized relations embedding object.
         """
-        for emb in ent_emb:
-            emb.data = normalize(emb.data, p=2, dim=1)
+        for embedding in node_embeddings:
+            embedding.data = normalize(embedding.data, p=2, dim=1)
 
-        rel_emb.weight.data = normalize(rel_emb.weight.data, p=2, dim=1)
-        return ent_emb, rel_emb
+        edge_embeddings.weight.data = normalize(edge_embeddings.weight.data, p=2, dim=1)
+        return node_embeddings, edge_embeddings
     
     def get_embeddings(self) -> Dict[str, Tensor]:
         return {"proj_mat": self.proj_mat.weight.data.view(-1,
@@ -265,28 +266,28 @@ class TransR(TransRModel):
                                               self.ent_emb_dim)}
     
     def inference_prepare_candidates(self, *, 
-                                    h_idx: Tensor, 
-                                    t_idx: Tensor, 
-                                    r_idx: Tensor, 
+                                    head_indices: Tensor, 
+                                    tail_indices: Tensor, 
+                                    edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
-                                    relation_embeddings: nn.Embedding,
-                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        b_size = h_idx.shape[0]
+                                    edge_embeddings: nn.Embedding,
+                                    node_inference: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        batch_size = head_indices.shape[0]
 
         if not self.evaluated_projections:
             self.evaluate_projections(node_embeddings)
 
-        r = relation_embeddings(r_idx)
-        if entities:
-            proj_h = self.projected_entities[r_idx, h_idx]  # shape: (b_size, emb_dim)
-            proj_t = self.projected_entities[r_idx, t_idx]  # shape: (b_size, emb_dim)
-            candidates = self.projected_entities[r_idx]  # shape: (b_size, self.n_rel, self.emb_dim)
+        edge_embeddings_inference = edge_embeddings(edge_indices)
+        if node_inference:
+            projected_heads = self.projected_entities[edge_indices, head_indices]  # shape: (b_size, emb_dim)
+            projected_tails = self.projected_entities[edge_indices, tail_indices]  # shape: (b_size, emb_dim)
+            candidates = self.projected_entities[edge_indices]  # shape: (b_size, self.n_rel, self.emb_dim)
         else:
-            proj_h = self.projected_entities[:, h_idx].transpose(0, 1)  # shape: (b_size, n_rel, emb_dim)
-            proj_t = self.projected_entities[:, t_idx].transpose(0, 1)  # shape: (b_size, n_rel, emb_dim)
-            candidates = relation_embeddings.weight.data.unsqueeze(0).expand(b_size, self.n_rel, self.emb_dim)
+            projected_heads = self.projected_entities[:, head_indices].transpose(0, 1)  # shape: (b_size, n_rel, emb_dim)
+            projected_tails = self.projected_entities[:, tail_indices].transpose(0, 1)  # shape: (b_size, n_rel, emb_dim)
+            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, self.n_rel, self.emb_dim)
 
-        return proj_h, proj_t, r, candidates
+        return projected_heads, projected_tails, edge_embeddings_inference, candidates
     
     def evaluate_projections(self, node_embeddings: Tensor):
         """Link prediction evaluation helper function. Project all entities
@@ -307,34 +308,36 @@ class TransR(TransRModel):
             if projection_matrices.is_cuda:
                 empty_cache()
 
-            ent = node_embeddings[mask]
+            # TODO: find better name
+            masked_node_embeddings = node_embeddings[mask]
             
-            proj_ent = matmul(projection_matrices, ent.view(self.ent_emb_dim))
-            proj_ent = proj_ent.view(self.n_rel, self.rel_emb_dim, 1)
-            self.projected_entities[:, i, :] = proj_ent.view(self.n_rel, self.rel_emb_dim)
+            projected_masked_node_embeddings = matmul(projection_matrices, masked_node_embeddings.view(self.ent_emb_dim))
+            projected_masked_node_embeddings = projected_masked_node_embeddings.view(self.n_rel, self.rel_emb_dim, 1)
+            self.projected_entities[:, i, :] = projected_masked_node_embeddings.view(self.n_rel, self.rel_emb_dim)
+            # TODO: comment that projected_entities equivalent to projected_masked_node_embeddings
 
-            del proj_ent
+            del projected_masked_node_embeddings
 
         self.evaluated_projections = True
 
 class TransD(TransDModel):
-    def __init__(self, ent_emb_dim: int, rel_emb_dim: int, n_entities: int, n_relations: int):
-        super().__init__(ent_emb_dim, rel_emb_dim, n_entities, n_relations)
+    def __init__(self, node_embedding_dimensions: int, edge_embedding_dimensions: int, node_count: int, edge_count: int):
+        super().__init__(node_embedding_dimensions, edge_embedding_dimensions, node_count, edge_count)
 
-    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, h_idx: Tensor, r_idx: Tensor, t_idx: Tensor, **_) -> Tensor:
-        h_norm = normalize(h_emb, p=2, dim=1)
-        t_norm = normalize(t_emb, p=2, dim=1)
-        r = normalize(r_emb, p=2, dim=1)
+    def score(self, *, head_embeddings: Tensor, edge_embeddings: Tensor, tail_embeddings: Tensor, head_indices: Tensor, edge_indices: Tensor, tail_indices: Tensor, **_) -> Tensor:
+        head_normalized_embeddings = normalize(head_embeddings, p=2, dim=1)
+        tail_normalized_embeddings = normalize(tail_embeddings, p=2, dim=1)
+        edge_normalized_embeddings = normalize(edge_embeddings, p=2, dim=1)
 
-        h_proj_v = normalize(self.ent_proj_vect(h_idx), p=2, dim=1)
-        t_proj_v = normalize(self.ent_proj_vect(t_idx), p=2, dim=1)
-        r_proj_v = normalize(self.rel_proj_vect(r_idx), p=2, dim=1)
+        head_projected_vectors = normalize(self.ent_proj_vect(head_indices), p=2, dim=1)
+        tail_projected_vectors = normalize(self.ent_proj_vect(tail_indices), p=2, dim=1)
+        edge_projected_vectors = normalize(self.rel_proj_vect(edge_indices), p=2, dim=1)
 
-        proj_h = self.project(h_norm, h_proj_v, r_proj_v)
-        proj_t = self.project(t_norm, t_proj_v, r_proj_v)
-        return - self.dissimilarity(proj_h + r, proj_t)
+        projected_heads = self.project(head_normalized_embeddings, head_projected_vectors, edge_projected_vectors)
+        projected_tails = self.project(tail_normalized_embeddings, tail_projected_vectors, edge_projected_vectors)
+        return - self.dissimilarity(projected_heads + edge_normalized_embeddings, projected_tails)
     
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
+    def normalize_parameters(self, node_embeddings: nn.ParameterList, edge_embeddings: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
         """Normalize parameters for the TransD model.
         
         According to the original paper, the entity embeddings, the relation embeddings
@@ -356,44 +359,44 @@ class TransD(TransDModel):
             rel_emb : torch.nn.Embedding
                 The normalized relations embedding object.
         """
-        for emb in ent_emb:
-            emb.data = normalize(emb.data, p=2, dim=1)
+        for embedding in node_embeddings:
+            embedding.data = normalize(embedding.data, p=2, dim=1)
 
-        rel_emb.weight.data = normalize(rel_emb.weight.data, p=2, dim=1)
+        edge_embeddings.weight.data = normalize(edge_embeddings.weight.data, p=2, dim=1)
 
         self.ent_proj_vect.weight.data = normalize(self.ent_proj_vect.weight.data, p=2, dim=1)
         self.rel_proj_vect.weight.data = normalize(self.rel_proj_vect.weight.data, p=2, dim=1)
 
-        return ent_emb, rel_emb
+        return node_embeddings, edge_embeddings
 
     def get_embeddings(self) -> Dict[str, Tensor]:
         return {"ent_proj_vect": self.ent_proj_vect.weight.data,
                 "rel_proj_vect": self.rel_proj_vect.weight.data}
     
     def inference_prepare_candidates(self, *, 
-                                    h_idx: Tensor, 
-                                    t_idx: Tensor, 
-                                    r_idx: Tensor, 
+                                    head_indices: Tensor, 
+                                    tail_indices: Tensor, 
+                                    edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
-                                    relation_embeddings: nn.Embedding,
-                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        b_size = h_idx.shape[0]
+                                    edge_embeddings: nn.Embedding,
+                                    node_inference: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        batch_size = head_indices.shape[0]
 
         if not self.evaluated_projections:
             self.evaluate_projections(node_embeddings)
 
-        r = relation_embeddings(r_idx)
+        edge_embeddings_inference = edge_embeddings(edge_indices)
 
-        if entities:
-            proj_h = self.projected_entities[r_idx, h_idx]  # shape: (b_size, emb_dim)
-            proj_t = self.projected_entities[r_idx, t_idx]  # shape: (b_size, emb_dim)
-            candidates = self.projected_entities[r_idx]  # shape: (b_size, self.n_rel, self.emb_dim)
+        if node_inference:
+            projected_heads = self.projected_entities[edge_indices, head_indices]  # shape: (b_size, emb_dim)
+            projected_tails = self.projected_entities[edge_indices, tail_indices]  # shape: (b_size, emb_dim)
+            candidates = self.projected_entities[edge_indices]  # shape: (b_size, self.n_rel, self.emb_dim)
         else:
-            proj_h = self.projected_entities[:, h_idx].transpose(0, 1)  # shape: (b_size, n_rel, rel_emb_dim)
-            proj_t = self.projected_entities[:, t_idx].transpose(0, 1)  # shape: (b_size, n_rel, rel_emb_dim)
-            candidates = self.rel_emb.weight.data.unsqueeze(0).expand(b_size, self.n_rel, self.rel_emb_dim)
+            projected_heads = self.projected_entities[:, head_indices].transpose(0, 1)  # shape: (b_size, n_rel, rel_emb_dim)
+            projected_tails = self.projected_entities[:, tail_indices].transpose(0, 1)  # shape: (b_size, n_rel, rel_emb_dim)
+            candidates = self.rel_emb.weight.data.unsqueeze(0).expand(batch_size, self.n_rel, self.rel_emb_dim)
 
-        return proj_h, proj_t, r, candidates
+        return projected_heads, projected_tails, edge_embeddings_inference, candidates
 
     def evaluate_projections(self, node_embeddings: Tensor):
         """Link prediction evaluation helper function. Project all entities
@@ -406,37 +409,39 @@ class TransD(TransDModel):
             return
 
         for i in tqdm(range(self.n_ent), unit="entities", desc="Projecting entities"):
-            rel_proj_vects = self.rel_proj_vect.weight.data
+            edge_projected_vectors = self.rel_proj_vect.weight.data
 
-            mask = tensor([i], device=rel_proj_vects.device).long()
+            mask = tensor([i], device=edge_projected_vectors.device).long()
 
-            ent = node_embeddings[mask]
+            # TODO: find better name
+            masked_node_embeddings = node_embeddings[mask]
 
-            ent_proj_vect = self.ent_proj_vect.weight[i]
+            node_projected_vectors = self.ent_proj_vect.weight[i]
 
-            sc_prod = (ent_proj_vect * ent).sum(dim=0)
-            proj_e = sc_prod * rel_proj_vects + ent[:self.rel_emb_dim].view(1, -1)
+            # TODO PLACEHOLDER TODO PLACEHOLDER TODO
+            sc_prod = (node_projected_vectors * masked_node_embeddings).sum(dim=0)
+            projected_nodes = sc_prod * edge_projected_vectors + masked_node_embeddings[:self.rel_emb_dim].view(1, -1)
 
-            self.projected_entities[:, i, :] = proj_e
+            self.projected_entities[:, i, :] = projected_nodes
 
-            del proj_e
+            del projected_nodes
 
         self.evaluated_projections = True
 
 class TorusE(TorusEModel):
-    def __init__(self, emb_dim: int, n_entities: int, n_relations: int, dissimilarity_type: str):
-        super().__init__(emb_dim, n_entities, n_relations, dissimilarity_type)
+    def __init__(self, embedding_dimensions: int, node_count: int, edge_count: int, dissimilarity_type: str):
+        super().__init__(embedding_dimensions, node_count, edge_count, dissimilarity_type)
     
-    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, h_idx: Tensor, r_idx: Tensor, t_idx: Tensor, **_) -> Tensor:
+    def score(self, *, head_embeddings: Tensor, edge_embeddings: Tensor, tail_embeddings: Tensor, head_indices: Tensor, edge_indices: Tensor, tail_indices: Tensor, **_) -> Tensor:
         self.normalized = False
 
-        h = h_emb.frac()
-        t = t_emb.frac()
-        r = r_emb.frac()
+        fractionned_head_embeddings = head_embeddings.frac()
+        fractionned_tail_embeddings = tail_embeddings.frac()
+        fractionned_edge_embeddings = edge_embeddings.frac()
 
-        return - self.dissimilarity(h + r, t)
+        return - self.dissimilarity(fractionned_head_embeddings + fractionned_edge_embeddings, fractionned_tail_embeddings)
 
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
+    def normalize_parameters(self, node_embeddings: nn.ParameterList, edge_embeddings: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
         """Normalize parameters for the TorusE model.
         
         According to the original paper, only the fraction of the embeddings 
@@ -458,44 +463,44 @@ class TorusE(TorusEModel):
             rel_emb : torch.nn.Embedding
                 The normalized relations embedding object.
         """
-        for emb in ent_emb:
-            emb.data.frac_()
+        for embedding in node_embeddings:
+            embedding.data.frac_()
 
-        rel_emb.weight.data = rel_emb.weight.data.frac()
+        edge_embeddings.weight.data = edge_embeddings.weight.data.frac()
         self.normalized = True
 
-        return ent_emb, rel_emb
+        return node_embeddings, edge_embeddings
     
     def get_embeddings(self):
         return None
     
     def inference_prepare_candidates(self, *, 
-                                    h_idx: Tensor, 
-                                    t_idx: Tensor, 
-                                    r_idx: Tensor, 
+                                    head_indices: Tensor, 
+                                    tail_indices: Tensor, 
+                                    edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
-                                    relation_embeddings: nn.Embedding,
-                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        b_size = h_idx.shape[0]
+                                    edge_embeddings: nn.Embedding,
+                                    node_inference: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        batch_size = head_indices.shape[0]
 
         if not self.normalized:
             # Very ugly transformation of the node embeddings into a ParameterList just for normalization
             # TODO: smoothen the cast (or avoid it)
-            self.normalize_parameters(ParameterList([Parameter(node_embeddings)]), relation_embeddings)
+            self.normalize_parameters(ParameterList([Parameter(node_embeddings)]), edge_embeddings)
 
-        device = h_idx.device        
+        device = head_indices.device        
 
-        h = node_embeddings[h_idx]
-        t = node_embeddings[t_idx]
-        r = relation_embeddings(r_idx)
+        head_embeddings = node_embeddings[head_indices]
+        tail_embeddings = node_embeddings[tail_indices]
+        edge_embeddings_inference = edge_embeddings(edge_indices)
 
-        if entities:
+        if node_inference:
             # Prepare candidates for every entities
             candidates = node_embeddings
         else:
             # Prepare candidates for every relations
-            candidates = relation_embeddings.weight.data
+            candidates = edge_embeddings.weight.data
             
-        candidates = candidates.unsqueeze(0).expand(b_size, -1, -1)
+        candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         
-        return h, t, r, candidates
+        return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates

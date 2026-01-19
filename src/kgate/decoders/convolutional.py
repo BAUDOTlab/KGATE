@@ -18,48 +18,48 @@ from torchkge.models import ConvKBModel
 # Code adapted from torchKGE's implementation
 # 
 class ConvKB(ConvKBModel):
-    def __init__(self, emb_dim:int, n_filters: int, n_entities: int, n_relations: int):
-        super().__init__(emb_dim, n_filters, n_entities, n_relations)
+    def __init__(self, embedding_dimensions:int, filter_count: int, node_count: int, edge_count: int):
+        super().__init__(embedding_dimensions, filter_count, node_count, edge_count)
         del self.ent_emb
         del self.rel_emb
         
-    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, **_):
-        b_size = h_emb.size(0)
+    def score(self, *, head_embeddings: Tensor, edge_embeddings: Tensor, tail_embeddings: Tensor, **_):
+        batch_size = head_embeddings.size(0)
 
-        h = h_emb.view(b_size, 1, -1)
-        r = r_emb.view(b_size, 1, -1)
-        t = t_emb.view(b_size, 1, -1)
+        head_score = head_embeddings.view(batch_size, 1, -1)
+        edge_score = edge_embeddings.view(batch_size, 1, -1)
+        tail_score = tail_embeddings.view(batch_size, 1, -1)
 
-        concat = cat((h,r,t), dim=1)
+        concat = cat((head_score,edge_score,tail_score), dim=1)
 
-        return self.output(self.convlayer(concat).reshape(b_size, -1))[:, 1]
+        return self.output(self.convlayer(concat).reshape(batch_size, -1))[:, 1]
     
     def get_embeddings(self):
         return None
     
     def inference_prepare_candidates(self, 
-                                     h_idx: Tensor,
-                                     t_idx: Tensor, 
-                                     r_idx: Tensor, 
+                                     head_indices: Tensor,
+                                     tail_indices: Tensor, 
+                                     edge_indices: Tensor, 
                                      node_embeddings: Tensor,
-                                     relation_embeddings: nn.Embedding,
-                                     entities: bool=True):
+                                     edge_embeddings: nn.Embedding,
+                                     node_inference: bool=True):
 
-        b_size = h_idx.shape[0]
+        batch_size = head_indices.shape[0]
 
         # Get head, tail and relation embeddings
-        h = node_embeddings[h_idx]
-        t = node_embeddings[t_idx]
-        r = relation_embeddings(r_idx)
+        head_embeddings = node_embeddings[head_indices]
+        tail_embeddings = node_embeddings[tail_indices]
+        edge_embeddings_inference = edge_embeddings(edge_indices)
 
-        if entities:
+        if node_inference:
             # Prepare candidates for every entities
             candidates = node_embeddings
         else:
             # Prepare candidates for every relations
-            candidates = relation_embeddings.weight.data
+            candidates = edge_embeddings.weight.data
         
-        candidates = candidates.unsqueeze(0).expand(b_size, -1, -1)
-        candidates = candidates.view(b_size, -1, 1, self.emb_dim)
+        candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
+        candidates = candidates.view(batch_size, -1, 1, self.emb_dim)
 
-        return h, t, r, candidates
+        return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates

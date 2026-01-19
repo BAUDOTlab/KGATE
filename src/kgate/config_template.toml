@@ -15,11 +15,11 @@ verbose = true
 
 # If the knowledge graph has not been preprocessed by KGATE before,
 # it is highly recommended to set this option as true.
-run_kg_preprocess = true
+run_kg_preprocessing = true
 
 [preprocessing]
 
-remove_duplicate_triples = true
+remove_duplicate_triplets = true
 
 # If undirected relations are found, will make them directed by creating a reverse relation
 make_directed = true
@@ -37,15 +37,15 @@ split = [0.8,0.1,0.1]
 
 [preprocessing.params]
 theta = 0.8
-theta1 = 0.8
-theta2 = 0.8
+theta_first_edge_type = 0.8
+theta_second_edge_type = 0.8
 
 [model]
 # The dimension of the embedding vectors for entities and relations.
 # Some models need to have the same dimensions for entity and relation vectors.
 # The default value for rel_emb_dim, -1, will set it to be equal to emb_dim
-emb_dim = 256
-rel_emb_dim = -1
+embedding_dimensions = 256
+edge_embedding_dimensions = -1
 
 [model.encoder]
 # The encoder transforms the entities and relations into embedding vectors
@@ -79,7 +79,7 @@ margin = 1
 dissimilarity = "L2"
 
 # Number of convolutional filter used by ConvKB
-n_filters = 3
+filter_count = 3
 
 [sampler]
 # Type of negative sampler to generate false triple during the training.
@@ -91,7 +91,7 @@ n_filters = 3
 name = "Positional"
 
 # Number of negative samples to generate for each triplet.
-n_neg = 1
+negative_triplet_count = 1
 
 [optimizer]
 # Pytorch optimizer to guide training. 
@@ -107,7 +107,7 @@ name = "Adam"
 weight_decay = 0.001
 
 # This is the initial learning rate, which might be modified by a learning rate scheduler (see below)
-lr = 0.001
+learning_rate = 0.001
 
 [lr_scheduler]
 # The Learning Rate Scheduler is an optional module that alter the learning rate throughout the training.
@@ -127,7 +127,7 @@ lr = 0.001
 # - OneCycleLR : Increase the learning rate to a maximum learning rate before reducing it to a minimum.
 # - CyclicLR : Cycles the learning rate between two boundaries with a constant frequency.
 type = ""
-[lr_scheduler.params]
+[learning_rate_scheduler.params]
 
 
 [training]
@@ -141,10 +141,10 @@ patience = 20
 train_batch_size = 2048
 
 # Number of epochs between an evaluation of the model on the validation set.
-eval_interval = 10
+evaluation_interval = 10
 
 # Size of an evaluation and inference batch. Must be smaller than the training batch, as evaluation takes a lot more memory.
-eval_batch_size = 32
+evaluation_batch_size = 32
 
 # Number of epochs between which a checkpoint is saved to retain the training state of a model.
 save_interval = 5
@@ -160,8 +160,8 @@ pretrained_embeddings = "auto"
 # - Triplet Classification : Discriminate between true and false triplets
 objective = "Link Prediction"
 
-made_directed_relations = []
-target_relations = [] 
+made_directed_edges = []
+target_edges = [] 
 thresholds = [10]
 
 [data_leakage]
@@ -169,4 +169,4 @@ thresholds = [10]
 
 # The name of relations to permute so that each tail of these relations 
 # is replaced by a different, random tail from the KG
-permuted_relations = []
+permuted_edges = []
