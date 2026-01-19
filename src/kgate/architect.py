@@ -36,7 +36,7 @@ from ignite.metrics import RunningAverage
 from ignite.engine import Events, Engine
 from ignite.handlers import EarlyStopping, ModelCheckpoint, Checkpoint, DiskSaver, ProgressBar
 
-from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, init_embedding, plot_learning_curves, save_config
+from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, initialize_embedding, plot_learning_curves, save_config
 from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .encoders import *
 from .decoders import *
@@ -549,12 +549,12 @@ class Architect(Model):
                     
                     self.node_embeddings.append(Parameter(input_features).to(self.device))
                 else:
-                    embeddings = init_embedding(node_count, self.embedding_dimensions, self.device)
+                    embeddings = initialize_embedding(node_count, self.embedding_dimensions, self.device)
                     self.node_embeddings.append(embeddings.weight)
             # The input features are not supposed to change if we use an encoder
             self.node_embeddings = self.node_embeddings.requires_grad_(False)
 
-        self.edge_embeddings = init_embedding(self.kg_train.edge_count, self.encoder_edge_embedding_dimensions, self.device)
+        self.edge_embeddings = initialize_embedding(self.kg_train.edge_count, self.encoder_edge_embedding_dimensions, self.device)
 
 
         logging.info("Initializing optimizer...")
@@ -925,7 +925,7 @@ class Architect(Model):
         _, node_type_count = self.kg_train.node_types.unique(return_counts=True)
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
-        self.edge_embeddings = init_embedding(self.edge_count, self.encoder_edge_embedding_dimensions, self.device)
+        self.edge_embeddings = initialize_embedding(self.edge_count, self.encoder_edge_embedding_dimensions, self.device)
 
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_directory)

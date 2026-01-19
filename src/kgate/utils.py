@@ -227,7 +227,7 @@ def find_best_model(dir: Path):
         default=None
     )
     
-def init_embedding(embedding_count: int, embedding_dimensions: int, device:str="cpu"):
+def initialize_embedding(embedding_count: int, embedding_dimensions: int, device:str="cpu"):
     embedding = nn.Embedding(embedding_count, embedding_dimensions, device=device)
     nn.init.xavier_uniform_(embedding.weight.data)
     return embedding
