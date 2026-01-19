@@ -53,7 +53,7 @@ def prepare_knowledge_graph(config: dict,
 
         for separator in SUPPORTED_SEPARATORS:
             try:
-                kg_dataframe = pd.read_csv(input_file, sep=separator, usecols=["from","to","rel"])
+                kg_dataframe = pd.read_csv(input_file, sep=separator, usecols=["head","tail","edge"])
                 break
             except ValueError:
                 continue
@@ -124,34 +124,34 @@ def clean_knowledge_graph(kg: KnowledgeGraph, config: dict) -> Tuple[KnowledgeGr
 
     index_to_edge_name = {value: key for key, value in kg.edge_to_index.items()}
 
-    if config["preprocessing"]["remove_duplicate_triples"]:
-        logging.info("Removing duplicated triples...")
+    if config["preprocessing"]["remove_duplicate_triplets"]:
+        logging.info("Removing duplicated triplets...")
         kg = kg.remove_duplicate_triplets()
 
     duplicated_edges_list = []
 
-    if config["preprocessing"]["flag_near_duplicate_relations"]:
-        logging.info("Checking for near duplicates relations...")
-        theta_first_edge_type = config["preprocessing"]["params"]["theta1"]
-        theta_second_edge_type = config["preprocessing"]["params"]["theta2"]
+    if config["preprocessing"]["flag_near_duplicate_edges"]:
+        logging.info("Checking for near duplicates edges...")
+        theta_first_edge_type = config["preprocessing"]["params"]["theta_first_edge_type"]
+        theta_second_edge_type = config["preprocessing"]["params"]["theta_second_edge_type"]
         duplicate_edges, reverse_duplicate_edges = kg.duplicates(theta_first_edge_type=theta_first_edge_type, theta_second_edge_type=theta_second_edge_type)
         if duplicate_edges:
-            logging.info(f"Adding {len(duplicate_edges)} synonymous relations ({[index_to_edge_name[edge] for edge in duplicate_edges]}) to the list of known duplicated relations.")
+            logging.info(f"Adding {len(duplicate_edges)} synonymous relations ({[index_to_edge_name[edge] for edge in duplicate_edges]}) to the list of known duplicated edges.")
             duplicated_edges_list.extend(duplicate_edges)
         if reverse_duplicate_edges:
-            logging.info(f"Adding {len(reverse_duplicate_edges)} anti-synonymous relations ({[index_to_edge_name[edge] for edge in reverse_duplicate_edges]}) to the list of known duplicated relations.")
+            logging.info(f"Adding {len(reverse_duplicate_edges)} anti-synonymous relations ({[index_to_edge_name[edge] for edge in reverse_duplicate_edges]}) to the list of known duplicated edges.")
             duplicated_edges_list.extend(reverse_duplicate_edges)
     
     if config["preprocessing"]["make_directed"]:
-        undirected_edges_names = config["preprocessing"]["make_directed_relations"]
+        undirected_edges_names = config["preprocessing"]["make_directed_edges"]
         if len(undirected_edges_names) == 0:
             undirected_edges_names = list(kg.edge_to_index.keys())
-        logging.info(f"Adding reverse triplets for relations {undirected_edges_names}...")
+        logging.info(f"Adding reverse triplets for edges {undirected_edges_names}...")
         edges_to_process = [kg.edge_to_index[edge_name] for edge_name in undirected_edges_names]
         kg, undirected_edges_list = kg.add_reverse_edges(edges_to_process)
             
-        if config["preprocessing"]["flag_near_duplicate_relations"]:
-            logging.info(f"Adding created reverses {[(edge_name, edge_name + "_inv") for edge_name in undirected_edges_names]} to the list of known duplicated relations.")
+        if config["preprocessing"]["flag_near_duplicate_edges"]:
+            logging.info(f"Adding created reverses {[(edge_name, edge_name + "_inv") for edge_name in undirected_edges_names]} to the list of known duplicated edges.")
             duplicated_edges_list.extend(undirected_edges_list)
 
     logging.info("Splitting the dataset into train, validation and test sets...")
@@ -159,9 +159,9 @@ def clean_knowledge_graph(kg: KnowledgeGraph, config: dict) -> Tuple[KnowledgeGr
 
     kg_train_ok, _ = verify_node_coverage(kg_train, kg)
     if not kg_train_ok:
-        logging.info("Entity coverage verification failed...")  
+        logging.info("Node coverage verification failed...")  
     else:
-        logging.info("Entity coverage verified successfully.")
+        logging.info("Node coverage verified successfully.")
 
     if config["preprocessing"]["clean_train_set"]:
         logging.info("Cleaning the train set to avoid data leakage...")
@@ -172,20 +172,20 @@ def clean_knowledge_graph(kg: KnowledgeGraph, config: dict) -> Tuple[KnowledgeGr
 
     kg_train_ok, _ = verify_node_coverage(kg_train, kg)
     if not kg_train_ok:
-        logging.info("Entity coverage verification failed...")
+        logging.info("Node coverage verification failed...")
     else:
-        logging.info("Entity coverage verified successfully.")
+        logging.info("Node coverage verified successfully.")
 
     new_kg_train, new_kg_validation, new_kg_test = ensure_node_coverage(kg_train, kg_validation, kg_test)
 
 
     kg_train_ok, missing_nodes = verify_node_coverage(new_kg_train, kg)
     if not kg_train_ok:
-        logging.info(f"Entity coverage verification failed. {len(missing_nodes)} entities are missing.")
-        logging.info(f"Missing entities: {missing_nodes}")
-        raise ValueError("One or more entities are not covered in the training set after ensuring entity coverage...")
+        logging.info(f"Node coverage verification failed. {len(missing_nodes)} nodes are missing.")
+        logging.info(f"Missing nodes: {missing_nodes}")
+        raise ValueError("One or more nodes are not covered in the training set after ensuring node coverage...")
     else:
-        logging.info("Entity coverage verified successfully.")
+        logging.info("Node coverage verified successfully.")
 
     logging.info("Computing triplet proportions...")
     logging.info(compute_triplet_proportions(kg_train, kg_test, kg_validation))
@@ -262,9 +262,9 @@ def ensure_node_coverage(kg_train: KnowledgeGraph, kg_validation: KnowledgeGraph
     # Identifier les entités manquantes dans kg_train
     missing_nodes = train_nodes - present_nodes
 
-    logging.info(f"Total entities in full kg: {len(train_nodes)}")
-    logging.info(f"Entities present in kg_train: {len(present_nodes)}")
-    logging.info(f"Missing entities in kg_train: {len(missing_nodes)}")
+    logging.info(f"Total nodes in full kg: {len(train_nodes)}")
+    logging.info(f"Nodes present in kg_train: {len(present_nodes)}")
+    logging.info(f"Missing nodes in kg_train: {len(missing_nodes)}")
 
     def find_and_move_triplets(kg_source: KnowledgeGraph, nodes: Set[int]):
         nonlocal kg_train, kg_validation, kg_test
@@ -306,7 +306,7 @@ def ensure_node_coverage(kg_train: KnowledgeGraph, kg_validation: KnowledgeGraph
     # Loguer les entités restantes non trouvées
     if len(missing_nodes) > 0:
         for node in missing_nodes:
-            logging.info(f"Warning: No triplet found involving entity '{node}' in kg_val or kg_test. Entity remains unconnected in kg_train.")
+            logging.info(f"Warning: No triplet found involving node '{node}' in kg_validation or kg_test. Node remains unconnected in kg_train.")
 
     return kg_train, kg_validation, kg_test
 
@@ -332,10 +332,10 @@ def clean_datasets(kg_train: KnowledgeGraph, kg_second: KnowledgeGraph, known_re
 
     for first_edge_type, second_edge_type in known_reverses:
 
-        logging.info(f"Processing relation pair: ({first_edge_type}, {second_edge_type})")
+        logging.info(f"Processing edge pair: ({first_edge_type}, {second_edge_type})")
 
         # Get (h, t) pairs in kg2 related by r1
-        first_edge_type_pairs_in_kg_second = kg_second.get_pairs(first_edge_type, type="ht")
+        first_edge_type_pairs_in_kg_second = kg_second.get_pairs(first_edge_type, type="head_tail")
         # Get indices of (h, t) in kg_train that are related by r2
         indices_to_remove_kg_train = [edge_index for edge_index, (head, tail) in enumerate(zip(kg_train.tail_indices, kg_train.head_indices)) if (head.item(), tail.item()) in first_edge_type_pairs_in_kg_second and kg_train.edge_indices[edge_index].item() == second_edge_type]
         indices_to_remove_kg_train.extend([edge_index for edge_index, (head, tail) in enumerate(zip(kg_train.head_indices, kg_train.tail_indices)) if (head.item(), tail.item()) in first_edge_type_pairs_in_kg_second and kg_train.edge_indices[edge_index].item() == second_edge_type])
@@ -343,10 +343,10 @@ def clean_datasets(kg_train: KnowledgeGraph, kg_second: KnowledgeGraph, known_re
         # Remove those (h, t) pairs from kg_train
         kg_train = kg_train.remove_triplets(torch.tensor(indices_to_remove_kg_train, dtype=torch.long))
 
-        logging.info(f"Found {len(indices_to_remove_kg_train)} triplets to remove for relation {second_edge_type} with reverse {first_edge_type}.")
+        logging.info(f"Found {len(indices_to_remove_kg_train)} triplets to remove for edge {second_edge_type} with reverse {first_edge_type}.")
 
         # Get (h, t) pairs in kg2 related by r2
-        second_edge_type_pairs_in_kg_second = kg_second.get_pairs(second_edge_type, type="ht")
+        second_edge_type_pairs_in_kg_second = kg_second.get_pairs(second_edge_type, type="head_tail")
         # Get indices of (h, t) in kg_train that are related by r1
         indices_to_remove_kg_train_reverse = [edge_index for edge_index, (head, tail) in enumerate(zip(kg_train.tail_indices, kg_train.head_indices)) if (head.item(), tail.item()) in second_edge_type_pairs_in_kg_second and kg_train.edge_indices[edge_index].item() == first_edge_type]
         indices_to_remove_kg_train_reverse.extend([edge_index for edge_index, (head, tail) in enumerate(zip(kg_train.head_indices, kg_train.tail_indices)) if (head.item(), tail.item()) in second_edge_type_pairs_in_kg_second and kg_train.edge_indices[edge_index].item() == first_edge_type])
@@ -354,7 +354,7 @@ def clean_datasets(kg_train: KnowledgeGraph, kg_second: KnowledgeGraph, known_re
         # Remove those (h, t) pairs from kg_train
         kg_train = kg_train.remove_triplets(torch.tensor(indices_to_remove_kg_train_reverse, dtype=torch.long))
 
-        logging.info(f"Found {len(indices_to_remove_kg_train_reverse)} reverse triplets to remove for relation {first_edge_type} with reverse {second_edge_type}.")
+        logging.info(f"Found {len(indices_to_remove_kg_train_reverse)} reverse triplets to remove for edge {first_edge_type} with reverse {second_edge_type}.")
     
     return kg_train
 
@@ -387,7 +387,7 @@ def clean_cartesians(kg_first: KnowledgeGraph, kg_second: KnowledgeGraph, known_
         - cleaned_train_kg: Training KG with cartesian triplets removed
         - augmented_test_kg: Test KG with the transferred triplets added
     """
-    assert node_type in ["head", "tail"], "entity_type must be either 'head' or 'tail'"
+    assert node_type in ["head", "tail"], "node_type must be either 'head' or 'tail'"
     
     for edge_index in known_cartesian:
         # Find all entities in test set that participate in the cartesian relation
@@ -428,7 +428,7 @@ def clean_cartesians(kg_first: KnowledgeGraph, kg_second: KnowledgeGraph, known_
             kg_second_dictionnary = {
                 "heads": torch.cat([kg_second.head_indices, triplets_to_move[:, 0]]),
                 "tails": torch.cat([kg_second.tail_indices, triplets_to_move[:, 2]]),
-                "relations": torch.cat([kg_second.edge_indices, triplets_to_move[:, 1]]),
+                "edges": torch.cat([kg_second.edge_indices, triplets_to_move[:, 1]]),
             }
             
             kg_second = kg_second.__class__(

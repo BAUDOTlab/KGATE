@@ -120,7 +120,7 @@ class EdgeInference(torchkge_inference.RelationInference):
                                                                                         entities=False)
                 scores = decoder.inference_scoring_function(head_embeddings, tail_embeddings, candidates)
 
-                scores = filter_scores(scores, self.kg.graphindices, "rel", head_index, tail_index, None)
+                scores = filter_scores(scores, self.kg.graphindices, "edge", head_index, tail_index, None)
 
                 scores, indices = scores.sort(descending=True)
 

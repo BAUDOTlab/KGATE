@@ -75,19 +75,19 @@ class KnowledgeGraph(Dataset):
                    node_to_index is not None and \
                    edge_to_index is not None and \
                    triplet_types is not None and \
-                   node_type_to_index is not None, "If df is not given, `edgelist`, `triple_types` and `ent2ix`, `rel2ix` and `nt2ix` must be provided."
+                   node_type_to_index is not None, "If `dataframe` is not given, `graphindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided."
             self.triplet_count = graphindices.size(1)
         else:
             self.triplet_count = len(dataframe)
 
         if graphindices is not None:
-            assert graphindices.size(0) == 4, "The `edgelist` parameter must be a 2D tensor of size [4, num_triples]."
+            assert graphindices.size(0) == 4, "The `graphindices` parameter must be a 2D tensor of size [4, triplet_count]."
             self.graphindices = graphindices.long()
         else:
             self.graphindices = tensor([], dtype=torch.long)
 
         if removed_triplets is not None and removed_triplets.numel() > 0:
-            assert removed_triplets.size(0) == 4,  "The `removed_triples` parameter must be a 2D tensor of size [4, num_triples]."
+            assert removed_triplets.size(0) == 4,  "The `removed_triplets` parameter must be a 2D tensor of size [4, triplet_count]."
             self.removed_triplets = removed_triplets
         else:
             self.removed_triplets = tensor([], dtype=torch.long)
@@ -120,11 +120,11 @@ class KnowledgeGraph(Dataset):
 
         else:
             if metadata is not None:
-                mapping_dataframe = pd.merge(dataframe, metadata.add_prefix("from_"), how="left", left_on="from", right_on="from_id")
-                mapping_dataframe = pd.merge(mapping_dataframe, metadata.add_prefix("to_"), how="left", left_on="to", right_on="to_id", suffixes=(None, "_to"))
+                mapping_dataframe = pd.merge(dataframe, metadata.add_prefix("head_"), how="left", left_on="head", right_on="head_id")
+                mapping_dataframe = pd.merge(mapping_dataframe, metadata.add_prefix("tail_"), how="left", left_on="tail", right_on="tail_id", suffixes=(None, "_tail"))
                 mapping_dataframe.drop([i for i in mapping_dataframe.columns if "id" in i],axis=1, inplace=True)
 
-                dataframe_node_types = list(set(mapping_dataframe['from_type'].unique()).union(set(mapping_dataframe['to_type'].unique())))
+                dataframe_node_types = list(set(mapping_dataframe['head_type'].unique()).union(set(mapping_dataframe['tail_type'].unique())))
                 self.node_type_to_index = {node_type: i for i, node_type in enumerate(sorted(dataframe_node_types))}
                 self._identity = "id"
             else:
@@ -134,11 +134,11 @@ class KnowledgeGraph(Dataset):
             self.node_count = self.node_count
             self.node_types = torch.ones(self.node_count, dtype=torch.long).neg()
 
-            for edge_name, group in mapping_dataframe.groupby("rel"):
+            for edge_name, group in mapping_dataframe.groupby("edge"):
                 edge_index = self.edge_to_index[edge_name]
                 if metadata is not None:
-                    source_types = group["from_type"].unique()
-                    target_types = group["to_type"].unique()
+                    source_types = group["head_type"].unique()
+                    target_types = group["tail_type"].unique()
                 else:
                     source_types = target_types = ["Node"]
 
@@ -147,8 +147,8 @@ class KnowledgeGraph(Dataset):
                     for target_type in target_types:
                         if metadata is not None:
                             subset = group[
-                                (group["from_type"] == source_type) &
-                                (group["to_type"] == target_type)
+                                (group["head_type"] == source_type) &
+                                (group["tail_type"] == target_type)
                             ]
                         else:
                             subset = group
@@ -157,9 +157,9 @@ class KnowledgeGraph(Dataset):
                         if subset.empty: 
                             continue 
 
-                        source = subset["from"].map(self.node_to_index).values
+                        source = subset["head"].map(self.node_to_index).values
                         source = tensor(source).unsqueeze(0).long()
-                        target = subset["to"].map(self.node_to_index).values
+                        target = subset["tail"].map(self.node_to_index).values
                         target = tensor(target).unsqueeze(0).long()
 
                         triplets = torch.cat([
@@ -271,7 +271,7 @@ class KnowledgeGraph(Dataset):
         """
         if self.metadata is None:
             assert not set(["type","id"]).isdisjoint(list(metadata.columns)), f"The metadata dataframe must have at least the columns `type` and `id`, but found only {",".join(list(metadata.columns))}"
-            assert metadata.shape[0] == self.node_count, f"The number of rows in the metadata dataframe must match the number of entities in the graph, but found {metadata.shape[0]} rows for {self.node_count} entities."
+            assert metadata.shape[0] == self.node_count, f"The number of rows in the metadata dataframe must match the number of nodes in the graph, but found {metadata.shape[0]} rows for {self.node_count} nodes."
             self.metadata = metadata
         else:
             assert "id" in metadata.columns and metadata["id"] == self.metadata["id"], "The metadata dataframe must have an id column identical to the existing metadata."
@@ -279,7 +279,7 @@ class KnowledgeGraph(Dataset):
 
     def get_dataframe(self):
         """
-        Returns a Pandas DataFrame with columns ['from', 'to', 'rel'].
+        Returns a Pandas DataFrame with columns ['head', 'tail', 'edge'].
         """
         index_to_node = {value: key for key, value in self.node_to_index.items()}
         index_to_edge = {value: key for key, value in self.edge_to_index.items()}
@@ -287,18 +287,18 @@ class KnowledgeGraph(Dataset):
         dataframe = pd.DataFrame(cat((self.head_indices.view(1, -1),
                             self.tail_indices.view(1, -1),
                             self.edge_indices.view(1, -1))).transpose(0, 1).numpy(),
-                       columns=['from', 'to', 'rel'])
+                       columns=['head', 'tail', 'edge'])
 
-        dataframe['from'] = dataframe['from'].apply(lambda x: index_to_node[x])
-        dataframe['to'] = dataframe['to'].apply(lambda x: index_to_node[x])
-        dataframe['rel'] = dataframe['rel'].apply(lambda x: index_to_edge[x])
+        dataframe['head'] = dataframe['head'].apply(lambda x: index_to_node[x])
+        dataframe['tail'] = dataframe['tail'].apply(lambda x: index_to_node[x])
+        dataframe['edge'] = dataframe['edge'].apply(lambda x: index_to_edge[x])
 
         return dataframe
 
     def split_kg(self, split_proportions: Tuple[float,float,float]=(0.8,0.1,0.1), 
                  sizes: Tuple[int, int, int] | None=None) -> Tuple[Self, Self, Self]:
         if sizes is not None:
-            assert sum(sizes) == self.triplet_count, "The sum of provided sizes must match the number of triples."
+            assert sum(sizes) == self.triplet_count, "The sum of provided sizes must match the number of triplets."
             
             mask_train = cat([tensor([1] * sizes[1]),
                            tensor([0 * (sizes[1] + sizes[2])])
@@ -310,7 +310,7 @@ class KnowledgeGraph(Dataset):
             ])
             mask_test = ~(mask_train | mask_validation)
         else:
-            assert sum(split_proportions) == 1, "The sum of provided shares must be equal to 1."
+            assert sum(split_proportions) == 1, "The sum of provided shares (`split_proportions`) must be equal to 1."
             mask_train, mask_validation, mask_test = self.get_mask(split_proportions)
             
         return (
@@ -450,16 +450,16 @@ class KnowledgeGraph(Dataset):
         KnowledgeGraph
             A new instance of KnowledgeGraph with the updated triples.
         """
-        assert new_triplets.dim() == 2 and new_triplets.size(0) == 4, "new_triples must have shape [4, n]"
+        assert new_triplets.dim() == 2 and new_triplets.size(0) == 4, "new_triplets must have shape [4, n]"
 
         # Check that entities and relations exist in ent2ix and rel2ix
         max_node_index = max(new_triplets[0].max().item(), new_triplets[1].max().item())
         max_triplet_index = new_triplets[3].max().item()
 
         if max_node_index >= self.node_count:
-            raise ValueError(f"The maximum entity index ({max_node_index}) is superior to the number of entities ({self.node_count}).")
+            raise ValueError(f"The maximum node index ({max_node_index}) is superior to the number of nodes ({self.node_count}).")
         if max_triplet_index >= len(self.triplet_types):
-            raise ValueError(f"The maximum triple index ({max_triplet_index}) is superior to the number of relations ({len(self.triplet_types)}).")
+            raise ValueError(f"The maximum triplet index ({max_triplet_index}) is superior to the number of edges ({len(self.triplet_types)}).")
 
         # Concatenate new triples to existing ones
         updated_graphindices = cat([self.graphindices, new_triplets], dim=1)
@@ -510,7 +510,7 @@ class KnowledgeGraph(Dataset):
 
             # Check if the inverse relation already exists in the graph
             if edge_index not in self.edge_to_index.values():
-                logging.info(f"Relation {edge_index} not found in knowledge graph. Skipping...")
+                logging.info(f"Edge {edge_index} not found in knowledge graph. Skipping...")
                 continue
 
             edge_triplets = self.graphindices[:, self.graphindices[2] == edge_index]
@@ -603,20 +603,20 @@ class KnowledgeGraph(Dataset):
 
             # Logging duplicate information
             if len(pairs) - len(unique_triplets) > 0:
-                logging.info(f"{len(pairs) - len(unique_triplets)} duplicates found. Keeping {len(unique_triplets)} unique triplets for relation {edge_type_index}")
+                logging.info(f"{len(pairs) - len(unique_triplets)} duplicates found. Keeping {len(unique_triplets)} unique triplets for edge {edge_type_index}")
 
         # Return a new KnowledgeGraph instance with only unique triples retained
         return self.keep_triplets(indices_to_keep)
 
-    def get_pairs(self, edge_type_index: int, type:str="ht") -> Set[Tuple[Number, Number]]:
+    def get_pairs(self, edge_type_index: int, type:str="head_tail") -> Set[Tuple[Number, Number]]:
         mask = (self.edge_indices == edge_type_index)
 
-        if type == "ht":
+        if type == "head_tail":
             return set((i.item(), j.item()) for i, j in cat(
                 (self.head_indices[mask].view(-1, 1),
                 self.tail_indices[mask].view(-1, 1)), dim=1))
         else:
-            assert type == "th"
+            assert type == "tail_head"
             return set((j.item(), i.item()) for i, j in cat(
                 (self.head_indices[mask].view(-1, 1),
                 self.tail_indices[mask].view(-1, 1)), dim=1))
@@ -676,7 +676,7 @@ class KnowledgeGraph(Dataset):
             pair_dictionnary[edge_type_index] = set([(head_index.item(), tail_index.item()) for head_index, tail_index in pairs])
             reverse_pair_dictionnary[edge_type_index] = set([(tail_index.item(), head_index.item()) for head_index, tail_index in pairs])
 
-        logging.info("Finding duplicate relations")
+        logging.info("Finding duplicate edges")
 
         duplicates: List[Tuple[int, int]] = []
         reverse_duplicates: List[Tuple[int, int]] = []
@@ -697,8 +697,8 @@ class KnowledgeGraph(Dataset):
                 if duplicate_triplets_proportion_first_edge_type > theta_first_edge_type and duplicate_triplets_proportion_second_edge_type > theta_second_edge_type:
                     reverse_duplicates.append((first_edge_type, second_edge_type))
 
-        logging.info("Duplicate relations: {}".format(len(duplicates)))
-        logging.info("Reverse duplicate relations: "
+        logging.info("Duplicate edges: {}".format(len(duplicates)))
+        logging.info("Reverse duplicate edges: "
                 "{}\n".format(len(reverse_duplicates)))
 
         return duplicates, reverse_duplicates

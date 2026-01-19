@@ -131,11 +131,11 @@ class Architect(Model):
 
         set_random_seeds(self.config["seed"])
 
-        self.embedding_dimensions: int = self.config["model"]["emb_dim"]
-        self.edge_embedding_dimensions: int = self.config["model"]["rel_emb_dim"]
+        self.embedding_dimensions: int = self.config["model"]["embedding_dimensions"]
+        self.edge_embedding_dimensions: int = self.config["model"]["edge_embedding_dimensions"]
         if self.edge_embedding_dimensions == -1:
             self.edge_embedding_dimensions = self.embedding_dimensions
-        self.evaluation_batch_size: int = self.config["training"]["eval_batch_size"]
+        self.evaluation_batch_size: int = self.config["training"]["evaluation_batch_size"]
 
         if metadata is not None and not set(["id","type"]).issubset(metadata.keys()):
             raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
@@ -154,7 +154,7 @@ class Architect(Model):
                 raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
 
-        run_kg_preprocessing: bool = self.config["run_kg_preprocess"]
+        run_kg_preprocessing: bool = self.config["run_kg_preprocessing"]
 
         if run_kg_preprocessing:
             logging.info(f"Preparing KG...")
@@ -305,7 +305,7 @@ class Architect(Model):
         if margin == 0:
             margin = decoder_config["margin"]
         if filter_count == 0:
-            filter_count = decoder_config["n_filters"]
+            filter_count = decoder_config["filter_count"]
 
         # Translational models
         match decoder_name:
@@ -403,7 +403,7 @@ class Architect(Model):
         
         negative_sampler_config: dict = self.config["sampler"]
         negative_sampler_name: str = negative_sampler_config["name"]
-        negative_triplet_count: int = negative_sampler_config["n_neg"]
+        negative_triplet_count: int = negative_sampler_config["negative_triplet_count"]
 
         match negative_sampler_name:
             case "Positional":
@@ -543,7 +543,7 @@ class Architect(Model):
                         node_index = self.kg_train.node_to_index[node]
                         node_type_index = self.kg_train.node_types[node_index]
                         local_index = self.kg_train.global_to_local_indices[node_index]
-                        assert node_type_index == self.kg_train.node_type_to_index[node_type], f"The entity {node} is given as {node_type} but registered as {index_to_node_type[str(node_type_index)]} in the KG."
+                        assert node_type_index == self.kg_train.node_type_to_index[node_type], f"The node {node} is given as {node_type} but registered as {index_to_node_type[str(node_type_index)]} in the KG."
 
                         input_features[local_index] = tensor(current_attribute.loc[node], dtype=torch.float)
                     
@@ -563,7 +563,7 @@ class Architect(Model):
         logging.info("Initializing sampler...")
         self.sampler = self.sampler or self.initialize_negative_sampler()
 
-        logging.info("Initializing lr scheduler...")
+        logging.info("Initializing learning rate scheduler...")
         self.scheduler = self.scheduler or self.initialize_learning_rate_scheduler()
 
         logging.info("Initializing evaluator...")
@@ -600,7 +600,7 @@ class Architect(Model):
         self.max_epochs: int = train_config["max_epochs"]
         self.train_batch_size: int = train_config["train_batch_size"]
         self.patience: int = train_config["patience"]
-        self.eval_interval: int = train_config["eval_interval"]
+        self.eval_interval: int = train_config["evaluation_interval"]
         self.save_interval: int = train_config["save_interval"]
 
         match train_config["pretrained_embeddings"]:
@@ -660,8 +660,8 @@ class Architect(Model):
         trainer.add_event_handler(Events.COMPLETED, self.on_training_completed)
 
         to_save = {
-            "relations": self.edge_embeddings,
-            "entities": self.node_embeddings,
+            "edges": self.edge_embeddings,
+            "nodes": self.node_embeddings,
             "decoder": self.decoder,
             "optimizer": self.optimizer,
             "trainer": trainer,
@@ -725,7 +725,7 @@ class Architect(Model):
         if checkpoint_file is not None:
             if Path(checkpoint_file).is_file():
                 logging.info(f"Resuming training from checkpoint: {checkpoint_file}")
-                logging.info(f"rel_emb size : {self.edge_embeddings.weight.size()}")
+                logging.info(f"edge_embeddings size : {self.edge_embeddings.weight.size()}")
                 checkpoint = torch.load(checkpoint_file, weights_only=False)
                 Checkpoint.load_objects(to_load=to_save, checkpoint=checkpoint)
 
@@ -759,8 +759,8 @@ class Architect(Model):
 
         self.eval()
 
-        list_rel_1: List[str] = self.config["evaluation"]["made_directed_relations"]
-        list_rel_2: List[str] = self.config["evaluation"]["target_relations"]
+        list_rel_1: List[str] = self.config["evaluation"]["made_directed_edges"]
+        list_rel_2: List[str] = self.config["evaluation"]["target_edges"]
         thresholds: List[int] = self.config["evaluation"]["thresholds"]
         metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.yaml")
 
@@ -781,19 +781,19 @@ class Architect(Model):
 
         results = {
             "Global_metrics": global_metrics,
-            "made_directed_relations": {
+            "made_directed_edges": {
                 "Global_metrics": group_metrics_list_1,
                 "Individual_metrics": individual_metrics_list_1
             },
-            "target_relations": {
+            "target_edges": {
                 "Global_metrics": group_metrics_list_2,
                 "Individual_metrics": individual_metrics_list_2
             },
-            "remaining_relations": {
+            "remaining_edges": {
                 "Global_metrics": group_metrics_remaining,
                 "Individual_metrics": individual_metrics_remaining
             },
-            "target_relations_by_frequency": {}  
+            "target_edges_by_frequency": {}  
         }
 
         for i in range(len(list_rel_2)):
@@ -801,10 +801,10 @@ class Architect(Model):
             threshold: int = thresholds[i]
             frequent_indices, infrequent_indices = self.categorize_test_nodes(edge, threshold)
             frequent_metrics, infrequent_metrics = self.calculate_metrics_for_categories(frequent_indices, infrequent_indices)
-            logging.info(f"Metrics for frequent nodes (threshold={threshold}) in relation {edge}: {frequent_metrics}")
-            logging.info(f"Metrics for infrequent nodes (threshold={threshold}) in relation {edge}: {infrequent_metrics}")
+            logging.info(f"Metrics for frequent nodes (threshold={threshold}) in edge {edge}: {frequent_metrics}")
+            logging.info(f"Metrics for infrequent nodes (threshold={threshold}) in edge {edge}: {infrequent_metrics}")
 
-            results["target_relations_by_frequency"][edge] = {
+            results["target_edges_by_frequency"][edge] = {
                 "Frequent_metrics": frequent_metrics,
                 "Infrequent_metrics": infrequent_metrics,
                 "Threshold": threshold
@@ -844,7 +844,7 @@ class Architect(Model):
             predictions: pd.DataFrame
                 A DataFrame containing the prediction alongside their score."""
         if not sum([len(arr) > 0 for arr in [heads,edges,tails]]) == 2:
-            raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, relations or tails.")
+            raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, edges or tails.")
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -867,7 +867,7 @@ class Architect(Model):
         elif do_edges_inference:
             first_known_triplet_part = tensor([self.kg_train.node_to_index[head] for head in heads]).long()
             second_known_triplet_part = tensor([self.kg_train.node_to_index[tail] for tail in tails]).long()
-            missing_triplet_part = "rel"
+            missing_triplet_part = "edge"
             inference = EdgeInference(full_kg)
             
         predictions, scores = inference.evaluate(
@@ -907,12 +907,12 @@ class Architect(Model):
         checkpoint = torch.load(path, map_location=self.device, weights_only=False)
 
         # Check entity and relation dict size
-        assert len(checkpoint["relations"]["weight"]) == self.edge_count, f"Mismatch between the number of relations in the checkpoint ({len(checkpoint['relations']['weight'])}) and the current configuration ({self.edge_count})!"
+        assert len(checkpoint["edges"]["weight"]) == self.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint['eges']['weight'])}) and the current configuration ({self.edge_count})!"
 
         if isinstance(self.encoder, GNN):
-            assert len(checkpoint["entities"]) == len(self.kg_train.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({len(self.kg_train.node_type_to_index)})!"
+            assert len(checkpoint["nodes"]) == len(self.kg_train.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({len(self.kg_train.node_type_to_index)})!"
         else:
-            assert len(checkpoint["entities"]["weight"]) != self.node_count, f"Mismatch between the number of entities in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({self.node_count})!"
+            assert len(checkpoint["nodes"]["weight"]) != self.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint['entities'])}) and the current configuration ({self.node_count})!"
 
         if "encoder" in checkpoint:
             assert checkpoint["encoder"].keys() == self.encoder.state_dict().keys(), "Mismatch between the checkpoint convolution layers and the current configuration's."
@@ -939,10 +939,10 @@ class Architect(Model):
 
 
         self.node_embeddings = nn.ParameterList()
-        for node_type in checkpoint["entities"]:
-            self.node_embeddings.append(checkpoint["entities"][node_type].to(self.device))
+        for node_type in checkpoint["nodes"]:
+            self.node_embeddings.append(checkpoint["nodes"][node_type].to(self.device))
         
-        self.edge_embeddings.load_state_dict(checkpoint["relations"])
+        self.edge_embeddings.load_state_dict(checkpoint["edges"])
         self.decoder.load_state_dict(checkpoint["decoder"])
         if "encoder" in checkpoint:
             self.encoder.load_state_dict(checkpoint["encoder"])
@@ -1069,7 +1069,7 @@ class Architect(Model):
 
         decoder_embeddings = self.decoder.get_embeddings()
 
-        embedding_dictionnary = {"entities": node_embeddings, "relations": edge_embeddings,}
+        embedding_dictionnary = {"nodes": node_embeddings, "edges": edge_embeddings,}
 
         if decoder_embeddings is not None:
             embedding_dictionnary.update({"decoder": decoder_embeddings})
@@ -1084,7 +1084,7 @@ class Architect(Model):
         # we don't want that.
         if callable(normalize_function) and len(signature(normalize_function).parameters) > 1:
             normalized_embeddings = normalize_function(node_embeddings = self.node_embeddings, edge_embeddings = self.edge_embeddings)
-            assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the entity embedding and the relation embedding."
+            assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the node embedding and the edge embedding."
             self.node_embeddings, self.edge_embeddings = normalized_embeddings
             
         logging.debug(f"Normalized all embeddings")
@@ -1174,7 +1174,7 @@ class Architect(Model):
         """
         # Get the index of the specified relation in the training graph
         if edge_name not in self.kg_train.edge_to_index:
-            raise ValueError(f"The relation '{edge_name}' does not exist in the training knowledge graph.")
+            raise ValueError(f"The edge '{edge_name}' does not exist in the training knowledge graph.")
         edge_index = self.kg_train.edge_to_index[edge_name]
 
         # Count occurrences of nodes with the specified relation in the training set
@@ -1294,15 +1294,15 @@ class Architect(Model):
         return self.evaluator.accuracy(self.evaluation_batch_size, kg_test = kg_test)
 
     def run_data_leakage(self, attributes: Dict[str, pd.DataFrame] ={}):
-        logging.info("Preparing KG for DL evaluation pocedure...")
+        logging.info("Preparing KG for data leakage evaluation pocedure...")
         data_leakage_config = self.config["data_leakage"]
 
         kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test])
 
-        for edge in data_leakage_config["permuted_relations"]:
+        for edge in data_leakage_config["permuted_edges"]:
             if edge not in self.kg_train.edge_to_index:
-                raise ValueError(f"Relation name {edge} was not found in the knowledge graph.")
-            logging.info(f"Permutting tails of relation {edge}")
+                raise ValueError(f"Edge name {edge} was not found in the knowledge graph.")
+            logging.info(f"Permutting tails of edge {edge}")
             self.kg_train = permute_tails(self.kg_train, edge)
 
         self.kg_train, self.kg_validation, self.kg_test = kg.split_kg(split_proportions=self.config["preprocessing"]["split"])

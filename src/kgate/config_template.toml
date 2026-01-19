@@ -23,9 +23,9 @@ remove_duplicate_triplets = true
 
 # If undirected relations are found, will make them directed by creating a reverse relation
 make_directed = true
-make_directed_relations = []
+make_directed_edges = []
 
-flag_near_duplicate_relations = true
+flag_near_duplicate_edges = true
 
 # Remove all flagged relations from the train set
 clean_train_set = true

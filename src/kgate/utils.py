@@ -163,7 +163,7 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGrap
             proportions[edge_index] = {
                 "train": train_count[edge_index].item() / total_counts[edge_index].item(),
                 "test": test_count[edge_index].item() / total_counts[edge_index].item(),
-                "val": validation_count[edge_index].item() / total_counts[edge_index].item()
+                "validation": validation_count[edge_index].item() / total_counts[edge_index].item()
             }
 
     return proportions
@@ -196,25 +196,25 @@ def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tu
     """
     duplicate_count = 0
     for first_edge_type, second_edge_type in duplicates:
-        head_tail_train = kg1.get_pairs(second_edge_type, type="ht")
-        head_tail_test = kg2.get_pairs(first_edge_type, type="ht")
+        head_tail_train = kg1.get_pairs(second_edge_type, type="head_tail")
+        head_tail_test = kg2.get_pairs(first_edge_type, type="head_tail")
 
         duplicate_count += len(head_tail_test.intersection(head_tail_train))
 
-        head_tail_train = kg1.get_pairs(first_edge_type, type="ht")
-        head_tail_test = kg2.get_pairs(second_edge_type, type="ht")
+        head_tail_train = kg1.get_pairs(first_edge_type, type="head_tail")
+        head_tail_test = kg2.get_pairs(second_edge_type, type="head_tail")
 
         duplicate_count += len(head_tail_test.intersection(head_tail_train))
 
     reverse_duplicate_count = 0
     for first_edge_type, second_edge_type in reverse_duplicates:
-        tail_head_train = kg1.get_pairs(second_edge_type, type="th")
-        head_tail_test = kg2.get_pairs(first_edge_type, type="ht")
+        tail_head_train = kg1.get_pairs(second_edge_type, type="tail_head")
+        head_tail_test = kg2.get_pairs(first_edge_type, type="head_tail")
 
         reverse_duplicate_count += len(head_tail_test.intersection(tail_head_train))
 
-        tail_head_train = kg1.get_pairs(first_edge_type, type="th")
-        head_tail_test = kg2.get_pairs(second_edge_type, type="ht")
+        tail_head_train = kg1.get_pairs(first_edge_type, type="tail_head")
+        head_tail_test = kg2.get_pairs(second_edge_type, type="head_tail")
 
         reverse_duplicate_count += len(head_tail_test.intersection(tail_head_train))
 
@@ -222,8 +222,8 @@ def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tu
 
 def find_best_model(dir: Path):
     return max(
-        (filename for filename in os.listdir(dir) if filename.startswith("best_model_checkpoint_val_metrics=") and filename.endswith(".pt")),
-        key=lambda filename: float(filename.split("val_metrics=")[1].rstrip(".pt")),
+        (filename for filename in os.listdir(dir) if filename.startswith("best_model_checkpoint_validation_metrics=") and filename.endswith(".pt")),
+        key=lambda filename: float(filename.split("validation_metrics=")[1].rstrip(".pt")),
         default=None
     )
     
@@ -270,7 +270,7 @@ def plot_learning_curves(train_metrics_file: Path, output_directory: Path, valid
     plt.legend()
     plt.savefig(output_directory.joinpath("validation_metric_curve.png"))
 
-def filter_scores(scores: Tensor, graphindices: Tensor, missing: Literal["head","tail","rel"], first_index: Tensor, second_index: Tensor, true_index: Tensor | None):
+def filter_scores(scores: Tensor, graphindices: Tensor, missing: Literal["head","tail","edge"], first_index: Tensor, second_index: Tensor, true_index: Tensor | None):
     """
     Filter a score tensor to ignore the score attributed to true entity or relation except the ones that are being predicted.
     Parameters
@@ -297,7 +297,7 @@ def filter_scores(scores: Tensor, graphindices: Tensor, missing: Literal["head",
     batch_size = scores.shape[0]
     filtered_scores = scores.clone()
 
-    if missing == "rel":
+    if missing == "edge":
         first_mask = torch.isin(graphindices[0], first_index)
         second_mask = torch.isin(graphindices[1], second_index)
         missing_index = 2
@@ -339,10 +339,10 @@ def merge_kg(kg_list: List[KnowledgeGraph], complete_graphindices: bool = False)
     first_kg = kg_list[0]
     for kg in kg_list:
         kg.clean()
-    assert all(first_kg.node_to_index == kg.node_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different ent2ix."
-    assert all(first_kg.edge_to_index == kg.edge_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different rel2ix."
-    assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different nt2ix."
-    assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triple_types."
+    assert all(first_kg.node_to_index == kg.node_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_to_index (ent2ix)."
+    assert all(first_kg.edge_to_index == kg.edge_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different edge_to_index (rel2ix)."
+    assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_type_to_index (nt2ix)."
+    assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triplet_types."
 
     new_graphindices = cat([kg.graphindices for kg in kg_list], dim=1)
     if complete_graphindices:
