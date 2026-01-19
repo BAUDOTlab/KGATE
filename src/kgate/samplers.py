@@ -60,10 +60,10 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
     Also fixes GPU/CPU incompatibility bug.
     See original implementation here : https://github.com/torchkge-team/torchkge/blob/3adb9344dec974fc29d158025c014b0dcb48118c/torchkge/sampling.py#L330C52-L330C53
     """
-    def __init__(self, kg:KnowledgeGraph):
+    def __init__(self, kg: KnowledgeGraph):
         super().__init__(kg)
-        self.index_to_node_type = {value: key for key,value in self.kg.nt2ix.items()}
-        self.edge_types = {value: key for key,value in self.kg.rel2ix.items()}
+        self.index_to_node_type = {value: key for key, value in self.kg.node_type_to_index.items()}
+        self.edge_types = {value: key for key,value in self.kg.edge_to_index.items()}
 
     def corrupt_batch(self, batch: Tensor, _: int = 0) -> Tensor:
         """For each true triplet, produce a corrupted one not different from
@@ -108,9 +108,9 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
         assert possible_tail_count.shape[0] == batch_size - corrupted_head_count
 
         # Choose a rank of an entity in the list of possible entities
-        chosen_heads = (possible_head_count.float() * rand((corrupted_head_count,), device=device)).floor().long()
+        chosen_head = (possible_head_count.float() * rand((corrupted_head_count,), device=device)).floor().long()
 
-        chosen_tails = (possible_tail_count.float() * rand((batch_size - corrupted_head_count,), device=device)).floor().long()
+        chosen_tail = (possible_tail_count.float() * rand((batch_size - corrupted_head_count,), device=device)).floor().long()
 
         corrupted_head_batch = batch[:,mask == 1]
         corrupted_heads = []
@@ -123,7 +123,7 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
                 # choose one entity at random
                 corrupted_head_index = randint(low=0, high=self.n_ent, size=(1,)).item()
             else:
-                corrupted_head_index = choices[chosen_heads[i].item()]
+                corrupted_head_index = choices[chosen_head[i].item()]
             corrupted_heads.append(corrupted_head_index)
             # If we don't use metadata, there is only 1 node type
             if len(self.kg.nt2ix) > 1:
@@ -157,7 +157,7 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
                 # choose one entity at random
                 corrupted_tail_index = randint(low=0, high=self.n_ent, size=(1,)).item()
             else:
-                corrupted_tail_index = choices[chosen_tails[i].item()]
+                corrupted_tail_index = choices[chosen_tail[i].item()]
             # If we don't use metadata, there is only 1 node type
             if len(self.kg.nt2ix) > 1:
                 head_index = corrupted_tail_batch[0][i].item()
@@ -179,10 +179,10 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
         return negative_triplets_batch
 
 class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
-    def __init__(self, kg, negative_triplet_count=1):
+    def __init__(self, kg: KnowledgeGraph, negative_triplet_count=1):
         super().__init__(kg, n_neg=negative_triplet_count)
-        self.index_to_node_type = {value: key for key,value in self.kg.nt2ix.items()}
-        self.edge_types = {value: key for key,value in self.kg.rel2ix.items()}
+        self.index_to_node_type = {value: key for key,value in self.kg.node_type_to_index.items()}
+        self.edge_types = {value: key for key,value in self.kg.edge_to_index.items()}
     
     def corrupt_batch(self, batch: torch.Tensor, negative_triplet_count=None) -> Tensor:
         negative_triplet_count = negative_triplet_count or self.n_neg
@@ -205,7 +205,7 @@ class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
                                        device=device)
         
         # If we don't use metadata, there is only 1 node type
-        if len(self.kg.nt2ix) == 1:
+        if len(self.kg.node_type_to_index) == 1:
             return torch.stack([negative_triplet_heads, negative_triplet_tails, negative_triplet_edges, batch[3].repeat(negative_triplet_count)], dim=0).long().to(device)
         
         corrupted_triplets = []
@@ -240,8 +240,8 @@ class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
 class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
     def __init__(self, kg, negative_triplet_count=1):
         super().__init__(kg, n_neg=negative_triplet_count)
-        self.index_to_node_type = {value: key for key,value in self.kg.nt2ix.items()}
-        self.edge_types = {value: key for key,value in self.kg.rel2ix.items()}
+        self.index_to_node_type = {value: key for key,value in self.kg.node_type_to_index.items()}
+        self.edge_types = {value: key for key,value in self.kg.edge_to_index.items()}
 
     def corrupt_batch(self, batch: torch.LongTensor, negative_triplet_count=None):
         negative_triplet_count = negative_triplet_count or self.n_neg
@@ -264,7 +264,7 @@ class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
                                        device=device)
         
         # If we don't use metadata, there is only 1 node type
-        if len(self.kg.nt2ix) == 1:
+        if len(self.kg.node_type_to_index) == 1:
             return torch.stack([negative_triplet_heads, negative_triplet_tails, negative_triplet_edges.repeat(negative_triplet_count), batch[3].repeat(negative_triplet_count)], dim=0).long().to(device)
         
         corrupted_triplets = []

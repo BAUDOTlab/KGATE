@@ -302,9 +302,9 @@ def filter_scores(scores: Tensor, graphindices: Tensor, missing: Literal["head",
         second_mask = torch.isin(graphindices[1], second_index)
         missing_index = 2
     else:
-        e_idx = 0 if missing == "tail" else 1
-        missing_index = 1 - e_idx
-        first_mask = torch.isin(graphindices[e_idx], first_index)
+        node_index = 0 if missing == "tail" else 1
+        missing_index = 1 - node_index
+        first_mask = torch.isin(graphindices[node_index], first_index)
         second_mask = torch.isin(graphindices[2], second_index)
 
     for i in range(batch_size):
@@ -322,7 +322,7 @@ def filter_scores(scores: Tensor, graphindices: Tensor, missing: Literal["head",
 
     return filtered_scores
 
-def merge_kg(kg_list: List[KnowledgeGraph], complete_edgelist: bool = False) -> KnowledgeGraph:
+def merge_kg(kg_list: List[KnowledgeGraph], complete_graphindices: bool = False) -> KnowledgeGraph:
     """Merge multiple KnowledgeGraph objects into a unique one.
     
     Parameters
@@ -344,13 +344,13 @@ def merge_kg(kg_list: List[KnowledgeGraph], complete_edgelist: bool = False) -> 
     assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different nt2ix."
     assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triple_types."
 
-    new_edgelist = cat([kg.graphindices for kg in kg_list], dim=1)
-    if complete_edgelist:
-        removed_edgelist = cat([kg.removed_triplets for kg in kg_list], dim=1)
-        new_edgelist = cat([new_edgelist, removed_edgelist], dim=1)
+    new_graphindices = cat([kg.graphindices for kg in kg_list], dim=1)
+    if complete_graphindices:
+        removed_graphindices = cat([kg.removed_triplets for kg in kg_list], dim=1)
+        new_graphindices = cat([new_graphindices, removed_graphindices], dim=1)
     
     return first_kg.__class__(
-        graphindices=new_edgelist,
+        graphindices=new_graphindices,
         node_to_index=first_kg.node_to_index,
         edge_to_index=first_kg.edge_to_index,
         node_type_to_index=first_kg.node_type_to_index,
