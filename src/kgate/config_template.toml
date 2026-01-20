@@ -1,11 +1,11 @@
 seed = 42
 
-# Path to the KG in CSV format with at least columns named from, to and rel
+# Path to the KG in CSV format with at least columns named 'heads', 'tails' and 'edges'
 kg_csv = "" 
 # Path to the KG in pickle format. If both csv and pkl are set, the pickle will have priority.
 kg_pkl = ""
 
-# Path to the CSV mapping entities to their metadata, with at least columns id (must be the same as the KG id) and type
+# Path to the CSV mapping nodes to their metadata, with at least columns 'id' (must be the same as the KG id) and 'type'
 metadata_csv = ""
 
 # Path to the analysis output directory
@@ -21,19 +21,19 @@ run_kg_preprocessing = true
 
 remove_duplicate_triplets = true
 
-# If undirected relations are found, will make them directed by creating a reverse relation
+# If undirected edges are found, will make them directed by creating a reverse edge
 make_directed = true
 make_directed_edges = []
 
 flag_near_duplicate_edges = true
 
-# Remove all flagged relations from the train set
+# Remove all flagged edges from the train set
 clean_train_set = true
 
-# How the KG should be split between train, val and test.
+# How the KG should be split between 'train', 'validation' and 'test'.
 # First value is train set proportion, second is validation set,
 # and third value is test set.
-split = [0.8,0.1,0.1] 
+split = [0.8, 0.1, 0.1] 
 
 [preprocessing.params]
 theta = 0.8
@@ -41,20 +41,20 @@ theta_first_edge_type = 0.8
 theta_second_edge_type = 0.8
 
 [model]
-# The dimension of the embedding vectors for entities and relations.
-# Some models need to have the same dimensions for entity and relation vectors.
-# The default value for rel_emb_dim, -1, will set it to be equal to emb_dim
+# The dimension of the embedding vectors for nodes and edges.
+# Some models need to have the same dimensions for node and edge vectors.
+# The default value for edge_embedding_dimensions, -1, will set it to be equal to embedding_dimensions
 embedding_dimensions = 256
 edge_embedding_dimensions = -1
 
 [model.encoder]
-# The encoder transforms the entities and relations into embedding vectors
+# The encoder transforms the nodes and edges into embedding vectors
 # of size model.emb_dim and model.rel_emb_dim respectively.
 # Read the documentation for more information about the different encoders.
-# Supported options are :
-# - Default : a simple lookup table, similar to a random initialization.
-# - GCN : Graph Convolutional Network proposed by Kipf & Welling 2017
-# - GAT : Graph Attention Network improvment proposed by Brody et al. 2021
+# Supported options are:
+# - Default: a simple lookup table, similar to a random initialization.
+# - GCN: Graph Convolutional Network proposed by Kipf & Welling 2017
+# - GAT: Graph Attention Network improvment proposed by Brody et al. 2021
 name = "Default" #Lookup table
 gnn_layer_number = 1
 
@@ -63,12 +63,12 @@ gnn_layer_number = 1
 # The decoder learns from the embedding to reconstruct the graph.
 # Read the documentation for more information about the different decoders.
 # Supported options are :
-# - TransE : Translational model proposed by Bordes et al. 2013
-# - TransH : Translational model proposed by Wang et al. 2014
-# - TransR : Translational model proposed by Lin et al. 2015
-# - TransD : Translational model proposed by Ji et al. 2015
-# - RESCAL : Bilinear model proposed by Nickel et al. 2011
-# - DistMult : Bilinear model proposed by Yang et al. 2014
+# - TransE: Translational model proposed by Bordes et al. 2013
+# - TransH: Translational model proposed by Wang et al. 2014
+# - TransR: Translational model proposed by Lin et al. 2015
+# - TransD: Translational model proposed by Ji et al. 2015
+# - RESCAL: Bilinear model proposed by Nickel et al. 2011
+# - DistMult: Bilinear model proposed by Yang et al. 2014
 name = "TransE"
 
 # Translational decoders use a Margin Loss, which needs a margin parameter.
@@ -82,12 +82,12 @@ dissimilarity = "L2"
 filter_count = 3
 
 [sampler]
-# Type of negative sampler to generate false triple during the training.
-# Supported options are :
-# - Positional : proposed by Socher et al. 2011, replaces either the head or tail of a triplet by another entity in the same place with the same relation.
-# - Uniform : proposed by Bordes et al. 2013, replaces either the head or tail by another entity at random following an uniform distribution.
-# - Bernoulli : proposed by Wang et al. 2014, replaces either the head or tail using probabilities taking relations into account.
-# - Mixed : proposed by Brière et al. 2025, combines the three negative samplers above, sampling n_neg negative samples for each triplet.
+# Type of negative sampler to generate false triplets during the training.
+# Supported options are:
+# - Positional: proposed by Socher et al. 2011, replaces either the head or tail of a triplet by another node in the same place with the same edge.
+# - Uniform: proposed by Bordes et al. 2013, replaces either the head or tail by another node at random following an uniform distribution.
+# - Bernoulli: proposed by Wang et al. 2014, replaces either the head or tail using probabilities taking edges into account.
+# - Mixed: proposed by Brière et al. 2025, combines the three negative samplers above, sampling negative_triplet_count negative samples for each triplet.
 name = "Positional"
 
 # Number of negative samples to generate for each triplet.
@@ -96,7 +96,7 @@ negative_triplet_count = 1
 [optimizer]
 # Pytorch optimizer to guide training. 
 # See Pytorch documentation for their differences.
-# Supported options are :
+# Supported options are:
 # - Adam
 # - SGD
 # - RMSprop
@@ -109,55 +109,55 @@ weight_decay = 0.001
 # This is the initial learning rate, which might be modified by a learning rate scheduler (see below)
 learning_rate = 0.001
 
-[lr_scheduler]
+[learning_rate_scheduler]
 # The Learning Rate Scheduler is an optional module that alter the learning rate throughout the training.
 # They follow different patterns following the type of LR scheduler and parameters.
-# lr_scheduler.params are the parameters passed to the LR scheduler. The name of the parameters must be the same
+# learning_rate_scheduler.params are the parameters passed to the LR scheduler. The name of the parameters must be the same
 # as those found in Pytorch's torch.optim.lr_scheduler documentation.
 # Supported options are:
-# - Empty string : no LR scheduler, the learning rate will stay the same during the entirety of the training.
-# - StepLR : applies a multiplicative decay to the learning rate each step
-# - MultiStepLR : same as StepLR, but at specified epochs (milestones) instead of each step.
-# - ExponentialLR : Decays the learning rate by gamma every epoch
-# - CosineAnnealingLR : Reduce the learning rate using a cosine function, between a maximum and minimum LR
-# - ConsineAnnealingWarmRestarts : Same as CosineAnnealingLR, except that the learning rate returns sometimes to the maximum
-# - ReduceLROnPlateau : Reduces the learning rate when the validation metric stopped improving.
-# - LambdaLR : Set the learning rate after each epoch according to a given function. To use this LR scheduler,
-#              see the documentation for Architect.initialize_scheduler() and give the function name as argument.
-# - OneCycleLR : Increase the learning rate to a maximum learning rate before reducing it to a minimum.
-# - CyclicLR : Cycles the learning rate between two boundaries with a constant frequency.
+# - Empty string: No LR scheduler, the learning rate will stay the same during the entirety of the training.
+# - StepLR: Applies a multiplicative decay to the learning rate each step
+# - MultiStepLR: Same as StepLR, but at specified epochs (milestones) instead of each step.
+# - ExponentialLR: Decays the learning rate by gamma every epoch
+# - CosineAnnealingLR: Reduces the learning rate using a cosine function, between a maximum and minimum LR
+# - ConsineAnnealingWarmRestarts: Same as CosineAnnealingLR, except that the learning rate returns sometimes to the maximum
+# - ReduceLROnPlateau: Reduces the learning rate when the validation metric stopped improving.
+# - LambdaLR: Sets the learning rate after each epoch according to a given function. To use this LR scheduler,
+#             see the documentation for Architect.initialize_scheduler() and give the function name as argument.
+# - OneCycleLR: Increases the learning rate to a maximum learning rate before reducing it to a minimum.
+# - CyclicLR: Cycles the learning rate between two boundaries with a constant frequency.
 type = ""
 [learning_rate_scheduler.params]
 
 
 [training]
-# Maximum number of training epochs. The training may stop before, but will at most do this much epochs.
+# Maximum number of training epochs. The training may stop before, but will at most do this many epochs.
 max_epochs = 100
 
 # Number of epochs with no significant loss improvement before the training is stopped early.
 patience = 20
 
-# Size of a training batch. The higher it is, the faster the training go, within reasons.
+# Size of a training batch. The higher it is, the faster the training goes, within reasons.
 train_batch_size = 2048
 
-# Number of epochs between an evaluation of the model on the validation set.
+# Number of epochs between two evaluations of the model on the validation set.
 evaluation_interval = 10
 
 # Size of an evaluation and inference batch. Must be smaller than the training batch, as evaluation takes a lot more memory.
 evaluation_batch_size = 32
 
-# Number of epochs between which a checkpoint is saved to retain the training state of a model.
+# Number of epochs after which a checkpoint is saved to retain the training state of a model.
 save_interval = 5
 
-# Either the absolute path toward a pretrained checkpoint, or "auto" to let KGATE find automatically the latest
+# Either the absolute path towards a pretrained checkpoint, or "auto" to let KGATE find automatically the latest
 # Embeddings in the output_directory.
 pretrained_embeddings = "auto"
     
 [evaluation]
-# Type of evaluation to be run on the validation and testing set.
-# Supported options are :
-# - Link Prediction : Predict plausible relations between two nodes of the graph
-# - Triplet Classification : Discriminate between true and false triplets
+# Types of evaluation to be run on the validation and testing set.
+# Supported options are:
+# - Link Prediction: Predicts plausible edges between two nodes of the graph
+# - Triplet Classification: Discriminates between true and false triplets
 objective = "Link Prediction"
 
 made_directed_edges = []
@@ -167,6 +167,6 @@ thresholds = [10]
 [data_leakage]
 # Set of options to run data leakage examination
 
-# The name of relations to permute so that each tail of these relations 
-# is replaced by a different, random tail from the KG
+# The name of edges to permute so that each tail of these edges 
+# is replaced with a different and random tail from the KG
 permuted_edges = []

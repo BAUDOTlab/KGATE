@@ -18,12 +18,20 @@ from torchkge.models import ConvKBModel
 # Code adapted from torchKGE's implementation
 # 
 class ConvKB(ConvKBModel):
-    def __init__(self, embedding_dimensions:int, filter_count: int, node_count: int, edge_count: int):
+    def __init__(self,
+                embedding_dimensions:int,
+                filter_count: int,
+                node_count: int,
+                edge_count: int):
         super().__init__(embedding_dimensions, filter_count, node_count, edge_count)
         del self.ent_emb
         del self.rel_emb
         
-    def score(self, *, head_embeddings: Tensor, edge_embeddings: Tensor, tail_embeddings: Tensor, **_):
+    def score(self, *,
+            head_embeddings: Tensor,
+            edge_embeddings: Tensor,
+            tail_embeddings: Tensor,
+            **_):
         batch_size = head_embeddings.size(0)
 
         head_score = head_embeddings.view(batch_size, 1, -1)
@@ -38,25 +46,25 @@ class ConvKB(ConvKBModel):
         return None
     
     def inference_prepare_candidates(self, 
-                                     head_indices: Tensor,
-                                     tail_indices: Tensor, 
-                                     edge_indices: Tensor, 
-                                     node_embeddings: Tensor,
-                                     edge_embeddings: nn.Embedding,
-                                     node_inference: bool=True):
+                                    head_indices: Tensor,
+                                    tail_indices: Tensor, 
+                                    edge_indices: Tensor, 
+                                    node_embeddings: Tensor,
+                                    edge_embeddings: nn.Embedding,
+                                    node_inference: bool=True):
 
         batch_size = head_indices.shape[0]
 
-        # Get head, tail and relation embeddings
+        # Get head, tail and edge embeddings
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
         edge_embeddings_inference = edge_embeddings(edge_indices)
 
         if node_inference:
-            # Prepare candidates for every entities
+            # Prepare candidates for every node
             candidates = node_embeddings
         else:
-            # Prepare candidates for every relations
+            # Prepare candidates for every edge
             candidates = edge_embeddings.weight.data
         
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
