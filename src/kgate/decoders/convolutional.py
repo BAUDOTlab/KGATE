@@ -51,7 +51,7 @@ class ConvKB(ConvKBModel):
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor,
                                     edge_embeddings: nn.Embedding,
-                                    node_inference: bool=True):
+                                    node_inference: bool = True):
 
         batch_size = head_indices.shape[0]
 

@@ -14,7 +14,7 @@ from torch import Tensor
 
 from torch_geometric.nn import HeteroConv, GATv2Conv, SAGEConv, Node2Vec
 
-logging_level = logging.INFO# if config["common"]['verbose'] else logging.WARNING
+logging_level = logging.INFO
 logging.basicConfig(
     level=logging_level,  
     format="%(asctime)s - %(levelname)s - %(message)s" 
@@ -26,7 +26,9 @@ class DefaultEncoder(nn.Module):
         self.deep = False
 
 class GNN(nn.Module):
-    def __init__(self, edge_types: List[Tuple[str,str,str]], add_self_loops: bool =True, aggregation:str="sum"):
+    def __init__(self,
+                edge_types: List[Tuple[str, str, str]],
+                aggregation: str = "sum"):
         super().__init__()
         self.deep = True
         self.device = "cuda"
@@ -43,64 +45,82 @@ class GNN(nn.Module):
         self.edge_types = edge_types
 
 
-    def forward(self, x_dict: Dict[str, Tensor], edge_index_dict: Dict[Tuple[str, str, str,], Tensor]):
-        # x_dict = {node_type: embedding.weight.to(self.device) for node_type, embedding in zip(mappings.hetero_node_type, node_embeddings)}
-        # edge_index_dict = {key: edge_index.to(self.device) for key, edge_index in mappings.data.edge_index_dict.items()}  # Move edges
+    def forward(self,
+                x_dict: Dict[str, Tensor],
+                edge_index_dict: Dict[Tuple[str, str, str,], Tensor]):
 
-        for i,conv in enumerate(self.convolutions):
-            x_dict = conv(x_dict=x_dict, edge_index_dict=edge_index_dict)
+        for _, conv in enumerate(self.convolutions):
+            x_dict = conv(x_dict = x_dict, edge_index_dict = edge_index_dict)
             x_dict = {key: F.leaky_relu(x) for key, x in x_dict.items()}
 
         return x_dict
     
 
 class GATEncoder(GNN):
-    def __init__(self, edge_types: List[Tuple[str,str,str]], embedding_dimensions: int, gat_layer_count: int=2, aggregation: str="sum", device: str="cuda", add_self_loops: bool = True):
+    def __init__(self,
+                edge_types: List[Tuple[str, str, str]],
+                embedding_dimensions: int,
+                gat_layer_count: int = 2,
+                aggregation: str = "sum",
+                device: str = "cuda",
+                add_self_loops: bool = True):
         super().__init__(edge_types, add_self_loops, aggregation)
         self.layer_count = gat_layer_count
 
-        for layer in range(gat_layer_count):
+        for _ in range(gat_layer_count):
             # Add_self_loops doesn"t work on heterogeneous graphs as per https://github.com/pyg-team/pytorch_geometric/issues/8121#issuecomment-1751129825  
             convolution = HeteroConv(
-            {edge_type: GATv2Conv(in_channels=-1, out_channels=embedding_dimensions, add_self_loops=False) for edge_type in self.edge_types},
-                aggr=self.aggregation
+            {edge_type: GATv2Conv(  in_channels = -1,
+                                    out_channels = embedding_dimensions,
+                                    add_self_loops = False)
+                for edge_type in self.edge_types},
+            aggr=self.aggregation
             ).to(device)
             self.convolutions.append(convolution)
         
 class GCNEncoder(GNN):
-    def __init__(self, edge_types: List[Tuple[str,str,str]], embedding_dimensions: int, gcn_layer_count: int=2, aggregation: str="sum", device: str="cuda", add_self_loops: bool=True):
+    def __init__(self,
+                edge_types: List[Tuple[str, str, str]],
+                embedding_dimensions: int,
+                gcn_layer_count: int = 2,
+                aggregation: str = "sum",
+                device: str = "cuda",
+                add_self_loops: bool = True):
         super().__init__(edge_types, add_self_loops, aggregation)
         self.layer_count = gcn_layer_count
         
-        for layer in range(gcn_layer_count):
+        for _ in range(gcn_layer_count):
             convolution = HeteroConv(
-            {edge_type: SAGEConv(in_channels=-1, out_channels=embedding_dimensions, aggregation="mean") for edge_type in self.edge_types},
-                aggr=self.aggregation
+            {edge_type: SAGEConv(   in_channels = -1,
+                                    out_channels = embedding_dimensions,
+                                    aggregation = "mean")
+                for edge_type in self.edge_types},
+            aggr=self.aggregation
             ).to(device)
             self.convolutions.append(convolution)
 
 class Node2VecEncoder:
     def __init__(self, 
-                 edge_index: Tensor, 
-                 embedding_dimensions: int, 
-                 walk_length: int, 
-                 context_size:int, 
-                 device: torch.device, 
-                 output_directory: Path, 
-                 **node2vec_kwargs):
+                edge_index: Tensor, 
+                embedding_dimensions: int, 
+                walk_length: int, 
+                context_size: int, 
+                device: torch.device, 
+                output_directory: Path, 
+                **node2vec_kwargs):
         self.device = device
         self.output_directory = output_directory
         self.model = Node2Vec(
-            edge_index=edge_index,
-            embedding_dim=embedding_dimensions,
-            walk_length=walk_length,
-            context_size=context_size,
+            edge_index = edge_index,
+            embedding_dim = embedding_dimensions,
+            walk_length = walk_length,
+            context_size = context_size,
             **node2vec_kwargs
         ).to(device)
 
         workers_count = 4 if sys.platform == 'linux' else 0
-        self.loader = self.model.loader(batch_size=128, shuffle=True, num_workers=workers_count)
-        self.optimizer = torch.optim.SparseAdam(list(self.model.parameters()), lr=0.01)
+        self.loader = self.model.loader(batch_size = 128, shuffle = True, num_workers = workers_count)
+        self.optimizer = torch.optim.SparseAdam(list(self.model.parameters()), lr = 0.01)
     
     def generate_embeddings(self):
         for epoch in range(1,101):
