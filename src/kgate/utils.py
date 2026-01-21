@@ -28,6 +28,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s" 
 )
 
+
 def parse_config(config_path: str, config_dictionnary: dict) -> dict:
     if config_path != "" and not Path(config_path).exists():
         raise FileNotFoundError(f"Configuration file {config_path} not found.")
@@ -43,7 +44,7 @@ def parse_config(config_path: str, config_dictionnary: dict) -> dict:
             config = tomllib.load(f)
     
     # Make the final configuration, using priority orders:
-    # 1. Inline configuration (config_dict)
+    # 1. Inline configuration (config_dictionnary)
     # 2. Configuration file (config)
     # 3. Default configuration (default_config)
     # If a default value is None, consider it required and not defaultable
@@ -51,7 +52,13 @@ def parse_config(config_path: str, config_dictionnary: dict) -> dict:
 
     return config
 
-def set_config_key(key: str, default: dict, config: dict | None = None, inline: dict | None = None) -> str | int | list | dict:
+
+def set_config_key( key: str,
+                    default: dict,
+                    config: dict | None = None,
+                    inline: dict | None = None
+                    ) -> str | int | list | dict:
+    
     if inline is not None and key in inline:
         inline_value = inline[key]
     else:
@@ -87,8 +94,11 @@ def set_config_key(key: str, default: dict, config: dict | None = None, inline: 
     else:
         return inline_value
 
-def save_config(config:dict, filename:Path | None = None):
-    """Saves the Architect configuration as a TOML file.
+
+def save_config(config: dict,
+                filename: Path | None = None):
+    """
+    Saves the Architect configuration as a TOML file.
     
     If no filename is given, it will be created as config.output_directory/kgate_config.toml.
     
@@ -97,15 +107,21 @@ def save_config(config:dict, filename:Path | None = None):
     config: dict
         The parsed config as a python dictionnary.
     filename: Path (optional)
-        The complete path to the configuration file. If one already exists, it will be overwritten."""
+        The complete path to the configuration file. If one already exists, it will be overwritten.
         
+    """
     config_path = filename or Path(config["output_directory"]).joinpath("kgate_config.toml")
 
     with open(config_path, "wb") as f:
         tomli_w.dump(config,f)
 
-def load_knowledge_graph(pickle_filename: Path) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
-    """Load the knowledge graph from pickle files."""
+
+def load_knowledge_graph(pickle_filename: Path
+                        ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
+    """
+    Load the knowledge graph from pickle files.
+    
+    """
     logging.info(f"Will not run the preparation step. Using KG stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:
         kg_train = pickle.load(file)
@@ -113,21 +129,32 @@ def load_knowledge_graph(pickle_filename: Path) -> Tuple[KnowledgeGraph, Knowled
         kg_test = pickle.load(file)
     return kg_train, kg_validation, kg_test
 
+
 def set_random_seeds(seed: int) -> None:
-    """Set random seeds for reproducibility."""
+    """
+    Set random seeds for reproducibility.
+    
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
+
 def extract_node_type(node_name: str):
-    """Extracts the node type from the node name, based on the string before the first underscore."""
+    """
+    Extracts the node type from the node name, based on the string before the first underscore.
+    
+    """
     return node_name.split("_")[0]
 
-def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGraph, kg_validation: KnowledgeGraph):
+
+def compute_triplet_proportions(kg_train: KnowledgeGraph,
+                                kg_test: KnowledgeGraph,
+                                kg_validation: KnowledgeGraph):
     """
-    Computes the proportion of triples for each relation in each of the KnowledgeGraphs
-    (train, test, val) relative to the total number of triples for that relation.
+    Computes the proportion of triplets for each edge in each of the KnowledgeGraphs
+    (train, test, val) relative to the total number of triplets for that edge.
 
     Parameters
     ----------
@@ -135,26 +162,31 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGrap
         The training KnowledgeGraph instance.
     kg_test: KnowledgeGraph
         The test KnowledgeGraph instance.
-    kg_val: KnowledgeGraph
+    kg_validation: KnowledgeGraph
         The validation KnowledgeGraph instance.
 
     Returns
     -------
-    dict
-        A dictionary where keys are relation identifiers and values are sub-dictionaries
-        with the respective proportions of each relation in kg_train, kg_test, and kg_val.
+    proportions: dict
+        A dictionary where keys are edge identifiers and values are sub-dictionaries
+        with the respective proportions of each edge in kg_train, kg_test, and kg_validation.
+        
     """
-     
-    # Concatenate relations from all KGs
-    all_edges = torch.cat((kg_train.triplets, kg_test.triplets, kg_validation.triplets))
+    # Concatenate edges from all KGs
+    all_edges = torch.cat(( kg_train.triplets,
+                            kg_test.triplets,
+                            kg_validation.triplets))
 
-    # Compute the number of triples for all relations
+    # Compute the number of triplets for all edges
     total_counts = torch.bincount(all_edges)
 
-    # Compute occurences of each relations
-    train_count = torch.bincount(kg_train.triplets, minlength=len(total_counts))
-    test_count = torch.bincount(kg_test.triplets, minlength=len(total_counts))
-    validation_count = torch.bincount(kg_validation.triplets, minlength=len(total_counts))
+    # Compute occurences of each edge
+    train_count = torch.bincount(kg_train.triplets,
+                                minlength = len(total_counts))
+    test_count = torch.bincount(kg_test.triplets,
+                                minlength = len(total_counts))
+    validation_count = torch.bincount(kg_validation.triplets,
+                                    minlength = len(total_counts))
 
     # Compute proportions for each KG
     proportions = {}
@@ -168,13 +200,29 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph, kg_test: KnowledgeGrap
 
     return proportions
 
-def concat_kgs(kg_train: KnowledgeGraph, kg_validation: KnowledgeGraph, kg_test: KnowledgeGraph):
-    head = cat((kg_train.head_indices, kg_validation.head_indices, kg_test.head_indices))
-    tail = cat((kg_train.tail_indices, kg_validation.tail_indices, kg_test.tail_indices))
-    edge = cat((kg_train.edge_indices, kg_validation.edge_indices, kg_test.edge_indices))
+def concat_kgs( kg_train: KnowledgeGraph,
+                kg_validation: KnowledgeGraph,
+                kg_test: KnowledgeGraph):
+    
+    head = cat((kg_train.head_indices,
+                kg_validation.head_indices,
+                kg_test.head_indices))
+    
+    tail = cat((kg_train.tail_indices,
+                kg_validation.tail_indices,
+                kg_test.tail_indices))
+    
+    edge = cat((kg_train.edge_indices,
+                kg_validation.edge_indices,
+                kg_test.edge_indices))
+    
     return head, tail, edge
 
-def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tuple[int, int]], reverse_duplicates: List[Tuple[int, int]]):
+
+def count_triplets( kg1: KnowledgeGraph,
+                    kg2: KnowledgeGraph,
+                    duplicates: List[Tuple[int, int]],
+                    reverse_duplicates: List[Tuple[int, int]]):
     """
     Parameters
     ----------
@@ -182,117 +230,145 @@ def count_triplets(kg1: KnowledgeGraph, kg2: KnowledgeGraph, duplicates: List[Tu
     kg2: torchkge.data_structures.KnowledgeGraph
     duplicates: list
         List returned by torchkge.utils.data_redundancy.duplicates.
-    rev_duplicates: list
+    reverse_duplicates: list
         List returned by torchkge.utils.data_redundancy.duplicates.
 
     Returns
     -------
-    n_duplicates: int
+    duplicate_count: int
         Number of triplets in kg2 that have their duplicate triplet
         in kg1
-    n_rev_duplicates: int
+    reverse_duplicate_count: int
         Number of triplets in kg2 that have their reverse duplicate
         triplet in kg1.
+        
     """
     duplicate_count = 0
     for first_edge_type, second_edge_type in duplicates:
-        head_tail_train = kg1.get_pairs(second_edge_type, type="head_tail")
-        head_tail_test = kg2.get_pairs(first_edge_type, type="head_tail")
+        head_tail_train = kg1.get_pairs(second_edge_type, type = "head_tail")
+        head_tail_test = kg2.get_pairs(first_edge_type, type = "head_tail")
 
         duplicate_count += len(head_tail_test.intersection(head_tail_train))
 
-        head_tail_train = kg1.get_pairs(first_edge_type, type="head_tail")
-        head_tail_test = kg2.get_pairs(second_edge_type, type="head_tail")
+        head_tail_train = kg1.get_pairs(first_edge_type, type = "head_tail")
+        head_tail_test = kg2.get_pairs(second_edge_type, type = "head_tail")
 
         duplicate_count += len(head_tail_test.intersection(head_tail_train))
 
     reverse_duplicate_count = 0
     for first_edge_type, second_edge_type in reverse_duplicates:
-        tail_head_train = kg1.get_pairs(second_edge_type, type="tail_head")
-        head_tail_test = kg2.get_pairs(first_edge_type, type="head_tail")
+        tail_head_train = kg1.get_pairs(second_edge_type, type = "tail_head")
+        head_tail_test = kg2.get_pairs(first_edge_type, type = "head_tail")
 
         reverse_duplicate_count += len(head_tail_test.intersection(tail_head_train))
 
-        tail_head_train = kg1.get_pairs(first_edge_type, type="tail_head")
-        head_tail_test = kg2.get_pairs(second_edge_type, type="head_tail")
+        tail_head_train = kg1.get_pairs(first_edge_type, type = "tail_head")
+        head_tail_test = kg2.get_pairs(second_edge_type, type = "head_tail")
 
         reverse_duplicate_count += len(head_tail_test.intersection(tail_head_train))
 
     return duplicate_count, reverse_duplicate_count
 
+
 def find_best_model(dir: Path):
+    
     return max(
-        (filename for filename in os.listdir(dir) if filename.startswith("best_model_checkpoint_validation_metrics=") and filename.endswith(".pt")),
-        key=lambda filename: float(filename.split("validation_metrics=")[1].rstrip(".pt")),
-        default=None
+        (filename
+        for filename
+        in os.listdir(dir)
+        if filename.startswith("best_model_checkpoint_validation_metrics=")
+        and filename.endswith(".pt")),
+        
+        key = lambda filename: float(filename.split("validation_metrics=")[1].rstrip(".pt")),
+        
+        default = None
     )
     
-def initialize_embedding(embedding_count: int, embedding_dimensions: int, device:str="cpu"):
-    embedding = nn.Embedding(embedding_count, embedding_dimensions, device=device)
+    
+def initialize_embedding(embedding_count: int,
+                        embedding_dimensions: int,
+                        device:str = "cpu"):
+    
+    embedding = nn.Embedding(embedding_count, embedding_dimensions, device = device)
     nn.init.xavier_uniform_(embedding.weight.data)
+    
     return embedding
 
+
 def read_train_metrics(train_metrics_file: Path):
+    
     dataframe = pd.read_csv(train_metrics_file)
 
     dataframe = dataframe[~dataframe["Epoch"].astype(str).str.contains("CHECKPOINT RESTART")]
 
     dataframe["Epoch"] = dataframe["Epoch"].astype(int)
-    dataframe = dataframe.sort_values(by="Epoch")
+    dataframe = dataframe.sort_values(by = "Epoch")
 
-    dataframe = dataframe.drop_duplicates(subset=["Epoch"], keep="last")
+    dataframe = dataframe.drop_duplicates(subset = ["Epoch"], keep = "last")
 
     return dataframe
 
-def plot_learning_curves(train_metrics_file: Path, output_directory: Path, validation_metric_value: str):
+
+def plot_learning_curves(train_metrics_file: Path,
+                        output_directory: Path,
+                        validation_metric_value: str):
+    
     output_directory = Path(output_directory)
     dataframe = read_train_metrics(train_metrics_file)
-    dataframe["Training Loss"] = pd.to_numeric(dataframe["Training Loss"], errors="coerce")
-    dataframe[f"Validation {validation_metric_value}"] = pd.to_numeric(dataframe[f"Validation {validation_metric_value}"], errors="coerce")
+    dataframe["Training Loss"] = pd.to_numeric(dataframe["Training Loss"], errors = "coerce")
+    dataframe[f"Validation {validation_metric_value}"] = pd.to_numeric(dataframe[f"Validation {validation_metric_value}"], errors = "coerce")
     
-    plt.figure(figsize=(12, 5))
+    plt.figure(figsize = (12, 5))
 
-    # Plot pour la perte d"entraînement
+    # Plot for training loss
     plt.subplot(1, 2, 1)
-    plt.plot(dataframe["Epoch"], dataframe["Training Loss"], label="Training Loss")
+    plt.plot(dataframe["Epoch"], dataframe["Training Loss"], label = "Training Loss")
     plt.xlabel("Epoch")
     plt.ylabel("Training Loss")
     plt.title("Training Loss over Epochs")
     plt.legend()
     plt.savefig(output_directory.joinpath("training_loss_curve.png"))
 
-    # Plot pour le MRR de validation
+    # Plot for validation MRR
     plt.subplot(1, 2, 2)
-    plt.plot(dataframe["Epoch"], dataframe[f"Validation {validation_metric_value}"], label=f"Validation {validation_metric_value}")
+    plt.plot(dataframe["Epoch"], dataframe[f"Validation {validation_metric_value}"], label = f"Validation {validation_metric_value}")
     plt.xlabel("Epoch")
     plt.ylabel(f"Validation {validation_metric_value}")
     plt.title("Validation Metric over Epochs")
     plt.legend()
     plt.savefig(output_directory.joinpath("validation_metric_curve.png"))
 
-def filter_scores(scores: Tensor, graphindices: Tensor, missing: Literal["head","tail","edge"], first_index: Tensor, second_index: Tensor, true_index: Tensor | None):
+
+def filter_scores(  scores: Tensor,
+                    graphindices: Tensor,
+                    missing: Literal["head", "tail", "edge"],
+                    first_index: Tensor,
+                    second_index: Tensor,
+                    true_index: Tensor | None):
     """
-    Filter a score tensor to ignore the score attributed to true entity or relation except the ones that are being predicted.
+    Filter a score tensor to ignore the score attributed to true node or edge except the ones that are being predicted.
+    
     Parameters
     ----------
     scores: Tensor
-        Tensor of shape [batch_size,n] where n is the number of entities of relation, depending on what is filtered.
-    edgelist: Tensor
-        Tensor of shape [4, n_triples] containing every true triple in the KG.
-    missing: "head", "tail" or "rel"
-        The part of the triple that is currently being predicted.
-    idx_1: Tensor
-        Tensor containing the index of the heads (if missing is "rel" or "tails") or tails (if missing is "head") that are part of the triple being predicted.
-    idx_2: Tensor
-        Tensor containing the index of the tails (if missing is "rel") or the relations (if missing is "head" or "tails") that are part of the triple being predicted.
-    true_idx: Tensor, optional
-        Tensor containing the index of the entities or relations currently being predicted.
+        Tensor of shape [batch_size, n] where n is the number of nodes or edges, depending on what is filtered.
+    graphindices: Tensor
+        Tensor of shape [4, triplet_count] containing every true triplet in the KG.
+    missing: "head", "tail" or "edge"
+        The part of the triplet that is currently being predicted.
+    first_index: Tensor
+        Tensor containing the index of the heads (if missing is "edge" or "tails") or tails (if missing is "head") that are part of the triplet being predicted.
+    second_index: Tensor
+        Tensor containing the index of the tails (if missing is "edge") or the edges (if missing is "head" or "tails") that are part of the triplet being predicted.
+    true_index: Tensor, optional
+        Tensor containing the index of the nodes or edges currently being predicted.
         If omitted, every true index will be filtered out.
 
     Returns
     -------
-    filt_scores: Tensor
-        Tensor of shape [batch_size, n] with -Inf values for all true entity/relation index except the ones being predicted.
+    filtered_scores: Tensor
+        Tensor of shape [batch_size, n] with -Inf values for all true node/edge index except the ones being predicted.
+        
     """
     batch_size = scores.shape[0]
     filtered_scores = scores.clone()
@@ -309,7 +385,7 @@ def filter_scores(scores: Tensor, graphindices: Tensor, missing: Literal["head",
 
     for i in range(batch_size):
         if true_index is None:
-            true_mask = torch.zeros(graphindices.size(1), dtype=torch.bool)
+            true_mask = torch.zeros(graphindices.size(1), dtype = torch.bool)
         else:
             true_mask = torch.isin(graphindices[missing_index], true_index[i])
 
@@ -322,20 +398,26 @@ def filter_scores(scores: Tensor, graphindices: Tensor, missing: Literal["head",
 
     return filtered_scores
 
-def merge_kg(kg_list: List[KnowledgeGraph], complete_graphindices: bool = False) -> KnowledgeGraph:
-    """Merge multiple KnowledgeGraph objects into a unique one.
+
+def merge_kg(kg_list: List[KnowledgeGraph],
+            complete_graphindices: bool = False
+            ) -> KnowledgeGraph:
+    """
+    Merge multiple KnowledgeGraph objects into a unique one.
     
     Parameters
     ----------
     kg_list: List[Tensor]
         The list of all KG to be merged
-    complete_edgelist: bool, default to False
-        Whether or not the removed_triples tensor should be integrated into the final KG's edgelist.
+    complete_graphindices: bool, default to False
+        Whether or not the removed_triplets tensor should be integrated into the final KG's graphindices.
     
     Returns
     -------
     KnowledgeGraph
-        The merged KnowledgeGraph object."""
+        The merged KnowledgeGraph object.
+        
+    """
     first_kg = kg_list[0]
     for kg in kg_list:
         kg.clean()
@@ -344,140 +426,15 @@ def merge_kg(kg_list: List[KnowledgeGraph], complete_graphindices: bool = False)
     assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_type_to_index (nt2ix)."
     assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triplet_types."
 
-    new_graphindices = cat([kg.graphindices for kg in kg_list], dim=1)
+    new_graphindices = cat([kg.graphindices for kg in kg_list], dim = 1)
     if complete_graphindices:
-        removed_graphindices = cat([kg.removed_triplets for kg in kg_list], dim=1)
-        new_graphindices = cat([new_graphindices, removed_graphindices], dim=1)
+        removed_graphindices = cat([kg.removed_triplets for kg in kg_list], dim = 1)
+        new_graphindices = cat([new_graphindices, removed_graphindices], dim = 1)
     
     return first_kg.__class__(
-        graphindices=new_graphindices,
-        node_to_index=first_kg.node_to_index,
-        edge_to_index=first_kg.edge_to_index,
-        node_type_to_index=first_kg.node_type_to_index,
-        triplet_types=first_kg.triplet_types
+        graphindices = new_graphindices,
+        node_to_index = first_kg.node_to_index,
+        edge_to_index = first_kg.edge_to_index,
+        node_type_to_index = first_kg.node_type_to_index,
+        triplet_types = first_kg.triplet_types
     )
-
-class HeteroMappings():
-    def __init__(self, kg: KnowledgeGraph, metadata:pd.DataFrame | None):
-        dataframe = kg.get_dataframe()
-        
-        self.data = HeteroData()
-        
-        # Dictionary to store mappings
-        self.df_to_hetero = {}
-        self.hetero_to_df = {}
-        
-        self.df_to_kg = {}
-        self.kg_to_df = {}
-        
-        self.kg_to_hetero_tmp = {}
-        self.hetero_to_kg = []
-        self.hetero_node_type = []
-
-        if metadata is not None:
-            # 1. Parse node types and IDs
-            dataframe = pd.merge(dataframe, metadata.add_prefix("from_"), how="left", left_on="from", right_on="from_id")
-            dataframe = pd.merge(dataframe, metadata.add_prefix("to_"), how="left", left_on="to", right_on="to_id", suffixes=(None, "_to"))
-            dataframe.drop([i for i in dataframe.columns if "id" in i],axis=1, inplace=True)
-
-            # 2. Identify all unique node types
-            node_types = pd.unique(dataframe[["from_type", "to_type"]].values.ravel("K"))
-        else:
-            node_types = ["Node"]
-        # 3. Create mappings for node IDs by type.
-        node_dict = {}
-        kg_to_nt = torch.zeros(kg.node_count, dtype=torch.int64)
-        kg_to_het = torch.zeros(kg.node_count, dtype=torch.int64)
-        
-        for i, ntype in enumerate(node_types):
-            # Extract all unique identifiers for each type
-            if metadata is not None:
-                nodes = pd.concat([
-                    dataframe[dataframe["from_type"] == ntype]["from"],
-                    dataframe[dataframe["to_type"] == ntype]["to"]
-                ]).unique()
-            else:
-                nodes = pd.concat([dataframe["from"], dataframe["to"]], ignore_index=True).unique()
-
-            node_dict[ntype] = {node: i for i, node in enumerate(nodes)}   
-            
-            # Create correspondings for this type of node (DataFrame - HeteroData)
-            self.df_to_hetero[ntype] = node_dict[ntype]  # Mapping DataFrame -> HeteroData
-            self.hetero_to_df[ntype] = {v: k for k, v in node_dict[ntype].items()}  # Mapping HeteroData -> DataFrame
-            
-            # Correspondings between DataFrame and KnowledgeGraph (use kg_train.ent2ix)
-            self.df_to_kg[ntype] = {node: kg.node_to_index[node] for node in nodes}  # DataFrame -> KG
-            self.kg_to_df[ntype] = {v: k for k, v in self.df_to_kg[ntype].items()}  # KG -> DataFrame
-            
-            # Mapping KG -> HeteroData via DataFrame
-            self.kg_to_hetero_tmp[ntype] = {self.df_to_kg[ntype][k]: self.df_to_hetero[ntype][k] for k in node_dict[ntype].keys()}
-            self.hetero_to_kg.append(torch.tensor([k for k in self.kg_to_hetero_tmp[ntype].keys()]))  # Inverted (HeteroData -> KG)
-            self.hetero_node_type.append(ntype)
-            
-            # Add node types associated to each ID of the KG
-            for kg_id, het_id in self.kg_to_hetero_tmp[ntype].items():
-                kg_to_nt[kg_id] = i
-                kg_to_het[kg_id] = het_id
-
-            # Define the number of nodes for this type in HeteroData
-            self.data[ntype].num_nodes = len(node_dict[ntype])
-
-        self.kg_to_node_type = kg_to_nt
-        self.kg_to_hetero = kg_to_het
-
-        self.relations = []
-        # 4. Build edge_index for each relation type
-        for rel, group in dataframe.groupby("rel"):
-            self.relations.append(rel)
-            # Identify source and target node type for this group
-            if metadata is not None:
-                src_types = group["from_type"].unique()
-                tgt_types = group["to_type"].unique()
-            else:
-                src_types = ["Node"]
-                tgt_types = ["Node"]
-            
-            for src_type in src_types:
-                for tgt_type in tgt_types:
-                    if metadata is not None:
-                        subset = group[
-                            (group["from_type"] == src_type) &
-                            (group["to_type"] == tgt_type)
-                        ]
-                    else:
-                        subset = group
-                    
-                    if subset.empty:
-                        continue  # Pass if there are no edges in this group
-                    
-                    # Map node identifiers to HeteroData indices
-                    src = subset["from"].map(node_dict[src_type]).values
-                    tgt = subset["to"].map(node_dict[tgt_type]).values
-                    
-                    # Create edge_index tensor
-                    edge_index = torch.tensor(np.array([src, tgt]), dtype=torch.long)
-
-                    edge_type = (src_type, rel, tgt_type)
-                    self.data[edge_type].edge_index = edge_index
-
-    def state_dict(self):
-        return {
-            "df_to_hetero": self.df_to_hetero,
-            "hetero_to_df": self.hetero_to_df,
-            "df_to_kg": self.df_to_kg,
-            "kg_to_df": self.kg_to_df,
-            "kg_to_hetero": self.kg_to_hetero,
-            "hetero_to_kg": self.hetero_to_kg,
-            "kg_to_node_type": self.kg_to_node_type,
-            "data": self.data
-        }
-
-    def load_state_dict(self, state_dict):
-        self.df_to_hetero = state_dict["df_to_hetero"]
-        self.hetero_to_df = state_dict["hetero_to_df"]
-        self.df_to_kg = state_dict["df_to_kg"]
-        self.kg_to_df = state_dict["kg_to_df"]
-        self.kg_to_hetero = state_dict["kg_to_hetero"]
-        self.hetero_to_kg = state_dict["hetero_to_kg"]
-        self.kg_to_node_type = state_dict["kg_to_node_type"]
-        self.data = state_dict["data"]
