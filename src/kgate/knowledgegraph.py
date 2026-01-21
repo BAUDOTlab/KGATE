@@ -698,12 +698,6 @@ class KnowledgeGraph(Dataset):
 
         Parameters
         ----------
-        kg_tr: torchkge.data_structures.KnowledgeGraph
-            Train set
-        kg_val: torchkge.data_structures.KnowledgeGraph
-            Validation set
-        kg_te: torchkge.data_structures.KnowledgeGraph
-            Test set
         theta_first_edge_type: float
             First threshold (see paper).
         theta_second_edge_type: float
