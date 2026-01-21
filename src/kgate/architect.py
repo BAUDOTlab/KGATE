@@ -16,6 +16,7 @@ from collections.abc import Callable
 
 import pandas as pd
 import numpy as np
+import tomli_w
 
 from torchkge import KnowledgeGraph
 from torchkge.models import Model
@@ -759,61 +760,47 @@ class Architect(Model):
 
         self.eval()
 
-        list_rel_1: List[str] = self.config["evaluation"]["made_directed_relations"]
-        list_rel_2: List[str] = self.config["evaluation"]["target_relations"]
-        thresholds: List[int] = self.config["evaluation"]["thresholds"]
+        target_edges: List[str] = self.config["evaluation"]["target_edges"]
         metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.yaml")
 
-        all_relations: Set[Any] = set(self.kg_test.rel2ix.keys())
-        remaining_relations = all_relations - set(list_rel_1) - set(list_rel_2)
-        remaining_relations = list(remaining_relations)
+        target_edges_result = {}
 
-        total_metrics_sum_list_1, fact_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_relations(
-            self.kg_test, list_rel_1)
-        total_metrics_sum_list_2, fact_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_relations(
-            self.kg_test, list_rel_2)
+        all_edges: Set[Any] = set(self.kg_test.rel2ix.keys())
+        remaining_edges = all_edges - set(target_edges)
+        remaining_edges = list(remaining_edges)
+        
+        if len(remaining_edges) != len(all_edges):
+            metrics_sum_target_edges, triple_count_target_edges, individual_metrics_target_edges, group_metrics_target_edges = self.calculate_metrics_for_relations(
+                self.kg_test, target_edges)
+            
+            target_edges_result = {
+                "target_relations": {
+                    "Global_metrics": group_metrics_target_edges,
+                    "Individual_metrics": individual_metrics_target_edges
+                },
+            }
+
         total_metrics_sum_remaining, fact_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
             self.kg_test, remaining_relations)
 
-        global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (fact_count_list_1 + fact_count_list_2 + fact_count_remaining)
+        global_metrics = (total_metrics_sum_list_2 + total_metrics_sum_remaining) / (triple_count_target_edges + fact_count_remaining)
 
         logging.info(f"Final Test metrics with best model: {global_metrics}")
 
         results = {
             "Global_metrics": global_metrics,
-            "made_directed_relations": {
-                "Global_metrics": group_metrics_list_1,
-                "Individual_metrics": individual_metrics_list_1
-            },
-            "target_relations": {
-                "Global_metrics": group_metrics_list_2,
-                "Individual_metrics": individual_metrics_list_2
-            },
+            **target_edges_result, # if there is no target edges, don't add the block
             "remaining_relations": {
                 "Global_metrics": group_metrics_remaining,
                 "Individual_metrics": individual_metrics_remaining
             },
             "target_relations_by_frequency": {}  
         }
-
-        for i in range(len(list_rel_2)):
-            relation: str = list_rel_2[i]
-            threshold: int = thresholds[i]
-            frequent_indices, infrequent_indices = self.categorize_test_nodes(relation, threshold)
-            frequent_metrics, infrequent_metrics = self.calculate_metrics_for_categories(frequent_indices, infrequent_indices)
-            logging.info(f"Metrics for frequent nodes (threshold={threshold}) in relation {relation}: {frequent_metrics}")
-            logging.info(f"Metrics for infrequent nodes (threshold={threshold}) in relation {relation}: {infrequent_metrics}")
-
-            results["target_relations_by_frequency"][relation] = {
-                "Frequent_metrics": frequent_metrics,
-                "Infrequent_metrics": infrequent_metrics,
-                "Threshold": threshold
-            }
                 
         self.test_results = results
         
         with open(metrics_file, "w") as file:
-            yaml.dump(results, file, default_flow_style=False, sort_keys=False)
+            tomli_w.dump(results, file)
 
         logging.info(f"Evaluation results stored in {metrics_file}")
 

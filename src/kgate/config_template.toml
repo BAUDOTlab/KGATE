@@ -160,9 +160,7 @@ pretrained_embeddings = "auto"
 # - Triplet Classification : Discriminate between true and false triplets
 objective = "Link Prediction"
 
-made_directed_relations = []
-target_relations = [] 
-thresholds = [10]
+target_edges = []
 
 [data_leakage]
 # Set of options to run data leakage examination
