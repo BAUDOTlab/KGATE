@@ -166,7 +166,7 @@ class RESCAL(RESCALModel):
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
-        -------            
+        -------
         head_embeddings: torch.Tensor
             Head node embeddings.
         tail_embeddings: torch.Tensor
