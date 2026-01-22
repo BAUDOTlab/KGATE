@@ -87,7 +87,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
                 kg: KnowledgeGraph,
                 node_embeddings: nn.ParameterList,
                 edge_embeddings: nn.Embedding,
-                verbose: bool=True):
+                verbose: bool = True):
         """
         Run the Link Prediction evaluation.
 

@@ -29,7 +29,7 @@ class RESCAL(RESCALModel):
     TODO
 
     Arguments
-    ----------
+    ---------
     embedding_dimensions: int
         Dimensions of embeddings.
     node_count: int
@@ -38,13 +38,13 @@ class RESCAL(RESCALModel):
         Number of edges in the knowledge graph.
         
     Attributes
-    -------
+    ----------
     edge_embeddings_matrix: TODO.type
         TODO.What_that_variable_is_or_does
-    n_rel: int
-        Number of edges in the knowledge graph. Equivalent to the `edge_count` variables.
     emb_dim: TODO.type
         Dimensions of embeddings. Equivalent to the `embedding_dimensions` variables.
+    n_rel: int
+        Number of edges in the knowledge graph. Equivalent to the `edge_count` variables.
     TODO.inherited_attributes
     
     """
@@ -57,7 +57,8 @@ class RESCAL(RESCALModel):
         self.edge_embeddings_matrix = initialize_embedding(self.n_rel, self.emb_dim * self.emb_dim)
 
 
-    def score(  self, *, 
+    def score(  self,
+                *, 
                 head_embeddings: Tensor, 
                 tail_embeddings: Tensor, 
                 edge_indices: Tensor, 
@@ -67,7 +68,7 @@ class RESCAL(RESCALModel):
         TODO.What_the_function_does_about_globally
 
         Arguments
-        ----------
+        ---------
         head_embeddings: torch.Tensor
             Embeddings of the head nodes in the knowledge graph.
         tail_embeddings: torch.Tensor
@@ -151,7 +152,7 @@ class RESCAL(RESCALModel):
         more details on the API.
 
         Arguments
-        ----------
+        ---------
         head_indices: torch.Tensor
             The indices of the head nodes (from KG).
         tail_indices: torch.Tensor
@@ -162,7 +163,7 @@ class RESCAL(RESCALModel):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding
             Unused.
-        node_inference: bool
+        node_inference: bool, default to True
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -204,7 +205,7 @@ class DistMult(DistMultModel):
     TODO
 
     Arguments
-    ----------
+    ---------
     embedding_dimensions: int
         Dimensions of embeddings.
     node_count: int
@@ -213,7 +214,7 @@ class DistMult(DistMultModel):
         Number of edges in the knowledge graph.
 
     Attributes
-    -------
+    ----------
     TODO.inherited_attributes
     
     """
@@ -228,15 +229,15 @@ class DistMult(DistMultModel):
     
     def score(self, *,
             head_embeddings: Tensor,
-            edge_embeddings: Tensor,
             tail_embeddings: Tensor,
+            edge_embeddings: Tensor,
             edge_indices: Tensor,
             **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
 
         Arguments
-        ----------
+        ---------
         head_embeddings: torch.Tensor
             Embeddings of the head nodes in the knowledge graph.
         tail_embeddings: torch.Tensor
@@ -303,7 +304,7 @@ class DistMult(DistMultModel):
         `inference_scoring_function` method.
 
         Arguments
-        ----------
+        ---------
         head_indices: torch.Tensor
             The indices of the head nodes (from KG).
         tail_indices: torch.Tensor
@@ -314,7 +315,7 @@ class DistMult(DistMultModel):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding
             TODO.What_that_argument_is_or_does
-        node_inference: bool
+        node_inference: bool, default to True
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -358,7 +359,7 @@ class ComplEx(ComplExModel):
     TODO
 
     Arguments
-    ----------
+    ---------
     embedding_dimensions: int
         Dimensions of embeddings.
     node_count: int
@@ -367,7 +368,7 @@ class ComplEx(ComplExModel):
         Number of edges in the knowledge graph.
         
     Attributes
-    -------
+    ----------
     TODO.inherited_attributes
     
     """
@@ -386,14 +387,14 @@ class ComplEx(ComplExModel):
 
     def score(self, *,
             head_embeddings: Tensor,
-            edge_embeddings: Tensor,
             tail_embeddings: Tensor,
+            edge_embeddings: Tensor,
             **_):
         """
         TODO.What_the_function_does_about_globally
 
         Arguments
-        ----------
+        ---------
         head_embeddings: torch.Tensor
             Embeddings of the head nodes in the knowledge graph.
         tail_embeddings: torch.Tensor
@@ -409,8 +410,8 @@ class ComplEx(ComplExModel):
         
         """        
         real_head_embedddings, imaginary_head_embeddings = tensor_split(head_embeddings, 2, dim=1)
-        real_edge_embedddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim=1)
         real_tail_embedddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim=1)
+        real_edge_embedddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim=1)
         
         return (real_head_embedddings * (real_edge_embedddings * real_tail_embedddings + imaginary_edge_embeddings * imaginary_tail_embeddings) + 
                 imaginary_head_embeddings * (real_edge_embedddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embedddings)).sum(dim=1)
@@ -448,7 +449,7 @@ class ComplEx(ComplExModel):
         TODO
 
         Arguments
-        ----------
+        ---------
         head_indices: torch.Tensor
             The indices of the head nodes (from KG).
         tail_indices: torch.Tensor
@@ -459,7 +460,7 @@ class ComplEx(ComplExModel):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding
             TODO.What_that_argument_is_or_does
-        node_inference: bool
+        node_inference: bool, default to True
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -477,8 +478,8 @@ class ComplEx(ComplExModel):
         batch_size = head_indices.shape[0]
 
         real_head_embeddings, imaginary_head_embeddings = tensor_split(node_embeddings[head_indices], 2, dim=1)
-        real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings(edge_indices), 2, dim=1)
         real_tail_embeddings, imaginary_tail_embeddings = tensor_split(node_embeddings[tail_indices], 2, dim=1)
+        real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings(edge_indices), 2, dim=1)
 
         if node_inference:
             real_candidates, imaginary_candidates = tensor_split(node_embeddings, 2, dim=1)

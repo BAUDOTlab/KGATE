@@ -26,7 +26,7 @@ class ConvKB(ConvKBModel):
     TODO
 
     Arguments
-    ----------
+    ---------
     embedding_dimensions: int
         Dimensions of embeddings.
     filter_count: int
@@ -37,7 +37,7 @@ class ConvKB(ConvKBModel):
         Number of edges in the knowledge graph.
 
     Attributes
-    -------
+    ----------
     TODO.inherited_attributes
     
     """
@@ -50,25 +50,24 @@ class ConvKB(ConvKBModel):
         super().__init__(embedding_dimensions, filter_count, node_count, edge_count)
         del self.ent_emb
         del self.rel_emb
-        
-        
+
         
     def score(self, *,
             head_embeddings: Tensor,
-            edge_embeddings: Tensor,
             tail_embeddings: Tensor,
+            edge_embeddings: Tensor,
             **_):
         """
         TODO.What_the_function_does_about_globally
 
         Arguments
-        ----------
+        ---------
         head_embeddings: torch.Tensor
             Embeddings of the head nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
-            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         tail_embeddings: torch.Tensor
             Embeddings of the tail nodes in the knowledge graph.
+        edge_embeddings: torch.Tensor
+            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
 
         Returns
         -------
@@ -76,17 +75,17 @@ class ConvKB(ConvKBModel):
             TODO.What_that_variable_is_or_does
             
         Notes
-        -------
+        -----
         Additional_info_from_the_dev_to_the_user
             
         """
         batch_size = head_embeddings.size(0)
 
         head_score = head_embeddings.view(batch_size, 1, -1)
-        edge_score = edge_embeddings.view(batch_size, 1, -1)
         tail_score = tail_embeddings.view(batch_size, 1, -1)
+        edge_score = edge_embeddings.view(batch_size, 1, -1)
 
-        concat = cat((head_score,edge_score,tail_score), dim=1)
+        concat = cat((head_score, edge_score, tail_score), dim=1)
 
         return self.output(self.convlayer(concat).reshape(batch_size, -1))[:, 1]
     
@@ -118,7 +117,7 @@ class ConvKB(ConvKBModel):
         TODO
 
         Arguments
-        ----------
+        ---------
         head_indices: torch.Tensor
             The indices of the head nodes (from KG).
         tail_indices: torch.Tensor
@@ -129,7 +128,7 @@ class ConvKB(ConvKBModel):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding
             TODO.What_that_argument_is_or_does
-        node_inference: bool
+        node_inference: bool, default to True
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns

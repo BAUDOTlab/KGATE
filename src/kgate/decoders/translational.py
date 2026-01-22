@@ -14,10 +14,10 @@ from typing import Tuple, Dict
 
 from tqdm import tqdm
 
-from torch.nn.functional import normalize
 from torch import nn, tensor, matmul, Tensor
-from torch.nn import ParameterList, Parameter
 from torch.cuda import empty_cache
+from torch.nn.functional import normalize
+from torch.nn import ParameterList, Parameter
 
 from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel, TorusEModel
 
@@ -31,7 +31,7 @@ class TransE(TransEModel):
     TODO
 
     Arguments
-    ----------
+    ---------
     embedding_dimensions: int
         Dimensions of embeddings.
     node_count: int
@@ -42,7 +42,7 @@ class TransE(TransEModel):
         TODO.What_that_argument_is_or_does
 
     Attributes
-    -------
+    ----------
     TODO.inherited_attributes
     
     """
@@ -60,8 +60,8 @@ class TransE(TransEModel):
     def score(self,
             *,
             head_embeddings: Tensor,
-            edge_embeddings: Tensor,
             tail_embeddings: Tensor,
+            edge_embeddings: Tensor,
             **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
@@ -71,13 +71,13 @@ class TransE(TransEModel):
         TODO
 
         Arguments
-        ----------
+        ---------
         head_embeddings: torch.Tensor
             Embeddings of the head nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
-            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         tail_embeddings: torch.Tensor
             Embeddings of the tail nodes in the knowledge graph.
+        edge_embeddings: torch.Tensor
+            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
 
         Returns
         -------
@@ -114,19 +114,19 @@ class TransE(TransEModel):
         
         Arguments
         ---------
-            node_embeddings: torch.nn.ParameterList
-                The node embedding as a ParameterList containing one Parameter by node type,
-                or only one if there is no node type. All Parameters should be of the same size
-                (n_ent, emb_dim) corresponding to (node_count, embedding_dimensions)
-            edge_embeddings: torch.nn.Embedding
-                The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
+        node_embeddings: torch.nn.ParameterList
+            The node embedding as a ParameterList containing one Parameter by node type,
+            or only one if there is no node type. All Parameters should be of the same size
+            (n_ent, emb_dim) corresponding to (node_count, embedding_dimensions)
+        edge_embeddings: torch.nn.Embedding
+            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         
         Returns
         -------
-            node_embeddings : torch.nn.ParameterList
-                The normalized node embedding object.
-            edge_embeddings : torch.nn.Embedding
-                The normalized edge embedding object.
+        node_embeddings : torch.nn.ParameterList
+            The normalized node embedding object.
+        edge_embeddings : torch.nn.Embedding
+            The normalized edge embedding object.
         
         """
         for embedding in node_embeddings:
@@ -142,7 +142,7 @@ class TransE(TransEModel):
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
                                     edge_embeddings: nn.Embedding,
-                                    node_inference: bool=True
+                                    node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings
@@ -150,7 +150,7 @@ class TransE(TransEModel):
         `inference_scoring_function` method.
 
         Arguments
-        ----------
+        ---------
         head_indices : torch.Tensor
             The indices of the head nodes (from KG).
         tail_indices : torch.Tensor
@@ -161,7 +161,7 @@ class TransE(TransEModel):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding
             TODO.What_that_argument_is_or_does
-        node_inference : bool, optional
+        node_inference : bool, optional, default to True
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -205,7 +205,7 @@ class TransH(TransHModel):
     TODO
 
     Arguments
-    ----------
+    ---------
     embedding_dimensions: int
         Dimensions of embeddings.
     node_count: int
@@ -214,7 +214,7 @@ class TransH(TransHModel):
         Number of edges in the knowledge graph.
 
     Attributes
-    -------
+    ----------
     TODO.inherited_attributes
     
     """
@@ -229,8 +229,8 @@ class TransH(TransHModel):
     def score(self,
             *,
             head_embeddings: Tensor,
-            edge_embeddings: Tensor,
             tail_embeddings: Tensor,
+            edge_embeddings: Tensor,
             edge_indices: Tensor,
             **_) -> Tensor:
         """
@@ -241,13 +241,13 @@ class TransH(TransHModel):
         TODO
 
         Arguments
-        ----------
+        ---------
         head_embeddings: torch.Tensor
             Embeddings of the head nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
-            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         tail_embeddings: torch.Tensor
             Embeddings of the tail nodes in the knowledge graph.
+        edge_embeddings: torch.Tensor
+            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         edge_indices: torch.Tensor
             The indices of the edges (from KG).
 
@@ -305,10 +305,6 @@ class TransH(TransHModel):
         """
         TODO.What_the_function_does_about_globally
 
-        Arguments
-        ----------
-        None
-
         Returns
         -------
         result_1: Dict[str, Tensor]
@@ -325,7 +321,7 @@ class TransH(TransHModel):
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
                                     edge_embeddings: nn.Embedding,
-                                    node_inference: bool =True
+                                    node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings
@@ -334,7 +330,7 @@ class TransH(TransHModel):
         more details on the API.
 
         Arguments
-        ----------
+        ---------
         head_indices : torch.Tensor
             The indices of the head nodes (from KG).
         tail_indices : torch.Tensor
@@ -345,7 +341,7 @@ class TransH(TransHModel):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding
             TODO.What_that_argument_is_or_does
-        node_inference : bool, optional
+        node_inference : bool, optional, default to True
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -392,7 +388,7 @@ class TransH(TransHModel):
         TODO
 
         Arguments
-        ----------
+        ---------
         node_embeddings: torch.Tensor
             TODO.What_that_argument_is_or_does
 
@@ -433,7 +429,7 @@ class TransR(TransRModel):
     TODO
 
     Arguments
-    ----------
+    ---------
     node_embedding_dimensions: int
         Dimensions of node embeddings.
     edge_embedding_dimensions: int
@@ -444,7 +440,7 @@ class TransR(TransRModel):
         Number of edges in the knowledge graph.
 
     Attributes
-    -------
+    ----------
     TODO.inherited_attributes
     
     """
@@ -460,8 +456,8 @@ class TransR(TransRModel):
     def score(self,
             *,
             head_embeddings: Tensor,
-            edge_embeddings: Tensor,
             tail_embeddings: Tensor,
+            edge_embeddings: Tensor,
             edge_indices: Tensor,
             **_) -> Tensor:
         """
@@ -472,13 +468,13 @@ class TransR(TransRModel):
         TODO
 
         Arguments
-        ----------
+        ---------
         head_embeddings: torch.Tensor
             Embeddings of the head nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
-            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         tail_embeddings: torch.Tensor
             Embeddings of the tail nodes in the knowledge graph.
+        edge_embeddings: torch.Tensor
+            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         edge_indices: torch.Tensor
             The indices of the edges (from KG).
 
@@ -539,10 +535,6 @@ class TransR(TransRModel):
         """
         TODO.What_the_function_does_about_globally
 
-        Arguments
-        ----------
-        None
-
         Returns
         -------
         result_1: Dict[str, Tensor]
@@ -567,7 +559,7 @@ class TransR(TransRModel):
         TODO.What_the_function_does_about_globally
 
         Arguments
-        ----------
+        ---------
         head_indices : torch.Tensor
             The indices of the head nodes (from KG).
         tail_indices : torch.Tensor
@@ -578,7 +570,7 @@ class TransR(TransRModel):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding
             TODO.What_that_argument_is_or_does
-        node_inference : bool, optional
+        node_inference : bool, optional, default to True
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -624,7 +616,7 @@ class TransR(TransRModel):
         TODO
 
         Arguments
-        ----------
+        ---------
         node_embeddings: torch.Tensor
             TODO.What_that_argument_is_or_does
 
@@ -668,7 +660,7 @@ class TransD(TransDModel):
     TODO
 
     Arguments
-    ----------
+    ---------
     node_embedding_dimensions: int
         Dimensions of node embeddings.
     edge_embedding_dimensions: int
@@ -679,7 +671,7 @@ class TransD(TransDModel):
         Number of edges in the knowledge graph.
 
     Attributes
-    -------
+    ----------
     TODO.inherited_attributes
     
     """
@@ -695,8 +687,8 @@ class TransD(TransDModel):
     def score(self,
             *,
             head_embeddings: Tensor,
-            edge_embeddings: Tensor,
             tail_embeddings: Tensor,
+            edge_embeddings: Tensor,
             head_indices: Tensor,
             edge_indices: Tensor,
             tail_indices: Tensor,
@@ -709,13 +701,13 @@ class TransD(TransDModel):
         TODO
 
         Arguments
-        ----------
+        ---------
         head_embeddings: torch.Tensor
             Embeddings of the head nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
-            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         tail_embeddings: torch.Tensor
             Embeddings of the tail nodes in the knowledge graph.
+        edge_embeddings: torch.Tensor
+            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         head_indices: torch.Tensor
             The indices of the head nodes (from KG).
         edge_indices: torch.Tensor
@@ -785,10 +777,6 @@ class TransD(TransDModel):
         """
         TODO.What_the_function_does_about_globally
 
-        Arguments
-        ----------
-        None
-
         Returns
         -------
         result_1: Dict[str, Tensor]
@@ -806,13 +794,13 @@ class TransD(TransDModel):
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
                                     edge_embeddings: nn.Embedding,
-                                    node_inference: bool =True
+                                    node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         TODO.What_the_function_does_about_globally
 
         Arguments
-        ----------
+        ---------
         head_indices : torch.Tensor
             The indices of the head nodes (from KG).
         tail_indices : torch.Tensor
@@ -823,7 +811,7 @@ class TransD(TransDModel):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding
             TODO.What_that_argument_is_or_does
-        node_inference : bool, optional
+        node_inference : bool, optional, default to True
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -870,7 +858,7 @@ class TransD(TransDModel):
         TODO
 
         Arguments
-        ----------
+        ---------
         node_embeddings: torch.Tensor
             TODO.What_that_argument_is_or_does
 
@@ -913,7 +901,7 @@ class TorusE(TorusEModel):
     TODO
 
     Arguments
-    ----------
+    ---------
     embedding_dimensions: int
         Dimensions of embeddings.
     node_count: int
@@ -924,7 +912,7 @@ class TorusE(TorusEModel):
         TODO.What_that_argument_is_or_does
 
     Attributes
-    -------
+    ----------
     TODO.inherited_attributes
     
     """
@@ -940,11 +928,11 @@ class TorusE(TorusEModel):
     def score(self,
             *,
             head_embeddings: Tensor,
-            edge_embeddings: Tensor,
             tail_embeddings: Tensor,
+            edge_embeddings: Tensor,
             head_indices: Tensor,
-            edge_indices: Tensor,
             tail_indices: Tensor,
+            edge_indices: Tensor,
             **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
@@ -954,18 +942,18 @@ class TorusE(TorusEModel):
         TODO
 
         Arguments
-        ----------
+        ---------
         head_embeddings: torch.Tensor
             Embeddings of the head nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
-            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         tail_embeddings: torch.Tensor
             Embeddings of the tail nodes in the knowledge graph.
+        edge_embeddings: torch.Tensor
+            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
         head_indices: torch.Tensor
             Unused.
-        edge_indices: torch.Tensor
-            Unused.
         tail_indices: torch.Tensor
+            Unused.
+        edge_indices: torch.Tensor
             Unused.
 
         Returns
@@ -1031,19 +1019,20 @@ class TorusE(TorusEModel):
         return None
     
     
-    def inference_prepare_candidates(self, *, 
+    def inference_prepare_candidates(self,
+                                    *, 
                                     head_indices: Tensor, 
                                     tail_indices: Tensor, 
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
                                     edge_embeddings: nn.Embedding,
-                                    node_inference: bool =True
+                                    node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         TODO.What_the_function_does_about_globally
 
         Arguments
-        ----------
+        ---------
         head_indices : torch.Tensor
             The indices of the head nodes (from KG).
         tail_indices : torch.Tensor
@@ -1054,7 +1043,7 @@ class TorusE(TorusEModel):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding
             TODO.What_that_argument_is_or_does
-        node_inference : bool, optional
+        node_inference : bool, optional, default to True
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
