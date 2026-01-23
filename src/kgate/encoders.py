@@ -38,6 +38,7 @@ class DefaultEncoder(nn.Module):
     
     """
     def __init__(self):
+        
         super().__init__()
         self.deep = False
 
@@ -76,6 +77,7 @@ class GNN(nn.Module):
     def __init__(self,
                 edge_types: List[Tuple[str, str, str]],
                 aggregation: str = "sum"):
+        
         super().__init__()
         self.deep = True
         self.device = "cuda"
@@ -277,7 +279,6 @@ class Node2VecEncoder:
         TODO.What_that_variable_is_or_does
     optimizer: TODO.type
         TODO.What_that_variable_is_or_does
-    TODO.inherited_attributes
     
     """
     def __init__(self,

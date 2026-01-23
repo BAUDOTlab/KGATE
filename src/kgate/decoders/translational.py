@@ -1013,7 +1013,7 @@ class TransD(TranslationalDecoder):
         for i in tqdm(range(self.node_count), unit = "nodes", desc = "Projecting nodes"):
             edge_projection_vector = self.edge_projection_vector.weight.data
 
-            mask = tensor([i], device=edge_projection_vector.device).long()
+            mask = tensor([i], device = edge_projected_vectors.device).long()
 
             # TODO: find better name
             masked_node_embeddings = node_embeddings[mask]

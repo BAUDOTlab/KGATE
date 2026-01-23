@@ -306,7 +306,6 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
                 batch_size: int,
                 kg: KnowledgeGraph):
         """
-        TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
         Find edge thresholds using the validation set. As described in
         the paper by Socher et al., for an edge, the threshold is a value t
         such that if the score of a triplet is larger than t, the triplet is correct.
