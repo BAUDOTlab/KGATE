@@ -72,11 +72,11 @@ class TransE(TransEModel):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
+        edge_embeddings: torch.Tensor, keyword-only
             The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
 
         Returns
@@ -151,17 +151,17 @@ class TransE(TransEModel):
 
         Arguments
         ---------
-        head_indices : torch.Tensor
+        head_indices : torch.Tensor, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices : torch.Tensor
+        tail_indices : torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices : torch.Tensor
+        edge_indices : torch.Tensor, keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor
+        node_embeddings: torch.Tensor, keyword-only
             TODO.What_that_argument_is_or_does
-        edge_embeddings: torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding, keyword-only
             TODO.What_that_argument_is_or_does
-        node_inference : bool, optional, default to True
+        node_inference : bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -242,13 +242,13 @@ class TransH(TransHModel):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
+        edge_embeddings: torch.Tensor, keyword-only
             The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
-        edge_indices: torch.Tensor
+        edge_indices: torch.Tensor, keyword-only
             The indices of the edges (from KG).
 
         Returns
@@ -331,17 +331,17 @@ class TransH(TransHModel):
 
         Arguments
         ---------
-        head_indices : torch.Tensor
+        head_indices : torch.Tensor, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices : torch.Tensor
+        tail_indices : torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices : torch.Tensor
+        edge_indices : torch.Tensor, keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor
+        node_embeddings: torch.Tensor, keyword-only
             TODO.What_that_argument_is_or_does
-        edge_embeddings: torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding, keyword-only
             TODO.What_that_argument_is_or_does
-        node_inference : bool, optional, default to True
+        node_inference : bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -469,13 +469,13 @@ class TransR(TransRModel):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
+        edge_embeddings: torch.Tensor, keyword-only
             The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
-        edge_indices: torch.Tensor
+        edge_indices: torch.Tensor, keyword-only
             The indices of the edges (from KG).
 
         Returns
@@ -560,17 +560,17 @@ class TransR(TransRModel):
 
         Arguments
         ---------
-        head_indices : torch.Tensor
+        head_indices : torch.Tensor, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices : torch.Tensor
+        tail_indices : torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices : torch.Tensor
+        edge_indices : torch.Tensor, keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor
+        node_embeddings: torch.Tensor, keyword-only
             TODO.What_that_argument_is_or_does
-        edge_embeddings: torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding, keyword-only
             TODO.What_that_argument_is_or_does
-        node_inference : bool, optional, default to True
+        node_inference : bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -702,17 +702,17 @@ class TransD(TransDModel):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
+        edge_embeddings: torch.Tensor, keyword-only
             The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
-        head_indices: torch.Tensor
+        head_indices: torch.Tensor, keyword-only
             The indices of the head nodes (from KG).
-        edge_indices: torch.Tensor
+        edge_indices: torch.Tensor, keyword-only
             The indices of the edges (from KG).
-        tail_indices: torch.Tensor
+        tail_indices: torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
 
         Returns
@@ -801,17 +801,17 @@ class TransD(TransDModel):
 
         Arguments
         ---------
-        head_indices : torch.Tensor
+        head_indices : torch.Tensor, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices : torch.Tensor
+        tail_indices : torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices : torch.Tensor
+        edge_indices : torch.Tensor, keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor
+        node_embeddings: torch.Tensor, keyword-only
             TODO.What_that_argument_is_or_does
-        edge_embeddings: torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding, keyword-only
             TODO.What_that_argument_is_or_does
-        node_inference : bool, optional, default to True
+        node_inference : bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -943,17 +943,17 @@ class TorusE(TorusEModel):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
+        edge_embeddings: torch.Tensor, keyword-only
             The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
-        head_indices: torch.Tensor
+        head_indices: torch.Tensor, keyword-only
             Unused.
-        tail_indices: torch.Tensor
+        tail_indices: torch.Tensor, keyword-only
             Unused.
-        edge_indices: torch.Tensor
+        edge_indices: torch.Tensor, keyword-only
             Unused.
 
         Returns
@@ -1033,17 +1033,17 @@ class TorusE(TorusEModel):
 
         Arguments
         ---------
-        head_indices : torch.Tensor
+        head_indices : torch.Tensor, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices : torch.Tensor
+        tail_indices : torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices : torch.Tensor
+        edge_indices : torch.Tensor, keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor
+        node_embeddings: torch.Tensor, keyword-only
             TODO.What_that_argument_is_or_does
-        edge_embeddings: torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding, keyword-only
             TODO.What_that_argument_is_or_does
-        node_inference : bool, optional, default to True
+        node_inference : bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns

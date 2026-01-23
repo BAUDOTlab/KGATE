@@ -69,11 +69,11 @@ class RESCAL(RESCALModel):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_indices: torch.Tensor
+        edge_indices: torch.Tensor, keyword-only
             Indices of edges in the knowledge graph.
         TODO.kwargs
 
@@ -153,17 +153,17 @@ class RESCAL(RESCALModel):
 
         Arguments
         ---------
-        head_indices: torch.Tensor
+        head_indices: torch.Tensor, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor
+        tail_indices: torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor
+        edge_indices: torch.Tensor, keyword-only
             The indices of the relations (from KG).
-        node_embeddings: torch.Tensor
+        node_embeddings: torch.Tensor, keyword-only
             TODO.What_that_argument_is_or_does
-        edge_embeddings: torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding, keyword-only
             Unused.
-        node_inference: bool, default to True
+        node_inference: bool, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -238,11 +238,11 @@ class DistMult(DistMultModel):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_indices: torch.Tensor
+        edge_indices: torch.Tensor, keyword-only
             Unused
         TODO.kwargs
 
@@ -305,17 +305,17 @@ class DistMult(DistMultModel):
 
         Arguments
         ---------
-        head_indices: torch.Tensor
+        head_indices: torch.Tensor, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor
+        tail_indices: torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor
+        edge_indices: torch.Tensor, keyword-only
             The indices of the relations (from KG).
-        node_embeddings: torch.Tensor
+        node_embeddings: torch.Tensor, keyword-only
             TODO.What_that_argument_is_or_does
-        edge_embeddings: torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding, keyword-only
             TODO.What_that_argument_is_or_does
-        node_inference: bool, default to True
+        node_inference: bool, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -395,11 +395,11 @@ class ComplEx(ComplExModel):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_indices: torch.Tensor
+        edge_indices: torch.Tensor, keyword-only
             Indices of edges in the knowledge graph.
         TODO.kwargs
 
@@ -450,17 +450,17 @@ class ComplEx(ComplExModel):
 
         Arguments
         ---------
-        head_indices: torch.Tensor
+        head_indices: torch.Tensor, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor
+        tail_indices: torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor
+        edge_indices: torch.Tensor, keyword-only
             The indices of the relations (from KG).
-        node_embeddings: torch.Tensor
+        node_embeddings: torch.Tensor, keyword-only
             TODO.What_that_argument_is_or_does
-        edge_embeddings: torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding, keyword-only
             TODO.What_that_argument_is_or_does
-        node_inference: bool, default to True
+        node_inference: bool, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
