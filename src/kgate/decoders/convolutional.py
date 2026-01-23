@@ -62,11 +62,11 @@ class ConvKB(ConvKBModel):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor
+        edge_embeddings: torch.Tensor, keyword-only
             The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
 
         Returns
