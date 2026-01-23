@@ -1,13 +1,18 @@
-"""Class to represent a Knowledge Graph in KGATE. Heavily inspired from TorchKGE's Knowledge Graph class, though expanded to take into account triplets and node types."""
+"""
+Class to represent a Knowledge Graph in KGATE.
+Heavily inspired from TorchKGE's Knowledge Graph class,
+though expanded to take into account triplets and node types.
 
-from math import ceil
+"""
+
+import logging
 from collections import defaultdict
 from itertools import combinations
+from math import ceil
 from typing import Self, Dict, Tuple, List, Set
-import logging
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 import torch
@@ -16,24 +21,54 @@ import torch.nn as nn
 from torch.utils.data import Dataset
 from torch.types import Number
 
-import torchkge
-from torchkge.utils.operations import get_dictionaries
 from torch_geometric.data import HeteroData
 
+import torchkge
+from torchkge.utils.operations import get_dictionaries
+
+
 logging.basicConfig(
-    level=logging.INFO,  
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level = logging.INFO,  
+    format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
+
 class EncoderInput:
+    """
+    TODO.What_the_class_is_about_globally
+
+    References
+    ----------
+    TODO
+
+    Arguments
+    ---------
+    x_dict: Dict[str, Tensor]
+        TODO.What_that_argument_is_or_does
+    edge_list: Dict[str, Tensor]
+        TODO.What_that_argument_is_or_does
+    mapping: Dict[str, Tensor]
+        TODO.What_that_argument_is_or_does
+
+    Attributes
+    ----------
+    x_dict: Dict[str, Tensor]
+        TODO.What_that_variable_is_or_does
+    edge_list: Dict[str, Tensor]
+        TODO.What_that_variable_is_or_does
+    mapping: Dict[str, Tensor]
+        TODO.What_that_variable_is_or_does
+    
+    """
     def __init__(self,
                 x_dict: Dict[str, Tensor],
                 edge_list: Dict[str, Tensor],
-                mapping:Dict[str, Tensor]):
+                mapping: Dict[str, Tensor]):
         
         self.x_dict = x_dict
         self.edge_list = edge_list
         self.mapping = mapping
+
 
     def __repr__(self):
         x_repr = "\n\t".join([
@@ -65,23 +100,89 @@ class EncoderInput:
         return message
 
 
+
 class KnowledgeGraph(Dataset):
+    """
+    TODO.What_the_class_is_about_globally
+
+    References
+    ----------
+    TODO
+
+    Arguments
+    ---------
+    dataframe: pd.DataFrame , default to None
+        TODO.What_that_argument_is_or_does
+    graphindices: torch.Tensor, default to None
+        TODO.What_that_argument_is_or_does
+    metadata: pd.DataFrame, default to None
+        TODO.What_that_argument_is_or_does
+    triplet_types: List[Tuple[str, str, str]], default to None
+        TODO.What_that_argument_is_or_does
+    node_to_index: Dict[str, int], default to None
+        TODO.What_that_argument_is_or_does
+    edge_to_index: Dict[str, int], default to None
+        TODO.What_that_argument_is_or_does
+    node_type_to_index: Dict[str, int], default to None
+        TODO.What_that_argument_is_or_does
+    removed_triplets: torch.Tensor, default to None
+        TODO.What_that_argument_is_or_does
+
+    Attributes
+    ----------
+    graphindices: torch.Tensor
+        TODO.What_that_variable_is_or_does
+    metadata: pd.DataFrame, default to None
+        TODO.What_that_variable_is_or_does
+    triplet_types: List[Tuple[str, str, str]]
+        TODO.What_that_variable_is_or_does
+    node_to_index: Dict[str, int]
+        TODO.What_that_variable_is_or_does
+    edge_to_index: Dict[str, int]
+        TODO.What_that_variable_is_or_does
+    node_type_to_index: Dict[str, int]
+        TODO.What_that_variable_is_or_does
+    removed_triplets: torch.Tensor
+        TODO.What_that_variable_is_or_does
+    triplet_count: int
+        TODO.What_that_variable_is_or_does
+    node_count: int
+        TODO.What_that_variable_is_or_does
+    edge_count: int
+        TODO.What_that_variable_is_or_does
+    node_types: torch.Tensor
+        TODO.What_that_variable_is_or_does
+    node_type_to_global: Dict[str, int]
+        TODO.What_that_variable_is_or_does
+    global_to_local_indices: Dict[str, int]
+        TODO.What_that_variable_is_or_does
+            
+    Raises
+    ------
+    ValueError
+        If `dataframe` is not given, `graphindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided.
+    ValueError
+        The `graphindices` parameter must be a 2D tensor of size [4, triplet_count].
+    ValueError
+        The `removed_triplets` parameter must be a 2D tensor of size [4, triplet_count].
+    
+    """
     def __init__(self,
-                dataframe: pd.DataFrame 
+                dataframe: pd.DataFrame
                         | None = None,
-                graphindices: Tensor 
+                graphindices: Tensor
                         | None = None,
-                metadata: pd.DataFrame 
+                metadata: pd.DataFrame
                         | None = None,
-                triplet_types: List[Tuple[str, str, str]] 
+                triplet_types: List[Tuple[str, str, str]]
                         | None = None,
-                node_to_index: Dict[str, int] 
+                node_to_index: Dict[str, int]
                         | None = None, 
-                edge_to_index: Dict[str, int] 
+                edge_to_index: Dict[str, int]
                         | None = None,
-                node_type_to_index: Dict[str, int] 
+                node_type_to_index: Dict[str, int]
                         | None = None,
-                removed_triplets: Tensor 
+                removed_triplets: Tensor
                         | None = None):
         
         if dataframe is None:
@@ -101,7 +202,7 @@ class KnowledgeGraph(Dataset):
             self.graphindices = tensor([], dtype = torch.long)
 
         if removed_triplets is not None and removed_triplets.numel() > 0:
-            assert removed_triplets.size(0) == 4,  "The `removed_triplets` parameter must be a 2D tensor of size [4, triplet_count]."
+            assert removed_triplets.size(0) == 4, "The `removed_triplets` parameter must be a 2D tensor of size [4, triplet_count]."
             self.removed_triplets = removed_triplets
         else:
             self.removed_triplets = tensor([], dtype = torch.long)
@@ -128,19 +229,29 @@ class KnowledgeGraph(Dataset):
 
             for triplet_type in self.triplets.unique():
                 head_node_type, tail_node_type = self.triplet_types[triplet_type][0], self.triplet_types[triplet_type][2]
-                triple_edgelist = self.graphindices[:, self.triplets == triplet_type]
-                self.node_types[triple_edgelist[0]] = self.node_type_to_index[head_node_type]
-                self.node_types[triple_edgelist[1]] = self.node_type_to_index[tail_node_type]
+                triplet_graphindices = self.graphindices[:, self.triplets == triplet_type]
+                self.node_types[triplet_graphindices[0]] = self.node_type_to_index[head_node_type]
+                self.node_types[triplet_graphindices[1]] = self.node_type_to_index[tail_node_type]
 
         else:
             if metadata is not None:
-                mapping_dataframe = pd.merge(dataframe, metadata.add_prefix("head_"), how = "left", left_on = "head", right_on = "head_id")
-                mapping_dataframe = pd.merge(mapping_dataframe, metadata.add_prefix("tail_"), how = "left", left_on = "tail", right_on = "tail_id", suffixes = (None, "_tail"))
-                mapping_dataframe.drop([i for i in mapping_dataframe.columns if "id" in i],axis = 1, inplace=True)
+                mapping_dataframe = pd.merge(dataframe,
+                                            metadata.add_prefix("head_"),
+                                            how = "left",
+                                            left_on = "head",
+                                            right_on = "head_id")
+                mapping_dataframe = pd.merge(mapping_dataframe,
+                                            metadata.add_prefix("tail_"),
+                                            how = "left",
+                                            left_on = "tail",
+                                            right_on = "tail_id",
+                                            suffixes = (None, "_tail"))
+                mapping_dataframe.drop([i for i in mapping_dataframe.columns if "id" in i], axis = 1, inplace=True)
 
                 dataframe_node_types = list(set(mapping_dataframe['head_type'].unique()).union(set(mapping_dataframe['tail_type'].unique())))
                 self.node_type_to_index = {node_type: i for i, node_type in enumerate(sorted(dataframe_node_types))}
-                self._identity = "id"
+                self._identity = "id" # private attribute, for more info refer to identity property
+                
             else:
                 mapping_dataframe = dataframe
 
@@ -155,7 +266,6 @@ class KnowledgeGraph(Dataset):
                     target_types = group["tail_type"].unique()
                 else:
                     source_types = target_types = ["Node"]
-
 
                 for source_type in source_types:
                     for target_type in target_types:
@@ -207,33 +317,95 @@ class KnowledgeGraph(Dataset):
     def __len__(self):
         return self.triplet_count
     
+    
     def __getitem__(self, index) -> Tensor:
         return self.graphindices[:, index]
     
+    
     @property
     def head_indices(self) -> Tensor:
+        """
+        TODO.What_the_function_does_about_globally
+
+        Returns
+        -------
+        result_name: torch.Tensor
+            TODO.What_that_variable_is_or_does
+            
+        """
         return self.graphindices[0]
+    
     
     @property
     def tail_indices(self) -> Tensor:
+        """
+        TODO.What_the_function_does_about_globally
+
+        Returns
+        -------
+        result_name: torch.Tensor
+            TODO.What_that_variable_is_or_does
+            
+        """
         return self.graphindices[1]
+    
     
     @property
     def edge_indices(self) -> Tensor:
+        """
+        TODO.What_the_function_does_about_globally
+
+        Returns
+        -------
+        result_name: torch.Tensor
+            TODO.What_that_variable_is_or_does
+            
+        """
         return self.graphindices[2]
+
 
     @property
     def triplets(self) -> Tensor:
+        """
+        TODO.What_the_function_does_about_globally
+
+        Returns
+        -------
+        result_name: torch.Tensor
+            TODO.What_that_variable_is_or_does
+            
+        """
         return self.graphindices[3]
+
 
     @property
     def edge_list(self) -> Tensor:
+        """
+        TODO.What_the_function_does_about_globally
+
+        Returns
+        -------
+        result_name: torch.Tensor
+            TODO.What_that_variable_is_or_does
+            
+        """
         return self.graphindices[:2]
     
-    # torchkge compatibility
+    
     @property
     def n_facts(self) -> int:
+        """
+        TODO.What_the_function_does_about_globally
+        torchkge compatibility
+
+        Returns
+        -------
+        triplet_count: int
+            TODO.What_that_variable_is_or_does
+            
+        """
         return self.triplet_count
+
 
     @property
     def identity(self) -> pd.DataFrame:
@@ -241,6 +413,11 @@ class KnowledgeGraph(Dataset):
         Get the DataFrame containing all the identity of the knowledge graph nodes.
         
         The default identity is the node ID, but different values can be set using the `set_identity` method.
+
+        Returns
+        -------
+        result_name: pd.DataFrame
+            TODO.What_that_variable_is_or_does
         
         """
         if self.metadata is not None:

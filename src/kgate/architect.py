@@ -122,7 +122,6 @@ class Architect(Model):
         TODO.What_that_variable_is_or_does
     scheduler: learning_rate_scheduler.LRScheduler or None
         TODO.What_that_variable_is_or_does
-    TODO.inherited_attributes
     
     Raises
     ------

@@ -873,7 +873,7 @@ class TransD(TransDModel):
         for i in tqdm(range(self.n_ent), unit = "nodes", desc = "Projecting nodes"):
             edge_projected_vectors = self.rel_proj_vect.weight.data
 
-            mask = tensor([i], device=edge_projected_vectors.device).long()
+            mask = tensor([i], device = edge_projected_vectors.device).long()
 
             # TODO: find better name
             masked_node_embeddings = node_embeddings[mask]
@@ -881,7 +881,7 @@ class TransD(TransDModel):
             node_projected_vectors = self.ent_proj_vect.weight[i]
 
             # TODO PLACEHOLDER TODO PLACEHOLDER TODO
-            sc_prod = (node_projected_vectors * masked_node_embeddings).sum(dim=0)
+            sc_prod = (node_projected_vectors * masked_node_embeddings).sum(dim = 0)
             projected_nodes = sc_prod * edge_projected_vectors + masked_node_embeddings[:self.rel_emb_dim].view(1, -1)
 
             self.projected_entities[:, i, :] = projected_nodes

@@ -52,6 +52,7 @@ class RESCAL(RESCALModel):
                 embedding_dimensions: int, 
                 node_count: int,
                 edge_count: int):
+        
         super().__init__(embedding_dimensions, node_count, edge_count)
         del self.ent_emb
         self.edge_embeddings_matrix = initialize_embedding(self.n_rel, self.emb_dim * self.emb_dim)
@@ -222,6 +223,7 @@ class DistMult(DistMultModel):
                 embedding_dimensions: int,
                 node_count: int,
                 edge_count: int):
+        
         super().__init__(embedding_dimensions, node_count, edge_count)
         del self.ent_emb
         del self.rel_emb
@@ -372,11 +374,11 @@ class ComplEx(ComplExModel):
     TODO.inherited_attributes
     
     """
-    
     def __init__(self,
                 embedding_dimensions: int,
                 node_count: int,
                 edge_count: int):
+        
         super().__init__(embedding_dimensions, node_count, edge_count)
         self.embedding_spaces = 2
         del self.re_ent_emb
