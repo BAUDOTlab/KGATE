@@ -1,8 +1,10 @@
 import random
 from collections import Counter
+
 import torch
 
 from .knowledgegraph import KnowledgeGraph
+
 
 def permute_tails(kg: KnowledgeGraph,
                 edge_name: str,
@@ -12,19 +14,27 @@ def permute_tails(kg: KnowledgeGraph,
     Randomly permutes the `tails` for a given edge while maintaining the original degree
     of `heads` and `tails`, ensuring there are no triplets of the form (a, edge, a) where `head == tail`.
 
-    Parameters
-    ----------
+    Arguments
+    ---------
     kg: KnowledgeGraph
         The KnowledgeGraph instance on which to perform the permutation.
     edge_name: str
         The name of the edge for which `tails` should be permuted.
-    preserve_node_degree: bool, optional
-        Whether or not the permuted tails should keep the same node degree. Default to True.
-        
+    preserve_node_degree: bool, optional, default to True
+        Whether or not the permuted tails should keep the same node degree.
+
+    Raises
+    ------
+    error_name
+        TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+    error_name
+        TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+    
     Returns
     -------
     KnowledgeGraph
         A new instance of KnowledgeGraph with the `tails` permuted.
+    
     """
     node_types = kg.node_types
     triplets_types = kg.triplet_types
@@ -39,7 +49,7 @@ def permute_tails(kg: KnowledgeGraph,
     heads_for_this_edge = kg.head_indices[mask].tolist()
     tails_for_this_edge = kg.tail_indices[mask].tolist()
 
-    triplets = [0] * len(tails_for_this_edge) if len(kg.node_type_to_index)==1 else []
+    triplets = [0] * len(tails_for_this_edge) if len(kg.node_type_to_index) == 1 else []
 
     # Count the occurence of each tail in the edge
     tails_count = Counter(tails_for_this_edge)
@@ -52,8 +62,6 @@ def permute_tails(kg: KnowledgeGraph,
         tail_count = len(tails_for_this_edge)
         node_count = kg.node_count
         permuted_tails = [random.randrange(node_count) for _ in range(tail_count)]
-
-
 
     # Fix self loop and correct node degree
     for i in range(len(permuted_tails)):
@@ -79,7 +87,7 @@ def permute_tails(kg: KnowledgeGraph,
                     edge_name,
                     index_to_node_type[node_types[permuted_tails[i]].item()]
                 )
-            # Add it if it doesn't already exists
+            # Add it if it doesn't already exist
             if not permuted_triplet in triplets_types:
                 triplets_types.append(permuted_triplet)
                 triplet = len(triplets_types)
