@@ -10,16 +10,121 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 The modifications are licensed under the BSD license according to the source license.
 """
 
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Literal
 
 from tqdm import tqdm
 
-from torch import nn, tensor, matmul, Tensor
+from torch import nn, tensor, matmul, Module, Tensor
 from torch.cuda import empty_cache
 from torch.nn.functional import normalize
 from torch.nn import ParameterList, Parameter
 
 from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel, TorusEModel
+from torchkge.utils.dissimilarities import l1_dissimilarity, l2_dissimilarity, \
+            l1_torus_dissimilarity, l2_torus_dissimilarity, el2_torus_dissimilarity
+
+class TranslationalDecoder(Module):
+    """Interface for translational decoders of KGATE.
+
+    This interface is largely inspired by TorchKGE's TranslationModel, and exposes
+    the methods that all translational decoders must use to be compatible with KGATE.
+    The interface doesn't have an __init__ method as inheriting decoders are supposed
+    to take care of their initialization, and only requires one attribute to be set.
+
+    Attributes
+    ----------
+    dissimilarity: function described in `torchkge.utils.dissimilarities`
+        The dissimilarity function used to compare translated head embeddings 
+        to tail embeddings. Most translational vectors use either L1 or L2, but
+        TorusE has a specific set of dissimilarity functions.
+    """
+    
+    def score(self,
+        *,
+        head_embeddings: Tensor,
+        tail_embeddings: Tensor,
+        edge_embeddings: Tensor,
+        head_indices: Tensor,
+        tail_indices: Tensor,
+        edge_indices: Tensor
+        ) -> Tensor:
+        """Interface method for the decoder's score function.
+
+        Refer to the specific decoder for details on scoring function implementation.
+        While all arguments are given when called from the Architect class, most 
+        decoders only use some of them. 
+
+        Arguments
+        ---------
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: (batch_size), keyword-only
+            The embeddings of the head entities for the current batch of length `batch_size`
+            (or the whole graph, if it fits in memory)
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: (batch_size), keyword-only
+            The embeddings of the tail entities for the current batch of length `batch_size` 
+            (or the whole graph, if it fits in memory)
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: (batch_size), keyword-only
+            The embeddings of the edges for the current batch of length `batch_size` 
+            (or the whole graph, if it fits in memory)
+        head_indices: torch.Tensor, dtype: torch.long, shape: (batch_size), keyword-only
+            The indices of the head entities for the current batch of length `batch_size` 
+            (or the whole graph, if it fits in memory)
+        tail_indices: torch.Tensor, dtype: torch.long, shape: (batch_size), keyword-only
+            The indices of the tail entities for the current batch of length `batch_size` 
+            (or the whole graph, if it fits in memory)
+        edge_indices: torch.Tensor, dtype: torch.long, shape: (batch_size), keyword-only
+            The indices of the edges for the current batch of length `batch_size` 
+            (or the whole graph, if it fits in memory)
+
+        Returns
+        -------
+            batch_score: torch.Tensor, dtype: torch.float, shape: (batch_size)
+                The score of each triplet as a tensor.
+        """
+        raise NotImplementedError("The score method must be implemented by the translational decoder.")
+
+    def normalize_parameters(self):
+        pass
+
+    def get_embeddings(self):
+        pass
+
+    def inference_prepare_candidates(self):
+        pass
+
+    def inference_score(self, 
+                        *,
+                        projected_heads: Tensor,
+                        projected_tails: Tensor,
+                        edges: Tensor
+                        ):
+        """TODO docstring
+        """
+        batch_size = projected_heads.size(0)
+
+        # When the shape of the edges is (batch_size, embedding_dimensions)
+        if len(edges.size()) == 2:
+            if len(projected_tails.size()) == 3:
+                assert len(projected_heads.size()) == 2, "When inferring tails, the projected heads tensor should be of shape (batch_size, embedding_dimensions)"
+
+                translated_heads = (projected_heads + edges).view(batch_size, 1, edges.size(1))
+                return - self.dissimilarity(translated_heads, projected_tails)
+            else:
+                assert (len(projected_heads.size()) == 3) and (len(projected_tails) == 2), "When inferring heads, the projected tails tensor should be of shape (batch_size, embedding_dimensions)"
+
+                edges_extended = edges.view(batch_size, 1, edges.size(1))
+                tails_extended = projected_tails.view(batch_size, 1, edges.size(1))
+                
+                return - self.dissimilarity(projected_heads + edges_extended, tails_extended)
+        elif len(edges.size()) == 3:
+            if hasattr(self, "evaluated_projections"):
+                projected_heads = projected_heads.view(batch_size, -1, edges.size(1))
+                projected_tails = projected_tails.view(batch_size, -1, edges.size(1))
+            else:
+                projected_heads = projected_heads.view(batch_size, -1, projected_heads.size(1))
+                projected_tails = projected_tails.view(batch_size, -1, projected_tails.size(1))
+
+            return - self.dissimilarity(projected_heads + edges, projected_tails)
+
 
 
 class TransE(TransEModel):
@@ -46,16 +151,15 @@ class TransE(TransEModel):
     TODO.inherited_attributes
     
     """
-    def __init__(self,
-                embedding_dimensions: int,
-                node_count: int,
-                edge_count: int,
-                dissimilarity_type: str):
+    def __init__(self, dissimilarity_type: Literal["L1","L2"] = "L2"):
         
-        super().__init__(embedding_dimensions, node_count, edge_count, dissimilarity_type = dissimilarity_type)
-        del self.ent_emb
-        del self.rel_emb
-
+        match dissimilarity_type:
+            case "L1":
+                self.dissimilarity = l1_dissimilarity
+            case "L2":
+                self.dissimilarity = l2_dissimilarity
+            case _:
+                raise ValueError(f"TransE decoder can only use L1 or L2 dissimlarity, but got \"{dissimilarity_type}\"")
 
     def score(self,
             *,
@@ -116,17 +220,16 @@ class TransE(TransEModel):
         ---------
         node_embeddings: torch.nn.ParameterList
             The node embedding as a ParameterList containing one Parameter by node type,
-            or only one if there is no node type. All Parameters should be of the same size
-            (n_ent, emb_dim) corresponding to (node_count, embedding_dimensions)
+            or only one if there is no node type.
         edge_embeddings: torch.nn.Embedding
-            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
+            The edge embeddings, which are not normalized as per the paper's recommendation.
         
         Returns
         -------
         node_embeddings : torch.nn.ParameterList
             The normalized node embedding object.
         edge_embeddings : torch.nn.Embedding
-            The normalized edge embedding object.
+            The untouched edge embedding object.
         
         """
         for embedding in node_embeddings:
