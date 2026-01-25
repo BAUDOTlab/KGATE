@@ -14,7 +14,7 @@ from typing import Tuple, Dict, Literal
 
 from tqdm import tqdm
 
-from torch import nn, tensor, matmul, Module, Tensor
+from torch import nn, tensor, matmul, Module, Tensor, empty
 from torch.cuda import empty_cache
 from torch.nn.functional import normalize
 from torch.nn import ParameterList, Parameter
@@ -22,6 +22,8 @@ from torch.nn import ParameterList, Parameter
 from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel, TorusEModel
 from torchkge.utils.dissimilarities import l1_dissimilarity, l2_dissimilarity, \
             l1_torus_dissimilarity, l2_torus_dissimilarity, el2_torus_dissimilarity
+
+from ..utils import initialize_embedding
 
 class TranslationalDecoder(Module):
     """Interface for translational decoders of KGATE.
@@ -85,8 +87,18 @@ class TranslationalDecoder(Module):
     def normalize_parameters(self):
         pass
 
-    def get_embeddings(self):
-        pass
+    def get_embeddings(self) -> Dict[str, Tensor] |None:
+        """Get the decoder-specific embeddings.
+        
+        If the decoder doesn't have dedicated embeddings, nothing is returned. In 
+        this case, it is not necessary to implement this method from the interface.
+        
+        Returns
+        -------
+            embeddings: Dict[str, torch.Tensor] or None
+                Decoder-specific embeddings, or None.
+        """
+        return None
 
     def inference_prepare_candidates(self):
         pass
@@ -127,7 +139,7 @@ class TranslationalDecoder(Module):
 
 
 
-class TransE(TransEModel):
+class TransE(TranslationalDecoder):
     """
     TODO.What_the_class_is_about_globally
 
@@ -193,19 +205,6 @@ class TransE(TransEModel):
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
         
         return -self.dissimilarity(head_normalized_embeddings + edge_embeddings, tail_normalized_embeddings)
-    
-    
-    def get_embeddings(self):
-        """
-        TODO.What_the_function_does_about_globally
-
-        Returns
-        -------
-        None
-        
-        """
-        return None
-    
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
@@ -299,7 +298,7 @@ class TransE(TransEModel):
     
     
     
-class TransH(TransHModel):
+class TransH(TranslationalDecoder):
     """
     TODO.What_the_class_is_about_globally
 
@@ -307,27 +306,24 @@ class TransH(TransHModel):
     ----------
     TODO
 
-    Arguments
-    ---------
-    embedding_dimensions: int
-        Dimensions of embeddings.
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
-
     Attributes
     ----------
     TODO.inherited_attributes
     
     """
-    def __init__(self,
-                embedding_dimensions: int,
-                node_count: int,
-                edge_count: int):
-        
-        super().__init__(embedding_dimensions, node_count, edge_count)
+    def __init__(self, node_count: int, edge_count: int, embedding_dimensions: int):
+        self.normal_vector = initialize_embedding(edge_count, embedding_dimensions)
+        self.dissimilarity_type = l2_dissimilarity
 
+        self.evaluated_projections = False
+        self.projected_nodes = Parameter(empty(size=(edge_count,
+                                                           node_count,
+                                                           embedding_dimensions)),
+                                                    requires_grad=False)
+
+    @staticmethod
+    def project(nodes, normal_vector):
+        return nodes - (nodes * normal_vector).sum(dim=1).view(-1, 1) * normal_vector
 
     def score(self,
             *,
@@ -363,10 +359,10 @@ class TransH(TransHModel):
         head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
         self.evaluated_projections = False
-        normalized_vector = normalize(self.norm_vect(edge_indices), p = 2, dim = 1)
+        normal_vector = normalize(self.normal_vector(edge_indices), p = 2, dim = 1)
         
-        return - self.dissimilarity(self.project(head_normalized_embeddings, normalized_vector) + edge_embeddings,
-                                    self.project(tail_normalized_embeddings, normalized_vector))
+        return - self.dissimilarity(self.project(head_normalized_embeddings, normal_vector) + edge_embeddings,
+                                    self.project(tail_normalized_embeddings, normal_vector))
     
     
     def normalize_parameters(self,
@@ -399,7 +395,7 @@ class TransH(TransHModel):
         for embedding in node_embeddings:
             embedding.data = normalize(embedding.data, p = 2, dim = 1)
         edge_embeddings.weight.data = normalize(edge_embeddings.weight.data, p = 2, dim = 1)
-        self.norm_vect.weight.data = normalize(self.norm_vect.weight.data, p = 2, dim = 1)
+        self.normal_vector.weight.data = normalize(self.normal_vector.weight.data, p = 2, dim = 1)
         
         return node_embeddings, edge_embeddings
 
@@ -414,7 +410,7 @@ class TransH(TransHModel):
             TODO.What_that_variable_is_or_does
             
         """
-        return {"norm_vect": self.norm_vect.weight.data}
+        return {"normal_vector": self.normal_vector.weight.data}
     
     
     def inference_prepare_candidates(self,
@@ -505,17 +501,17 @@ class TransH(TransHModel):
 
         for i in tqdm(range(self.n_ent), unit = "nodes", desc = "Projecting nodes"):
 
-            normalized_vector = self.norm_vect.weight.data.view(self.n_rel, self.emb_dim)
-            mask = tensor([i], device = normalized_vector.device).long()
+            normal_vector = self.norm_vect.weight.data.view(self.n_rel, self.emb_dim)
+            mask = tensor([i], device = normal_vector.device).long()
 
-            if normalized_vector.is_cuda:
+            if normal_vector.is_cuda:
                 empty_cache()
 
             # TODO: find better name
             masked_node_embeddings = node_embeddings[mask]
 
-            normalized_components = (masked_node_embeddings.view(1, -1) * normalized_vector).sum(dim = 1)
-            self.projected_entities[:, i, :] = (masked_node_embeddings.view(1, -1) - normalized_components.view(-1, 1) * normalized_vector)
+            normalized_components = (masked_node_embeddings.view(1, -1) * normal_vector).sum(dim = 1)
+            self.projected_entities[:, i, :] = (masked_node_embeddings.view(1, -1) - normalized_components.view(-1, 1) * normal_vector)
 
             del normalized_components
 
@@ -523,7 +519,7 @@ class TransH(TransHModel):
 
 
 
-class TransR(TransRModel):
+class TransR(TranslationalDecoder):
     """
     TODO.What_the_class_is_about_globally
 
@@ -754,7 +750,7 @@ class TransR(TransRModel):
 
 
 
-class TransD(TransDModel):
+class TransD(TranslationalDecoder):
     """
     TODO.What_the_class_is_about_globally
 
@@ -995,7 +991,7 @@ class TransD(TransDModel):
 
 
 
-class TorusE(TorusEModel):
+class TorusE(TranslationalDecoder):
     """
     TODO.What_the_class_is_about_globally
 
