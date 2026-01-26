@@ -2,7 +2,6 @@
 
 import os
 import tomllib
-import tomli_w
 import random
 import logging 
 import pickle
@@ -13,23 +12,50 @@ from typing import List, Tuple, Literal
 import pandas as pd 
 import numpy as np
 import matplotlib.pyplot as plt
+import tomli_w
 
 import torch
 import torch.nn as nn
 from torch import cat, Tensor
 
-from torch_geometric.data import HeteroData
-
 from .knowledgegraph import KnowledgeGraph
+
 
 logging_level = logging.INFO
 logging.basicConfig(
-    level=logging_level,  
-    format="%(asctime)s - %(levelname)s - %(message)s" 
+    level = logging_level,  
+    format = "%(asctime)s - %(levelname)s - %(message)s" 
 )
 
 
-def parse_config(config_path: str, config_dictionnary: dict) -> dict:
+def parse_config(config_path: str,
+                config_dictionnary: dict
+                ) -> dict:
+    """
+        TODO.What_the_function_does_about_globally
+
+        References
+        ----------
+        TODO
+
+        Arguments
+        ---------
+        config_path: str
+            TODO.What_that_argument_is_or_does
+        config_dictionnary: dict
+            TODO.What_that_argument_is_or_does
+
+        Raises
+        ------
+        FileNotFoundError
+            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+
+        Returns
+        -------
+        config: dict
+            TODO.What_that_variable_is_or_does
+            
+        """
     if config_path != "" and not Path(config_path).exists():
         raise FileNotFoundError(f"Configuration file {config_path} not found.")
 
@@ -58,7 +84,37 @@ def set_config_key( key: str,
                     config: dict | None = None,
                     inline: dict | None = None
                     ) -> str | int | list | dict:
-    
+    """
+        TODO.What_the_function_does_about_globally
+
+        References
+        ----------
+        TODO
+
+        Arguments
+        ---------
+        default: dict
+            TODO.What_that_argument_is_or_does
+        config: dict, optional, default to None
+            TODO.What_that_argument_is_or_does
+        inline: dict, optional, default to None
+            TODO.What_that_argument_is_or_does
+
+        Raises
+        ------
+        ValueError
+            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+
+        Returns
+        -------
+        inline_value: TODO.type
+            TODO.What_that_variable_is_or_does
+        config_value: TODO.type
+            TODO.What_that_variable_is_or_does
+        default[key]: TODO.type
+            TODO.What_that_variable_is_or_does
+            
+        """
     if inline is not None and key in inline:
         inline_value = inline[key]
     else:
@@ -69,19 +125,23 @@ def set_config_key( key: str,
     else: 
         config_value = None
 
+    # If the value is a dict, recursively call this function on each of its keys
     if key in default and isinstance(default[key], dict):
         new_value = {}
+        # The keys are taken from default
         keys = list(default[key].keys())
         if config_value is not None:
+            # If they exist, keys are taken from the config file
             keys += (list(config_value.keys()))
         if inline_value is not None:
+            # If they exist, keys are taken from inline inputs
             keys += (list(inline_value.keys()))
-            
         for child_key in set(keys):
             new_value.update({child_key: set_config_key(child_key, default[key], config_value,  inline_value)})
-
         return new_value
     
+    # Return the key value in priority from: inline, config, default
+    # TODO: invert conditions, starting with 'if inline_value is not None:', for lisibility
     if inline_value is None:
         if config_value is None:
             if default[key] is None:
@@ -102,11 +162,11 @@ def save_config(config: dict,
     
     If no filename is given, it will be created as config.output_directory/kgate_config.toml.
     
-    Parameters
-    ----------
+    Arguments
+    ---------
     config: dict
         The parsed config as a python dictionnary.
-    filename: Path (optional)
+    filename: Path, optional
         The complete path to the configuration file. If one already exists, it will be overwritten.
         
     """
@@ -121,18 +181,38 @@ def load_knowledge_graph(pickle_filename: Path
     """
     Load the knowledge graph from pickle files.
     
+    Arguments
+    ---------
+    pickle_filename: Path
+        TODO.What_that_argument_is_or_does
+
+    Returns
+    -------
+    kg_train: KnowledgeGraph
+        TODO.What_that_variable_is_or_does
+    kg_validation: KnowledgeGraph
+        TODO.What_that_variable_is_or_does
+    kg_test: KnowledgeGraph
+        TODO.What_that_variable_is_or_does
+    
     """
     logging.info(f"Will not run the preparation step. Using KG stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:
         kg_train = pickle.load(file)
         kg_validation = pickle.load(file)
         kg_test = pickle.load(file)
+        
     return kg_train, kg_validation, kg_test
 
 
 def set_random_seeds(seed: int) -> None:
     """
     Set random seeds for reproducibility.
+    
+    Arguments
+    ---------
+    seed: int
+        TODO.What_that_argument_is_or_does
     
     """
     random.seed(seed)
@@ -145,19 +225,30 @@ def extract_node_type(node_name: str):
     """
     Extracts the node type from the node name, based on the string before the first underscore.
     
+    Arguments
+    ---------
+    node_name: str
+        TODO.What_that_argument_is_or_does
+
+    Returns
+    -------
+    TODO.result_name: TODO.type
+        TODO.What_that_variable_is_or_does
+    
     """
     return node_name.split("_")[0]
 
 
 def compute_triplet_proportions(kg_train: KnowledgeGraph,
                                 kg_test: KnowledgeGraph,
-                                kg_validation: KnowledgeGraph):
+                                kg_validation: KnowledgeGraph
+                                ) -> dict:
     """
     Computes the proportion of triplets for each edge in each of the KnowledgeGraphs
     (train, test, val) relative to the total number of triplets for that edge.
 
-    Parameters
-    ----------
+    Arguments
+    ---------
     kg_train: KnowledgeGraph
         The training KnowledgeGraph instance.
     kg_test: KnowledgeGraph
@@ -172,7 +263,7 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph,
         with the respective proportions of each edge in kg_train, kg_test, and kg_validation.
         
     """
-    # Concatenate edges from all KGs
+    # Concatenate edges from all knowledge graphs
     all_edges = torch.cat(( kg_train.triplets,
                             kg_test.triplets,
                             kg_validation.triplets))
@@ -188,7 +279,7 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph,
     validation_count = torch.bincount(kg_validation.triplets,
                                     minlength = len(total_counts))
 
-    # Compute proportions for each KG
+    # Compute proportions for each knowledge graph
     proportions = {}
     for edge_index in range(len(total_counts)):
         if total_counts[edge_index] > 0:
@@ -200,10 +291,33 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph,
 
     return proportions
 
+
 def concat_kgs( kg_train: KnowledgeGraph,
                 kg_validation: KnowledgeGraph,
-                kg_test: KnowledgeGraph):
+                kg_test: KnowledgeGraph
+                ) -> Tuple[Tensor, Tensor, Tensor]:
+    """
+    TODO.What_the_function_does_about_globally
+
+    Arguments
+    ---------
+    kg_train: KnowledgeGraph
+        The training KnowledgeGraph instance.
+    kg_test: KnowledgeGraph
+        The test KnowledgeGraph instance.
+    kg_validation: KnowledgeGraph
+        The validation KnowledgeGraph instance.
+
+    Returns
+    -------
+    head: torch.Tensor
+        TODO.What_that_variable_is_or_does
+    tail: torch.Tensor
+        TODO.What_that_variable_is_or_does
+    edge: torch.Tensor
+        TODO.What_that_variable_is_or_does
     
+    """
     head = cat((kg_train.head_indices,
                 kg_validation.head_indices,
                 kg_test.head_indices))
@@ -222,15 +336,20 @@ def concat_kgs( kg_train: KnowledgeGraph,
 def count_triplets( kg1: KnowledgeGraph,
                     kg2: KnowledgeGraph,
                     duplicates: List[Tuple[int, int]],
-                    reverse_duplicates: List[Tuple[int, int]]):
+                    reverse_duplicates: List[Tuple[int, int]]
+                    ) -> Tuple[int, int]:
     """
-    Parameters
-    ----------
-    kg1: torchkge.data_structures.KnowledgeGraph
-    kg2: torchkge.data_structures.KnowledgeGraph
-    duplicates: list
+    TODO.What_the_function_does_about_globally
+    
+    Arguments
+    ---------
+    kg1: KnowledgeGraph
+        TODO.What_that_argument_is_or_does
+    kg2: KnowledgeGraph
+        TODO.What_that_argument_is_or_does
+    duplicates: List[Tuple[int, int]]
         List returned by torchkge.utils.data_redundancy.duplicates.
-    reverse_duplicates: list
+    reverse_duplicates: List[Tuple[int, int]]
         List returned by torchkge.utils.data_redundancy.duplicates.
 
     Returns
@@ -271,7 +390,20 @@ def count_triplets( kg1: KnowledgeGraph,
 
 
 def find_best_model(dir: Path):
+    """
+    TODO.What_the_function_does_about_globally
     
+    Arguments
+    ---------
+    dir: Path
+        TODO.What_that_argument_is_or_does
+        
+    Returns
+    -------
+    TODO.result_name: TODO.type
+        TODO.What_that_variable_is_or_does
+
+    """
     return max(
         (filename
         for filename
@@ -287,16 +419,48 @@ def find_best_model(dir: Path):
     
 def initialize_embedding(embedding_count: int,
                         embedding_dimensions: int,
-                        device:str = "cpu"):
+                        device: str = "cpu"
+                        ) -> nn.Embedding:
+    """
+    TODO.What_the_function_does_about_globally
     
+    Arguments
+    ---------
+    embedding_count: int
+        TODO.What_that_argument_is_or_does
+    embedding_dimensions: int
+        TODO.What_that_argument_is_or_does
+    device: str, default to "cpu"
+        TODO.What_that_argument_is_or_does
+        
+    Returns
+    -------
+    embedding: nn.Embedding
+        TODO.What_that_variable_is_or_does
+    
+    """
     embedding = nn.Embedding(embedding_count, embedding_dimensions, device = device)
     nn.init.xavier_uniform_(embedding.weight.data)
     
     return embedding
 
 
-def read_train_metrics(train_metrics_file: Path):
+def read_train_metrics(train_metrics_file: Path
+                        ) -> pd.DataFrame:
+    """
+    TODO.What_the_function_does_about_globally
     
+    Arguments
+    ---------
+    train_metrics_file: Path
+        TODO.What_that_argument_is_or_does
+        
+    Returns
+    -------
+    dataframe: pd.DataFrame
+        TODO.What_that_variable_is_or_does
+    
+    """
     dataframe = pd.read_csv(train_metrics_file)
 
     dataframe = dataframe[~dataframe["Epoch"].astype(str).str.contains("CHECKPOINT RESTART")]
@@ -312,7 +476,19 @@ def read_train_metrics(train_metrics_file: Path):
 def plot_learning_curves(train_metrics_file: Path,
                         output_directory: Path,
                         validation_metric_value: str):
+    """
+    TODO.What_the_function_does_about_globally
     
+    Arguments
+    ---------
+    train_metrics_file: Path
+        TODO.What_that_argument_is_or_does
+    output_directory: Path
+        TODO.What_that_argument_is_or_does
+    validation_metric_value: str
+        TODO.What_that_argument_is_or_does
+    
+    """    
     output_directory = Path(output_directory)
     dataframe = read_train_metrics(train_metrics_file)
     dataframe["Training Loss"] = pd.to_numeric(dataframe["Training Loss"], errors = "coerce")
@@ -344,29 +520,32 @@ def filter_scores(  scores: Tensor,
                     missing: Literal["head", "tail", "edge"],
                     first_index: Tensor,
                     second_index: Tensor,
-                    true_index: Tensor | None):
+                    true_index: Tensor | None
+                    ) -> Tensor:
     """
     Filter a score tensor to ignore the score attributed to true node or edge except the ones that are being predicted.
     
-    Parameters
-    ----------
-    scores: Tensor
+    Arguments
+    ---------
+    scores: torch.Tensor
         Tensor of shape [batch_size, n] where n is the number of nodes or edges, depending on what is filtered.
-    graphindices: Tensor
+    graphindices: torch.Tensor
         Tensor of shape [4, triplet_count] containing every true triplet in the KG.
     missing: "head", "tail" or "edge"
         The part of the triplet that is currently being predicted.
-    first_index: Tensor
-        Tensor containing the index of the heads (if missing is "edge" or "tails") or tails (if missing is "head") that are part of the triplet being predicted.
-    second_index: Tensor
-        Tensor containing the index of the tails (if missing is "edge") or the edges (if missing is "head" or "tails") that are part of the triplet being predicted.
-    true_index: Tensor, optional
+    first_index: torch.Tensor
+        Tensor containing the index of the heads (if missing is "edge" or "tails")
+        or tails (if missing is "head") that are part of the triplet being predicted.
+    second_index: torch.Tensor
+        Tensor containing the index of the tails (if missing is "edge")
+        or the edges (if missing is "head" or "tails") that are part of the triplet being predicted.
+    true_index: torch.Tensor, optional
         Tensor containing the index of the nodes or edges currently being predicted.
         If omitted, every true index will be filtered out.
 
     Returns
     -------
-    filtered_scores: Tensor
+    filtered_scores: torch.Tensor
         Tensor of shape [batch_size, n] with -Inf values for all true node/edge index except the ones being predicted.
         
     """
@@ -405,12 +584,23 @@ def merge_kg(kg_list: List[KnowledgeGraph],
     """
     Merge multiple KnowledgeGraph objects into a unique one.
     
-    Parameters
-    ----------
-    kg_list: List[Tensor]
+    Arguments
+    ---------
+    kg_list: List[KnowledgeGraph]
         The list of all KG to be merged
     complete_graphindices: bool, default to False
         Whether or not the removed_triplets tensor should be integrated into the final KG's graphindices.
+
+        Raises
+        ------
+        error_name
+            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        error_name
+            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        error_name
+            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        error_name
+            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
     
     Returns
     -------
