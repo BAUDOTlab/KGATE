@@ -14,19 +14,24 @@ from typing import Tuple, Dict, Literal
 
 from tqdm import tqdm
 
-from torch import nn, tensor, matmul, Module, Tensor, empty
+from torch import nn, tensor, matmul, Tensor, empty
 from torch.cuda import empty_cache
 from torch.nn.functional import normalize
-from torch.nn import ParameterList, Parameter
+from torch.nn import Module, Parameter, ParameterList
 
 from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel, TorusEModel
-from torchkge.utils.dissimilarities import l1_dissimilarity, l2_dissimilarity, \
-            l1_torus_dissimilarity, l2_torus_dissimilarity, el2_torus_dissimilarity
+from torchkge.utils.dissimilarities import  l1_dissimilarity, \
+                                            l2_dissimilarity, \
+                                            l1_torus_dissimilarity, \
+                                            l2_torus_dissimilarity, \
+                                            el2_torus_dissimilarity
 
 from ..utils import initialize_embedding
 
+
 class TranslationalDecoder(Module):
-    """Interface for translational decoders of KGATE.
+    """
+    Interface for translational decoders of KGATE.
 
     This interface is largely inspired by TorchKGE's TranslationModel, and exposes
     the methods that all translational decoders must use to be compatible with KGATE.
