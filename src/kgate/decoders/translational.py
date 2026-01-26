@@ -343,7 +343,7 @@ class TransH(TranslationalDecoder):
         self.dissimilarity = l2_dissimilarity
 
         self.evaluated_projections = False
-        self.projected_nodes = Parameter(empty(size=(edge_count,
+        self.projected_nodes = Parameter(empty(size = (edge_count,
                                                     node_count,
                                                     embedding_dimensions)),
                                                     requires_grad = False)
@@ -593,10 +593,9 @@ class TransR(TranslationalDecoder):
 
         self.evaluated_projections = False
         self.projected_nodes = Parameter(empty(size = (edge_count,
-                                                        node_count,
-                                                        embedding_dimensions)),
-                                                        requires_grad = False)
-
+                                                    node_count,
+                                                    embedding_dimensions)),
+                                                    requires_grad = False)
 
     def score(  self,
                 *,
@@ -654,6 +653,10 @@ class TransR(TranslationalDecoder):
         
         return projected_nodes.view(-1, self.edge_embedding_dimensions)
     
+    def project(self, nodes: Tensor, projection_matrix: Tensor):
+        """Project the given nodes onto the projection matrix."""
+        projected_nodes = matmul(projection_matrix, nodes.view(-1, self.node_embedding_dimensions, 1))
+        return projected_nodes.view(-1, self.edge_embedding_dimensions)
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
@@ -851,11 +854,10 @@ class TransD(TranslationalDecoder):
         self.dissimilarity = l2_dissimilarity
 
         self.evaluated_projections = False
-        self.projected_nodes = Parameter(empty(size = ( edge_count,
-                                                        node_count,
-                                                        embedding_dimensions)),
-                                                        requires_grad = False)
-
+        self.projected_nodes = Parameter(empty(size = (edge_count,
+                                                    node_count,
+                                                    embedding_dimensions)),
+                                                    requires_grad = False)
 
     def score(  self,
                 *,
@@ -907,6 +909,13 @@ class TransD(TranslationalDecoder):
         
         return - self.dissimilarity(projected_heads + edge_normalized_embeddings, projected_tails)
     
+    def project(self, nodes: Tensor, node_projection_vector: Tensor, edge_projection_vector: Tensor) -> Tensor:
+        batch_size = nodes.size(0)
+
+        scalar_product = (nodes * node_projection_vector).sum(dim=1)
+        projected_nodes = (edge_projection_vector * scalar_product.view(batch_size, 1))
+
+        return projected_nodes + nodes[:, :self.edge_embedding_dimensions]
     
     def project(self, nodes: Tensor, node_projection_vector: Tensor, edge_projection_vector: Tensor) -> Tensor:
         batch_size = nodes.shape[0]
@@ -1116,7 +1125,6 @@ class TorusE(TranslationalDecoder):
                 raise ValueError(f"TorusE decoder can only use L1, torus_L1, torus_L2 or torus_eL2 dissimlarity, but got \"{dissimilarity_type}\"")
 
         self.normalized = False
-    
     
     def score(  self,
                 *,
