@@ -313,12 +313,12 @@ class TransH(TranslationalDecoder):
     """
     def __init__(self, node_count: int, edge_count: int, embedding_dimensions: int):
         self.normal_vector = initialize_embedding(edge_count, embedding_dimensions)
-        self.dissimilarity_type = l2_dissimilarity
+        self.dissimilarity = l2_dissimilarity
 
         self.evaluated_projections = False
         self.projected_nodes = Parameter(empty(size=(edge_count,
-                                                           node_count,
-                                                           embedding_dimensions)),
+                                                    node_count,
+                                                    embedding_dimensions)),
                                                     requires_grad=False)
 
     @staticmethod
@@ -463,12 +463,12 @@ class TransH(TranslationalDecoder):
         edge_embeddings_inference = edge_embeddings(edge_indices)
 
         if node_inference:
-            projected_heads = self.projected_entities[edge_indices, head_indices]  # shape: (batch_size, self.emb_dim)
-            projected_tails = self.projected_entities[edge_indices, tail_indices]  # shape: (batch_size, self.emb_dim)
-            candidates = self.projected_entities[edge_indices]  # shape: (batch_size, self.n_rel, self.emb_dim)
+            projected_heads = self.projected_nodes[edge_indices, head_indices]  # shape: (batch_size, self.emb_dim)
+            projected_tails = self.projected_nodes[edge_indices, tail_indices]  # shape: (batch_size, self.emb_dim)
+            candidates = self.projected_nodes[edge_indices]  # shape: (batch_size, self.n_rel, self.emb_dim)
         else:
-            projected_heads = self.projected_entities[:, head_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.emb_dim)
-            projected_tails = self.projected_entities[:, tail_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.emb_dim)
+            projected_heads = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.emb_dim)
+            projected_tails = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.emb_dim)
             candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, self.n_rel, self.emb_dim)  # shape: (batch_size, self.n_rel, self.emb_dim)
 
         return projected_heads, projected_tails, edge_embeddings_inference, candidates
@@ -511,7 +511,7 @@ class TransH(TranslationalDecoder):
             masked_node_embeddings = node_embeddings[mask]
 
             normalized_components = (masked_node_embeddings.view(1, -1) * normal_vector).sum(dim = 1)
-            self.projected_entities[:, i, :] = (masked_node_embeddings.view(1, -1) - normalized_components.view(-1, 1) * normal_vector)
+            self.projected_nodes[:, i, :] = (masked_node_embeddings.view(1, -1) - normalized_components.view(-1, 1) * normal_vector)
 
             del normalized_components
 
@@ -549,8 +549,20 @@ class TransR(TranslationalDecoder):
                 node_count: int,
                 edge_count: int):
         
-        super().__init__(node_embedding_dimensions, edge_embedding_dimensions, node_count, edge_count)
+        self.node_count = node_count
+        self.edge_count = edge_count
+        self.node_embedding_dimensions = node_embedding_dimensions
+        self.edge_embedding_dimensions = edge_embedding_dimensions
 
+        self.projection_matrix = initialize_embedding(node_count, edge_embedding_dimensions * node_embedding_dimensions)
+
+        self.dissimilarity = l2_dissimilarity
+
+        self.evaluated_projections = False
+        self.projected_nodes = Parameter(empty(size=(edge_count,
+                                                    node_count,
+                                                    embedding_dimensions)),
+                                                    requires_grad=False)
 
     def score(self,
             *,
@@ -588,12 +600,16 @@ class TransR(TranslationalDecoder):
         self.evaluated_projections = False
         batch_size = head_normalized_embeddings.shape[0]
 
-        projected_matrix = self.proj_mat(edge_indices).view(batch_size,
-                                                            self.rel_emb_dim,
-                                                            self.ent_emb_dim)
-        return - self.dissimilarity(self.project(head_normalized_embeddings, projected_matrix) + edge_embeddings,
-                                    self.project(tail_normalized_embeddings, projected_matrix))
+        projection_matrix = self.proj_mat(edge_indices).view(batch_size,
+                                                            self.edge_embedding_dimensions,
+                                                            self.node_embedding_dimensions)
+        return - self.dissimilarity(self.project(head_normalized_embeddings, projection_matrix) + edge_embeddings,
+                                    self.project(tail_normalized_embeddings, projection_matrix))
     
+    def project(self, nodes: Tensor, projection_matrix: Tensor):
+        """Project the given nodes onto the projection matrix."""
+        projected_nodes = matmul(projection_matrix, nodes.view(-1, self.node_embedding_dimensions, 1))
+        return projected_nodes.view(-1, self.edge_embedding_dimensions)
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
@@ -640,7 +656,7 @@ class TransR(TranslationalDecoder):
             TODO.What_that_variable_is_or_does
             
         """
-        return {"proj_mat": self.proj_mat.weight.data.view(-1,
+        return {"projection_matrix": self.projection_matrix.weight.data.view(-1,
                                                         self.rel_emb_dim,
                                                         self.ent_emb_dim)}
     
@@ -691,13 +707,13 @@ class TransR(TranslationalDecoder):
 
         edge_embeddings_inference = edge_embeddings(edge_indices)
         if node_inference:
-            projected_heads = self.projected_entities[edge_indices, head_indices]  # shape: (batch_size, self.emb_dim)
-            projected_tails = self.projected_entities[edge_indices, tail_indices]  # shape: (batch_size, self.emb_dim)
-            candidates = self.projected_entities[edge_indices]  # shape: (batch_size, self.n_rel, self.emb_dim)
+            projected_heads = self.projected_nodes[edge_indices, head_indices]  # shape: (batch_size, self.emb_dim)
+            projected_tails = self.projected_nodes[edge_indices, tail_indices]  # shape: (batch_size, self.emb_dim)
+            candidates = self.projected_nodes[edge_indices]  # shape: (batch_size, self.n_rel, self.emb_dim)
         else:
-            projected_heads = self.projected_entities[:, head_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.emb_dim)
-            projected_tails = self.projected_entities[:, tail_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.emb_dim)
-            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, self.n_rel, self.emb_dim)  # shape: (batch_size, self.n_rel, self.emb_dim)
+            projected_heads = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.emb_dim)
+            projected_tails = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.emb_dim)
+            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, edge_embeddings.num_embeddings, edge_embeddings.embedding_dim)  # shape: (batch_size, self.n_rel, self.emb_dim)
 
         return projected_heads, projected_tails, edge_embeddings_inference, candidates
     
@@ -728,8 +744,8 @@ class TransR(TranslationalDecoder):
             return
 
         for i in tqdm(range(self.n_ent), unit = "nodes", desc = "Projecting nodes"):
-            projection_matrices = self.proj_mat.weight.data
-            projection_matrices = projection_matrices.view(self.n_rel, self.rel_emb_dim, self.ent_emb_dim)
+            projection_matrices = self.projection_matrix.weight.data
+            projection_matrices = projection_matrices.view(self.edge_count, self.edge_embedding_dimensions, self.node_embedding_dimension)
 
             mask = tensor([i], device = projection_matrices.device).long()
 
@@ -739,10 +755,10 @@ class TransR(TranslationalDecoder):
             # TODO: find better name
             masked_node_embeddings = node_embeddings[mask]
             
-            projected_masked_node_embeddings = matmul(projection_matrices, masked_node_embeddings.view(self.ent_emb_dim))
-            projected_masked_node_embeddings = projected_masked_node_embeddings.view(self.n_rel, self.rel_emb_dim, 1)
-            self.projected_entities[:, i, :] = projected_masked_node_embeddings.view(self.n_rel, self.rel_emb_dim)
-            # TODO: comment that projected_entities equivalent to projected_masked_node_embeddings
+            projected_masked_node_embeddings = matmul(projection_matrices, masked_node_embeddings.view(self.node_embedding_dimension))
+            projected_masked_node_embeddings = projected_masked_node_embeddings.view(self.n_rel, self.edge_embedding_dimensions, 1)
+            self.projected_nodes[:, i, :] = projected_masked_node_embeddings.view(self.n_rel, self.edge_embedding_dimensions)
+            # TODO: comment that projected_nodes equivalent to projected_masked_node_embeddings
 
             del projected_masked_node_embeddings
 
@@ -779,9 +795,22 @@ class TransD(TranslationalDecoder):
                 edge_embedding_dimensions: int,
                 node_count: int,
                 edge_count: int):
-    
-        super().__init__(node_embedding_dimensions, edge_embedding_dimensions, node_count, edge_count)
+        self.node_count = node_count
+        self.edge_count = edge_count
+        self.node_embedding_dimensions = node_embedding_dimensions
+        self.edge_embedding_dimensions = edge_embedding_dimensions
 
+        # Might be changed to have 2 embedding spaces instead (meaning it will be encoded by a GNN if present)
+        self.node_projection_vector = initialize_embedding(self.node_count, self.node_embedding_dimensions)
+        self.edge_projection_vector = initialize_embedding(self.edge_count, self.edge_embedding_dimensions)
+
+        self.dissimilarity = l2_dissimilarity
+
+        self.evaluated_projections = False
+        self.projected_nodes = Parameter(empty(size=(edge_count,
+                                                    node_count,
+                                                    embedding_dimensions)),
+                                                    requires_grad=False)
 
     def score(self,
             *,
@@ -824,15 +853,22 @@ class TransD(TranslationalDecoder):
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
         edge_normalized_embeddings = normalize(edge_embeddings, p = 2, dim = 1)
 
-        head_projected_vectors = normalize(self.ent_proj_vect(head_indices), p = 2, dim = 1)
-        tail_projected_vectors = normalize(self.ent_proj_vect(tail_indices), p = 2, dim = 1)
-        edge_projected_vectors = normalize(self.rel_proj_vect(edge_indices), p = 2, dim = 1)
+        head_projected_vectors = normalize(self.node_projection_vector(head_indices), p = 2, dim = 1)
+        tail_projected_vectors = normalize(self.node_projection_vector(tail_indices), p = 2, dim = 1)
+        edge_projected_vectors = normalize(self.edge_projection_vector(edge_indices), p = 2, dim = 1)
 
         projected_heads = self.project(head_normalized_embeddings, head_projected_vectors, edge_projected_vectors)
         projected_tails = self.project(tail_normalized_embeddings, tail_projected_vectors, edge_projected_vectors)
         
         return - self.dissimilarity(projected_heads + edge_normalized_embeddings, projected_tails)
     
+    def project(self, nodes: Tensor, node_projection_vector: Tensor, edge_projection_vector: Tensor) -> Tensor:
+        batch_size = nodes.size(0)
+
+        scalar_product = (nodes * node_projection_vector).sum(dim=1)
+        projected_nodes = (edge_projection_vector * scalar_product.view(batch_size, 1))
+
+        return projected_nodes + nodes[:, :self.edge_embedding_dimensions]
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
@@ -866,8 +902,8 @@ class TransD(TranslationalDecoder):
 
         edge_embeddings.weight.data = normalize(edge_embeddings.weight.data, p = 2, dim = 1)
 
-        self.ent_proj_vect.weight.data = normalize(self.ent_proj_vect.weight.data, p = 2, dim = 1)
-        self.rel_proj_vect.weight.data = normalize(self.rel_proj_vect.weight.data, p = 2, dim = 1)
+        self.node_projection_vector.weight.data = normalize(self.node_projection_vector.weight.data, p = 2, dim = 1)
+        self.edge_projection_vector.weight.data = normalize(self.edge_projection_vector.weight.data, p = 2, dim = 1)
 
         return node_embeddings, edge_embeddings
 
@@ -882,8 +918,8 @@ class TransD(TranslationalDecoder):
             TODO.What_that_variable_is_or_does
             
         """
-        return {"ent_proj_vect": self.ent_proj_vect.weight.data,
-                "rel_proj_vect": self.rel_proj_vect.weight.data}
+        return {"node_projection_vector": self.node_projection_vector.weight.data,
+                "edge_projection_vector": self.edge_projection_vector.weight.data}
     
     
     def inference_prepare_candidates(self,
@@ -933,12 +969,12 @@ class TransD(TranslationalDecoder):
         edge_embeddings_inference = edge_embeddings(edge_indices)
 
         if node_inference:
-            projected_heads = self.projected_entities[edge_indices, head_indices]  # shape: (batch_size, self.emb_dim)
-            projected_tails = self.projected_entities[edge_indices, tail_indices]  # shape: (batch_size, self.emb_dim)
-            candidates = self.projected_entities[edge_indices]  # shape: (batch_size, self.n_rel, self.emb_dim)
+            projected_heads = self.projected_nodes[edge_indices, head_indices]  # shape: (batch_size, self.emb_dim)
+            projected_tails = self.projected_nodes[edge_indices, tail_indices]  # shape: (batch_size, self.emb_dim)
+            candidates = self.projected_nodes[edge_indices]  # shape: (batch_size, self.n_rel, self.emb_dim)
         else:
-            projected_heads = self.projected_entities[:, head_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.rel_emb_dim)
-            projected_tails = self.projected_entities[:, tail_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.rel_emb_dim)
+            projected_heads = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.rel_emb_dim)
+            projected_tails = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.rel_emb_dim)
             candidates = self.rel_emb.weight.data.unsqueeze(0).expand(batch_size, self.n_rel, self.rel_emb_dim)  # shape: (batch_size, self.n_rel, self.emb_dim)
 
         return projected_heads, projected_tails, edge_embeddings_inference, candidates
@@ -969,21 +1005,20 @@ class TransD(TranslationalDecoder):
         if self.evaluated_projections:
             return
 
-        for i in tqdm(range(self.n_ent), unit = "nodes", desc = "Projecting nodes"):
-            edge_projected_vectors = self.rel_proj_vect.weight.data
+        for i in tqdm(range(self.node_count), unit = "nodes", desc = "Projecting nodes"):
+            edge_projection_vector = self.edge_projection_vector.weight.data
 
-            mask = tensor([i], device=edge_projected_vectors.device).long()
+            mask = tensor([i], device=edge_projection_vector.device).long()
 
             # TODO: find better name
             masked_node_embeddings = node_embeddings[mask]
 
-            node_projected_vectors = self.ent_proj_vect.weight[i]
+            node_projection_vector = self.node_projection_vector.weight[i]
 
-            # TODO PLACEHOLDER TODO PLACEHOLDER TODO
-            sc_prod = (node_projected_vectors * masked_node_embeddings).sum(dim=0)
-            projected_nodes = sc_prod * edge_projected_vectors + masked_node_embeddings[:self.rel_emb_dim].view(1, -1)
+            scalar_product = (node_projection_vector * masked_node_embeddings).sum(dim=0)
+            projected_nodes = scalar_product * edge_projection_vector + masked_node_embeddings[:self.rel_emb_dim].view(1, -1)
 
-            self.projected_entities[:, i, :] = projected_nodes
+            self.projected_nodes[:, i, :] = projected_nodes
 
             del projected_nodes
 
@@ -1019,10 +1054,21 @@ class TorusE(TranslationalDecoder):
                 embedding_dimensions: int,
                 node_count: int,
                 edge_count: int,
-                dissimilarity_type: str):
+                dissimilarity_type: Literal["L1","torus_L1","torus_L2","torus_eL2"]):
         
-        super().__init__(embedding_dimensions, node_count, edge_count, dissimilarity_type)
-    
+        match dissimilarity_type:
+            case "L1":
+                self.dissimilarity = l1_dissimilarity
+            case "torus_L1":
+                self.dissimilarity = l1_torus_dissimilarity
+            case "torus_L2":
+                self.dissimilarity = l2_torus_dissimilarity
+            case "torus_eL2":
+                self.dissimilarity = el2_torus_dissimilarity
+            case _:
+                raise ValueError(f"TorusE decoder can only use L1, torus_L1, torus_L2 or torus_eL2 dissimlarity, but got \"{dissimilarity_type}\"")
+
+        self.normalized = False
     
     def score(self,
             *,
@@ -1098,24 +1144,12 @@ class TorusE(TranslationalDecoder):
             
         """
         for embedding in node_embeddings:
-            embedding.data.frac_()
+            embedding.data.frac_() # Inplace fraction
 
-        edge_embeddings.weight.data = edge_embeddings.weight.data.frac()
+        edge_embeddings.weight.data.frac_()
         self.normalized = True
 
         return node_embeddings, edge_embeddings
-    
-    
-    def get_embeddings(self):
-        """
-        TODO.What_the_function_does_about_globally
-
-        Returns
-        -------
-        None
-        
-        """
-        return None
     
     
     def inference_prepare_candidates(self,
