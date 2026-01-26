@@ -19,8 +19,90 @@ from torchkge.models import DistMultModel, RESCALModel, ComplExModel
 
 from ..utils import initialize_embedding
 
+class BilinearDecoder(Module):
+    """Interface for bilinear decoders of KGATE.
 
-class RESCAL(RESCALModel):
+    This interface is largely inspired by TorchKGE's BilinearModel, and exposes
+    the methods that all translational decoders must use to be compatible with KGATE.
+    The interface doesn't have an __init__ method as inheriting decoders are supposed
+    to take care of their initialization, and only requires one attribute to be set.
+
+    Furthermore, this interface doesn't implement anything but is a type helper.
+    """
+    
+    def score(self,
+        *,
+        head_embeddings: Tensor,
+        tail_embeddings: Tensor,
+        edge_embeddings: Tensor,
+        head_indices: Tensor,
+        tail_indices: Tensor,
+        edge_indices: Tensor
+        ) -> Tensor:
+        """Interface method for the decoder's score function.
+
+        Refer to the specific decoder for details on scoring function implementation.
+        While all arguments are given when called from the Architect class, most 
+        decoders only use some of them. 
+
+        Arguments
+        ---------
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: (batch_size), keyword-only
+            The embeddings of the head entities for the current batch of length `batch_size`
+            (or the whole graph, if it fits in memory)
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: (batch_size), keyword-only
+            The embeddings of the tail entities for the current batch of length `batch_size` 
+            (or the whole graph, if it fits in memory)
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: (batch_size), keyword-only
+            The embeddings of the edges for the current batch of length `batch_size` 
+            (or the whole graph, if it fits in memory)
+        head_indices: torch.Tensor, dtype: torch.long, shape: (batch_size), keyword-only
+            The indices of the head entities for the current batch of length `batch_size` 
+            (or the whole graph, if it fits in memory)
+        tail_indices: torch.Tensor, dtype: torch.long, shape: (batch_size), keyword-only
+            The indices of the tail entities for the current batch of length `batch_size` 
+            (or the whole graph, if it fits in memory)
+        edge_indices: torch.Tensor, dtype: torch.long, shape: (batch_size), keyword-only
+            The indices of the edges for the current batch of length `batch_size` 
+            (or the whole graph, if it fits in memory)
+
+        Returns
+        -------
+            batch_score: torch.Tensor, dtype: torch.float, shape: (batch_size)
+                The score of each triplet as a tensor.
+        """
+        raise NotImplementedError("The score method must be implemented by the bilinear decoder.")
+
+    def normalize_parameters(self):
+        pass
+
+    def get_embeddings(self) -> Dict[str, Tensor] |None:
+        """Get the decoder-specific embeddings.
+        
+        If the decoder doesn't have dedicated embeddings, nothing is returned. In 
+        this case, it is not necessary to implement this method from the interface.
+        
+        Returns
+        -------
+            embeddings: Dict[str, torch.Tensor] or None
+                Decoder-specific embeddings, or None.
+        """
+        return None
+
+    def inference_prepare_candidates(self):
+        pass
+
+    def inference_score(self, 
+                        *,
+                        projected_heads: Tensor,
+                        projected_tails: Tensor,
+                        edges: Tensor
+                        ):
+        """TODO docstring
+        """
+        raise NotImplementedError("Bilinear decoders must implement the inference_score function themselves.")
+
+class RESCAL(BilinearDecoder):
     """
     TODO.What_the_class_is_about_globally
 
@@ -52,10 +134,11 @@ class RESCAL(RESCALModel):
                 embedding_dimensions: int, 
                 node_count: int,
                 edge_count: int):
-        
-        super().__init__(embedding_dimensions, node_count, edge_count)
-        del self.ent_emb
-        self.edge_embeddings_matrix = initialize_embedding(self.n_rel, self.emb_dim * self.emb_dim)
+        self.edge_count = edge_count
+        self.node_count = node_count
+        self.embedding_dimensions = embedding_dimensions
+
+        self.edge_embeddings_matrix = initialize_embedding(self.edge_count, self.embedding_dimensions * self.embedding_dimensions)
 
 
     def score(  self,
@@ -86,11 +169,11 @@ class RESCAL(RESCALModel):
         """
         head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
-        edge_embeddings = self.edge_embeddings_matrix(edge_indices).view(-1, self.emb_dim, self.emb_dim)
+        edge_embeddings = self.edge_embeddings_matrix(edge_indices).view(-1, self.embedding_dimensions, self.embedding_dimensions)
         # TODO: hr = head_edge_embeddings to rename
-        head_edge_embeddings = matmul(head_normalized_embeddings.view(-1, 1, self.emb_dim), edge_embeddings)
+        head_edge_embeddings = matmul(head_normalized_embeddings.view(-1, 1, self.embedding_dimensions), edge_embeddings)
         
-        return (head_edge_embeddings.view(-1, self.emb_dim) * tail_normalized_embeddings).sum(dim = 1)
+        return (head_edge_embeddings.view(-1, self.embedding_dimensions) * tail_normalized_embeddings).sum(dim = 1)
     
     
     def get_embeddings(self) -> Dict[str, Tensor]:
@@ -103,7 +186,7 @@ class RESCAL(RESCALModel):
             TODO.What_that_variable_is_or_does
             
         """
-        return {"edge_embeddings_matrix" : self.edge_embeddings_matrix.weight.data.view(-1, self.emb_dim, self.emb_dim)}
+        return {"edge_embeddings_matrix" : self.edge_embeddings_matrix.weight.data.view(-1, self.embedding_dimensions, self.embedding_dimensions)}
     
     
     def normalize_parameters(self,
@@ -184,7 +267,7 @@ class RESCAL(RESCALModel):
         # Get head, tail and edge embeddings
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
-        edge_embeddings_inference = self.edge_embeddings_matrix(edge_indices).view(-1, self.emb_dim, self.emb_dim)
+        edge_embeddings_inference = self.edge_embeddings_matrix(edge_indices).view(-1, self.embedding_dimensions, self.embedding_dimensions)
 
         if node_inference:
             # Prepare candidates for every node
@@ -195,9 +278,34 @@ class RESCAL(RESCALModel):
 
         return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
 
+    def inference_scoring_function(self, *,
+                                    head_embeddings: Tensor,
+                                    tail_embeddings: Tensor,
+                                    edge_embeddings: Tensor) -> Tensor:
+        batch_size = head_embeddings.size(0)
 
+        if len(head_embeddings.size()) == 3:
+            assert (len(tail_embeddings.size()) == 2) and (len(edge_embeddings.size()) == 3), \
+                "When inferring heads, ..."
+
+            tail_edge_embeddings = matmul(edge_embeddings, tail_embeddings.view(batch_size, self.embedding_dimensions, 1)).view(batch_size, 1, self.embedding_dimensions)
+            return (head_embeddings * tail_edge_embeddings).sum(dim=2)
+        elif len(tail_embeddings.size()) == 3:
+            assert (len(head_embeddings.size()) == 2) and (len(edge_embeddings.size()) == 3), \
+                "When inferring tails, ..."
+            
+            head_edge_embeddings = matmul(head_embeddings.view(batch_size, 1, self.embedding_dimensions)).view(batch_size, 1, self.embedding_dimensions)
+            return (head_edge_embeddings * tail_embeddings).sum(dim=2)
+        elif len(edge_embeddings.size()) == 4:
+            assert (len(head_embeddings.size()) == 2) and (len(tail_embeddings.size()) == 2), \
+                "When inferring edges, ..."
+
+            head_embeddings = head_embeddings.view(batch_size, 1, 1, self.embedding_dimensions)
+            tail_embeddings = tail_embeddings.view(batch_size, 1, self.embedding_dimensions)
+            head_edge_embeddings = matmul(head_embeddings, edge_embeddings).view(batch_size, self.edge_count, self.embedding_dimensions)
+            return (head_edge_embeddings * tail_embeddings).sum(dim=2)
     
-class DistMult(DistMultModel):
+class DistMult(BilinearDecoder):
     """
     TODO.What_the_class_is_about_globally
 
