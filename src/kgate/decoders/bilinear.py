@@ -24,7 +24,7 @@ class BilinearDecoder(Module):
     """Interface for bilinear decoders of KGATE.
 
     This interface is largely inspired by TorchKGE's BilinearModel, and exposes
-    the methods that all translational decoders must use to be compatible with KGATE.
+    the methods that all bilinear decoders must use to be compatible with KGATE.
     The interface doesn't have an __init__ method as inheriting decoders are supposed
     to take care of their initialization, and only requires one attribute to be set.
 
@@ -74,10 +74,10 @@ class BilinearDecoder(Module):
         """
         raise NotImplementedError("The score method must be implemented by the bilinear decoder.")
 
-    def normalize_parameters(self):
-        pass
+    def normalize_parameters(self) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+        return None
 
-    def get_embeddings(self) -> Dict[str, Tensor] |None:
+    def get_embeddings(self) -> Dict[str, Tensor] | None:
         """Get the decoder-specific embeddings.
         
         If the decoder doesn't have dedicated embeddings, nothing is returned. In 
@@ -90,15 +90,16 @@ class BilinearDecoder(Module):
         """
         return None
 
-    def inference_prepare_candidates(self):
-        pass
+    def inference_prepare_candidates(self) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        raise NotImplementedError("The inference_prepare_candidates method must be implemented by the bilinear decoder.")
+
 
     def inference_score(self, 
                         *,
                         projected_heads: Tensor,
                         projected_tails: Tensor,
                         edges: Tensor
-                        ):
+                        ) -> Tensor:
         """TODO docstring
         """
         raise NotImplementedError("Bilinear decoders must implement the inference_score function themselves.")
