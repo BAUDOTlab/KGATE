@@ -35,7 +35,6 @@ from torchkge.models import Model
 import torchkge.sampling as sampling
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
 
-
 from .data_leakage import permute_tails
 from .decoders import *
 from .encoders import *

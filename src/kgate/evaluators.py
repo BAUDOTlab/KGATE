@@ -26,10 +26,12 @@ from torchkge.models import Model
 
 from torch_geometric.utils import k_hop_subgraph
 
+from .architect import Architect
 from .knowledgegraph import KnowledgeGraph
 from .utils import filter_scores
 from .samplers import PositionalNegativeSampler
 from .encoders import GNN, DefaultEncoder
+from .decoders import BilinearDecoder, ConvolutionalDecoder, TranslationalDecoder
 
 
 class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
@@ -46,19 +48,17 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
 
     Arguments
     ---------
-    full_graphindices: Tensor
+    full_graphindices: torch.Tensor
         Tensor of shape [4, triplet_count] containing every true triplet.
 
     Attributes
     ----------
     full_graphindices: torch.Tensor
-        TODO.What_that_variable_is_or_does
+        Tensor of shape [4, triplet_count] containing every true triplet.
     evaluated: bool
-        Indicates if the method LinkPredictionEvaluator.evaluate has already
+        Indicate whether the method LinkPredictionEvaluator.evaluate has already
         been called.
-    model: torchkge.models.interfaces.Model
-        Embedding model inheriting from the right interface.
-    kg: torchkge.data_structures.KnowledgeGraph
+    kg: KnowledgeGraph
         Knowledge graph on which the evaluation will be done.
     rank_true_heads: torch.Tensor, shape: (triplet_count), dtype: `torch.int`
         For each fact, this is the rank of the true head when all nodes
@@ -84,7 +84,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
     def evaluate(self,
                 batch_size: int,
                 encoder: DefaultEncoder | GNN,
-                decoder: Model,
+                decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
                 kg: KnowledgeGraph,
                 node_embeddings: nn.ParameterList,
                 edge_embeddings: nn.Embedding,
@@ -98,17 +98,14 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             Size of the current batch.
         encoder: DefaultEncoder or GNN
             Encoder model to embed the nodes. Deactivated with DefaultEncoder.
-        decoder: any specific decoder type supported by KGATE
-            Decoder model to evaluate, inheriting from the torchkge.Model class.
-        knowledge_graph: kgate.KnowledgeGraph
-            The test Knowledge Graph that will be used for the evaluation.
+        decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
+            Decoder model to evaluate.
+        kg: KnowledgeGraph
+            Knowledge graph on which the evaluation will be done.
         node_embeddings: nn.ParameterList
-            TODO.What_that_argument_is_or_does
+            A list containing all embeddings (values) for each node type (indices).
         edge_embeddings: nn.Embedding
             A tensor containing one embedding by edge type.
-        mappings: kgate.HeteroMappings
-            An object containing mapping between the knowledge graph and 
-            embeddings.
         verbose: bool
             Indicates whether a progress bar should be displayed during
             evaluation.
@@ -216,7 +213,7 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
 
     Arguments
     ---------
-    architect: torchkge.models.interfaces.Model
+    architect: Architect
         Embedding model inheriting from the right interface.
     kg_validation: torchkge.data_structures.KnowledgeGraph
         Knowledge graph on which the validation thresholds will be computed.
@@ -225,27 +222,27 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
 
     Attributes
     ----------
-    architect: torchkge.models.interfaces.Model
+    architect: Architect
         Embedding model inheriting from the right interface.
-    kg_validation: torchkge.data_structures.KnowledgeGraph
+    kg_validation: KnowledgeGraph
         Knowledge graph on which the validation thresholds will be computed.
-    kg_test: torchkge.data_structures.KnowledgeGraph
+    kg_test: KnowledgeGraph
         Knowledge graph on which the evaluation will be done.
     is_cuda: str, default to "cuda"
         TODO.What_that_variable_is_or_does
     evaluated: bool, default to False
-        Indicate whether the `evaluate` function has been called.
+        Indicate whether the `evaluate` function has already been called.
     thresholds: float
         Value of the thresholds for the scoring function to consider a
         triplet as true. It is defined by calling the `evaluate` method.
-    sampler: torchkge.sampling.NegativeSampler
+    sampler: torchkge.sampling.NegativeSampler TODO.NegativeSmapler_super_class_maybe
         Negative sampler.
 
     """
     def __init__(self,
-                architect,
-                kg_validation,
-                kg_test):
+                architect: Architect,
+                kg_validation: KnowledgeGraph,
+                kg_test: KnowledgeGraph):
         
         self.architect = architect
         self.kg_validation = kg_validation
@@ -262,7 +259,8 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
                     heads: Tensor,
                     tails: Tensor,
                     edges: Tensor,
-                    batch_size: int):
+                    batch_size: int
+                    ) -> Tensor:
         """
         With head, tail and edge indices, compute the value of the
         scoring function of the model.
@@ -270,18 +268,19 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
         Arguments
         ---------
         heads: torch.Tensor, dtype: torch.long, shape: triplet_count
-            List of heads indices.
+            List of head indices.
         tails: torch.Tensor, dtype: torch.long, shape: triplet_count
-            List of tails indices.
+            List of tail indices.
         edges: torch.Tensor, dtype: torch.long, shape: triplet_count
             List of edge indices.
         batch_size: int
+            Size of the current batch.
 
         Returns
         -------
         scores: torch.Tensor, dtype: torch.float, shape: triplet_count
             List of scores of each triplet.
-            
+        
         """
         
         scores = []
@@ -295,7 +294,7 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
             dataloader = DataLoader(small_kg,
                                     batch_size = batch_size)
 
-        for i, batch in enumerate(dataloader):
+        for _, batch in enumerate(dataloader):
             head_index, tail_index, edge_index = batch[0].to(self.architect.device), batch[1].to(self.architect.device), batch[2].to(self.architect.device)
             scores.append(self.architect.scoring_function(head_index, tail_index, edge_index, train = False))
 
@@ -315,9 +314,9 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
         Arguments
         ---------
         batch_size: int
-            Batch size.
+            Size of the current batch.
         kg: KnowledgeGraph
-            Knowledge graph.
+            Knowledge graph on which the evaluation will be done.
             
         """
         sampler = PositionalNegativeSampler(kg)
@@ -347,16 +346,17 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
     def accuracy(self,
                 batch_size: int,
                 kg_test: KnowledgeGraph,
-                kg_validation: KnowledgeGraph | None = None):
+                kg_validation: KnowledgeGraph | None = None
+                ) -> float:
         
         """
         Arguments
         ---------
         batch_size: int
-            Batch size.
+            Size of the current batch.
         kg_test: KnowledgeGraph
             Test split from the knowledge graph.
-        kg_validation: KnowledgeGraph, optional, default to None
+        kg_validation: KnowledgeGraph, optional
             Validation split from the knowledge graph.
 
         Returns

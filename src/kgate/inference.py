@@ -41,8 +41,8 @@ class Inference_KG(Dataset):
     
     Raises
     ------
-    error_name
-        TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+    AssertionError
+        Index tensors are of different sizes.
 
     Notes
     -----
@@ -75,12 +75,12 @@ class EdgeInference(torchkge_inference.RelationInference):
     Arguments
     ---------
     kg: KnowledgeGraph
-        Knowledge graph.
+        Knowledge graph on which the inference will be done.
 
     Attributes
     ----------
     kg: KnowledgeGraph
-        Knowledge graph.
+        Knowledge graph on which the inference will be done.
 
     """
     def __init__(self, kg: KnowledgeGraph):
@@ -120,17 +120,17 @@ class EdgeInference(torchkge_inference.RelationInference):
         decoder: torchkge.Model, keyword-only
             TODO.What_that_argument_is_or_does
         node_embeddings: nn.ParameterList or nn.Embedding, keyword-only
-            TODO.What_that_argument_is_or_does
+            A list containing all embeddings (values) for each node type (indices).
         edge_embeddings: nn.Embedding, keyword-only
-            TODO.What_that_argument_is_or_does
+            A tensor containing one embedding by edge type.
         verbose: bool, default to True, keyword-only
             TODO.What_that_argument_is_or_does
 
         Returns
         -------
-        result_name: TODO.type
+        predictions: TODO.type
             TODO.What_that_variable_is_or_does
-        result_name: TODO.type
+        scores: TODO.type
             TODO.What_that_variable_is_or_does
             
         """
@@ -193,27 +193,26 @@ class NodeInference(torchkge_inference.EntityInference):
 
     Arguments
     ---------
-    kg:
+    kg: KnowledgeGraph
+        Knowledge graph on which the inference will be done.
     
     Attributes
     ----------
-    model: torchkge.models.interfaces.Model
-        Embedding model inheriting from the right interface.
-    known_entities: `torch.Tensor`, shape: (n_facts), dtype: `torch.long`
-        List of the indices of known entities.
-    known_relations: `torch.Tensor`, shape: (n_facts), dtype: `torch.long`
-        List of the indices of known relations.
-    top_k: int
+    known_nodes: torch.Tensor, shape: (n_facts), dtype: torch.long
+        List of the indices of known nodes.
+    known_edges: torch.Tensor, shape: (n_facts), dtype: torch.long
+        List of the indices of known edges.
+    top_k: int, keyword-only
         Indicates the number of top predictions to return.
-    missing: str
+    missing_triplet_part: Literal["head", "tail"], keyword-only
         String indicating if the missing entities are the heads or the tails.
     dictionary: dict, optional (default=None)
         Dictionary of possible heads or tails (depending on the value of `missing`).
         It is used to filter predictions that are known to be True in the training set
         in order to return only new facts.
-    predictions: `torch.Tensor`, shape: (n_facts, self.top_k), dtype: `torch.long`
+    predictions: torch.Tensor, shape: (n_facts, self.top_k), dtype: `torch.long`
         List of the indices of predicted entities for each test fact.
-    scores: `torch.Tensor`, shape: (n_facts, self.top_k), dtype: `torch.float`
+    scores: torch.Tensor, shape: (n_facts, self.top_k), dtype: `torch.float`
         List of the scores of resulting triples for each test fact.
 
     """
@@ -251,23 +250,24 @@ class NodeInference(torchkge_inference.EntityInference):
         missing_triplet_part: Literal["head", "tail"], keyword-only
             TODO.What_that_argument_is_or_does
         batch_size: int, keyword-only
-            TODO.What_that_argument_is_or_does
+            Size of the current batch.
         encoder: DefaultEncoder or GNN, keyword-only
-            TODO.What_that_argument_is_or_does
-        decoder: torchkge.Model, keyword-only
-            TODO.What_that_argument_is_or_does
+            Encoder model to embed the nodes. Deactivated with DefaultEncoder.
+        decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder, keyword-only
+            Decoder model to evaluate.
         node_embeddings: nn.ParameterList, keyword-only
-            TODO.What_that_argument_is_or_does
+            A list containing all embeddings (values) for each node type (indices).
         edge_embeddings: nn.Embedding, keyword-only
-            TODO.What_that_argument_is_or_does
+            A tensor containing one embedding by edge type.
         verbose: bool, default to True, keyword-only
-            TODO.What_that_argument_is_or_does
+            Indicates whether a progress bar should be displayed during
+            evaluation.
 
         Returns
         -------
-        result_name: TODO.type
+        predictions: TODO.type
             TODO.What_that_variable_is_or_does
-        result_name: TODO.type
+        scores: TODO.type
             TODO.What_that_variable_is_or_does
             
         """

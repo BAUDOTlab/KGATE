@@ -96,7 +96,8 @@ class GNN(nn.Module):
 
     def forward(self,
                 x_dict: Dict[str, Tensor],
-                edge_index_dict: Dict[Tuple[str, str, str,], Tensor]):
+                edge_index_dict: Dict[Tuple[str, str, str,], Tensor]
+                ) -> Dict[str, Tensor]:
         """
         TODO.What_the_function_does_about_globally
 
@@ -113,7 +114,7 @@ class GNN(nn.Module):
 
         Returns
         -------
-        x_dict: TODO.type
+        x_dict: Dict[str, Tensor]
             TODO.What_that_variable_is_or_does
             
         """
