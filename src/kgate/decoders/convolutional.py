@@ -30,16 +30,15 @@ class ConvolutionalDecoder(Module):
     Furthermore, this interface doesn't implement anything but is a type helper.
     
     """
-    
-    def score(self,
-        *,
-        head_embeddings: Tensor,
-        tail_embeddings: Tensor,
-        edge_embeddings: Tensor,
-        head_indices: Tensor,
-        tail_indices: Tensor,
-        edge_indices: Tensor
-        ) -> Tensor:
+    def score(  self,
+                *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_embeddings: Tensor,
+                head_indices: Tensor,
+                tail_indices: Tensor,
+                edge_indices: Tensor
+                ) -> Tensor:
         """
         Interface method for the decoder's score function.
 
@@ -167,11 +166,11 @@ class ConvKB(ConvolutionalDecoder):
         )
 
         
-    def score(self, *,
-            head_embeddings: Tensor,
-            tail_embeddings: Tensor,
-            edge_embeddings: Tensor,
-            **_) -> Tensor:
+    def score(  self, *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_embeddings: Tensor,
+                **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
 

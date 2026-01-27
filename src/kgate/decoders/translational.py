@@ -19,7 +19,6 @@ from torch.cuda import empty_cache
 from torch.nn.functional import normalize
 from torch.nn import Module, Parameter, ParameterList
 
-from torchkge.models import TransEModel, TransHModel, TransRModel, TransDModel, TorusEModel
 from torchkge.utils.dissimilarities import  l1_dissimilarity, \
                                             l2_dissimilarity, \
                                             l1_torus_dissimilarity, \
@@ -27,6 +26,7 @@ from torchkge.utils.dissimilarities import  l1_dissimilarity, \
                                             el2_torus_dissimilarity
 
 from ..utils import initialize_embedding
+
 
 
 class TranslationalDecoder(Module):
@@ -46,16 +46,17 @@ class TranslationalDecoder(Module):
         TorusE has a specific set of dissimilarity functions.
     """
     
-    def score(self,
-        *,
-        head_embeddings: Tensor,
-        tail_embeddings: Tensor,
-        edge_embeddings: Tensor,
-        head_indices: Tensor,
-        tail_indices: Tensor,
-        edge_indices: Tensor
-        ) -> Tensor:
-        """Interface method for the decoder's score function.
+    def score(  self,
+                *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_embeddings: Tensor,
+                head_indices: Tensor,
+                tail_indices: Tensor,
+                edge_indices: Tensor
+                ) -> Tensor:
+        """
+        Interface method for the decoder's score function.
 
         Refer to the specific decoder for details on scoring function implementation.
         While all arguments are given when called from the Architect class, most 
@@ -86,14 +87,22 @@ class TranslationalDecoder(Module):
         -------
             batch_score: torch.Tensor, dtype: torch.float, shape: (batch_size)
                 The score of each triplet as a tensor.
+        
         """
         raise NotImplementedError("The score method must be implemented by the translational decoder.")
 
+
     def normalize_parameters(self) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+        """
+        TODO.docstring
+        
+        """
         return None
 
+
     def get_embeddings(self) -> Dict[str, Tensor] | None:
-        """Get the decoder-specific embeddings.
+        """
+        Get the decoder-specific embeddings.
         
         If the decoder doesn't have dedicated embeddings, nothing is returned. In 
         this case, it is not necessary to implement this method from the interface.
@@ -102,10 +111,16 @@ class TranslationalDecoder(Module):
         -------
             embeddings: Dict[str, torch.Tensor] or None
                 Decoder-specific embeddings, or None.
+        
         """
         return None
 
+
     def inference_prepare_candidates(self) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        """
+        TODO.docstring
+        
+        """
         raise NotImplementedError("The inference_prepare_candidates method must be implemented by the translational decoder.")
 
     def inference_score(self, 
@@ -114,7 +129,9 @@ class TranslationalDecoder(Module):
                         projected_tails: Tensor,
                         edges: Tensor
                         ) -> Tensor:
-        """TODO docstring
+        """
+        TODO docstring
+        
         """
         batch_size = projected_heads.size(0)
 
@@ -178,6 +195,7 @@ class TransE(TranslationalDecoder):
             case _:
                 raise ValueError(f"TransE decoder can only use L1 or L2 dissimlarity, but got \"{dissimilarity_type}\"")
 
+
     def score(self,
             *,
             head_embeddings: Tensor,
@@ -210,6 +228,7 @@ class TransE(TranslationalDecoder):
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
         
         return -self.dissimilarity(head_normalized_embeddings + edge_embeddings, tail_normalized_embeddings)
+    
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
@@ -316,7 +335,10 @@ class TransH(TranslationalDecoder):
     TODO.inherited_attributes
     
     """
-    def __init__(self, node_count: int, edge_count: int, embedding_dimensions: int):
+    def __init__(self,
+                node_count: int,
+                edge_count: int,
+                embedding_dimensions: int):
         self.normal_vector = initialize_embedding(edge_count, embedding_dimensions)
         self.dissimilarity = l2_dissimilarity
 
@@ -324,11 +346,17 @@ class TransH(TranslationalDecoder):
         self.projected_nodes = Parameter(empty(size=(edge_count,
                                                     node_count,
                                                     embedding_dimensions)),
-                                                    requires_grad=False)
+                                                    requires_grad = False)
+
 
     @staticmethod
     def project(nodes, normal_vector):
-        return nodes - (nodes * normal_vector).sum(dim=1).view(-1, 1) * normal_vector
+        """
+        TODO.docstring
+        
+        """
+        return nodes - (nodes * normal_vector).sum(dim = 1).view(-1, 1) * normal_vector
+
 
     def score(self,
             *,
@@ -564,18 +592,19 @@ class TransR(TranslationalDecoder):
         self.dissimilarity = l2_dissimilarity
 
         self.evaluated_projections = False
-        self.projected_nodes = Parameter(empty(size=(edge_count,
-                                                    node_count,
-                                                    embedding_dimensions)),
-                                                    requires_grad=False)
+        self.projected_nodes = Parameter(empty(size = (edge_count,
+                                                        node_count,
+                                                        embedding_dimensions)),
+                                                        requires_grad = False)
 
-    def score(self,
-            *,
-            head_embeddings: Tensor,
-            tail_embeddings: Tensor,
-            edge_embeddings: Tensor,
-            edge_indices: Tensor,
-            **_) -> Tensor:
+
+    def score(  self,
+                *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_embeddings: Tensor,
+                edge_indices: Tensor,
+                **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
 
@@ -608,13 +637,23 @@ class TransR(TranslationalDecoder):
         projection_matrix = self.proj_mat(edge_indices).view(batch_size,
                                                             self.edge_embedding_dimensions,
                                                             self.node_embedding_dimensions)
+        
         return - self.dissimilarity(self.project(head_normalized_embeddings, projection_matrix) + edge_embeddings,
                                     self.project(tail_normalized_embeddings, projection_matrix))
     
-    def project(self, nodes: Tensor, projection_matrix: Tensor):
-        """Project the given nodes onto the projection matrix."""
+    
+    def project(self,
+                nodes: Tensor,
+                projection_matrix: Tensor):
+        """
+        Project the given nodes onto the projection matrix.
+        TODO
+        
+        """
         projected_nodes = matmul(projection_matrix, nodes.view(-1, self.node_embedding_dimensions, 1))
+        
         return projected_nodes.view(-1, self.edge_embedding_dimensions)
+    
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
@@ -812,20 +851,21 @@ class TransD(TranslationalDecoder):
         self.dissimilarity = l2_dissimilarity
 
         self.evaluated_projections = False
-        self.projected_nodes = Parameter(empty(size=(edge_count,
-                                                    node_count,
-                                                    embedding_dimensions)),
-                                                    requires_grad=False)
+        self.projected_nodes = Parameter(empty(size = ( edge_count,
+                                                        node_count,
+                                                        embedding_dimensions)),
+                                                        requires_grad = False)
 
-    def score(self,
-            *,
-            head_embeddings: Tensor,
-            tail_embeddings: Tensor,
-            edge_embeddings: Tensor,
-            head_indices: Tensor,
-            edge_indices: Tensor,
-            tail_indices: Tensor,
-            **_) -> Tensor:
+
+    def score(  self,
+                *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_embeddings: Tensor,
+                head_indices: Tensor,
+                edge_indices: Tensor,
+                tail_indices: Tensor,
+                **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
 
@@ -867,13 +907,15 @@ class TransD(TranslationalDecoder):
         
         return - self.dissimilarity(projected_heads + edge_normalized_embeddings, projected_tails)
     
+    
     def project(self, nodes: Tensor, node_projection_vector: Tensor, edge_projection_vector: Tensor) -> Tensor:
         batch_size = nodes.size(0)
 
-        scalar_product = (nodes * node_projection_vector).sum(dim=1)
+        scalar_product = (nodes * node_projection_vector).sum(dim = 1)
         projected_nodes = (edge_projection_vector * scalar_product.view(batch_size, 1))
 
         return projected_nodes + nodes[:, :self.edge_embedding_dimensions]
+    
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
@@ -1020,7 +1062,7 @@ class TransD(TranslationalDecoder):
 
             node_projection_vector = self.node_projection_vector.weight[i]
 
-            scalar_product = (node_projection_vector * masked_node_embeddings).sum(dim=0)
+            scalar_product = (node_projection_vector * masked_node_embeddings).sum(dim = 0)
             projected_nodes = scalar_product * edge_projection_vector + masked_node_embeddings[:self.rel_emb_dim].view(1, -1)
 
             self.projected_nodes[:, i, :] = projected_nodes
@@ -1075,15 +1117,16 @@ class TorusE(TranslationalDecoder):
 
         self.normalized = False
     
-    def score(self,
-            *,
-            head_embeddings: Tensor,
-            tail_embeddings: Tensor,
-            edge_embeddings: Tensor,
-            head_indices: Tensor,
-            tail_indices: Tensor,
-            edge_indices: Tensor,
-            **_) -> Tensor:
+    
+    def score(  self,
+                *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_embeddings: Tensor,
+                head_indices: Tensor,
+                tail_indices: Tensor,
+                edge_indices: Tensor,
+                **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
 
@@ -1217,4 +1260,3 @@ class TorusE(TranslationalDecoder):
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         
         return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
-    

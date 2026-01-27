@@ -19,19 +19,18 @@ from torch import empty, zeros, cat, Tensor
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+from torch_geometric.utils import k_hop_subgraph
+
 import torchkge.evaluation as eval
 from torchkge.utils import get_rank
 from torchkge.data_structures import SmallKG
-from torchkge.models import Model
-
-from torch_geometric.utils import k_hop_subgraph
 
 from .architect import Architect
-from .knowledgegraph import KnowledgeGraph
-from .utils import filter_scores
-from .samplers import PositionalNegativeSampler
-from .encoders import GNN, DefaultEncoder
 from .decoders import BilinearDecoder, ConvolutionalDecoder, TranslationalDecoder
+from .encoders import GNN, DefaultEncoder
+from .knowledgegraph import KnowledgeGraph
+from .samplers import PositionalNegativeSampler
+from .utils import filter_scores
 
 
 class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
@@ -107,7 +106,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
         edge_embeddings: nn.Embedding
             A tensor containing one embedding by edge type.
         verbose: bool
-            Indicates whether a progress bar should be displayed during
+            Indicate whether a progress bar should be displayed during
             evaluation.
         
         """
@@ -158,14 +157,14 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             else:
                 node_embeddings = node_embeddings[0].data
 
-            head_embeddings, tail_embeddings, edge_embeddings, candidates = decoder.inference_prepare_candidates(head_index = head_index, 
-                                                                                                                tail_index = tail_index, 
-                                                                                                                edge_index = edge_index, 
+            head_embeddings, tail_embeddings, edge_embeddings, candidates = decoder.inference_prepare_candidates(head_indices = head_index, 
+                                                                                                                tail_indices = tail_index, 
+                                                                                                                edge_indices = edge_index, 
                                                                                                                 node_embeddings = node_embeddings, 
                                                                                                                 edge_embeddings = edge_embeddings,
                                                                                                                 node_inference = True)
 
-            scores = decoder.inference_scoring_function(head_embeddings, candidates, edge_embeddings)
+            scores = decoder.inference_score(head_embeddings, candidates, edge_embeddings)
             filtered_scores = filter_scores(
                 scores = scores, 
                 graphindices = self.full_graphindices.to(device),
@@ -177,7 +176,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             self.rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(scores, tail_index).detach()
             self.filtered_rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(filtered_scores, tail_index).detach()
 
-            scores = decoder.inference_scoring_function(candidates, tail_embeddings, edge_embeddings)
+            scores = decoder.inference_score(candidates, tail_embeddings, edge_embeddings)
             filtered_scores = filter_scores(
                 scores = scores, 
                 graphindices = self.full_graphindices.to(device),
@@ -235,7 +234,7 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
     thresholds: float
         Value of the thresholds for the scoring function to consider a
         triplet as true. It is defined by calling the `evaluate` method.
-    sampler: torchkge.sampling.NegativeSampler TODO.NegativeSmapler_super_class_maybe
+    sampler: torchkge.sampling.NegativeSampler TODO.NegativeSampler_super_class_maybe
         Negative sampler.
 
     """
