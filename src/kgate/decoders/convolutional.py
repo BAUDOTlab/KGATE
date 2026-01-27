@@ -67,12 +67,12 @@ class ConvolutionalDecoder(Module):
             batch_score: torch.Tensor, dtype: torch.float, shape: (batch_size)
                 The score of each triplet as a tensor.
         """
-        raise NotImplementedError("The score method must be implemented by the bilinear decoder.")
+        raise NotImplementedError("The score method must be implemented by the convolutional decoder.")
 
-    def normalize_parameters(self) -> Tuple[Tensor, Tensor] | None:
+    def normalize_parameters(self) -> Tuple[nn.ParameterList, nn.Embedding] | None:
         return None
 
-    def get_embeddings(self) -> Dict[str, Tensor] |None:
+    def get_embeddings(self) -> Dict[str, Tensor] | None:
         """Get the decoder-specific embeddings.
         
         If the decoder doesn't have dedicated embeddings, nothing is returned. In 
@@ -86,7 +86,7 @@ class ConvolutionalDecoder(Module):
         return None
 
     def inference_prepare_candidates(self) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        pass
+        raise NotImplementedError("The inference_prepare_candidates method must be implemented by the convolutional decoder.")
 
     def inference_score(self, 
                         *,

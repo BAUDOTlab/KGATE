@@ -89,10 +89,10 @@ class TranslationalDecoder(Module):
         """
         raise NotImplementedError("The score method must be implemented by the translational decoder.")
 
-    def normalize_parameters(self):
-        pass
+    def normalize_parameters(self) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+        return None
 
-    def get_embeddings(self) -> Dict[str, Tensor] |None:
+    def get_embeddings(self) -> Dict[str, Tensor] | None:
         """Get the decoder-specific embeddings.
         
         If the decoder doesn't have dedicated embeddings, nothing is returned. In 
@@ -105,15 +105,15 @@ class TranslationalDecoder(Module):
         """
         return None
 
-    def inference_prepare_candidates(self):
-        pass
+    def inference_prepare_candidates(self) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        raise NotImplementedError("The inference_prepare_candidates method must be implemented by the translational decoder.")
 
     def inference_score(self, 
                         *,
                         projected_heads: Tensor,
                         projected_tails: Tensor,
                         edges: Tensor
-                        ):
+                        ) -> Tensor:
         """TODO docstring
         """
         batch_size = projected_heads.size(0)
