@@ -14,6 +14,7 @@ from typing import Tuple, Dict
 
 from torch import matmul, Tensor, nn, tensor_split
 from torch.nn.functional import normalize
+from torch.nn import Module
 
 from torchkge.models import DistMultModel, RESCALModel, ComplExModel
 
@@ -123,10 +124,12 @@ class RESCAL(BilinearDecoder):
     ----------
     edge_embeddings_matrix: TODO.type
         TODO.What_that_variable_is_or_does
-    emb_dim: TODO.type
-        Dimensions of embeddings. Equivalent to the `embedding_dimensions` variables.
-    n_rel: int
-        Number of edges in the knowledge graph. Equivalent to the `edge_count` variables.
+    embedding_dimensions: TODO.type
+        Dimensions of embeddings.
+    edge_count: int
+        Number of edges in the knowledge graph.
+    node_count: int
+        Number of nodes in the knowledge graph.
     TODO.inherited_attributes
     
     """
@@ -332,16 +335,15 @@ class DistMult(BilinearDecoder):
                 node_count: int,
                 edge_count: int):
         
-        super().__init__(embedding_dimensions, node_count, edge_count)
-        del self.ent_emb
-        del self.rel_emb
+        self.embedding_dimensions = embedding_dimensions
+        self.node_count = node_count
+        self.edge_count = edge_count
     
     
     def score(self, *,
             head_embeddings: Tensor,
             tail_embeddings: Tensor,
             edge_embeddings: Tensor,
-            edge_indices: Tensor,
             **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
@@ -352,8 +354,8 @@ class DistMult(BilinearDecoder):
             Embeddings of the head nodes in the knowledge graph.
         tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_indices: torch.Tensor, keyword-only
-            Unused
+        edge_embeddings: torch.Tensor, keyword-only
+            Embeddings of the edges in the knowledge graph.
         TODO.kwargs
 
         Returns
@@ -458,9 +460,49 @@ class DistMult(BilinearDecoder):
         
         return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
 
+    def inference_score(self, *,
+                        head_embeddings: Tensor,
+                        tail_embeddings: Tensor,
+                        edge_embeddings: Tensor):
+        """
+        TODO.What_the_function_does_about_globally
 
+        Arguments
+        ---------
+        head_embeddings: torch.Tensor, keyword-only
+            Embeddings of the head nodes in the knowledge graph.
+        tail_embeddings: torch.Tensor, keyword-only
+            Embeddings of the tail nodes in the knowledge graph.
+        edge_embeddings: torch.Tensor, keyword-only
+            Embeddings of the edges in the knowledge graph.
 
-class ComplEx(ComplExModel):
+        Returns
+        -------
+        score: torch.Tensor
+            TODO.What_that_variable_is_or_does
+        """
+        batch_size = head_embeddings.size(0)
+
+        if len(head_embeddings.size()) == 3:
+            assert (len(tail_embeddings.size()) == 2) and (len(edge_embeddings.size()) == 2), \
+                "When inferring heads, ..."
+
+            tail_edge_embeddings = (edge_embeddings * tail_embeddings).view(batch_size, 1, self.embedding_dimensions)
+            return (head_embeddings * tail_edge_embeddings).sum(dim=2)
+        elif len(tail_embeddings.size()) == 3:
+            assert (len(head_embeddings.size()) == 2) and (len(edge_embeddings.size()) == 2), \
+                "When inferring tails, ..."
+            
+            head_edge_embeddings = (head_embeddings * edge_embeddings).view(batch_size, 1, self.embedding_dimensions)
+            return (head_edge_embeddings * tail_embeddings).sum(dim=2)
+        elif len(edge_embeddings.size()) == 3:
+            assert (len(head_embeddings.size()) == 2) and (len(tail_embeddings.size()) == 2), \
+                "When inferring edges, ..."
+
+            head_edge_embeddings = (head_embeddings.view(batch_size, 1, self.embedding_dimensions) * edge_embeddings)
+            return (head_edge_embeddings * tail_embeddings.view(batch_size, 1, self.embedding_dimensions)).sum(dim=2)
+
+class ComplEx(BilinearDecoder):
     """
     TODO.What_the_class_is_about_globally
 
@@ -483,16 +525,9 @@ class ComplEx(ComplExModel):
     
     """
     def __init__(self,
-                embedding_dimensions: int,
-                node_count: int,
-                edge_count: int):
-        
-        super().__init__(embedding_dimensions, node_count, edge_count)
+                embedding_dimensions: int):
+        self.embedding_dimensions = embedding_dimensions
         self.embedding_spaces = 2
-        del self.re_ent_emb
-        del self.re_rel_emb
-        del self.im_ent_emb
-        del self.im_rel_emb
 
 
     def score(self, *,
@@ -525,18 +560,6 @@ class ComplEx(ComplExModel):
         
         return (real_head_embedddings * (real_edge_embedddings * real_tail_embedddings + imaginary_edge_embeddings * imaginary_tail_embeddings) + 
                 imaginary_head_embeddings * (real_edge_embedddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embedddings)).sum(dim=1)
-    
-    
-    def get_embeddings(self) -> Dict[str, Tensor]:
-        """
-        TODO.What_the_function_does_about_globally
-
-        Returns
-        -------
-        None
-            
-        """
-        return None
     
     
     def inference_prepare_candidates(self, *, 
@@ -604,3 +627,56 @@ class ComplEx(ComplExModel):
                 (real_edge_embeddings, imaginary_edge_embeddings), \
                 (real_candidates, imaginary_candidates)
     
+    def inference_score(self, *,
+                        head_embeddings: Tensor,
+                        tail_embeddings: Tensor,
+                        edge_embeddings: Tensor):
+
+        real_head_embeddings, imaginary_head_embeddings = tensor_split(head_embeddings, 2, dim=1)
+        real_tail_embeddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim=1)
+        real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim=1)
+        
+        batch_size = real_head_embeddings.size(0)
+
+        if len(real_head_embeddings.size()) == 3:
+            assert (len(real_tail_embeddings.size()) == 2) and (len(real_edge_embeddings.size()) == 2), \
+                "When inferring heads, ..."
+            
+            return (real_head_embeddings * 
+                        (real_edge_embeddings * real_tail_embeddings 
+                         + imaginary_edge_embeddings * imaginary_tail_embeddings
+                         ).view(batch_size, 1, self.embedding_dimensions)
+                    + imaginary_head_embeddings * 
+                        (real_edge_embeddings * imaginary_tail_embeddings
+                        - imaginary_edge_embeddings * real_tail_embeddings
+                        ).view(batch_size, 1, self.embedding_spaces)
+                    ).sum(dim=2)
+
+        elif len(real_tail_embeddings.size()) == 3:
+            assert (len(real_head_embeddings.size()) == 2) and (len(real_edge_embeddings.size()) == 2), \
+                "When inferring tails, ..."
+            
+            return ((real_head_embeddings * real_edge_embeddings
+                        - imaginary_head_embeddings * imaginary_edge_embeddings
+                    ).view(batch_size, 1, self.embedding_dimensions)
+                    * real_tail_embeddings
+                    + (real_head_embeddings * imaginary_edge_embeddings
+                       + imaginary_head_embeddings * real_tail_embeddings
+                       ).view(batch_size, 1, self.embedding_dimensions)
+                    * imaginary_tail_embeddings
+                    )
+
+        elif len(real_edge_embeddings.size()) == 3:
+            assert (len(real_head_embeddings.size()) == 2) and (len(real_tail_embeddings.size()) == 2), \
+                "When inferring edges, ..."
+            
+            return ((real_head_embeddings * real_tail_embeddings
+                     + imaginary_head_embeddings * imaginary_tail_embeddings
+                     ).view(batch_size, 1, self.embedding_dimensions)
+                     * real_edge_embeddings
+                     + (real_head_embeddings * imaginary_tail_embeddings
+                        - imaginary_head_embeddings * real_tail_embeddings
+                     ).view(batch_size, 1, self.embedding_dimensions)
+                     * imaginary_edge_embeddings
+                    ).sum(dim=2)
+                    
