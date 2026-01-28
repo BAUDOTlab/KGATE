@@ -637,3 +637,32 @@ def merge_kg(kg_list: List[KnowledgeGraph],
         node_type_to_index = first_kg.node_type_to_index,
         triplet_types = first_kg.triplet_types
     )
+
+def get_dictionary_mapping(dataframe: pd.DataFrame, nodes = True) -> Dict[str, int]:
+    """
+    Build the dictionary used to map either the node or edge identifiers to their index in the graph.
+
+    Arguments
+    ---------
+    dataframe: pd.DataFrame
+        Pandas dataframe containing at least three columns : "head", "edge" and "tail".
+        Other columns are ignored.
+    nodes: bool, optional, default to True
+        If True will build the dictionary for the nodes mapping, otherwise will build
+        the dictionary for the edge mapping.
+    
+    Returns
+    -------
+    node_to_index or edge_to_index: Dict[str, int]
+        Mapping dictionary for nodes or edges.
+
+    Notes
+    -----
+    This function is adapted from the torchkge.utils.operations.get_dictionaries() from the TorchKGE package.
+    """
+    if nodes:
+        unique_nodes = list(set(dataframe["head"].unique()).union(set(dataframe["tail"]).unique()))
+        return {node: index for index, node in enumerate(sorted(unique_nodes))}
+    else:
+        unique_edges = list(dataframe["edge"].unique())
+        return {edge: index for index, edge in enumerate(sorted(unique_edges))}

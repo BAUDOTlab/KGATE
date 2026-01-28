@@ -193,7 +193,7 @@ class ConvKB(ConvolutionalDecoder):
         Additional_info_from_the_dev_to_the_user
             
         """
-        batch_size = head_embeddings.size(0)
+        batch_size = head_embeddings.shape[0]
 
         head_score = head_embeddings.view(batch_size, 1, -1)
         tail_score = tail_embeddings.view(batch_size, 1, -1)
@@ -248,7 +248,7 @@ class ConvKB(ConvolutionalDecoder):
             Candidate embeddings for nodes or edges.
 
         """
-        batch_size = head_indices.size(0)
+        batch_size = head_indices.shape[0]
 
         # Get head, tail and edge embeddings
         head_embeddings = node_embeddings[head_indices]
@@ -277,10 +277,10 @@ class ConvKB(ConvolutionalDecoder):
         TODO.docstring
         
         """        
-        batch_size = head_embeddings.size(0)
+        batch_size = head_embeddings.shape[0]
 
-        if len(head_embeddings.size()) == 4:
-            assert (len(tail_embeddings.size()) == 2) and (len(edge_embeddings.size()) == 2), \
+        if len(head_embeddings.shape) == 4:
+            assert (len(tail_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 2), \
                 "When inferring heads..."
             concatenation = cat((head_embeddings,
                             edge_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.node_count, 1, self.embedding_dimensions),

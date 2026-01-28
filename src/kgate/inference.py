@@ -9,9 +9,9 @@ from torch.utils.data import DataLoader, Dataset
 from torch_geometric.utils import k_hop_subgraph
 
 import torchkge.inference as torchkge_inference
-from torchkge.models import Model
 
 from .encoders import DefaultEncoder, GNN
+from .decoders import TranslationalDecoder, BilinearDecoder, ConvolutionalDecoder
 from .knowledgegraph import KnowledgeGraph
 from .utils import filter_scores
 
@@ -95,7 +95,7 @@ class EdgeInference(torchkge_inference.RelationInference):
                 top_k: int,
                 batch_size: int,
                 encoder: DefaultEncoder | GNN,
-                decoder: Model,
+                decoder: TranslationalDecoder | BilinearDecoder | ConvolutionalDecoder,
                 node_embeddings: nn.ParameterList | nn.Embedding, 
                 edge_embeddings: nn.Embedding, 
                 verbose: bool = True,
@@ -218,7 +218,7 @@ class NodeInference(torchkge_inference.EntityInference):
                 missing_triplet_part: Literal["head", "tail"],
                 batch_size: int,
                 encoder: DefaultEncoder | GNN,
-                decoder: Model,
+                decoder: TranslationalDecoder | BilinearDecoder | ConvolutionalDecoder,
                 node_embeddings: nn.ParameterList, 
                 edge_embeddings: nn.Embedding,
                 verbose: bool = True,
