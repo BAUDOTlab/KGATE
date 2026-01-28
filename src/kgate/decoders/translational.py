@@ -133,23 +133,23 @@ class TranslationalDecoder(Module):
         TODO docstring
         
         """
-        batch_size = projected_heads.size(0)
+        batch_size = projected_heads.shape[0]
 
         # When the shape of the edges is (batch_size, embedding_dimensions)
-        if len(edges.size()) == 2:
-            if len(projected_tails.size()) == 3:
-                assert len(projected_heads.size()) == 2, "When inferring tails, the projected heads tensor should be of shape (batch_size, embedding_dimensions)"
+        if len(edges.shape) == 2:
+            if len(projected_tails.shape) == 3:
+                assert len(projected_heads.shape) == 2, "When inferring tails, the projected heads tensor should be of shape (batch_size, embedding_dimensions)"
 
                 translated_heads = (projected_heads + edges).view(batch_size, 1, edges.size(1))
                 return - self.dissimilarity(translated_heads, projected_tails)
             else:
-                assert (len(projected_heads.size()) == 3) and (len(projected_tails) == 2), "When inferring heads, the projected tails tensor should be of shape (batch_size, embedding_dimensions)"
+                assert (len(projected_heads.shape) == 3) and (len(projected_tails) == 2), "When inferring heads, the projected tails tensor should be of shape (batch_size, embedding_dimensions)"
 
                 edges_extended = edges.view(batch_size, 1, edges.size(1))
                 tails_extended = projected_tails.view(batch_size, 1, edges.size(1))
                 
                 return - self.dissimilarity(projected_heads + edges_extended, tails_extended)
-        elif len(edges.size()) == 3:
+        elif len(edges.shape) == 3:
             if hasattr(self, "evaluated_projections"):
                 projected_heads = projected_heads.view(batch_size, -1, edges.size(1))
                 projected_tails = projected_tails.view(batch_size, -1, edges.size(1))
@@ -909,7 +909,7 @@ class TransD(TranslationalDecoder):
     
     
     def project(self, nodes: Tensor, node_projection_vector: Tensor, edge_projection_vector: Tensor) -> Tensor:
-        batch_size = nodes.size(0)
+        batch_size = nodes.shape[0]
 
         scalar_product = (nodes * node_projection_vector).sum(dim = 1)
         projected_nodes = (edge_projection_vector * scalar_product.view(batch_size, 1))

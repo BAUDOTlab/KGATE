@@ -314,26 +314,26 @@ class RESCAL(BilinearDecoder):
         TODO.docstring
         
         """        
-        batch_size = head_embeddings.size(0)
+        batch_size = head_embeddings.shape[0]
 
-        if len(head_embeddings.size()) == 3:
-            assert (len(tail_embeddings.size()) == 2) and (len(edge_embeddings.size()) == 3), \
+        if len(head_embeddings.shape) == 3:
+            assert (len(tail_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 3), \
                 "When inferring heads, ..."
 
             tail_edge_embeddings = matmul(edge_embeddings, tail_embeddings.view(batch_size, self.embedding_dimensions, 1)).view(batch_size, 1, self.embedding_dimensions)
             
             return (head_embeddings * tail_edge_embeddings).sum(dim = 2)
         
-        elif len(tail_embeddings.size()) == 3:
-            assert (len(head_embeddings.size()) == 2) and (len(edge_embeddings.size()) == 3), \
+        elif len(tail_embeddings.shape) == 3:
+            assert (len(head_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 3), \
                 "When inferring tails, ..."
             
             head_edge_embeddings = matmul(head_embeddings.view(batch_size, 1, self.embedding_dimensions)).view(batch_size, 1, self.embedding_dimensions)
             
             return (head_edge_embeddings * tail_embeddings).sum(dim = 2)
         
-        elif len(edge_embeddings.size()) == 4:
-            assert (len(head_embeddings.size()) == 2) and (len(tail_embeddings.size()) == 2), \
+        elif len(edge_embeddings.shape) == 4:
+            assert (len(head_embeddings.shape) == 2) and (len(tail_embeddings.shape) == 2), \
                 "When inferring edges, ..."
 
             head_embeddings = head_embeddings.view(batch_size, 1, 1, self.embedding_dimensions)
@@ -519,26 +519,26 @@ class DistMult(BilinearDecoder):
             TODO.What_that_variable_is_or_does
         
         """
-        batch_size = head_embeddings.size(0)
+        batch_size = head_embeddings.shape[0]
 
-        if len(head_embeddings.size()) == 3:
-            assert (len(tail_embeddings.size()) == 2) and (len(edge_embeddings.size()) == 2), \
+        if len(head_embeddings.shape) == 3:
+            assert (len(tail_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 2), \
                 "When inferring heads, ..."
 
             tail_edge_embeddings = (edge_embeddings * tail_embeddings).view(batch_size, 1, self.embedding_dimensions)
             
             return (head_embeddings * tail_edge_embeddings).sum(dim = 2)
         
-        elif len(tail_embeddings.size()) == 3:
-            assert (len(head_embeddings.size()) == 2) and (len(edge_embeddings.size()) == 2), \
+        elif len(tail_embeddings.shape) == 3:
+            assert (len(head_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 2), \
                 "When inferring tails, ..."
             
             head_edge_embeddings = (head_embeddings * edge_embeddings).view(batch_size, 1, self.embedding_dimensions)
             
             return (head_edge_embeddings * tail_embeddings).sum(dim = 2)
         
-        elif len(edge_embeddings.size()) == 3:
-            assert (len(head_embeddings.size()) == 2) and (len(tail_embeddings.size()) == 2), \
+        elif len(edge_embeddings.shape) == 3:
+            assert (len(head_embeddings.shape) == 2) and (len(tail_embeddings.shape) == 2), \
                 "When inferring edges, ..."
 
             head_edge_embeddings = (head_embeddings.view(batch_size, 1, self.embedding_dimensions) * edge_embeddings)
@@ -688,10 +688,10 @@ class ComplEx(BilinearDecoder):
         real_tail_embeddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim = 1)
         real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim = 1)
         
-        batch_size = real_head_embeddings.size(0)
+        batch_size = real_head_embeddings.shape[0]
 
-        if len(real_head_embeddings.size()) == 3:
-            assert (len(real_tail_embeddings.size()) == 2) and (len(real_edge_embeddings.size()) == 2), \
+        if len(real_head_embeddings.shape) == 3:
+            assert (len(real_tail_embeddings.shape) == 2) and (len(real_edge_embeddings.shape) == 2), \
                 "When inferring heads, ..."
             
             return (real_head_embeddings * 
@@ -704,8 +704,8 @@ class ComplEx(BilinearDecoder):
                         ).view(batch_size, 1, self.embedding_spaces)
                     ).sum(dim = 2)
 
-        elif len(real_tail_embeddings.size()) == 3:
-            assert (len(real_head_embeddings.size()) == 2) and (len(real_edge_embeddings.size()) == 2), \
+        elif len(real_tail_embeddings.shape) == 3:
+            assert (len(real_head_embeddings.shape) == 2) and (len(real_edge_embeddings.shape) == 2), \
                 "When inferring tails, ..."
             
             return ((real_head_embeddings * real_edge_embeddings
@@ -718,8 +718,8 @@ class ComplEx(BilinearDecoder):
                     * imaginary_tail_embeddings
                     )
 
-        elif len(real_edge_embeddings.size()) == 3:
-            assert (len(real_head_embeddings.size()) == 2) and (len(real_tail_embeddings.size()) == 2), \
+        elif len(real_edge_embeddings.shape) == 3:
+            assert (len(real_head_embeddings.shape) == 2) and (len(real_tail_embeddings.shape) == 2), \
                 "When inferring edges, ..."
             
             return ((real_head_embeddings * real_tail_embeddings
