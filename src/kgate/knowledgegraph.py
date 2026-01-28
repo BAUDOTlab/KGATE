@@ -24,8 +24,8 @@ from torch.types import Number
 from torch_geometric.data import HeteroData
 
 import torchkge
-from torchkge.utils.operations import get_dictionaries
 
+from .utils import get_dictionary_mapping
 
 logging.basicConfig(
     level = logging.INFO,  
@@ -209,9 +209,9 @@ class KnowledgeGraph(Dataset):
 
         self.triplet_types: List[Tuple[str, str, str]] = triplet_types or []
 
-        self.node_to_index = node_to_index or get_dictionaries(dataframe, ent = True)
+        self.node_to_index = node_to_index or get_dictionary_mapping(dataframe, nodes = True)
         self.node_type_to_index: Dict[str, int] = node_type_to_index or {"Node": 0}
-        self.edge_to_index = edge_to_index or get_dictionaries(dataframe, ent = False)
+        self.edge_to_index = edge_to_index or get_dictionary_mapping(dataframe, nodes = False)
 
         self.node_count = max(self.node_to_index.values()) + 1
         self.edge_count = max(self.edge_to_index.values()) + 1

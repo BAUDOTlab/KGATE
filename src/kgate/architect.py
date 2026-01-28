@@ -19,7 +19,7 @@ import yaml
 
 import torch
 from torch import tensor, Tensor
-from torch.nn import Parameter
+from torch.nn import Parameter, Module
 import torch.optim as optim
 from torch.optim import lr_scheduler as learning_rate_scheduler
 from torch.utils.data import DataLoader
@@ -30,8 +30,6 @@ from ignite.metrics import RunningAverage
 
 from torch_geometric.utils import k_hop_subgraph
 
-from torchkge import KnowledgeGraph
-from torchkge.models import Model
 import torchkge.sampling as sampling
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
 
@@ -55,7 +53,7 @@ logging.basicConfig(
 )
 
 
-class Architect(Model):
+class Architect(Module):
     """
     Architect class for knowledge graph embedding training.
     
