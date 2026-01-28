@@ -507,12 +507,12 @@ class MixedNegativeSampler(torchkge.sampling.NegativeSampler):
     n_neg: int
         Number of negative samples to create from each triplet.
         Inherited attribute, equivalent to negative_triplet_count.
-    uniform_sampler: TODO.type
-        TODO.What_that_variable_is_or_does
-    bernoulli_sampler: TODO.type
-        TODO.What_that_variable_is_or_does
-    positional_sampler: TODO.type
-        TODO.What_that_variable_is_or_does
+    uniform_sampler: UniformNegativeSampler
+        TODO.brief_description_of_the_class
+    bernoulli_sampler: BernoulliNegativeSampler
+        TODO.brief_description_of_the_class
+    positional_sampler: PositionalNegativeSampler
+        TODO.brief_description_of_the_class
     TODO.inherited_attributes
         
     """

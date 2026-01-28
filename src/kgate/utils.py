@@ -1,4 +1,6 @@
-"""Utility functions for Knowledge Graph manipulation, data visualisation or file handling."""
+"""
+Utility functions for Knowledge Graph manipulation, data visualisation or file handling.
+"""
 
 import os
 import tomllib
@@ -41,19 +43,22 @@ def parse_config(config_path: str,
         Arguments
         ---------
         config_path: str
-            TODO.What_that_argument_is_or_does
-        config_dictionnary: dict
-            TODO.What_that_argument_is_or_does
+            The complete path to the configuration file. If one already exists, it will be overwritten.
+        config_dictionnary: dict, optional
+            The parsed configuration as a python dictionnary.
 
         Raises
         ------
         FileNotFoundError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-
+            The configuration file is not found at the indicated path.
+            Check that you gave the correct path, and that it is a str.
+            If you give a relative path, it must be relative to the run script path.
+        
         Returns
         -------
         config: dict
-            TODO.What_that_variable_is_or_does
+            The final parsed configuration as a python dictionnary.
+            Using priority orders: inline configuration, configuration file, default configuration
             
         """
     if config_path != "" and not Path(config_path).exists():
@@ -94,16 +99,16 @@ def set_config_key( key: str,
         Arguments
         ---------
         default: dict
+            The default parsed configuration as a python dictionnary.
+        config: dict, optional
             TODO.What_that_argument_is_or_does
-        config: dict, optional, default to None
-            TODO.What_that_argument_is_or_does
-        inline: dict, optional, default to None
-            TODO.What_that_argument_is_or_does
+        inline: dict, optional
+            The inline parsed configuration as a python dictionnary.
 
         Raises
         ------
         ValueError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+            A parameter without a default value is required but not set.
 
         Returns
         -------
@@ -184,19 +189,19 @@ def load_knowledge_graph(pickle_filename: Path
     Arguments
     ---------
     pickle_filename: Path
-        TODO.What_that_argument_is_or_does
+        The complete path to the pickle file (.pkl).
 
     Returns
     -------
     kg_train: KnowledgeGraph
-        TODO.What_that_variable_is_or_does
+        Train split from the knowledge graph, directly loaded from the pickle file.
     kg_validation: KnowledgeGraph
-        TODO.What_that_variable_is_or_does
+        Validation split from the knowledge graph, directly loaded from the pickle file.
     kg_test: KnowledgeGraph
-        TODO.What_that_variable_is_or_does
+        Test split from the knowledge graph, directly loaded from the pickle file.
     
     """
-    logging.info(f"Will not run the preparation step. Using KG stored in: {pickle_filename}")
+    logging.info(f"Will not run the preparation step. Using knowledge graph stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:
         kg_train = pickle.load(file)
         kg_validation = pickle.load(file)
@@ -232,7 +237,7 @@ def extract_node_type(node_name: str):
 
     Returns
     -------
-    TODO.result_name: TODO.type
+    node_type: str
         TODO.What_that_variable_is_or_does
     
     """
@@ -245,16 +250,16 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph,
                                 ) -> dict:
     """
     Computes the proportion of triplets for each edge in each of the KnowledgeGraphs
-    (train, test, val) relative to the total number of triplets for that edge.
+    (train, test, validation) relative to the total number of triplets for that edge.
 
     Arguments
     ---------
     kg_train: KnowledgeGraph
-        The training KnowledgeGraph instance.
+        Train split from the knowledge graph.
     kg_test: KnowledgeGraph
-        The test KnowledgeGraph instance.
+        Test split from the knowledge graph.
     kg_validation: KnowledgeGraph
-        The validation KnowledgeGraph instance.
+        Validation split from the knowledge graph.
 
     Returns
     -------
@@ -297,25 +302,29 @@ def concat_kgs( kg_train: KnowledgeGraph,
                 kg_test: KnowledgeGraph
                 ) -> Tuple[Tensor, Tensor, Tensor]:
     """
-    TODO.What_the_function_does_about_globally
+    Merge the 3 splits of a knowledge graph into the original knowledge graph.
 
     Arguments
     ---------
     kg_train: KnowledgeGraph
-        The training KnowledgeGraph instance.
+        Train split from the knowledge graph.
     kg_test: KnowledgeGraph
-        The test KnowledgeGraph instance.
+        Test split from the knowledge graph.
     kg_validation: KnowledgeGraph
-        The validation KnowledgeGraph instance.
+        Validation split from the knowledge graph.
 
     Returns
     -------
-    head: torch.Tensor
-        TODO.What_that_variable_is_or_does
-    tail: torch.Tensor
-        TODO.What_that_variable_is_or_does
-    edge: torch.Tensor
-        TODO.What_that_variable_is_or_does
+    head: torch.Tensor, shape: (merged_kg.node_count)
+        List of head indices.
+    tail: torch.Tensor, shape: (merged_kg.node_count)
+        List of tail indices.
+    edge: torch.Tensor, shape: (merged_kg.node_count)
+        List of edge indices.
+    
+    Notes
+    -----
+    (merged_kg.node_count) is the number of nodes of the newly merged knowledge graph.
     
     """
     head = cat((kg_train.head_indices,
@@ -344,9 +353,9 @@ def count_triplets( kg1: KnowledgeGraph,
     Arguments
     ---------
     kg1: KnowledgeGraph
-        TODO.What_that_argument_is_or_does
+        First knowledge graph.
     kg2: KnowledgeGraph
-        TODO.What_that_argument_is_or_does
+        Second knowledge graph.
     duplicates: List[Tuple[int, int]]
         List returned by torchkge.utils.data_redundancy.duplicates.
     reverse_duplicates: List[Tuple[int, int]]
