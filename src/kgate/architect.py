@@ -651,11 +651,13 @@ class Architect(Model):
         else:
             assert isinstance(self.encoder, GNN) or len(self.kg_train.node_type_to_index) == 1, "When using a GNN as encoder, the node_type shouldn't be supplied."
 
+            # create initial embeddings
             self.node_embeddings = nn.ParameterList()
             index_to_node_type = {value: key for key,value in self.kg_train.node_type_to_index.items()}
             for node_type in self.kg_train.node_type_to_global:
                 node_count = self.kg_train.node_type_to_global[node_type].size(0)
                 if node_type in attributes:
+                    # if feature attributes given, initialization based on them
                     current_attribute: pd.DataFrame = attributes[node_type]
                     assert current_attribute.shape[0] == node_count, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({node_count})."
                     input_features = torch.zeros((node_count,current_attribute.shape[1]), dtype = torch.float)
@@ -668,9 +670,12 @@ class Architect(Model):
                         input_features[local_index] = tensor(current_attribute.loc[node], dtype = torch.float)
                     
                     self.node_embeddings.append(Parameter(input_features).to(self.device))
+                    
                 else:
+                    # if no feature attribute given, random initialization
                     embeddings = initialize_embedding(node_count, self.embedding_dimensions, self.device)
                     self.node_embeddings.append(embeddings.weight)
+                    
             # The input features are not supposed to change if we use an encoder
             self.node_embeddings = self.node_embeddings.requires_grad_(False)
 

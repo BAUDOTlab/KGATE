@@ -101,10 +101,12 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             Decoder model to evaluate.
         kg: KnowledgeGraph
             Knowledge graph on which the evaluation will be done.
-        node_embeddings: nn.ParameterList
-            A list containing all embeddings (values) for each node type (indices).
-        edge_embeddings: nn.Embedding
-            A tensor containing one embedding by edge type.
+        node_embeddings: nn.ParameterList, keyword-only
+            A list containing all embeddings for each node type.
+            keys: node type index
+            values: tensors of shape (node_count, embedding_dimensions)
+        edge_embeddings: nn.Embedding, keyword-only
+            A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
         verbose: bool
             Indicate whether a progress bar should be displayed during
             evaluation.

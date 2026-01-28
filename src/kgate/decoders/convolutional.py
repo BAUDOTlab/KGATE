@@ -233,7 +233,7 @@ class ConvKB(ConvolutionalDecoder):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding
             TODO.What_that_argument_is_or_does
-        node_inference: bool, default to True
+        node_inference: bool, optional, default to True
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns

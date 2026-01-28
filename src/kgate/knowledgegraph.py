@@ -1203,8 +1203,10 @@ class KnowledgeGraph(Dataset):
 
         Arguments
         ---------
-        node_embeddings: nn.ParameterList
-            TODO.What_that_argument_is_or_does
+        node_embeddings: nn.ParameterList, keyword-only
+            A list containing all embeddings for each node type.
+            keys: node type index
+            values: tensors of shape (node_count, embedding_dimensions)
 
         Returns
         -------

@@ -121,10 +121,12 @@ class EdgeInference(torchkge_inference.RelationInference):
             Encoder model to embed the nodes. Deactivated with DefaultEncoder.
         decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
             Decoder model to evaluate.
-        node_embeddings: nn.ParameterList or nn.Embedding, keyword-only
-            A list containing all embeddings (values) for each node type (indices).
+        node_embeddings: nn.ParameterList, keyword-only
+            A list containing all embeddings for each node type.
+            keys: node type index
+            values: tensors of shape (node_count, embedding_dimensions)
         edge_embeddings: nn.Embedding, keyword-only
-            A tensor containing one embedding by edge type.
+            A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
         verbose: bool, default to True, keyword-only
             Indicate whether a progress bar should be displayed during evaluation.
 
@@ -245,9 +247,11 @@ class NodeInference(torchkge_inference.EntityInference):
         decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder, keyword-only
             Decoder model to evaluate.
         node_embeddings: nn.ParameterList, keyword-only
-            A list containing all embeddings (values) for each node type (indices).
+            A list containing all embeddings for each node type.
+            keys: node type index
+            values: tensors of shape (node_count, embedding_dimensions)
         edge_embeddings: nn.Embedding, keyword-only
-            A tensor containing one embedding by edge type.
+            A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
         verbose: bool, default to True, keyword-only
             Indicate whether a progress bar should be displayed during
             evaluation.
