@@ -34,33 +34,33 @@ def parse_config(config_path: str,
                 config_dictionnary: dict
                 ) -> dict:
     """
-        TODO.What_the_function_does_about_globally
-
-        References
-        ----------
-        TODO
-
-        Arguments
-        ---------
-        config_path: str
-            The complete path to the configuration file. If one already exists, it will be overwritten.
-        config_dictionnary: dict, optional
-            The parsed configuration as a python dictionnary.
-
-        Raises
-        ------
-        FileNotFoundError
-            The configuration file is not found at the indicated path.
-            Check that you gave the correct path, and that it is a str.
-            If you give a relative path, it must be relative to the run script path.
+    TODO.What_the_function_does_about_globally
+    
+    References
+    ----------
+    TODO
+    
+    Arguments
+    ---------
+    config_path: str
+        The complete path to the configuration file. If one already exists, it will be overwritten.
+    config_dictionnary: dict, optional
+        The parsed configuration as a python dictionnary.
         
-        Returns
-        -------
-        config: dict
-            The final parsed configuration as a python dictionnary.
-            Using priority orders: inline configuration, configuration file, default configuration
-            
-        """
+    Raises
+    ------
+    FileNotFoundError
+        The configuration file is not found at the indicated path.
+        Check that you gave the correct path, and that it is a str.
+        If you give a relative path, it must be relative to the run script path.
+    
+    Returns
+    -------
+    config: dict
+        The final parsed configuration as a python dictionnary.
+        Using priority orders: inline configuration, configuration file, default configuration
+        
+    """
     if config_path != "" and not Path(config_path).exists():
         raise FileNotFoundError(f"Configuration file {config_path} not found.")
 
@@ -596,20 +596,20 @@ def merge_kg(kg_list: List[KnowledgeGraph],
     Arguments
     ---------
     kg_list: List[KnowledgeGraph]
-        The list of all KG to be merged
+        The list of all knowledge graphs to be merged.
     complete_graphindices: bool, default to False
         Whether or not the removed_triplets tensor should be integrated into the final KG's graphindices.
 
-        Raises
-        ------
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+    Raises
+    ------
+    AssertionError #1
+        Knowledge graphs in kg_list must have the same node_to_index (ent2ix).
+    AssertionError #2
+        Knowledge graphs in kg_list must have the same edge_to_index (rel2ix).
+    AssertionError #3
+        Knowledge graphs in kg_list must have the same node_type_to_index (nt2ix).
+    AssertionError #4
+        Knowledge graphs in kg_list must have the same triplet_types.
     
     Returns
     -------

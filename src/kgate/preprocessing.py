@@ -20,9 +20,9 @@ SUPPORTED_SEPARATORS = [",","\t",";"]
 
 
 def prepare_knowledge_graph(config: dict, 
-                            kg: KnowledgeGraph | None, 
-                            dataframe: pd.DataFrame | None,
-                            metadata: pd.DataFrame | None
+                            kg: KnowledgeGraph | None = None, 
+                            dataframe: pd.DataFrame | None = None,
+                            metadata: pd.DataFrame | None = None
                             ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """
     Prepare and clean the knowledge graph.
@@ -35,12 +35,12 @@ def prepare_knowledge_graph(config: dict,
     ---------
     config: dict
         The full configuration, usually parsed from the KGATE configuration file.
-    kg: KnowledgeGraph
+    kg: KnowledgeGraph, optional
         The knowledge graph as a single object of class KnowledgeGraph or inheriting the class (KnowledgeGraph inherits the class)
-    dataframe: pd.DataFrame
+    dataframe: pd.DataFrame, optional
         The knowledge graph as a pandas DataFrame.
-    metadata: pd.DataFrame
-        TODO: description here
+    metadata: pd.DataFrame, optional
+        The metadata dataframe to associate to the knowledge graph.
 
     Raises
     ------

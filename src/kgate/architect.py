@@ -1,4 +1,6 @@
-"""Architect class and methods to run a KGE model training, testing and inference from end to end."""
+"""
+Architect class and methods to run a KGE model training, testing and inference from end to end.
+"""
 
 import csv
 import gc
@@ -86,37 +88,39 @@ class Architect(Module):
     checkpoints_directory: Path
         TODO.What_that_variable_is_or_does
     config: dict
-        TODO.What_that_variable_is_or_does
-    decoder: Model
-        TODO.What_that_variable_is_or_does
+        The parsed configuration as a python dictionnary.
+    decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
+        Decoder model to evaluate.
     decoder_loss: MarginLoss or BinaryCrossEntropyLoss
-        TODO.What_that_variable_is_or_does
+        The loss object.
     device: torch.device
         TODO.What_that_variable_is_or_does
     edge_embedding_dimensions: int
         TODO.What_that_variable_is_or_does
     embedding_dimensions: int
         TODO.What_that_variable_is_or_does
-    encoder: DefaultEncoder or  GNN
-        TODO.What_that_variable_is_or_does
+    encoder: DefaultEncoder or GNN
+        Encoder model to embed the nodes.
     evaluation_batch_size: int
         TODO.What_that_variable_is_or_does
     evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
-        TODO.What_that_variable_is_or_does
-    kg_test: TODO.type
-        TODO.What_that_variable_is_or_does
-    kg_train: TODO.type
-        TODO.What_that_variable_is_or_does
-    kg_validation: TODO.type
-        TODO.What_that_variable_is_or_does
-    metadata: TODO.type
-        TODO.What_that_variable_is_or_does
+        The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
+    kg_test: KnowledgeGraph
+        Test split from the knowledge graph.
+    kg_train: KnowledgeGraph
+        Train split from the knowledge graph.
+    kg_validation: KnowledgeGraph
+        Validation split from the knowledge graph.
+    metadata: pd.DataFrame
+        The metadata dataframe to associate to the knowledge graph.
     node_embeddings: nn.ParameterList
-        TODO.What_that_variable_is_or_does
+        A list containing all embeddings for each node type.
+        keys: node type index
+        values: tensors of shape (node_count, embedding_dimensions)
     optimizer: optim.Optimizer
-        TODO.What_that_variable_is_or_does
-    sampler: sampling.NegativeSampler
-        TODO.What_that_variable_is_or_does
+        Initialized optimizer.
+    sampler: torchkge.sampling.NegativeSampler TODO.NegativeSampler_super_class_maybe
+        Negative sampler.
     scheduler: learning_rate_scheduler.LRScheduler or None
         TODO.What_that_variable_is_or_does
     
@@ -204,7 +208,6 @@ class Architect(Module):
             if self.metadata is None:
                 raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
-
         run_kg_preprocessing: bool = self.config["run_kg_preprocessing"]
 
         if run_kg_preprocessing:
@@ -226,7 +229,7 @@ class Architect(Module):
         super().__init__(self.kg_train.node_count, self.kg_train.edge_count)
         # Initialize attributes
         self.encoder: DefaultEncoder | GNN = None
-        self.decoder: Model = None
+        self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
         self.decoder_loss: MarginLoss | BinaryCrossEntropyLoss = None
         self.optimizer: optim.Optimizer = None
         self.sampler: sampling.NegativeSampler = None
@@ -242,7 +245,7 @@ class Architect(Module):
 
         Returns
         -------
-        embedding_dimensions: TODO.type
+        embedding_dimensions: int
             TODO.What_that_variable_is_or_does
             
         """
@@ -270,7 +273,7 @@ class Architect(Module):
 
 
     def initialize_encoder( self,
-                            encoder_name: str = "",
+                            encoder_name: Literal["Default", "GCN", "GAT", "Node2Vec", ""] = "",
                             gnn_layers: int = 0
                             ) -> DefaultEncoder | GCNEncoder | GATEncoder:
         """
@@ -289,7 +292,7 @@ class Architect(Module):
 
         Arguments
         ---------
-        encoder_name: {"Default", "GCN", "GAT"}, optional
+        encoder_name: {"Default", "GCN", "GAT", "Node2vec"}, optional
             Name of the encoder.
         gnn_layers: int, optional, default to 0
             Number of hidden layers for the encoder. Only used for deep learning encoders.
@@ -334,7 +337,10 @@ class Architect(Module):
                             dissimilarity: Literal["L1", "L2", ""] = "",
                             margin: int = 0,
                             filter_count: int = 0
-                            ) -> Tuple[Model, MarginLoss | BinaryCrossEntropyLoss]:
+                            ) -> Tuple[
+                                        BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
+                                        MarginLoss | BinaryCrossEntropyLoss
+                                        ]:
         """
         Create and initialize the decider object according to the configuration or arguments.
 
@@ -377,7 +383,7 @@ class Architect(Module):
 
         Returns
         -------
-        decoder: torchkge.Model
+        decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
             The decoder object.
         decoder_loss: MarginLoss or BinaryCrossEntropyLoss
             The loss object.
@@ -487,7 +493,7 @@ class Architect(Module):
 
         Returns
         -------
-        negative_sampler: TODO.type
+        negative_sampler: torchkge.sampling.NegativeSampler TODO.NegativeSampler_super_class_maybe
             The initialized sampler.
         
         """
@@ -518,7 +524,11 @@ class Architect(Module):
         ------
         ValueError
             If the scheduler type is unsupported or required parameters are missing.
-                
+        
+        Warns
+        -----
+        If no learning rate scheduler is specified in the configuration, none will be used.
+        
         Returns
         -------
         learning_rate_scheduler: torch.optim.lr_scheduler._LRScheduler or None:
@@ -580,10 +590,10 @@ class Architect(Module):
             
         Returns
         -------
-        evaluator: TODO.type
+        evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
             The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
         
-            """
+        """
         match self.config["evaluation"]["objective"]:
             case "Link Prediction":
                 full_graphindices = torch.cat([
@@ -624,12 +634,12 @@ class Architect(Module):
 
         Raises
         ------
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        AssertionError #1
+            When using a GNN as encoder, the node_type shouldn't be supplied.
+        AssertionError #2
+            The length of the given attribute must match the number of nodes of this type.
+        AssertionError #3
+            The node type of each node must correspond to the one registered in the knowledge graph.
         
         """
         # Cannot use short-circuit syntax with tuples
@@ -721,7 +731,7 @@ class Architect(Module):
 
         Notes
         -----
-        If there is already a configuration file in the output folder identical to the current configuration, KGATE will
+        If there already is a configuration file in the output folder identical to the current configuration, KGATE will
         automatically attempt to restart the training from the most recent checkpoint in the `checkpoints/` folder. Otherwise,
         the output folder will be cleaned and the current configuration will be written as `kgate_config.toml`
         
@@ -818,7 +828,7 @@ class Architect(Module):
             engine: Engine
                 TODO.What_that_argument_is_or_does
 
-            """    
+            """
             # Move models to CPU before saving
             if self.encoder.deep:
                 self.encoder.to("cpu")
@@ -835,7 +845,6 @@ class Architect(Module):
             self.decoder.to(self.device)
             self.edge_embeddings.to(self.device)
             self.node_embeddings.to(self.device)
-
 
         # Attach checkpoint handler to trainer and call save_checkpoint_to_cpu
         trainer.add_event_handler(Events.EPOCH_COMPLETED(every = self.save_interval), save_checkpoint_to_cpu)
@@ -889,15 +898,15 @@ class Architect(Module):
                 trainer.run(data_loader, max_epochs = self.max_epochs)
     
 
-    def test(self) -> Dict[str,float | Dict[str,float]]:
+    def test(self) -> Dict[str, float | Dict[str, float]]:
         """
         TODO.What_the_function_does_about_globally
 
         Returns
         -------
-        results: Dict[str,float | Dict[str,float]]
+        results: Dict[str, float | Dict[str, float]]
             TODO.What_that_variable_is_or_does
-            
+        
         """
         torch.cuda.empty_cache()
         gc.collect()
@@ -953,15 +962,15 @@ class Architect(Module):
             logging.info(f"Metrics for infrequent nodes (threshold={threshold}) in edge {edge}: {infrequent_metrics}")
 
             results["target_edges_by_frequency"][edge] = {
-                "Frequent_metrics": frequent_metrics,
-                "Infrequent_metrics": infrequent_metrics,
-                "Threshold": threshold
-            }
+                            "Frequent_metrics": frequent_metrics,
+                            "Infrequent_metrics": infrequent_metrics,
+                            "Threshold": threshold
+                            }
                 
         self.test_results = results
         
         with open(metrics_file, "w") as file:
-            yaml.dump(results, file, default_flow_style=False, sort_keys=False)
+            yaml.dump(results, file, default_flow_style = False, sort_keys = False)
 
         logging.info(f"Evaluation results stored in {metrics_file}")
 
@@ -990,7 +999,12 @@ class Architect(Module):
             List of known edges.
         top_k: int, optional, Default to 100
             Number of prediction to return for each couple in the list.
-                
+        
+        Raises
+        ------
+        ValueError
+            To infer missing elements, exactly 2 lists must be given between heads, tails or edges.
+        
         Returns
         -------
         predictions: pd.DataFrame
@@ -1010,7 +1024,7 @@ class Architect(Module):
 
         if do_heads_inference:
             first_known_triplet_part = tensor([self.kg_train.node_to_index[tail] for tail in tails]).long()
-            second_known_triplet_part = tensor([self.kg_train.edge_to_index[rel] for rel in edges]).long()
+            second_known_triplet_part = tensor([self.kg_train.edge_to_index[edge] for edge in edges]).long()
             missing_triplet_part = "head"
             inference = NodeInference(full_kg)
         elif do_tails_inference:
@@ -1056,14 +1070,14 @@ class Architect(Module):
         
         Raises
         ------
-        error_name: TODO.type
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name: TODO.type
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name: TODO.type
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name: TODO.type
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        AssertionError #1
+            The number of edges must be the same in the checkpoint and in the current configuration.
+        AssertionError #2
+            The number of node types must be the same in the checkpoint and in the current configuration.
+        AssertionError #3
+            The number of nodes must be the same in the checkpoint and in the current configuration.
+        AssertionError #4
+            The convolution layers must be the same in the checkpoint and in the current configuration.
         
         Returns
         -------
@@ -1093,8 +1107,9 @@ class Architect(Module):
 
         Raises
         ------
-        error_1
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        TODO.error_1
+            No best model was found in the checkpoint directory.
+            Make sure to run the training first and not rename checkpoint files before running evaluation.
         
         """
         self.decoder, _ = self.initialize_decoder()
@@ -1105,6 +1120,7 @@ class Architect(Module):
         best_model = find_best_model(self.checkpoints_directory)
 
         if not best_model:
+            # TODO: rewrite to clarify between a warning and an error, by raising instead of returning
             logging.error(f"No best model was found in {self.checkpoints_directory}. Make sure to run the training first and not rename checkpoint files before running evaluation.")
             return
         
@@ -1136,17 +1152,22 @@ class Architect(Module):
 
         Arguments
         ---------
-        positive_triplets_batch: TODO.type
-            TODO.What_that_argument_is_or_does
-        negative_triplets_batch: TODO.type
-            TODO.What_that_argument_is_or_does
+        positive_triplets_batch: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+            Tensor containing the integer key of true sampled triplets of
+            the edges in the current batch.
+        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+            Tensor containing the integer key of negatively sampled triplets of
+            the edges in the current batch.
 
         Returns
         -------
-        positive_triplet: Tensor
-            TODO.What_that_variable_is_or_does
-        negative_triplet: Tensor
-            TODO.What_that_variable_is_or_does
+        positive_triplet: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+            Tensor containing the integer key of true sampled triplets of
+            the edges in the current batch.
+        negative_triplet: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+            Tensor containing the integer key of negatively sampled triplets of
+            the edges in the current batch.
+        
         """
         positive_triplet: Tensor = self.scoring_function(positive_triplets_batch, self.kg_train)
         # The loss function requires the positive and negative tensors to be of the same size,
@@ -1167,8 +1188,10 @@ class Architect(Module):
 
         Arguments
         ---------
-        batch: Tensor
-            TODO.What_that_argument_is_or_does
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the integer key of heads, tails, edges and triplets
+            of the edges in the current batch.
+            Here, batch_size is batch.shape[1].
 
         Returns
         -------
@@ -1207,18 +1230,19 @@ class Architect(Module):
         
         Arguments
         ---------
-        batch: torch.Tensor
-            Batch of triplets, in the format [4, batch_size]. The rows correspond to:
+        batch: torch.Tensor, shape: [4, batch_size]
+            Batch of triplets. The rows correspond to:
             - head_index
             - tail_index
             - edge_index
             - triplet_index
+            Here, batch_size is batch.shape[1].
         kg: KnowledgeGraph
-            The Knowledge Graph corresponding to the batch identifiers.
+            The knowledge graph corresponding to the batch identifiers.
             
         Returns
         -------
-        score: Tensor
+        score: torch.Tensor
             The score given by the decoder for the batch.
             
         """
@@ -1308,8 +1332,8 @@ class Architect(Module):
 
         Raises
         ------
-        error_name: TODO.type
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        AssertionError
+            The decoder.normalize_params method should return exactly two elements, the node embedding and the edge embedding.
             
         """
         # Some decoders should not normalize parameters or do so in a different way.
@@ -1452,7 +1476,7 @@ class Architect(Module):
         Raises
         ------
         ValueError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+            An edge from edge_name does not exist in the training knowledge graph.
 
         Returns
         -------
@@ -1462,6 +1486,7 @@ class Architect(Module):
         infrequent_indices: List[int]
             Indices of triplets in the test set with the specified edge where
             nodes have been seen fewer than or equal to `threshold` times with that edge in the training set.
+        
         """
         # Get the index of the specified edge in the training graph
         if edge_name not in self.kg_train.edge_to_index:
@@ -1506,7 +1531,7 @@ class Architect(Module):
         Arguments
         ---------
         kg: KnowledgeGraph
-            TODO.What_that_argument_is_or_does
+            Knowledge graph on which the metrics will be calculated.
         edge_indices: List[str]
             TODO.What_that_argument_is_or_does
 
@@ -1514,7 +1539,7 @@ class Architect(Module):
         -------
         metrics_sum: float
             TODO.What_that_variable_is_or_does
-        fact_count: int
+        triplet_count: int
             TODO.What_that_variable_is_or_does
         individual_metrics: Dict[str, float]
             TODO.What_that_variable_is_or_does
@@ -1524,7 +1549,7 @@ class Architect(Module):
         """
         # MRR computed by ponderating for each edge
         metrics_sum = 0.0
-        fact_count = 0
+        triplet_count = 0
         individual_metrics = {} 
 
         for edge_name in edge_indices:
@@ -1546,12 +1571,12 @@ class Architect(Module):
             individual_metrics[edge_name] = test_metrics
             
             metrics_sum += test_metrics * indices_to_keep.numel()
-            fact_count += indices_to_keep.numel()
+            triplet_count += indices_to_keep.numel()
         
         # Compute global MRR for the edge group
-        group_metrics = metrics_sum / fact_count if fact_count > 0 else 0
+        group_metrics = metrics_sum / triplet_count if triplet_count > 0 else 0
         
-        return metrics_sum, fact_count, individual_metrics, group_metrics
+        return metrics_sum, triplet_count, individual_metrics, group_metrics
 
 
     def calculate_metrics_for_categories(self,
@@ -1598,12 +1623,13 @@ class Architect(Module):
         Arguments
         ---------
         kg: KnowledgeGraph
-            TODO.What_that_argument_is_or_does
-        
+            Knowledge graph on which the link prediction evaluation will be done.
+
         Raises
         -----
         ValueError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+            Wrong evaluator called.
+            TODO.detail
 
         Returns
         -------
@@ -1637,17 +1663,20 @@ class Architect(Module):
 
         Arguments
         ---------
-        argument_name: TODO.type
-            TODO.What_that_argument_is_or_does
+        kg_validation: KnowledgeGraph
+            Validation split from the knowledge graph.
+        kg_test: KnowledgeGraph
+            Test split from the knowledge graph.
 
         Raises
         ------
         ValueError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+            Wrong evaluator called.
+            TODO.detail
 
         Returns
         -------
-        TODO.result_name: TODO.type
+        accuracy: float
             TODO.What_that_variable_is_or_does
         
         """
@@ -1668,12 +1697,12 @@ class Architect(Module):
         Arguments
         ---------
         attributes: Dict[str, pd.DataFrame], optional
-            TODO.What_that_argument_is_or_does
+            dict(node_type, embedding) containing the embedding for each type of node.
 
         Raises
         ------
         ValueError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+            An edge was not found in the knowledge graph.
             
         """
         logging.info("Preparing KG for data leakage evaluation pocedure...")
