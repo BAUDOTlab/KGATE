@@ -93,7 +93,7 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
 
         Arguments
         ---------
-        batch: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
             Tensor containing the integer key of heads, tails, edges and triplets
             of the edges in the current batch.
             Here, batch_size is batch.shape[1].
@@ -107,7 +107,7 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
 
         Returns
         -------
-        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
             Tensor containing the integer key of negatively sampled triplets of
             the edges in the current batch.
             Here, batch_size is batch.shape[1].
@@ -277,7 +277,7 @@ class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
 
         Arguments
         ---------
-        batch: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
             Tensor containing the integer key of heads, tails, edges and triplets
             of the edges in the current batch.
             Here, batch_size is batch.shape[1].
@@ -287,7 +287,7 @@ class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
 
         Returns
         -------
-        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: (4, negative_triplet_count * batch_size)
+        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, negative_triplet_count * batch_size]
             Tensor containing the integer key of negatively sampled triplets of
             the edges in the current batch.
             Here, batch_size is batch.shape[1].
@@ -410,7 +410,7 @@ class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
 
         Arguments
         ---------
-        batch: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
             Tensor containing the integer key of heads, tails, edges and triplets
             of the edges in the current batch.
             Here, batch_size is batch.shape[1].
@@ -420,7 +420,7 @@ class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
 
         Returns
         -------
-        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: (4, negative_triplet_count * batch_size)
+        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, negative_triplet_count * batch_size]
             Tensor containing the integer key of negatively sampled triplets of
             the edges in the current batch.
             Here, batch_size is batch.shape[1].
@@ -538,7 +538,7 @@ class MixedNegativeSampler(torchkge.sampling.NegativeSampler):
 
         Arguments
         ---------
-        batch: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
             Tensor containing the integer key of heads, tails, edges and triplets
             of the edges in the current batch.
             Here, batch_size is batch.shape[1].
@@ -548,7 +548,7 @@ class MixedNegativeSampler(torchkge.sampling.NegativeSampler):
 
         Returns
         -------
-        combined_negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: (4, 2 * negative_triplet_count * batch_size + batch_size)
+        combined_negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, 2 * negative_triplet_count * batch_size + batch_size]
             Tensor containing the integer key of negatively sampled heads and tails from both samplers.
             Here, batch_size is batch.shape[1].
             

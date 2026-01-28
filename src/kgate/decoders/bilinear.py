@@ -53,28 +53,28 @@ class BilinearDecoder(Module):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: (batch_size), keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
             The embeddings of the head entities for the current batch of length `batch_size`
             (or the whole graph, if it fits in memory)
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: (batch_size), keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
             The embeddings of the tail entities for the current batch of length `batch_size` 
             (or the whole graph, if it fits in memory)
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: (batch_size), keyword-only
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
             The embeddings of the edges for the current batch of length `batch_size` 
             (or the whole graph, if it fits in memory)
-        head_indices: torch.Tensor, dtype: torch.long, shape: (batch_size), keyword-only
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the head entities for the current batch of length `batch_size` 
             (or the whole graph, if it fits in memory)
-        tail_indices: torch.Tensor, dtype: torch.long, shape: (batch_size), keyword-only
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the tail entities for the current batch of length `batch_size` 
             (or the whole graph, if it fits in memory)
-        edge_indices: torch.Tensor, dtype: torch.long, shape: (batch_size), keyword-only
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the edges for the current batch of length `batch_size` 
             (or the whole graph, if it fits in memory)
 
         Returns
         -------
-            batch_score: torch.Tensor, dtype: torch.float, shape: (batch_size)
+            batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
                 The score of each triplet as a tensor.
         
         """

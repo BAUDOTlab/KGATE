@@ -59,18 +59,18 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
         been called.
     kg: KnowledgeGraph
         Knowledge graph on which the evaluation will be done.
-    rank_true_heads: torch.Tensor, shape: (triplet_count), dtype: `torch.int`
+    rank_true_heads: torch.Tensor, shape: [triplet_count], dtype: `torch.int`
         For each fact, this is the rank of the true head when all nodes
         are ranked as possible replacement of the head node. They are
         ranked in decreasing order of scoring function :math:`f_r(h,t)`.
-    rank_true_tails: torch.Tensor, shape: (triplet_count), dtype: `torch.int`
+    rank_true_tails: torch.Tensor, shape: [triplet_count], dtype: `torch.int`
         For each fact, this is the rank of the true tail when all nodes
         are ranked as possible replacement of the tail node. They are
         ranked in decreasing order of scoring function :math:`f_r(h,t)`.
-    filtered_rank_true_heads: torch.Tensor, shape: (triplet_count), dtype: `torch.int`
+    filtered_rank_true_heads: torch.Tensor, shape: [triplet_count], dtype: `torch.int`
         This is the same as the `rank_of_true_heads` when in the filtered
         case. See referenced paper by Bordes et al. for more information.
-    filtered_rank_true_tails: torch.Tensor, shape: (triplet_count), dtype: `torch.int`
+    filtered_rank_true_tails: torch.Tensor, shape: [triplet_count], dtype: `torch.int`
         This is the same as the `rank_of_true_tails` when in the filtered
         case. See referenced paper by Bordes et al. for more information.
 

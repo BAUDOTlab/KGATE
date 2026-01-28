@@ -315,11 +315,11 @@ def concat_kgs( kg_train: KnowledgeGraph,
 
     Returns
     -------
-    head: torch.Tensor, shape: (merged_kg.node_count)
+    head: torch.Tensor, shape: [merged_kg.node_count]
         List of head indices.
-    tail: torch.Tensor, shape: (merged_kg.node_count)
+    tail: torch.Tensor, shape: [merged_kg.node_count]
         List of tail indices.
-    edge: torch.Tensor, shape: (merged_kg.node_count)
+    edge: torch.Tensor, shape: [merged_kg.node_count]
         List of edge indices.
     
     Notes
