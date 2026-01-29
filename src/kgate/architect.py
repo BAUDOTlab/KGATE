@@ -292,7 +292,7 @@ class Architect(Module):
 
         Arguments
         ---------
-        encoder_name: {"Default", "GCN", "GAT", "Node2vec"}, optional
+        encoder_name: {"Default", "GCN", "GAT", "Node2Vec"}, optional
             Name of the encoder.
         gnn_layers: int, optional, default to 0
             Number of hidden layers for the encoder. Only used for deep learning encoders.
@@ -323,7 +323,7 @@ class Architect(Module):
                 encoder = GCNEncoder(edge_types, self.encoder_node_embedding_dimensions, gnn_layers)
             case "GAT":
                 encoder = GATEncoder(edge_types, self.encoder_node_embedding_dimensions, gnn_layers)
-            case "Node2vec":
+            case "Node2Vec":
                 encoder = Node2VecEncoder(self.kg_train.edge_list, self.encoder_node_embedding_dimensions, device = self.device, **encoder_config["params"])
             case _:
                 encoder = DefaultEncoder()

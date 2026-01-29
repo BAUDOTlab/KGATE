@@ -16,8 +16,6 @@ from torch import matmul, Tensor, nn, tensor_split
 from torch.nn.functional import normalize
 from torch.nn import Module
 
-from torchkge.models import DistMultModel, RESCALModel, ComplExModel
-
 from ..utils import initialize_embedding
 
 
@@ -32,6 +30,7 @@ class BilinearDecoder(Module):
     to take care of their initialization, and only requires one attribute to be set.
 
     Furthermore, this interface doesn't implement anything but is a type helper.
+    However, functions from this class returning None can be used directly from inheriting classes.
     
     """
     
@@ -54,28 +53,33 @@ class BilinearDecoder(Module):
         Arguments
         ---------
         head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
-            The embeddings of the head entities for the current batch of length `batch_size`
-            (or the whole graph, if it fits in memory)
+            The embeddings of the head nodes for the current batch of length `batch_size`.
         tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
-            The embeddings of the tail entities for the current batch of length `batch_size` 
-            (or the whole graph, if it fits in memory)
+            The embeddings of the tail nodes for the current batch of length `batch_size`.
         edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
-            The embeddings of the edges for the current batch of length `batch_size` 
-            (or the whole graph, if it fits in memory)
+            The embeddings of the edges for the current batch of length `batch_size`.
         head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head entities for the current batch of length `batch_size` 
-            (or the whole graph, if it fits in memory)
+            The indices of the head nodes for the current batch of length `batch_size`.
         tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail entities for the current batch of length `batch_size` 
-            (or the whole graph, if it fits in memory)
+            The indices of the tail nodes for the current batch of length `batch_size`.
         edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges for the current batch of length `batch_size` 
-            (or the whole graph, if it fits in memory)
+            The indices of the edges for the current batch of length `batch_size`.
+            
+        Raises
+        ------
+        NotImplementedError
+            The score method must be implemented by a bilinear decoder
+            inheriting from this interface.
 
         Returns
         -------
-            batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
-                The score of each triplet as a tensor.
+        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
+            The score of each triplet as a tensor.
+        
+        Notes
+        -----
+        The batch can be the whole graph if it fits in memory.
+        Here, [batch_size] is batch.shape[1].
         
         """
         raise NotImplementedError("The score method must be implemented by the bilinear decoder.")
@@ -83,7 +87,20 @@ class BilinearDecoder(Module):
 
     def normalize_parameters(self) -> Tuple[nn.ParameterList, nn.Embedding] | None:
         """
-        TODO.docstring
+        TODO
+        
+        Arguments
+        ---------
+        TODO
+        
+        Returns
+        -------
+        TODO
+        
+        Notes
+        -----
+        The normalize_parameters method can be implemented by a bilinear decoder inheriting from this class
+        if it has specific parameters to normalize.
         
         """    
         return None
@@ -96,10 +113,19 @@ class BilinearDecoder(Module):
         If the decoder doesn't have dedicated embeddings, nothing is returned. In 
         this case, it is not necessary to implement this method from the interface.
         
+        Arguments
+        ---------
+        TODO
+        
         Returns
         -------
-            embeddings: Dict[str, torch.Tensor] or None
-                Decoder-specific embeddings, or None.
+        embeddings: Dict[str, torch.Tensor] or None
+            Decoder-specific embeddings, or None.
+        
+        Notes
+        -----
+        The get_embeddings method can be implemented by a bilinear decoder inheriting from this class
+        if it needed.
         
         """
         return None
@@ -107,7 +133,21 @@ class BilinearDecoder(Module):
 
     def inference_prepare_candidates(self) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
-        TODO.docstring
+        TODO
+        
+        Arguments
+        ---------
+        TODO
+        
+        Returns
+        -------
+        TODO
+        
+        Raises
+        ------
+        NotImplementedError
+            The inference_prepare_candidates method must be implemented by a bilinear decoder
+            inheriting from this interface.
         
         """
         raise NotImplementedError("The inference_prepare_candidates method must be implemented by the bilinear decoder.")
@@ -120,7 +160,21 @@ class BilinearDecoder(Module):
                         edges: Tensor
                         ) -> Tensor:
         """
-        TODO docstring
+        TODO
+        
+        Arguments
+        ---------
+        TODO
+        
+        Returns
+        -------
+        TODO
+        
+        Raises
+        ------
+        NotImplementedError
+            The inference_score method must be implemented by a bilinear decoder
+            inheriting from this interface.
         
         """
         raise NotImplementedError("Bilinear decoders must implement the inference_score function themselves.")
@@ -140,21 +194,25 @@ class RESCAL(BilinearDecoder):
     embedding_dimensions: int
         Dimensions of embeddings.
     node_count: int
-        Number of nodes in the knowledge graph.
+        Number of nodes in the batch.
     edge_count: int
-        Number of edges in the knowledge graph.
+        Number of edges in the batch.
         
     Attributes
     ----------
     edge_embeddings_matrix: TODO.type
         TODO.What_that_variable_is_or_does
-    embedding_dimensions: TODO.type
+    embedding_dimensions: int
         Dimensions of embeddings.
     edge_count: int
-        Number of edges in the knowledge graph.
+        Number of edges in the batch.
     node_count: int
-        Number of nodes in the knowledge graph.
+        Number of nodes in the batch.
     TODO.inherited_attributes
+        
+    Notes
+    -----
+    The batch can be the whole graph if it fits in memory.
     
     """
     def __init__(self, 
@@ -170,10 +228,10 @@ class RESCAL(BilinearDecoder):
 
 
     def score(  self,
-                *, 
-                head_embeddings: Tensor, 
-                tail_embeddings: Tensor, 
-                edge_indices: Tensor, 
+                *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_indices: Tensor,
                 **_
                 ) -> Tensor:
         """
@@ -181,18 +239,23 @@ class RESCAL(BilinearDecoder):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_indices: torch.Tensor, keyword-only
-            Indices of edges in the knowledge graph.
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+            Embeddings of the head nodes in the batch.
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+            Embeddings of the tail nodes in the batch.
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            Indices of edges in the batch.
         TODO.kwargs
 
         Returns
         -------
-        TODO.name_result: Tensor
-            TODO.What_that_variable_is_or_does
+        score: torch.Tensor
+            The score given by the decoder for the batch.
+        
+        Notes
+        -----
+        The batch can be the whole graph if it fits in memory.
+        Here, [batch_size] is batch.shape[1].
         
         """
         head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
@@ -201,19 +264,6 @@ class RESCAL(BilinearDecoder):
         head_edge_embeddings = matmul(head_normalized_embeddings.view(-1, 1, self.embedding_dimensions), edge_embeddings)
         
         return (head_edge_embeddings.view(-1, self.embedding_dimensions) * tail_normalized_embeddings).sum(dim = 1)
-    
-    
-    def get_embeddings(self) -> Dict[str, Tensor]:
-        """
-        TODO.What_the_function_does_about_globally
-
-        Returns
-        -------
-        edge_embeddings_matrix: Dict[str, Tensor]
-            TODO.What_that_variable_is_or_does
-            
-        """
-        return {"edge_embeddings_matrix" : self.edge_embeddings_matrix.weight.data.view(-1, self.embedding_dimensions, self.embedding_dimensions)}
     
     
     def normalize_parameters(self,
@@ -229,10 +279,12 @@ class RESCAL(BilinearDecoder):
         ---------
         node_embeddings: torch.nn.ParameterList
             The node embedding as a ParameterList containing one Parameter by node type,
-            or only one if there is no node type. All Parameters should be of the same size
-            (n_ent,emb_dim) corresponding to (node_count, embedding_dimensions)
+            or only one if there is no node type. All Parameters should be of the same shape
+            (n_ent, emb_dim) corresponding to (node_count, embedding_dimensions)
         edge_embeddings: torch.nn.Embedding
-            The relation embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
+            The edge embedding as a ParameterList containing one Parameter by edge type,
+            or only one if there is no node type. All parameters should be of the same shape
+            (n_rel, emb_dim) corresponding to (edge_count, embedding_dimensions)
         
         Returns
         -------
@@ -248,13 +300,27 @@ class RESCAL(BilinearDecoder):
         return node_embeddings, edge_embeddings
 
 
-    def inference_prepare_candidates(self, *, 
+    def get_embeddings(self) -> Dict[str, Tensor]:
+        """
+        TODO.What_the_function_does_about_globally
+
+        Returns
+        -------
+        edge_embeddings_matrix: Dict[str, Tensor]
+            TODO.What_that_variable_is_or_does
+            
+        """
+        return {"edge_embeddings_matrix" : self.edge_embeddings_matrix.weight.data.view(-1, self.embedding_dimensions, self.embedding_dimensions)}
+    
+
+    def inference_prepare_candidates(self,
+                                    *, 
                                     head_indices: Tensor, 
                                     tail_indices: Tensor, 
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
                                     edge_embeddings: nn.Embedding,
-                                    node_inference: bool =True
+                                    node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings
@@ -274,7 +340,7 @@ class RESCAL(BilinearDecoder):
             TODO.What_that_argument_is_or_does
         edge_embeddings: torch.nn.Embedding, keyword-only
             Unused.
-        node_inference: bool, default to True, keyword-only
+        node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
@@ -420,9 +486,9 @@ class DistMult(BilinearDecoder):
         node_embeddings: torch.nn.ParameterList
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type. All Parameters should be of the same size
-            (n_ent,emb_dim) corresponding to (node_count, embedding_dimensions)
+            (n_ent, emb_dim) corresponding to (node_count, embedding_dimensions)
         edge_embeddings: torch.nn.Embedding
-            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
+            The edge embeddings, of size (n_rel, emb_dim) corresponding to (edge_count, embedding_dimensions)
         
         Returns
         -------
