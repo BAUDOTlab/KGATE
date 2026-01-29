@@ -105,15 +105,17 @@ class BilinearDecoder(Module):
         
         Returns
         -------
-        node_embeddings : torch.nn.ParameterList
+        node_embeddings: torch.nn.ParameterList
             The normalized node embedding object.
-        edge_embeddings_emb : torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding
             The normalized edges embedding object.
         
         Notes
         -----
         The normalize_parameters method can be implemented by a bilinear decoder inheriting from this class
         if it has specific parameters to normalize.
+        If the decoder doesn't have dedicated normalization, nothing is returned. In 
+        this case, it is not necessary to implement this method from the interface.
         
         """    
         return None
@@ -122,9 +124,6 @@ class BilinearDecoder(Module):
     def get_embeddings(self) -> Dict[str, Tensor] | None:
         """
         Get the decoder-specific embeddings.
-        
-        If the decoder doesn't have dedicated embeddings, nothing is returned. In 
-        this case, it is not necessary to implement this method from the interface.
         
         Returns
         -------
@@ -135,6 +134,8 @@ class BilinearDecoder(Module):
         -----
         The get_embeddings method can be implemented by a bilinear decoder inheriting from this class
         if it needed.
+        If the decoder doesn't have dedicated embeddings, nothing is returned. In 
+        this case, it is not necessary to implement this method from the interface.
         
         """
         return None
@@ -155,7 +156,9 @@ class BilinearDecoder(Module):
                                                 Tensor | Tuple
                                                 ]:
         """
-        TODO
+        Link prediction evaluation helper function. Get node embeddings
+        and edge embeddings. The output will be fed to the
+        `inference_score_function` method.
         
         Arguments
         ---------
@@ -164,7 +167,7 @@ class BilinearDecoder(Module):
         tail_indices: torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
         edge_indices: torch.Tensor, keyword-only
-            The indices of the relations (from KG).
+            The indices of the edges (from KG).
         node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
         edge_embeddings: torch.nn.Embedding, keyword-only
@@ -200,7 +203,7 @@ class BilinearDecoder(Module):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        TODO.what_that_funciton_does
+        TODO.what_that_function_does
         
         Arguments
         ---------
@@ -336,9 +339,9 @@ class RESCAL(BilinearDecoder):
         
         Returns
         -------
-        node_embeddings : torch.nn.ParameterList
+        node_embeddings: torch.nn.ParameterList
             The normalized node embedding object.
-        edge_embeddings : torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding
             The unchanged edges embedding object.
         
         """
@@ -358,7 +361,7 @@ class RESCAL(BilinearDecoder):
             TODO.What_that_variable_is_or_does
             
         """
-        return {"edge_embeddings_matrix" : self.edge_embeddings_matrix.weight.data.view(-1, self.embedding_dimensions, self.embedding_dimensions)}
+        return {"edge_embeddings_matrix": self.edge_embeddings_matrix.weight.data.view(-1, self.embedding_dimensions, self.embedding_dimensions)}
     
 
     def inference_prepare_candidates(self,
@@ -373,8 +376,7 @@ class RESCAL(BilinearDecoder):
         """
         Link prediction evaluation helper function. Get node embeddings
         and edge embeddings. The output will be fed to the
-        `inference_score` method. See torchkge.models.interfaces.Models for
-        more details on the API.
+        `inference_score_function` method.
 
         Arguments
         ---------
@@ -383,7 +385,7 @@ class RESCAL(BilinearDecoder):
         tail_indices: torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
         edge_indices: torch.Tensor, keyword-only
-            The indices of the relations (from KG).
+            The indices of the edges (from KG).
         node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
         edge_embeddings: torch.nn.Embedding, keyword-only
@@ -593,9 +595,9 @@ class DistMult(BilinearDecoder):
         
         Returns
         -------
-        node_embeddings : torch.nn.ParameterList
+        node_embeddings: torch.nn.ParameterList
             The normalized node embedding object.
-        edge_embeddings : torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding
             The unchanged edges embedding object.
         
         """
@@ -616,9 +618,8 @@ class DistMult(BilinearDecoder):
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings
-        and relations embeddings. The output will be fed to the
+        and edge embeddings. The output will be fed to the
         `inference_score_function` method.
-
         Arguments
         ---------
         head_indices: torch.Tensor, keyword-only
@@ -626,7 +627,7 @@ class DistMult(BilinearDecoder):
         tail_indices: torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
         edge_indices: torch.Tensor, keyword-only
-            The indices of the relations (from KG).
+            The indices of the edges (from KG).
         node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
         edge_embeddings: torch.nn.Embedding, keyword-only
@@ -648,16 +649,16 @@ class DistMult(BilinearDecoder):
         """
         batch_size = head_indices.shape[0]
 
-        # Get head, tail and relation embeddings
+        # Get head, tail and edge embeddings
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
         edge_embeddings_inference = edge_embeddings(edge_indices)
         
         if node_inference:
-            # Prepare candidates for every entities
+            # Prepare candidates for every node
             candidates = node_embeddings
         else:
-            # Prepare candidates for every relations
+            # Prepare candidates for every edge
             candidates = edge_embeddings.weight.data
         
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
@@ -813,7 +814,9 @@ class ComplEx(BilinearDecoder):
                                         Tuple[Tensor, Tensor],
                                         Tuple[Tensor, Tensor]]:
         """
-        TODO.What_the_class_is_about_globally
+        Link prediction evaluation helper function. Get node embeddings
+        and edge embeddings. The output will be fed to the
+        `inference_score_function` method.
 
         References
         ----------
@@ -826,7 +829,7 @@ class ComplEx(BilinearDecoder):
         tail_indices: torch.Tensor, keyword-only
             The indices of the tail nodes (from KG).
         edge_indices: torch.Tensor, keyword-only
-            The indices of the relations (from KG).
+            The indices of the edges (from KG).
         node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
         edge_embeddings: torch.nn.Embedding, keyword-only
