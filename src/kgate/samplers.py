@@ -105,6 +105,13 @@ class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
         AssertionError #2
             The size/shape of possible_head_count must be (batch_size - corrupted_head_count).
 
+        Raises
+        ------
+        error_name
+            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        error_name
+            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+
         Returns
         -------
         negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
@@ -531,7 +538,7 @@ class MixedNegativeSampler(torchkge.sampling.NegativeSampler):
     def corrupt_batch(  self,
                         batch: torch.LongTensor,
                         negative_triplet_count = None):
-        """
+        """ TODO
         For each true triplet, produce `negative_triplet_count` corrupted ones from the
         Uniform sampler, the Bernoulli sampler and the Positional sampler. If `heads` and `tails` are
         cuda objects, then the returned tensors are on the GPU.

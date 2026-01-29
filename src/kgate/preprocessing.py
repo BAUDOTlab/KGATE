@@ -494,7 +494,7 @@ def clean_cartesians(kg_first: KnowledgeGraph,
     Returns
     -------
     kg_first: KnowledgeGraph
-        Cleaned train vset knowledge graph, with cartesian triplets removed.
+        Cleaned train set knowledge graph, with cartesian triplets removed.
     kg_second: KnowledgeGraph
         Augmented test set knowledge graph, with the transferred triplets added.
         

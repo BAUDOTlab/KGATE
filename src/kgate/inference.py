@@ -61,6 +61,7 @@ class Inference_KG(Dataset):
         self.second_tensor_index = second_index_tensor
 
 
+
     def __len__(self):
         return self.first_tensor_index.size(0)
 

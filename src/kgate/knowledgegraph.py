@@ -333,7 +333,7 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        result_name: torch.Tensor
+        TODO.result_name: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
@@ -347,7 +347,7 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        result_name: torch.Tensor
+        TODO.result_name: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
@@ -361,7 +361,7 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        result_name: torch.Tensor
+        TODO.result_name: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
@@ -375,7 +375,7 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        result_name: torch.Tensor
+        TODO.result_name: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
@@ -389,7 +389,7 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        result_name: torch.Tensor
+        TODO.result_name: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
@@ -420,7 +420,7 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        result_name: pd.DataFrame
+        TODO.result_name: pd.DataFrame
             TODO.What_that_variable_is_or_does
         
         """
