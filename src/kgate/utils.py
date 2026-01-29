@@ -666,3 +666,68 @@ def get_dictionary_mapping(dataframe: pd.DataFrame, nodes = True) -> Dict[str, i
     else:
         unique_edges = list(dataframe["edge"].unique())
         return {edge: index for index, edge in enumerate(sorted(unique_edges))}
+
+def get_average_heads_per_tail(graphindices: Tensor) -> Dict[float, float]:
+    """
+    Get the average number of heads per tail across each edges.
+
+    Arguments
+    ---------
+    graphindices: torch.Tensor, dtype: torch.long, shape: [4, triplet_count]
+        The knowledge graph representation as a tensor with four rows, respectively
+        the head, tail, edge and triplet indices.
+    
+    Returns
+    -------
+    average_heads_per_tail: Dict[float,float]
+        Keys: relation indices; Values: average number of heads per tail
+    """
+    dataframe = DataFrame(graphindices.T.cpu().numpy(), columns=["head","tail","edge","triplet"])
+    dataframe = dataframe.groupby(["edge", "tail"]).count().groupby("edge").mean()
+    dataframe.reset_index(inplace=True)
+    return {dataframe.loc[i].values[0]: dataframe.loc[i].values[1] for i in dataframe.index}
+
+def get_average_tails_per_head(graphindices: Tensor) -> Dict[float, float]:
+    """
+    Get the average number of tails per head across each edges.
+
+    Arguments
+    ---------
+    graphindices: torch.Tensor, dtype: torch.long, shape: [4, triplet_count]
+        The knowledge graph representation as a tensor with four rows, respectively
+        the head, tail, edge and triplet indices.
+    
+    Returns
+    -------
+    average_tails_per_head: Dict[float,float]
+        Keys: relation indices; Values: average number of tails per head
+    """
+    dataframe = DataFrame(graphindices.T.cpu().numpy(), columns=["head","tail","edge","triplet"])
+    dataframe = dataframe.groupby(["head", "edge"]).count().groupby("edge").mean()
+    dataframe.reset_index(inplace=True)
+    return {dataframe.loc[i].values[0]: dataframe.loc[i].values[1] for i in dataframe.index}
+
+def get_bernoulli_probabilities(knowledge_graph: KnowledgeGraph) -> Dict[float, float]:
+    """
+    Evaluate the Bernoulli probabilities for negative sampling as in the
+    TransH original paper by Wang et al. (2014).
+
+    Arguments
+    ---------
+    knowledge_graph: kgate.KnowledgeGraph
+        The knowledge graph to sample bernoulli probabilities from.
+    
+    Returns
+    -------
+    bernoulli_probabilities: Dict[int, float]
+        Sampled probabilities of tails for each head. Keys: edge indices; Values: probabilities.
+    """
+    heads_per_tail = get_average_heads_per_tail(knowledge_graph.graphindices)
+    tails_per_head = get_average_tails_per_head(knowledge_graph.graphindices)
+
+    assert heads_per_tail.keys() == tails_per_head.keys(), "The edges between heads_per_tail and tails_per_edge sets do not correspond."
+
+    for edge in tails_per_head.keys():
+        tails_per_head[edge] = tails_per_head[edge] / (tails_per_head[edge] + heads_per_tail[edge])
+    
+    return tails_per_head
