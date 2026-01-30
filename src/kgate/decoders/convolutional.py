@@ -43,9 +43,9 @@ class ConvolutionalDecoder(Module):
         """
         Interface method for the decoder's score function.
 
-        Refer to the specific decoder for details on scoring function implementation.
+        Refer to the specific decoder for details on this function's implementation.
         While all arguments are given when called from the Architect class, most 
-        decoders only use some of them. 
+        decoders only use some of them.
 
         Arguments
         ---------
@@ -61,6 +61,12 @@ class ConvolutionalDecoder(Module):
             The indices of the tail nodes for the current batch of length `batch_size`.
         edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the edges for the current batch of length `batch_size`.
+        
+        Raises
+        ------
+        NotImplementedError
+            The score method must be implemented by a convolutional decoder
+            inheriting from this interface.
 
         Returns
         -------
@@ -114,6 +120,8 @@ class ConvolutionalDecoder(Module):
     def get_embeddings(self) -> Dict[str, Tensor] | None:
         """
         Get the decoder-specific embeddings.
+
+        Refer to the specific decoder for details on this function's implementation.
         
         Returns
         -------
@@ -144,6 +152,10 @@ class ConvolutionalDecoder(Module):
         Link prediction evaluation helper function. Get node embeddings
         and edge embeddings. The output will be fed to the
         `inference_score_function` method.
+
+        Refer to the specific decoder for details on this function's implementation.
+        While all arguments are given when called from the Architect class, most 
+        decoders only use some of them.
         
         Arguments
         ---------
@@ -189,6 +201,10 @@ class ConvolutionalDecoder(Module):
                         ) -> Tensor:
         """
         TODO.what_that_function_does
+
+        Refer to the specific decoder for details on this function's implementation.
+        While all arguments are given when called from the Architect class, most 
+        decoders only use some of them.
         
         Arguments
         ---------

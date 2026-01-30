@@ -46,7 +46,7 @@ class BilinearDecoder(Module):
         """
         Interface method for the decoder's score function.
 
-        Refer to the specific decoder for details on scoring function implementation.
+        Refer to the specific decoder for details on this function's implementation.
         While all arguments are given when called from the Architect class, most 
         decoders only use some of them. 
 
@@ -125,6 +125,8 @@ class BilinearDecoder(Module):
         """
         Get the decoder-specific embeddings.
         
+        Refer to the specific decoder for details on this function's implementation.
+        
         Returns
         -------
         edge_embeddings_matrix: Dict[str, torch.Tensor] or None
@@ -160,6 +162,10 @@ class BilinearDecoder(Module):
         and edge embeddings. The output will be fed to the
         `inference_score_function` method.
         
+        Refer to the specific decoder for details on this function's implementation.
+        While all arguments are given when called from the Architect class, most 
+        decoders only use some of them.
+        
         Arguments
         ---------
         head_indices: torch.Tensor, keyword-only
@@ -175,6 +181,12 @@ class BilinearDecoder(Module):
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
         
+        Raises
+        ------
+        NotImplementedError
+            The inference_prepare_candidates method must be implemented by a bilinear decoder
+            inheriting from this interface.
+        
         Returns
         -------
         head_embeddings: torch.Tensor or Tuple
@@ -185,12 +197,6 @@ class BilinearDecoder(Module):
             Edge embeddings.
         candidates: torch.Tensor or Tuple
             Candidate embeddings for nodes or edges.
-        
-        Raises
-        ------
-        NotImplementedError
-            The inference_prepare_candidates method must be implemented by a bilinear decoder
-            inheriting from this interface.
         
         """
         raise NotImplementedError("The inference_prepare_candidates method must be implemented by the bilinear decoder.")
@@ -204,6 +210,10 @@ class BilinearDecoder(Module):
                         ) -> Tensor:
         """
         TODO.what_that_function_does
+
+        Refer to the specific decoder for details on this function's implementation.
+        While all arguments are given when called from the Architect class, most 
+        decoders only use some of them.
         
         Arguments
         ---------
