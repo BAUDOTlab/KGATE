@@ -9,7 +9,7 @@ import logging
 import pickle
 from pathlib import Path
 from importlib.resources import open_binary
-from typing import List, Tuple, Literal
+from typing import List, Tuple, Literal, Dict
 
 import pandas as pd 
 import numpy as np
@@ -702,7 +702,7 @@ def get_average_tails_per_head(graphindices: Tensor) -> Dict[float, float]:
     average_tails_per_head: Dict[float,float]
         Keys: relation indices; Values: average number of tails per head
     """
-    dataframe = DataFrame(graphindices.T.cpu().numpy(), columns=["head","tail","edge","triplet"])
+    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns=["head","tail","edge","triplet"])
     dataframe = dataframe.groupby(["head", "edge"]).count().groupby("edge").mean()
     dataframe.reset_index(inplace=True)
     return {dataframe.loc[i].values[0]: dataframe.loc[i].values[1] for i in dataframe.index}
