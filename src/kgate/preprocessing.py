@@ -1,4 +1,7 @@
-"""Knowledge Graph preprocessing functions to run before any training procedure."""
+"""
+Knowledge Graph preprocessing functions to run before any training procedure.
+
+"""
 
 import logging
 import pickle

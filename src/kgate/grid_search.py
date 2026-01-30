@@ -80,23 +80,23 @@ def suggest_value(  trial: optuna.trial.Trial,
                     value: int | float | list, # TODO check if the types are correct
                     ) -> int | float | list: # TODO check if the types are correct
     """
-        TODO.What_the_function_does_about_globally
-
-        Arguments
-        ---------
-        trial: optuna.trial.Trial
-            TODO.What_that_argument_is_or_does
-        value_name: str
-            TODO.What_that_argument_is_or_does
-        value: int or float or list
-            TODO.What_that_argument_is_or_does
-
-        Returns
-        -------
-        suggested_value: int or float or list
-            The value suggested.
-            
-        """
+    TODO.What_the_function_does_about_globally
+    
+    Arguments
+    ---------
+    trial: optuna.trial.Trial
+        TODO.What_that_argument_is_or_does
+    value_name: str
+        TODO.What_that_argument_is_or_does
+    value: int or float or list
+        TODO.What_that_argument_is_or_does
+    
+    Returns
+    -------
+    suggested_value: int or float or list
+        The value suggested.
+    
+    """
     logging.info(value_name)
     logging.info(value)
     
