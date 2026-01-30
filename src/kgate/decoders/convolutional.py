@@ -333,10 +333,6 @@ class ConvKB(ConvolutionalDecoder):
         Link prediction evaluation helper function. Get node embeddings
         and edge embeddings. The output will be fed to the
         `inference_score_function` method.
-
-        References
-        ----------
-        TODO
         
         Arguments
         ---------

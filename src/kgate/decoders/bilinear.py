@@ -8,6 +8,7 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 - 
 
 The modifications are licensed under the BSD license according to the source license.
+
 """
 
 from typing import Tuple, Dict          
@@ -264,7 +265,7 @@ class RESCAL(BilinearDecoder):
         
     Attributes
     ----------
-    edge_embeddings_matrix: TODO.type
+    edge_embeddings_matrix: Dict[str, Tensor]
         TODO.What_that_variable_is_or_does
     embedding_dimensions: int
         Dimensions of embeddings.
@@ -630,6 +631,7 @@ class DistMult(BilinearDecoder):
         Link prediction evaluation helper function. Get node embeddings
         and edge embeddings. The output will be fed to the
         `inference_score_function` method.
+        
         Arguments
         ---------
         head_indices: torch.Tensor, keyword-only
@@ -827,10 +829,6 @@ class ComplEx(BilinearDecoder):
         Link prediction evaluation helper function. Get node embeddings
         and edge embeddings. The output will be fed to the
         `inference_score_function` method.
-
-        References
-        ----------
-        TODO
 
         Arguments
         ---------
