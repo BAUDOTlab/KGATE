@@ -505,7 +505,8 @@ class RESCAL(BilinearDecoder):
         
             return (head_edge_embeddings * tail_embeddings).sum(dim = 2)
         
-        # TODO: else with raise error
+        else:
+            raise ValueError("None of the embeddings have a shape adapted to be inferred. Shapes must be: 3 for `head_embeddings` and `tail_embeddings`, and 4 for `edge_embeddings`.")
     
     
     
@@ -742,7 +743,8 @@ class DistMult(BilinearDecoder):
             
             return (head_edge_embeddings * tail_embeddings.view(batch_size, 1, self.embedding_dimensions)).sum(dim = 2)
         
-        # TODO: else with raise error
+        else:
+            raise ValueError("None of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.")
 
 
 
@@ -963,4 +965,6 @@ class ComplEx(BilinearDecoder):
                     * imaginary_edge_embeddings
                     ).sum(dim = 2)
         
-        # TODO: else with raise error
+        else:
+            raise ValueError("None of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.")
+    
