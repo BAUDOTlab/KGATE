@@ -24,8 +24,8 @@ from torch.types import Number
 from torch_geometric.data import HeteroData
 
 import torchkge
-from torchkge.utils.operations import get_dictionaries
 
+from .utils import get_dictionary_mapping
 
 logging.basicConfig(
     level = logging.INFO,  
@@ -44,7 +44,9 @@ class EncoderInput:
     Arguments
     ---------
     x_dict: Dict[str, Tensor]
-        TODO.What_that_argument_is_or_does
+        Key (str): node type
+        Value (Tensor): [node_count for the node_type, embedding_dimension]
+        PyTorch Geometric equivalent to node_embeddings.
     edge_list: Dict[str, Tensor]
         TODO.What_that_argument_is_or_does
     mapping: Dict[str, Tensor]
@@ -53,7 +55,9 @@ class EncoderInput:
     Attributes
     ----------
     x_dict: Dict[str, Tensor]
-        TODO.What_that_variable_is_or_does
+        Key (str): node type
+        Value (Tensor): [node_count for the node_type, embedding_dimension]
+        PyTorch Geometric equivalent to node_embeddings.
     edge_list: Dict[str, Tensor]
         TODO.What_that_variable_is_or_does
     mapping: Dict[str, Tensor]
@@ -85,17 +89,17 @@ class EncoderInput:
         ])
 
         message = f"""{self.__class__.__name__} (
-    x_dict: {{
-        {x_repr}
-    }}
+                    x_dict: {{
+                        {x_repr}
+                    }}
 
-    edge_index: {{
-        {edge_repr}
-    }}
+                    edge_index: {{
+                        {edge_repr}
+                    }}
 
-    mapping: {{
-        {mapping_repr}
-    }})"""
+                    mapping: {{
+                        {mapping_repr}
+                    }})"""
 
         return message
 
@@ -113,10 +117,10 @@ class KnowledgeGraph(Dataset):
     ---------
     dataframe: pd.DataFrame , default to None
         TODO.What_that_argument_is_or_does
-    graphindices: torch.Tensor, default to None
-        TODO.What_that_argument_is_or_does
+    graphindices: torch.Tensor, shape: [4, triplet_count], default to None
+        Tensor of containing every true triplet in the knowledge graph.
     metadata: pd.DataFrame, default to None
-        TODO.What_that_argument_is_or_does
+        The metadata dataframe to associate to the knowledge graph.
     triplet_types: List[Tuple[str, str, str]], default to None
         TODO.What_that_argument_is_or_does
     node_to_index: Dict[str, int], default to None
@@ -130,10 +134,10 @@ class KnowledgeGraph(Dataset):
 
     Attributes
     ----------
-    graphindices: torch.Tensor
-        TODO.What_that_variable_is_or_does
+    graphindices: torch.Tensor, shape: [4, triplet_count], default to None
+        Tensor of containing every true triplet in the knowledge graph.
     metadata: pd.DataFrame, default to None
-        TODO.What_that_variable_is_or_does
+        The metadata dataframe to associate to the knowledge graph.
     triplet_types: List[Tuple[str, str, str]]
         TODO.What_that_variable_is_or_does
     node_to_index: Dict[str, int]
@@ -162,9 +166,9 @@ class KnowledgeGraph(Dataset):
     ValueError
         If `dataframe` is not given, `graphindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided.
     ValueError
-        The `graphindices` parameter must be a 2D tensor of size [4, triplet_count].
+        The `graphindices` parameter must be a 2D tensor of shape [4, triplet_count].
     ValueError
-        The `removed_triplets` parameter must be a 2D tensor of size [4, triplet_count].
+        The `removed_triplets` parameter must be a 2D tensor of shape [4, triplet_count].
     
     """
     def __init__(self,
@@ -209,9 +213,9 @@ class KnowledgeGraph(Dataset):
 
         self.triplet_types: List[Tuple[str, str, str]] = triplet_types or []
 
-        self.node_to_index = node_to_index or get_dictionaries(dataframe, ent = True)
+        self.node_to_index = node_to_index or get_dictionary_mapping(dataframe, nodes = True)
         self.node_type_to_index: Dict[str, int] = node_type_to_index or {"Node": 0}
-        self.edge_to_index = edge_to_index or get_dictionaries(dataframe, ent = False)
+        self.edge_to_index = edge_to_index or get_dictionary_mapping(dataframe, nodes = False)
 
         self.node_count = max(self.node_to_index.values()) + 1
         self.edge_count = max(self.edge_to_index.values()) + 1
@@ -445,10 +449,10 @@ class KnowledgeGraph(Dataset):
         
         Raises
         ------
-        TODO.error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        TODO.error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        AssertionError #1
+            Metadata is required to set an identity.
+        AssertionError #2
+            The given identity is not a valid data name.
         
         Warns
         -----
@@ -478,12 +482,12 @@ class KnowledgeGraph(Dataset):
         
         Raises
         ------
-        TODO.error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        TODO.error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        TODO.error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        AssertionError #1
+            The metadata dataframe must have at least the columns `type` and `id`.
+        AssertionError #2
+            The number of rows in the metadata dataframe must match the number of nodes in the graph.
+        AssertionError #3
+            The metadata dataframe must have an `id` column identical to the existing metadata.
         
         """
         if self.metadata is None:
@@ -547,8 +551,8 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        TODO.result_name: Tuple[Self, Self, Self]
-            TODO.What_that_variable_is_or_does
+        kgs: Tuple[Self, Self, Self]
+            3 new instances of KnowledgeGraph: train, validation, test.
             
         """
         if sizes is not None:
@@ -608,11 +612,11 @@ class KnowledgeGraph(Dataset):
 
         Raises
         ------
-        TODO.error_name
+        AssertionError #1
             TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        TODO.error_name
+        AssertionError #2
             TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        TODO.error_name
+        AssertionError #3
             TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
 
         Returns
@@ -677,7 +681,7 @@ class KnowledgeGraph(Dataset):
 
         Arguments
         ---------
-        indices_to_keep : list or torch.Tensor
+        indices_to_keep : List[int] or torch.Tensor
             Indices of triplets to keep in the knowledge graph.
 
         Returns
@@ -711,7 +715,7 @@ class KnowledgeGraph(Dataset):
 
         Arguments
         ---------
-        indices_to_remove : list or torch.Tensor
+        indices_to_remove : List[int] or torch.Tensor
             Indices of triplets to remove from the knowledge graph.
 
         Returns
@@ -744,16 +748,16 @@ class KnowledgeGraph(Dataset):
         Arguments
         ---------
         new_triplets : torch.Tensor
-            Tensor of shape (4, n) where each column represents a triplet (head_index, tail_index, edge_index, triplet_type).
+            Tensor of shape [4, n] where each column represents a triplet (head_index, tail_index, edge_index, triplet_type).
 
         Raises
         ------
-        TODO.error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        ValueError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        ValueError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        AssertionError
+            The tensor new_triplets must have shape [4, n].
+        ValueError #1
+            The maximum node index must not be superior to the number of nodes.
+        ValueError #2
+            The maximum triplet index must not be superior to the number of edges.
 
         Returns
         -------
@@ -783,7 +787,7 @@ class KnowledgeGraph(Dataset):
             node_type_to_index = self.node_type_to_index,
             removed_triplets = self.removed_triplets
         )
-        
+    
 
     def add_reverse_edges(self,
                         undirected_edges: List[int]
@@ -791,7 +795,7 @@ class KnowledgeGraph(Dataset):
         """
         Adds reverse triplets for the specified undirected edges in the knowledge graph.
         Updates head_index, tail_index, edges with the reverse triplets, and updates the dictionaries to include
-        both original and reverse facts (TODO) in all directions.
+        both original and reverse triplets in all directions.
 
         Arguments
         ----------
@@ -872,14 +876,14 @@ class KnowledgeGraph(Dataset):
 
         This function processes each edge separately, identifies unique triplets based on head and tail indices,
         and retains only the unique triplets by filtering out duplicates.
-
-        Returns
-        -------
-        TODO.result_name: TODO.type
-            A new instance of the KnowledgeGraph containing only unique triplets.
         
         The function also updates a dictionary `pair_dictionnary` which holds pairs of head and tail indices for each edge
         along with their original indices in the dataset.
+
+        Returns
+        -------
+        kg: KnowledgeGraph
+            A new instance of the KnowledgeGraph containing only unique triplets.
 
         """
         pair_dictionnary = {}  # Dictionary to store pairs for each edge
@@ -951,8 +955,8 @@ class KnowledgeGraph(Dataset):
 
         Raises
         ------
-        TODO.error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        AssertionError #1
+            If the type is not "head_tail" then it must be "tail_head".
 
         Returns
         -------
@@ -1130,18 +1134,20 @@ class KnowledgeGraph(Dataset):
         data: torch.Tensor
             TODO.What_that_argument_is_or_does
         node_embedding: nn.ParameterList
-            TODO.What_that_argument_is_or_does
+            A list containing all embeddings for each node type.
+            keys: node type index
+            values: tensors of shape (node_count, embedding_dimensions)
 
         Raises
         ------
-        TODO.error_name
+        AssertionError
             TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
 
         Returns
         -------
         TODO.result_name: EncoderInput
             TODO.What_that_variable_is_or_does
-            
+        
         """
         assert data.device == node_embedding[0].device
         device = data.device
@@ -1203,8 +1209,10 @@ class KnowledgeGraph(Dataset):
 
         Arguments
         ---------
-        node_embeddings: nn.ParameterList
-            TODO.What_that_argument_is_or_does
+        node_embeddings: nn.ParameterList, keyword-only
+            A list containing all embeddings for each node type.
+            keys: node type index
+            values: tensors of shape (node_count, embedding_dimensions)
 
         Returns
         -------

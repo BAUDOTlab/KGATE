@@ -20,9 +20,9 @@ SUPPORTED_SEPARATORS = [",","\t",";"]
 
 
 def prepare_knowledge_graph(config: dict, 
-                            kg: KnowledgeGraph | None, 
-                            dataframe: pd.DataFrame | None,
-                            metadata: pd.DataFrame | None
+                            kg: KnowledgeGraph | None = None, 
+                            dataframe: pd.DataFrame | None = None,
+                            metadata: pd.DataFrame | None = None
                             ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """
     Prepare and clean the knowledge graph.
@@ -30,30 +30,26 @@ def prepare_knowledge_graph(config: dict,
     This function takes an input knowledge graph either as a csv file (from the configuration), an object of type
     `torchkge.KnowledgeGraph` or a pandas `DataFrame`. It is preprocessed by the `clean_knowledge_graph` function
     and saved as a pickle file with the `save_knowledge_graph` function.
-    
-    Notes
-    -----
-    The CSV file can have any number of columns but at least three named head, tail and edge.
 
     Arguments
     ---------
     config: dict
         The full configuration, usually parsed from the KGATE configuration file.
-    kg: KnowledgeGraph
+    kg: KnowledgeGraph, optional
         The knowledge graph as a single object of class KnowledgeGraph or inheriting the class (KnowledgeGraph inherits the class)
-    dataframe: pd.DataFrame
+    dataframe: pd.DataFrame, optional
         The knowledge graph as a pandas DataFrame.
-    metadata: pd.DataFrame
-        TODO: description here
+    metadata: pd.DataFrame, optional
+        The metadata dataframe to associate to the knowledge graph.
 
     Raises
     ------
     ValueError
-        TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-    ValueError
-        TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        Knowledge graph csv file not found or using a non supported separator.
+        Supported separators are "," (comma), "\t" (tabulation), ";" (semicolon).
     NotImplementedError
-        TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        Knowledge graph type not supported.
+        Supported knowledge graph types are KGATE's and TorchKGE's.
         
     Returns
     -------
@@ -63,7 +59,11 @@ def prepare_knowledge_graph(config: dict,
         Subpart of the preprocessed and split knowledge graph, for validation.
     kg_test: KnowledgeGraph
         Subpart of the preprocessed and split knowledge graph, for test.
-        
+    
+    Notes
+    -----
+    The CSV file can have any number of columns but at least three named head, tail and edge.
+    
     """
     # Load knowledge graph
     if kg is None and dataframe is None:
@@ -80,7 +80,7 @@ def prepare_knowledge_graph(config: dict,
                 continue
         
         if kg_dataframe is None:
-            raise ValueError(f"The Knowledge Graph csv file was not found or uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
+            raise ValueError(f"The knowledge graph csv file was not found or uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
         kg = KnowledgeGraph(dataframe = kg_dataframe, metadata = metadata)
 
@@ -92,7 +92,7 @@ def prepare_knowledge_graph(config: dict,
             elif isinstance(kg, KnowledgeGraph):
                 kg = kg
             else:
-                raise NotImplementedError(f"Knowledge Graph type {type(kg)} is not supported.")
+                raise NotImplementedError(f"Knowledge graph type {type(kg)} is not supported. Supported knowledge graph types are KGATE's and TorchKGE's.")
         elif dataframe is not None:
             kg = KnowledgeGraph(dataframe = dataframe, metadata = metadata)
                 
@@ -145,7 +145,7 @@ def load_knowledge_graph(pickle_filename: Path):
     Arguments
     ---------
     pickle_filename: Path
-        TODO.What_that_argument_is_or_does
+        Path to the pickle file.
         
     Returns
     -------
@@ -170,14 +170,14 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
     Arguments
     ---------
     kg: KnowledgeGraph
-        TODO.What_that_argument_is_or_does
+        Knowledge graph on which the cleaning will be done.
     config: dict
-        TODO.What_that_argument_is_or_does
+        The full configuration, usually parsed from the KGATE configuration file.
     
     Raises
     ------
     ValueError
-        TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        One or more nodes are not covered in the training set after ensuring node coverage.
         
     Returns
     -------
@@ -274,13 +274,13 @@ def verify_node_coverage(kg_train: KnowledgeGraph,
     Arguments
     ---------
     kg_train: KnowledgeGraph
-        The training knowledge graph.
+        The training knowledge graph subset.
     kg_full: KnowledgeGraph
         The full knowledge graph.
 
     Returns
     -------
-    TODO.result_name: Tuple[bool, List[str]]
+    missing_nodes: Tuple[bool, List[str]]
         A tuple where the first element is True if all nodes in the full knowledge graph are present in the training 
         knowledge graph, and the second element is a list of missing nodes (names) if any are missing.
     
@@ -306,20 +306,20 @@ def verify_node_coverage(kg_train: KnowledgeGraph,
 
 def ensure_node_coverage(kg_train: KnowledgeGraph,
                         kg_validation: KnowledgeGraph,
-                        kg_test:KnowledgeGraph
+                        kg_test: KnowledgeGraph
                         ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """
     Ensure that all nodes in kg_train.node_to_index are present in kg_train as head or tail.
-    If an node is missing, move a triplet involving that node from kg_validation or kg_test to kg_train.
+    If a node is missing, move a triplet involving that node from kg_validation or kg_test to kg_train.
 
     Arguments
     ---------
     kg_train: KnowledgeGraph
-        The training knowledge graph to ensure node coverage.
+        The training knowledge graph subset to ensure node coverage of.
     kg_validation: KnowledgeGraph
-        The validation knowledge graph from which to move triplets if needed.
+        The validation knowledge graph subset from which to move triplets if needed.
     kg_test: KnowledgeGraph
-        The test knowledge graph from which to move triplets if needed.
+        The test knowledge graph subset from which to move triplets if needed.
 
     Returns
     -------
@@ -378,6 +378,7 @@ def ensure_node_coverage(kg_train: KnowledgeGraph,
             # Update the list of missing nodes
             nodes_in_triplets = set(triplets[0].tolist() + triplets[1].tolist())
             remaining_nodes = nodes - set(nodes_in_triplets)
+            
             return remaining_nodes
         
         return nodes
@@ -406,16 +407,16 @@ def clean_datasets( kg_train: KnowledgeGraph,
     Arguments
     ---------
     kg_train: KnowledgeGraph
-        The training knowledge graph.
+        The training knowledge graph subset.
     kg_second: KnowledgeGraph
-        The second knowledge graph, test or validation.
+        The second knowledge graph subset, test or validation.
     known_reverses: List[Tuple[int, int]]
         Each tuple contains two edges (first_edge_type, second_edge_type) that are known reverse edges.
 
     Returns
     -------
     kg_train: KnowledgeGraph
-        The cleaned train knowledge graph.
+        The cleaned train knowledge graph subset.
         
     """
     for first_edge_type, second_edge_type in known_reverses:
@@ -493,9 +494,9 @@ def clean_cartesians(kg_first: KnowledgeGraph,
     Returns
     -------
     kg_first: KnowledgeGraph
-        Cleaned train knowledge graph, with cartesian triplets removed
+        Cleaned train set knowledge graph, with cartesian triplets removed.
     kg_second: KnowledgeGraph
-        Augmented test knowledge graph, with the transferred triplets added
+        Augmented test set knowledge graph, with the transferred triplets added.
         
     """
     assert node_type in ["head", "tail"], "node_type must be either 'head' or 'tail'"
@@ -505,7 +506,7 @@ def clean_cartesians(kg_first: KnowledgeGraph,
         mask = (kg_second.edge_indices == edge_index)
         if node_type == "head":
             cartesian_node_indices = kg_second.head_indices[mask].view(-1,1)
-            # Find matching triplets in training set with same head and edge
+            # Find matching triplets in train set with same head and edge
             all_indices_to_move = []
             for node_index in cartesian_node_indices:
                 mask = (kg_first.head_indices == node_index) & (kg_first.edge_indices == edge_index)
@@ -515,7 +516,7 @@ def clean_cartesians(kg_first: KnowledgeGraph,
                 all_indices_to_move.extend(indices.tolist())
         else:  # tail
             cartesian_node_indices = kg_second.tail_indices[mask].view(-1,1)
-            # Find matching triplets in training set with same tail and edge
+            # Find matching triplets in train set with same tail and edge
             all_indices_to_move = []
             for node_index in cartesian_node_indices:
                 mask = (kg_first.tail_indices == node_index) & (kg_first.edge_indices == edge_index)
@@ -532,7 +533,7 @@ def clean_cartesians(kg_first: KnowledgeGraph,
                 kg_first.tail_indices[all_indices_to_move]
             ], dim = 1)
             
-            # Remove identified triplets from training set
+            # Remove identified triplets from train set
             kg_first = kg_first.remove_triplets(torch.tensor(all_indices_to_move, dtype = torch.long))
             
             # Add transferred triplets to test set while preserving KG structure

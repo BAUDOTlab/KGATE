@@ -1,3 +1,3 @@
-from .translational import TransE, TransH, TransR, TransD
-from .bilinear import RESCAL, DistMult, ComplEx
-from .convolutional import ConvKB
+from .translational import TranslationalDecoder, TransE, TransH, TransR, TransD
+from .bilinear import BilinearDecoder, RESCAL, DistMult, ComplEx
+from .convolutional import ConvolutionalDecoder, ConvKB

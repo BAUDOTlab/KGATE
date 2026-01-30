@@ -4,8 +4,6 @@ from typing import Tuple, Any
 import optuna
 import pandas as pd
 
-from torchkge import KnowledgeGraph
-
 from .architect import Architect
 from .knowledgegraph import KnowledgeGraph
 from .utils import parse_config
@@ -17,6 +15,7 @@ logging.basicConfig(
     level = logging_level,  
     format = "%(asctime)s - %(levelname)s - %(message)s" 
 )
+
 
 def run_grid_search(config_path: str,
                     number_of_trials: int = 10,
@@ -37,9 +36,9 @@ def run_grid_search(config_path: str,
     ---------
     number_of_trials: int, default to 10
         TODO.What_that_argument_is_or_does
-    kg: Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph] or KnowledgeGraph, optional, default to None
-        Knowledge graph.
-    dataframe: pd.DataFrame, optional, default to None
+    kg: Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph] or KnowledgeGraph, optional
+        Knowledge graph on which a grid search hyperparameter optimization will be done.
+    dataframe: pd.DataFrame, optional
         TODO.What_that_argument_is_or_does
     
     Notes
@@ -78,7 +77,8 @@ def run_grid_search(config_path: str,
 
 def suggest_value(  trial: optuna.trial.Trial,
                     value_name: str,
-                    value: Any):
+                    value: int | float | list, # TODO check if the types are correct
+                    ) -> int | float | list: # TODO check if the types are correct
     """
         TODO.What_the_function_does_about_globally
 
@@ -88,13 +88,13 @@ def suggest_value(  trial: optuna.trial.Trial,
             TODO.What_that_argument_is_or_does
         value_name: str
             TODO.What_that_argument_is_or_does
-        value: Any
+        value: int or float or list
             TODO.What_that_argument_is_or_does
 
         Returns
         -------
-        suggested_value: TODO.type
-            TODO.What_that_variable_is_or_does
+        suggested_value: int or float or list
+            The value suggested.
             
         """
     logging.info(value_name)
@@ -111,7 +111,6 @@ def suggest_value(  trial: optuna.trial.Trial,
             return value
         
         elif len(value) == 3 and (isinstance(value[0], int) or isinstance(value[0], float)):
-            
             low, high = value[:2]
             step = None
             log = False
