@@ -682,7 +682,7 @@ def get_average_heads_per_tail(graphindices: Tensor) -> Dict[float, float]:
     average_heads_per_tail: Dict[float,float]
         Keys: relation indices; Values: average number of heads per tail
     """
-    dataframe = DataFrame(graphindices.T.cpu().numpy(), columns=["head","tail","edge","triplet"])
+    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns=["head","tail","edge","triplet"])
     dataframe = dataframe.groupby(["edge", "tail"]).count().groupby("edge").mean()
     dataframe.reset_index(inplace=True)
     return {dataframe.loc[i].values[0]: dataframe.loc[i].values[1] for i in dataframe.index}
