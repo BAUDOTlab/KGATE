@@ -1,4 +1,7 @@
-"""Collections of encoder classes to embed the graph structure into a latent space."""
+"""
+Collections of encoder classes to embed the graph structure into a latent space.
+
+"""
 
 import sys
 import logging
@@ -24,6 +27,8 @@ logging.basicConfig(
 
 class DefaultEncoder(nn.Module):
     """
+    Interface for encoders of KGATE.
+
     TODO.What_the_class_is_about_globally
 
     References
@@ -32,7 +37,7 @@ class DefaultEncoder(nn.Module):
 
     Attributes
     ----------
-    deep: bool, defaul to False
+    deep: bool, default to False
         TODO.What_that_variable_is_or_does
     TODO.inherited_attributes
     
