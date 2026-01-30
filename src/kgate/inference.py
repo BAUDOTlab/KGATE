@@ -8,8 +8,6 @@ from torch.utils.data import DataLoader, Dataset
 
 from torch_geometric.utils import k_hop_subgraph
 
-import torchkge.inference as torchkge_inference
-
 from .encoders import DefaultEncoder, GNN
 from .decoders import TranslationalDecoder, BilinearDecoder, ConvolutionalDecoder
 from .knowledgegraph import KnowledgeGraph
@@ -71,7 +69,7 @@ class Inference_KG(Dataset):
 
 
 
-class EdgeInference(torchkge_inference.RelationInference):
+class EdgeInference:
     """
     Use trained embedding model to infer missing edges in triplets.
 
@@ -192,7 +190,7 @@ class EdgeInference(torchkge_inference.RelationInference):
 
 
 
-class NodeInference(torchkge_inference.EntityInference):
+class NodeInference:
     """
     Use trained embedding model to infer missing entities in triples.
 
