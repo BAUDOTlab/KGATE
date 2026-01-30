@@ -32,7 +32,6 @@ from ignite.metrics import RunningAverage
 
 from torch_geometric.utils import k_hop_subgraph
 
-import torchkge.sampling as sampling
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
 
 from .data_leakage import permute_tails
@@ -42,7 +41,7 @@ from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
 from .inference import NodeInference, EdgeInference
 from .knowledgegraph import KnowledgeGraph
 from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
-from .samplers import PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
+from .samplers import NegativeSampler, PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, initialize_embedding, plot_learning_curves, save_config
 
 
@@ -232,7 +231,7 @@ class Architect(Module):
         self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
         self.decoder_loss: MarginLoss | BinaryCrossEntropyLoss = None
         self.optimizer: optim.Optimizer = None
-        self.sampler: sampling.NegativeSampler = None
+        self.sampler: NegativeSampler = None
         self.scheduler: learning_rate_scheduler.LRScheduler | None = None
         self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
         self.node_embeddings: nn.ParameterList
@@ -478,7 +477,7 @@ class Architect(Module):
         return optimizer
 
 
-    def initialize_negative_sampler(self) -> sampling.NegativeSampler:
+    def initialize_negative_sampler(self) -> NegativeSampler:
         """
         Initialize the sampler according to the configuration.
         

@@ -21,6 +21,13 @@ from torch.types import Number, Tensor
 from .knowledgegraph import KnowledgeGraph
 from .utils import get_bernoulli_probabilities
 
+class NegativeSampler:
+    """This class is a simple interface to ease typing and use of negative samplers."""
+    def corrupt_batch(  self,
+                        batch: torch.Tensor,
+                        negative_triplet_count = None
+                        ) -> Tensor:
+        raise NotImplementedError()
 
 class UniformNegativeSampler:
     """
