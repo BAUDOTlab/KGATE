@@ -38,6 +38,10 @@ class TranslationalDecoder(Module):
     The interface doesn't have an __init__ method as inheriting decoders are supposed
     to take care of their initialization, and only requires one attribute to be set.
 
+    Furthermore, this interface doesn't implement anything but is a type helper.
+    However, functions from this class returning None can be used directly from inheriting classes.
+    Exception for the inference_score function, fully implemented in this class.
+
     Attributes
     ----------
     dissimilarity: function described in `torchkge.utils.dissimilarities`
@@ -59,9 +63,9 @@ class TranslationalDecoder(Module):
         """
         Interface method for the decoder's score function.
 
-        Refer to the specific decoder for details on scoring function implementation.
+        Refer to the specific decoder for details on this function's implementation.
         While all arguments are given when called from the Architect class, most 
-        decoders only use some of them. 
+        decoders only use some of them.
 
         Arguments
         ---------
@@ -77,6 +81,12 @@ class TranslationalDecoder(Module):
             The indices of the tail entities for the current batch of length `batch_size`.
         edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the edges for the current batch of length `batch_size`.
+        
+        Raises
+        ------
+        NotImplementedError
+            The score method must be implemented by a translational decoder
+            inheriting from this interface.
 
         Returns
         -------
@@ -130,6 +140,8 @@ class TranslationalDecoder(Module):
     def get_embeddings(self) -> Dict[str, Tensor] | None:
         """
         Get the decoder-specific embeddings.
+
+        Refer to the specific decoder for details on this function's implementation.
         
         Returns
         -------
@@ -160,7 +172,10 @@ class TranslationalDecoder(Module):
         Link prediction evaluation helper function. Get node embeddings
         and edge embeddings. The output will be fed to the
         `inference_score_function` method.
-        TODO.Interface_mention
+        
+        Refer to the specific decoder for details on this function's implementation.
+        While all arguments are given when called from the Architect class, most 
+        decoders only use some of them.
         
         Arguments
         ---------
@@ -215,6 +230,13 @@ class TranslationalDecoder(Module):
             Embeddings of the tail nodes in the knowledge graph.
         edge_embeddings: torch.Tensor, keyword-only
             Embeddings of the edges in the knowledge graph.
+        
+        Raises
+        ------
+        AssertionError #1
+            When inferring heads, the head_embeddings tensor should be of shape (batch_size, embedding_dimensions).
+        AssertionError #2
+            When inferring tails, the head_embeddings tensor should be of shape (batch_size, embedding_dimensions).
 
         Returns
         -------
@@ -232,21 +254,24 @@ class TranslationalDecoder(Module):
         # When the shape of the edges is (batch_size, embedding_dimensions)
         if len(edge_embeddings.shape) == 2:
             if len(tail_embeddings.shape) == 3:
-                assert len(head_embeddings.shape) == 2, "When inferring tails, the projected heads tensor should be of shape (batch_size, embedding_dimensions)"
+                assert len(head_embeddings.shape) == 2, "When inferring tails, the head_embeddings tensor should be of shape (batch_size, embedding_dimensions)"
 
                 translated_heads = (head_embeddings + edge_embeddings).view(batch_size, 1, edge_embeddings.size(1))
                 return - self.dissimilarity(translated_heads, tail_embeddings)
+            
             else:
-                assert (len(head_embeddings.shape) == 3) and (len(tail_embeddings) == 2), "When inferring heads, the projected tails tensor should be of shape (batch_size, embedding_dimensions)"
+                assert (len(head_embeddings.shape) == 3) and (len(tail_embeddings) == 2), "When inferring heads, the head_embeddings tensor should be of shape (batch_size, embedding_dimensions)"
 
                 edges_extended = edge_embeddings.view(batch_size, 1, edge_embeddings.size(1))
                 tails_extended = tail_embeddings.view(batch_size, 1, edge_embeddings.size(1))
                 
                 return - self.dissimilarity(head_embeddings + edges_extended, tails_extended)
+        
         elif len(edge_embeddings.shape) == 3:
             if hasattr(self, "evaluated_projections"):
                 head_embeddings = head_embeddings.view(batch_size, -1, edge_embeddings.size(1))
                 tail_embeddings = tail_embeddings.view(batch_size, -1, edge_embeddings.size(1))
+            
             else:
                 head_embeddings = head_embeddings.view(batch_size, -1, head_embeddings.size(1))
                 tail_embeddings = tail_embeddings.view(batch_size, -1, tail_embeddings.size(1))
@@ -271,15 +296,23 @@ class TransE(TranslationalDecoder):
         Number of nodes in the knowledge graph.
     edge_count: int
         Number of edges in the knowledge graph.
-    dissimilarity_type: str
-        TODO.What_that_argument_is_or_does
+    dissimilarity_type: Literal["L1", "L2"], default to "L2"
+        The type of dissimilarity function that will be used,
+        either "L1" or "L2".
+    
+    Raises
+    ------
+    ValueError
+        The dissimilarity_type must be "L1" or "L2".
 
     Attributes
     ----------
-    TODO.inherited_attributes
+    dissimilarity: function described in `torchkge.utils.dissimilarities`
+        The dissimilarity function used to compare translated head embeddings 
+        to tail embeddings.
     
     """
-    def __init__(self, dissimilarity_type: Literal["L1","L2"] = "L2"):
+    def __init__(self, dissimilarity_type: Literal["L1", "L2"] = "L2"):
         
         match dissimilarity_type:
             case "L1":
@@ -287,7 +320,7 @@ class TransE(TranslationalDecoder):
             case "L2":
                 self.dissimilarity = l2_dissimilarity
             case _:
-                raise ValueError(f"TransE decoder can only use L1 or L2 dissimlarity, but got \"{dissimilarity_type}\"")
+                raise ValueError(f"TransE decoder can only use L1 or L2 dissimilarity, but got \"{dissimilarity_type}\"")
 
 
     def score(  self,
@@ -314,7 +347,7 @@ class TransE(TranslationalDecoder):
 
         Returns
         -------
-        result_1: TODO.type
+        result_1: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
@@ -426,7 +459,9 @@ class TransH(TranslationalDecoder):
 
     Attributes
     ----------
-    TODO.inherited_attributes
+    dissimilarity: function described in `torchkge.utils.dissimilarities`
+        The dissimilarity function used to compare translated head embeddings 
+        to tail embeddings.
     
     """
     def __init__(self,
@@ -444,21 +479,35 @@ class TransH(TranslationalDecoder):
 
 
     @staticmethod
-    def project(nodes, normal_vector):
+    def project(nodes: Tensor,
+                normal_vector: Tensor
+                ) -> Tensor:
         """
-        TODO.docstring
+        Project the given nodes onto the normal vector.
+        
+        Arguments
+        ---------
+        nodes: torch.Tensor
+            TODO.what_that_variable_is_or_does
+        normal_vector: torch.Tensor
+            TODO.what_that_variable_is_or_does
+        
+        Returns
+        -------
+        projected_nodes: torch.Tensor
+            TODO.what_that_variable_is_or_does
         
         """
         return nodes - (nodes * normal_vector).sum(dim = 1).view(-1, 1) * normal_vector
 
 
-    def score(self,
-            *,
-            head_embeddings: Tensor,
-            tail_embeddings: Tensor,
-            edge_embeddings: Tensor,
-            edge_indices: Tensor,
-            **_) -> Tensor:
+    def score(  self,
+                *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_embeddings: Tensor,
+                edge_indices: Tensor,
+                **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
 
@@ -616,10 +665,6 @@ class TransH(TranslationalDecoder):
         ---------
         node_embeddings: torch.Tensor
             TODO.What_that_argument_is_or_does
-
-        Returns
-        -------
-        TODO
             
         """
         if self.evaluated_projections:
@@ -666,7 +711,9 @@ class TransR(TranslationalDecoder):
 
     Attributes
     ----------
-    TODO.inherited_attributes
+    dissimilarity: function described in `torchkge.utils.dissimilarities`
+        The dissimilarity function used to compare translated head embeddings 
+        to tail embeddings.
     
     """
     def __init__(self,
@@ -685,10 +732,11 @@ class TransR(TranslationalDecoder):
         self.dissimilarity = l2_dissimilarity
 
         self.evaluated_projections = False
-        self.projected_nodes = Parameter(empty(size = (edge_count,
-                                                    node_count,
-                                                    embedding_dimensions)),
-                                                    requires_grad = False)
+        self.projected_nodes = Parameter(empty(size = ( edge_count,
+                                                        node_count,
+                                                        node_embedding_dimensions)),
+                                                        requires_grad = False)
+
 
     def score(  self,
                 *,
@@ -717,7 +765,7 @@ class TransR(TranslationalDecoder):
 
         Returns
         -------
-        result_1: TODO.type
+        result_1: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
@@ -736,20 +784,28 @@ class TransR(TranslationalDecoder):
     
     def project(self,
                 nodes: Tensor,
-                projection_matrix: Tensor):
+                projection_matrix: Tensor
+                ) -> Tensor:
         """
         Project the given nodes onto the projection matrix.
-        TODO
+        
+        Arguments
+        ---------
+        nodes: torch.Tensor
+            TODO.what_that_variable_is_or_does
+        projection_matrix: torch.Tensor
+            TODO.what_that_variable_is_or_does
+        
+        Returns
+        -------
+        projected_nodes: torch.Tensor
+            TODO.what_that_variable_is_or_does
         
         """
         projected_nodes = matmul(projection_matrix, nodes.view(-1, self.node_embedding_dimensions, 1))
         
         return projected_nodes.view(-1, self.edge_embedding_dimensions)
     
-    def project(self, nodes: Tensor, projection_matrix: Tensor):
-        """Project the given nodes onto the projection matrix."""
-        projected_nodes = matmul(projection_matrix, nodes.view(-1, self.node_embedding_dimensions, 1))
-        return projected_nodes.view(-1, self.edge_embedding_dimensions)
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
@@ -929,7 +985,9 @@ class TransD(TranslationalDecoder):
 
     Attributes
     ----------
-    TODO.inherited_attributes
+    dissimilarity: function described in `torchkge.utils.dissimilarities`
+        The dissimilarity function used to compare translated head embeddings 
+        to tail embeddings.
     
     """
     def __init__(self,
@@ -949,10 +1007,10 @@ class TransD(TranslationalDecoder):
         self.dissimilarity = l2_dissimilarity
 
         self.evaluated_projections = False
-        self.projected_nodes = Parameter(empty(size = (edge_count,
-                                                    node_count,
-                                                    embedding_dimensions)),
-                                                    requires_grad = False)
+        self.projected_nodes = Parameter(empty(size = ( edge_count,
+                                                        node_count,
+                                                        node_embedding_dimensions)),
+                                                        requires_grad = False)
 
     def score(  self,
                 *,
@@ -960,8 +1018,8 @@ class TransD(TranslationalDecoder):
                 tail_embeddings: Tensor,
                 edge_embeddings: Tensor,
                 head_indices: Tensor,
-                edge_indices: Tensor,
                 tail_indices: Tensor,
+                edge_indices: Tensor,
                 **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
@@ -987,7 +1045,7 @@ class TransD(TranslationalDecoder):
 
         Returns
         -------
-        result_1: TODO.type
+        result_1: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
@@ -1004,15 +1062,30 @@ class TransD(TranslationalDecoder):
         
         return - self.dissimilarity(projected_heads + edge_normalized_embeddings, projected_tails)
     
-    def project(self, nodes: Tensor, node_projection_vector: Tensor, edge_projection_vector: Tensor) -> Tensor:
-        batch_size = nodes.size(0)
-
-        scalar_product = (nodes * node_projection_vector).sum(dim=1)
-        projected_nodes = (edge_projection_vector * scalar_product.view(batch_size, 1))
-
-        return projected_nodes + nodes[:, :self.edge_embedding_dimensions]
     
-    def project(self, nodes: Tensor, node_projection_vector: Tensor, edge_projection_vector: Tensor) -> Tensor:
+    def project(self,
+                nodes: Tensor,
+                node_projection_vector: Tensor,
+                edge_projection_vector: Tensor
+                ) -> Tensor:
+        """
+        Project the given nodes onto the projection vector.
+        
+        Arguments
+        ---------
+        nodes: torch.Tensor
+            TODO.what_that_variable_is_or_does
+        node_projection_vector: torch.Tensor
+            TODO.what_that_variable_is_or_does
+        edge_projection_vector: torch.Tensor
+            TODO.what_that_variable_is_or_does
+        
+        Returns
+        -------
+        projected_nodes: torch.Tensor
+            TODO.what_that_variable_is_or_does
+        
+        """
         batch_size = nodes.shape[0]
 
         scalar_product = (nodes * node_projection_vector).sum(dim = 1)
@@ -1161,7 +1234,7 @@ class TransD(TranslationalDecoder):
         for i in tqdm(range(self.node_count), unit = "nodes", desc = "Projecting nodes"):
             edge_projection_vector = self.edge_projection_vector.weight.data
 
-            mask = tensor([i], device = edge_projected_vectors.device).long()
+            mask = tensor([i], device = edge_projection_vector.device).long()
 
             # TODO: find better name
             masked_node_embeddings = node_embeddings[mask]
@@ -1197,17 +1270,24 @@ class TorusE(TranslationalDecoder):
         Number of edges in the knowledge graph.
     dissimilarity_type: str
         TODO.What_that_argument_is_or_does
+    
+    Raises
+    ------
+    ValueError
+        The dissimilarity_type must be "L1", "torus_L1", "torus_L2" or "torus_eL2".
 
     Attributes
     ----------
-    TODO.inherited_attributes
+    dissimilarity: function described in `torchkge.utils.dissimilarities`
+        The dissimilarity function used to compare translated head embeddings 
+        to tail embeddings.
     
     """
     def __init__(self,
                 embedding_dimensions: int,
                 node_count: int,
                 edge_count: int,
-                dissimilarity_type: Literal["L1","torus_L1","torus_L2","torus_eL2"]):
+                dissimilarity_type: Literal["L1", "torus_L1", "torus_L2", "torus_eL2"]):
         
         match dissimilarity_type:
             case "L1":
@@ -1219,9 +1299,10 @@ class TorusE(TranslationalDecoder):
             case "torus_eL2":
                 self.dissimilarity = el2_torus_dissimilarity
             case _:
-                raise ValueError(f"TorusE decoder can only use L1, torus_L1, torus_L2 or torus_eL2 dissimlarity, but got \"{dissimilarity_type}\"")
+                raise ValueError(f"TorusE decoder can only use L1, torus_L1, torus_L2 or torus_eL2 dissimilarity, but got \"{dissimilarity_type}\"")
 
         self.normalized = False
+    
     
     def score(  self,
                 *,
@@ -1256,7 +1337,7 @@ class TorusE(TranslationalDecoder):
 
         Returns
         -------
-        result_1: TODO.type
+        result_1: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
