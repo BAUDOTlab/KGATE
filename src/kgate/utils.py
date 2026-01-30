@@ -557,7 +557,7 @@ def filter_scores(  scores: Tensor,
     -------
     filtered_scores: torch.Tensor
         Tensor of shape [batch_size, n] with -Inf values for all true node/edge index except the ones being predicted.
-        
+    
     """
     batch_size = scores.shape[0]
     filtered_scores = scores.clone()
@@ -637,7 +637,8 @@ def merge_kg(kg_list: List[KnowledgeGraph],
         edge_to_index = first_kg.edge_to_index,
         node_type_to_index = first_kg.node_type_to_index,
         triplet_types = first_kg.triplet_types
-    )
+        )
+
 
 def get_dictionary_mapping( dataframe: pd.DataFrame,
                             nodes = True
@@ -662,15 +663,19 @@ def get_dictionary_mapping( dataframe: pd.DataFrame,
     Notes
     -----
     This function is adapted from the torchkge.utils.operations.get_dictionaries() from the TorchKGE package.
+    
     """
     if nodes:
         unique_nodes = list(set(dataframe["head"].unique()).union(set(dataframe["tail"]).unique()))
         return {node: index for index, node in enumerate(sorted(unique_nodes))}
+    
     else:
         unique_edges = list(dataframe["edge"].unique())
         return {edge: index for index, edge in enumerate(sorted(unique_edges))}
 
-def get_average_heads_per_tail(graphindices: Tensor) -> Dict[float, float]:
+
+def get_average_heads_per_tail( graphindices: Tensor
+                                ) -> Dict[float, float]:
     """
     Get the average number of heads per tail across each edges.
 
@@ -686,14 +691,15 @@ def get_average_heads_per_tail(graphindices: Tensor) -> Dict[float, float]:
         Keys: relation indices; Values: average number of heads per tail
         
     """
-    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns=["head","tail","edge","triplet"])
+    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head","tail","edge","triplet"])
     dataframe = dataframe.groupby(["edge", "tail"]).count().groupby("edge").mean()
     dataframe.reset_index(inplace = True)
     
     return {dataframe.loc[i].values[0]: dataframe.loc[i].values[1] for i in dataframe.index}
 
 
-def get_average_tails_per_head(graphindices: Tensor) -> Dict[float, float]:
+def get_average_tails_per_head( graphindices: Tensor
+                                ) -> Dict[float, float]:
     """
     Get the average number of tails per head across each edges.
 
@@ -707,13 +713,17 @@ def get_average_tails_per_head(graphindices: Tensor) -> Dict[float, float]:
     -------
     average_tails_per_head: Dict[float,float]
         Keys: relation indices; Values: average number of tails per head
+    
     """
-    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns=["head","tail","edge","triplet"])
+    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head","tail","edge","triplet"])
     dataframe = dataframe.groupby(["head", "edge"]).count().groupby("edge").mean()
-    dataframe.reset_index(inplace=True)
+    dataframe.reset_index(inplace = True)
+    
     return {dataframe.loc[i].values[0]: dataframe.loc[i].values[1] for i in dataframe.index}
 
-def get_bernoulli_probabilities(knowledge_graph: KnowledgeGraph) -> Dict[float, float]:
+
+def get_bernoulli_probabilities(knowledge_graph: KnowledgeGraph
+                                ) -> Dict[float, float]:
     """
     Evaluate the Bernoulli probabilities for negative sampling as in the
     TransH original paper by Wang et al. (2014).
@@ -727,6 +737,7 @@ def get_bernoulli_probabilities(knowledge_graph: KnowledgeGraph) -> Dict[float, 
     -------
     bernoulli_probabilities: Dict[int, float]
         Sampled probabilities of tails for each head. Keys: edge indices; Values: probabilities.
+    
     """
     heads_per_tail = get_average_heads_per_tail(knowledge_graph.graphindices)
     tails_per_head = get_average_tails_per_head(knowledge_graph.graphindices)

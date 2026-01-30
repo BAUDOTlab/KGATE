@@ -8,6 +8,7 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 - 
 
 The modifications are licensed under the BSD license according to the source license.
+
 """
 
 from typing import Dict, Set, Tuple, List
@@ -71,6 +72,7 @@ class UniformNegativeSampler:
         self.edge_types: Dict[int, str] = {value: key for key,value in self.knowledge_graph.edge_to_index.items()}
     
         self.negative_triplet_count = negative_triplet_count
+    
     
     def corrupt_batch(  self,
                         batch: torch.Tensor,
@@ -191,8 +193,8 @@ class BernoulliNegativeSampler:
     n_ent: int
         Number of nodes.
         Inherited attribute equivalent to node_count.
-    bernoulli_probabilities: torch.Tensor
-        TODO.What_that_variable_is_or_does
+    bernoulli_probabilities: torch.Tensor, dtype: torch.float, shape: [edge_count]
+        Tensor containing the probabilities of sampling a head for each edge.
     TODO.inherited_attributes
     
     """
@@ -207,8 +209,10 @@ class BernoulliNegativeSampler:
         self.negative_triplet_count = negative_triplet_count
         self.bernoulli_probabilities = self.evaluate_bernoulli_probabilities()
 
+
     def evaluate_bernoulli_probabilities(self) -> torch.Tensor:
-        """Evaluate the Bernoulli probabilities as in the TransH original paper. 
+        """
+        Evaluate the Bernoulli probabilities as in the TransH original paper. 
         
         Code adapted from the TorchKGE function. The bernoullis probabilities are sampled
         from the average number of heads per tail and tails per head, for each edge type. If 
@@ -218,6 +222,7 @@ class BernoulliNegativeSampler:
         -------
         bernoulli_probabilities: torch.Tensor, dtype: torch.float, shape: [edge_count]
             Tensor containing the probabilities of sampling a head for each edge.
+        
         """
         bernoulli_probabilities = get_bernoulli_probabilities(self.knowledge_graph)
 
@@ -315,6 +320,8 @@ class BernoulliNegativeSampler:
 
         return torch.stack(corrupted_triplets, dim = 1).long().to(device)
 
+
+
 class PositionalNegativeSampler(BernoulliNegativeSampler):
     """
     Adaptation of torchKGE's PositionalNegativeSampler to KGATE's graphindices format.
@@ -330,7 +337,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
     ---------
     kg: kgate.data_structure.KnowledgeGraph
         Knowledge Graph from which the corrupted triplets will be created.
-            
+
     Attributes
     ----------
     possible_heads: Dict[int, torch.Tensor]
@@ -355,8 +362,8 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         Knowledge graph on which the sampling will be done.
     node_count: int
         Number of nodes.
-    bernoulli_probabilities: torch.Tensor
-        TODO.What_that_variable_is_or_does
+    bernoulli_probabilities: torch.Tensor, dtype: torch.float, shape: [edge_count]
+        Tensor containing the probabilities of sampling a head for each edge.
     TODO.inherited_attributes
     
     Notes
@@ -373,28 +380,30 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
 
         self.possible_heads, self.possible_tails, \
             self.possible_head_count, self.possible_tail_count = self.find_possibilities()
-        
+
 
     def find_possibilities(self) -> Tuple[
-                        Dict[int, List[int]],
-                        Dict[int, List[int]], 
-                        Tensor, 
-                        Tensor]:
-        """For each relation of the knowledge graph (and possibly the
+                                Dict[int, List[int]],
+                                Dict[int, List[int]], 
+                                Tensor, 
+                                Tensor]:
+        """
+        For each edge of the knowledge graph (and possibly the
         validation graph but not the test graph) find all the possible heads
-        and tails in the sense of Wang et al., e.g. all entities that occupy
+        and tails in the sense of Wang et al., e.g. all nodes that occupy
         once this position in another triplet.
 
         Returns
         -------
-        possible_heads: dict
-            keys : relation index, values : list of possible heads
-        possible tails: dict
-            keys : relation index, values : list of possible tails
-        n_poss_heads: torch.Tensor, dtype: torch.long, shape: (n_relations)
-            Number of possible heads for each relation.
-        n_poss_tails: torch.Tensor, dtype: torch.long, shape: (n_relations)
-            Number of possible tails for each relation.
+        possible_heads: Dict[int, List[int]]
+            keys : edge index, values : list of possible heads
+        possible tails: Dict[int, List[int]]
+            keys : edge index, values : list of possible tails
+        possible_heads_count: torch.Tensor, dtype: torch.long, shape: (edge_count)
+            Number of possible heads for each edge.
+        possible_tails_count: torch.Tensor, dtype: torch.long, shape: (edge_count)
+            Number of possible tails for each edge.
+        
         """
         possible_heads = defaultdict(set)
         possible_tails = defaultdict(set)
@@ -419,6 +428,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
 
         return possible_heads, possible_tails, torch.tensor(possible_heads_count), torch.tensor(possible_tails_count)
 
+
     def corrupt_batch(  self,
                         batch: Tensor,
                         _: int = 0
@@ -442,20 +452,13 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         AssertionError #2
             The size/shape of possible_head_count must be (batch_size - corrupted_head_count).
 
-        Raises
-        ------
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-
         Returns
         -------
         negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
             Tensor containing the integer key of negatively sampled triplets of
             the edges in the current batch.
             Here, batch_size is batch.shape[1].
-            
+        
         """
         edges = batch[2]
         device = batch.device
@@ -559,6 +562,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         return negative_triplets_batch
 
 
+
 class MixedNegativeSampler:
     """
     A custom negative sampler that combines the BernoulliNegativeSampler, the UniformNegativeSampler
@@ -593,6 +597,7 @@ class MixedNegativeSampler:
     -----
     This is an example of a custom negative sampler using other existing samplers, and may produce
     unexpected behaviour if used as is.
+    
     """
     
     def __init__(self,
@@ -614,7 +619,7 @@ class MixedNegativeSampler:
     def corrupt_batch(  self,
                         batch: torch.LongTensor,
                         negative_triplet_count = None):
-        """ TODO
+        """
         For each true triplet, produce `negative_triplet_count` corrupted ones from the
         Uniform sampler, the Bernoulli sampler and the Positional sampler. If `heads` and `tails` are
         cuda objects, then the returned tensors are on the GPU.
@@ -634,7 +639,7 @@ class MixedNegativeSampler:
         combined_negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, 2 * negative_triplet_count * batch_size + batch_size]
             Tensor containing the integer key of negatively sampled heads and tails from both samplers.
             Here, batch_size is batch.shape[1].
-            
+        
         """
         negative_triplet_count = negative_triplet_count or self.n_neg
 
