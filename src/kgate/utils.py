@@ -1,5 +1,6 @@
 """
 Utility functions for Knowledge Graph manipulation, data visualisation or file handling.
+
 """
 
 import os
@@ -90,36 +91,36 @@ def set_config_key( key: str,
                     inline: dict | None = None
                     ) -> str | int | list | dict:
     """
-        TODO.What_the_function_does_about_globally
+    TODO.What_the_function_does_about_globally
 
-        References
-        ----------
-        TODO
+    References
+    ----------
+    TODO
 
-        Arguments
-        ---------
-        default: dict
-            The default parsed configuration as a python dictionnary.
-        config: dict, optional
-            TODO.What_that_argument_is_or_does
-        inline: dict, optional
-            The inline parsed configuration as a python dictionnary.
+    Arguments
+    ---------
+    default: dict
+        The default parsed configuration as a python dictionnary.
+    config: dict, optional
+        The configuration parsed from the config file.
+    inline: dict, optional
+        The inline parsed configuration as a python dictionnary.
 
-        Raises
-        ------
-        ValueError
-            A parameter without a default value is required but not set.
+    Raises
+    ------
+    ValueError
+        A parameter without a default value is required but not set.
 
-        Returns
-        -------
-        inline_value: TODO.type
-            TODO.What_that_variable_is_or_does
-        config_value: TODO.type
-            TODO.What_that_variable_is_or_does
-        default[key]: TODO.type
-            TODO.What_that_variable_is_or_does
-            
-        """
+    Returns
+    -------
+    inline_value: TODO.type
+        TODO.What_that_variable_is_or_does
+    config_value: TODO.type
+        TODO.What_that_variable_is_or_does
+    default[key]: TODO.type
+        TODO.What_that_variable_is_or_does
+    
+    """
     if inline is not None and key in inline:
         inline_value = inline[key]
     else:
@@ -233,12 +234,12 @@ def extract_node_type(node_name: str):
     Arguments
     ---------
     node_name: str
-        TODO.What_that_argument_is_or_does
+        The name of the node to extract the type from.
 
     Returns
     -------
     node_type: str
-        TODO.What_that_variable_is_or_does
+        The node type extracted.
     
     """
     return node_name.split("_")[0]
@@ -638,7 +639,9 @@ def merge_kg(kg_list: List[KnowledgeGraph],
         triplet_types = first_kg.triplet_types
     )
 
-def get_dictionary_mapping(dataframe: pd.DataFrame, nodes = True) -> Dict[str, int]:
+def get_dictionary_mapping( dataframe: pd.DataFrame,
+                            nodes = True
+                            ) -> Dict[str, int]:
     """
     Build the dictionary used to map either the node or edge identifiers to their index in the graph.
 
@@ -681,11 +684,14 @@ def get_average_heads_per_tail(graphindices: Tensor) -> Dict[float, float]:
     -------
     average_heads_per_tail: Dict[float,float]
         Keys: relation indices; Values: average number of heads per tail
+        
     """
     dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns=["head","tail","edge","triplet"])
     dataframe = dataframe.groupby(["edge", "tail"]).count().groupby("edge").mean()
-    dataframe.reset_index(inplace=True)
+    dataframe.reset_index(inplace = True)
+    
     return {dataframe.loc[i].values[0]: dataframe.loc[i].values[1] for i in dataframe.index}
+
 
 def get_average_tails_per_head(graphindices: Tensor) -> Dict[float, float]:
     """
