@@ -21,7 +21,6 @@ from torch.utils.data import DataLoader
 
 from torch_geometric.utils import k_hop_subgraph
 
-import torchkge.evaluation as eval
 from torchkge.utils import get_rank
 from torchkge.data_structures import SmallKG
 
@@ -32,8 +31,48 @@ from .knowledgegraph import KnowledgeGraph
 from .samplers import PositionalNegativeSampler
 from .utils import filter_scores
 
+class Predictions:
+    """Object holding the predictions output of an Evaluator.
+    
+    Predictions are available as a dataframe, but can also be accessed through
+    builtin methods to get specific metrics."""
+    def __init__(self,
+                 true_predictions_rank: Tensor,
+                 filtered_true_predictions_rank: Tensor):
+                 
+        self.true_predictions_rank = true_predictions_rank
+        self.filtered_true_predictions_rank = filtered_true_predictions_rank
+    
+    def __str__(self):
+        k = 10
+        return f"""Hit@{k}: {round(self.hit_at_k(k)[0],3)} \t Filtered Hit@{k}: {round(self.hit_at_k(k)[1],3)} 
 
-class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
+        MRR: {round(self.mrr()[0],3)} \t Filtered MRR: {round(self.mrr()[1],3)}
+
+        Mean Rank: {int(self.mean_rank()[0])} \t Filtered Mean Rank: {int(self.mean_rank()[1])}
+        """
+
+    def mean_rank(self):
+        """Mean rank metric"""
+        mean_rank_score = self.true_predictions_rank.float().mean().item()
+
+        filtered_mean_rank_score = self.filtered_true_predictions_rank.float().mean().item()
+
+        return mean_rank_score, filtered_mean_rank_score
+    
+    def hit_at_k(self, k: int=10):
+        true_prediction_hit = (self.true_predictions_rank <= k).float().mean().item()
+        filtered_true_prediction_hit = (self.filtered_true_predictions_rank <= k).float().mean().item()
+        
+        return true_prediction_hit, filtered_true_prediction_hit
+    
+    def mrr(self):
+        mrr = self.true_predictions_rank.float()**(-1).mean()
+        filtered_mrr = self.filtered_true_predictions_rank.float()**(-1).mean()
+
+        return mrr, filtered_mrr
+    
+class LinkPredictionEvaluator:
     """
     Evaluate performance of given embedding using link prediction method.
 
@@ -192,15 +231,13 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
 
         self.evaluated = True
 
-        if use_cuda:
-            self.rank_true_heads = self.rank_true_heads.cpu()
-            self.rank_true_tails = self.rank_true_tails.cpu()
-            self.filtered_rank_true_heads = self.filtered_rank_true_heads.cpu()
-            self.filtered_rank_true_tails = self.filtered_rank_true_tails.cpu()
+        head_predictions = Predictions(self.rank_true_heads.cpu(), self.filtered_rank_true_heads.cup())
+        tail_predictions = Predictions(self.rank_true_tails.cpu(), self.filtered_rank_true_tails.cpu())
+
+        return head_predictions, tail_predictions
 
 
-
-class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
+class TripletClassificationEvaluator:
     """
     Evaluates performance of given embedding using triplet classification
     method.
