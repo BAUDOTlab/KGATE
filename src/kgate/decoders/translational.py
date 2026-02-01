@@ -8,6 +8,7 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 - 
 
 The modifications are licensed under the BSD license according to the source license.
+
 """
 
 from typing import Tuple, Dict, Literal
@@ -332,10 +333,6 @@ class TransE(TranslationalDecoder):
         """
         TODO.What_the_function_does_about_globally
 
-        References
-        ----------
-        TODO
-
         Arguments
         ---------
         head_embeddings: torch.Tensor, keyword-only
@@ -511,10 +508,6 @@ class TransH(TranslationalDecoder):
         """
         TODO.What_the_function_does_about_globally
 
-        References
-        ----------
-        TODO
-
         Arguments
         ---------
         head_embeddings: torch.Tensor, keyword-only
@@ -657,15 +650,15 @@ class TransH(TranslationalDecoder):
         link prediction makes the process faster by computing projections only
         once.
 
-        References
-        ----------
-        TODO
-
         Arguments
         ---------
         node_embeddings: torch.Tensor
             TODO.What_that_argument_is_or_does
-            
+        
+        Returns
+        -------
+        TODO
+
         """
         if self.evaluated_projections:
             return
@@ -747,10 +740,6 @@ class TransR(TranslationalDecoder):
                 **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
-
-        References
-        ----------
-        TODO
 
         Arguments
         ---------
@@ -924,10 +913,6 @@ class TransR(TranslationalDecoder):
         link prediction makes the process faster by computing projections only
         once.
 
-        References
-        ----------
-        TODO
-
         Arguments
         ---------
         node_embeddings: torch.Tensor
@@ -1023,10 +1008,6 @@ class TransD(TranslationalDecoder):
                 **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
-
-        References
-        ----------
-        TODO
 
         Arguments
         ---------
@@ -1214,10 +1195,6 @@ class TransD(TranslationalDecoder):
         link prediction makes the process faster by computing projections only
         once.
 
-        References
-        ----------
-        TODO
-
         Arguments
         ---------
         node_embeddings: torch.Tensor
@@ -1268,8 +1245,9 @@ class TorusE(TranslationalDecoder):
         Number of nodes in the knowledge graph.
     edge_count: int
         Number of edges in the knowledge graph.
-    dissimilarity_type: str
-        TODO.What_that_argument_is_or_does
+    dissimilarity_type: Literal["L1", "torus_L1", "torus_L2", "torus_eL2"]
+        The type of dissimilarity function that will be used,
+        either "L1", "torus_L1", "torus_L2" or "torus_eL2".
     
     Raises
     ------
@@ -1315,10 +1293,6 @@ class TorusE(TranslationalDecoder):
                 **_) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
-
-        References
-        ----------
-        TODO
 
         Arguments
         ---------

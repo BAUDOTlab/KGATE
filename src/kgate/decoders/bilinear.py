@@ -8,6 +8,7 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 - 
 
 The modifications are licensed under the BSD license according to the source license.
+
 """
 
 from typing import Tuple, Dict          
@@ -264,7 +265,7 @@ class RESCAL(BilinearDecoder):
         
     Attributes
     ----------
-    edge_embeddings_matrix: TODO.type
+    edge_embeddings_matrix: Dict[str, Tensor]
         TODO.What_that_variable_is_or_does
     embedding_dimensions: int
         Dimensions of embeddings.
@@ -504,7 +505,8 @@ class RESCAL(BilinearDecoder):
         
             return (head_edge_embeddings * tail_embeddings).sum(dim = 2)
         
-        # TODO: else with raise error
+        else:
+            raise ValueError("None of the embeddings have a shape adapted to be inferred. Shapes must be: 3 for `head_embeddings` and `tail_embeddings`, and 4 for `edge_embeddings`.")
     
     
     
@@ -630,6 +632,7 @@ class DistMult(BilinearDecoder):
         Link prediction evaluation helper function. Get node embeddings
         and edge embeddings. The output will be fed to the
         `inference_score_function` method.
+        
         Arguments
         ---------
         head_indices: torch.Tensor, keyword-only
@@ -740,7 +743,8 @@ class DistMult(BilinearDecoder):
             
             return (head_edge_embeddings * tail_embeddings.view(batch_size, 1, self.embedding_dimensions)).sum(dim = 2)
         
-        # TODO: else with raise error
+        else:
+            raise ValueError("None of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.")
 
 
 
@@ -827,10 +831,6 @@ class ComplEx(BilinearDecoder):
         Link prediction evaluation helper function. Get node embeddings
         and edge embeddings. The output will be fed to the
         `inference_score_function` method.
-
-        References
-        ----------
-        TODO
 
         Arguments
         ---------
@@ -965,4 +965,6 @@ class ComplEx(BilinearDecoder):
                     * imaginary_edge_embeddings
                     ).sum(dim = 2)
         
-        # TODO: else with raise error
+        else:
+            raise ValueError("None of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.")
+    
