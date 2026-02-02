@@ -10,7 +10,7 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 The modifications are licensed under the BSD license according to the source license.
 """
 
-from typing import Dict
+from typing import Dict, Tuple
 
 from tqdm import tqdm
 
@@ -31,47 +31,121 @@ from .knowledgegraph import KnowledgeGraph
 from .samplers import PositionalNegativeSampler
 from .utils import filter_scores
 
+
+
 class Predictions:
-    """Object holding the predictions output of an Evaluator.
+    """
+    Object holding the predictions output of an Evaluator.
     
     Predictions are available as a dataframe, but can also be accessed through
-    builtin methods to get specific metrics."""
+    builtin methods to get specific metrics.
+
+    Arguments
+    ---------
+    true_predictions_rank: torch.Tensor
+        TODO.What_that_argument_is_or_does
+    filtered_true_predictions_rank: torch.Tensor
+        TODO.What_that_argument_is_or_does
+
+    Attributes
+    ----------
+    true_predictions_rank: torch.Tensor
+        TODO.What_that_argument_is_or_does
+    filtered_true_predictions_rank: torch.Tensor
+        TODO.What_that_argument_is_or_does
+    
+    
+    """
     def __init__(self,
-                 true_predictions_rank: Tensor,
-                 filtered_true_predictions_rank: Tensor):
-                 
+                true_predictions_rank: Tensor,
+                filtered_true_predictions_rank: Tensor):
+
         self.true_predictions_rank = true_predictions_rank
         self.filtered_true_predictions_rank = filtered_true_predictions_rank
     
+    
     def __str__(self):
         k = 10
-        return f"""Hit@{k}: {round(self.hit_at_k(k)[0],3)} \t Filtered Hit@{k}: {round(self.hit_at_k(k)[1],3)} 
+        message = f"""
+        Hit@{k}: {round(self.hit_at_k(k)[0],3)} \t Filtered Hit@{k}: {round(self.hit_at_k(k)[1],3)} 
 
         MRR: {round(self.mrr()[0],3)} \t Filtered MRR: {round(self.mrr()[1],3)}
 
         Mean Rank: {int(self.mean_rank()[0])} \t Filtered Mean Rank: {int(self.mean_rank()[1])}
         """
+        
+        return message
 
-    def mean_rank(self):
-        """Mean rank metric"""
+
+    def mean_rank(self) -> Tuple[float, float]:
+        """
+        Mean rank metric
+        
+        TODO.What_the_function_does_about_globally
+
+        Returns
+        -------
+        mean_rank_score: float
+            TODO.What_that_variable_is_or_does
+        filtered_mean_rank_score: float
+            TODO.What_that_variable_is_or_does
+        
+        """
         mean_rank_score = self.true_predictions_rank.float().mean().item()
 
         filtered_mean_rank_score = self.filtered_true_predictions_rank.float().mean().item()
 
         return mean_rank_score, filtered_mean_rank_score
     
-    def hit_at_k(self, k: int=10):
+    
+    def hit_at_k(self,
+                k: int = 10
+                ) -> Tuple[float, float]:
+        """
+        Return the frequence at which the true triplet is within the k first predictions.
+        
+        Arguments
+        ---------
+        k: int, default to 10
+            The true triplet must be within the k first predictions.
+        
+        Returns
+        -------
+        true_prediction_hit: float
+            TODO.What_that_variable_is_or_does
+        filtered_true_prediction_hit: float
+            TODO.What_that_variable_is_or_does
+        
+        """
         true_prediction_hit = (self.true_predictions_rank <= k).float().mean().item()
         filtered_true_prediction_hit = (self.filtered_true_predictions_rank <= k).float().mean().item()
         
         return true_prediction_hit, filtered_true_prediction_hit
     
-    def mrr(self):
-        mrr = self.true_predictions_rank.float()**(-1).mean()
-        filtered_mrr = self.filtered_true_predictions_rank.float()**(-1).mean()
+    
+    def mrr(self) -> Tuple[float, float]:
+        """
+        Mean reciprocal rank
+        
+        TODO.What_the_function_does_about_globally
+
+        Returns
+        -------
+        mrr: float
+            TODO.What_that_variable_is_or_does
+            Inverse of the position of the true triplet prediction.
+            If the true triplet is predicted in 100th position, then mrr = 0.01
+        filtered_mrr: float
+            TODO.What_that_variable_is_or_does
+        
+        """
+        mrr = self.true_predictions_rank.float()**(-1).mean().item()
+        filtered_mrr = self.filtered_true_predictions_rank.float()**(-1).mean().item()
 
         return mrr, filtered_mrr
-    
+
+
+
 class LinkPredictionEvaluator:
     """
     Evaluate performance of given embedding using link prediction method.
