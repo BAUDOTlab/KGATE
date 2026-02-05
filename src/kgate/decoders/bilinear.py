@@ -106,9 +106,9 @@ class BilinearDecoder(Module):
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList
+        node_embeddings: torch.nn.ParameterList or None
             The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding or None
             The normalized edges embedding object.
         
         Notes
@@ -461,6 +461,8 @@ class RESCAL(BilinearDecoder):
             and edge_embeddings must have 3 dimensions.
         AssertionError #3
             When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
+        ValueError
+            Raised if none of the embeddings have a shape adapted to be inferred.
 
         Returns
         -------
@@ -481,7 +483,7 @@ class RESCAL(BilinearDecoder):
 
         if len(head_embeddings.shape) == 3:
             assert (len(tail_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 3), \
-                "When inferring heads, ..."
+                "When inferring heads, the tensors tail_embeddings must have 2 dimensions and edge_embeddings must have 3 dimensions."
 
             tail_edge_embeddings = matmul(edge_embeddings, tail_embeddings.view(batch_size, self.embedding_dimensions, 1)).view(batch_size, 1, self.embedding_dimensions)
             
@@ -489,7 +491,7 @@ class RESCAL(BilinearDecoder):
         
         elif len(tail_embeddings.shape) == 3:
             assert (len(head_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 3), \
-                "When inferring tails, ..."
+                "When inferring tails, the tensors head_embeddings must have 2 dimensions and edge_embeddings must have 3 dimensions."
             
             head_edge_embeddings = matmul(head_embeddings.view(batch_size, 1, self.embedding_dimensions)).view(batch_size, 1, self.embedding_dimensions)
             
@@ -497,7 +499,7 @@ class RESCAL(BilinearDecoder):
         
         elif len(edge_embeddings.shape) == 4:
             assert (len(head_embeddings.shape) == 2) and (len(tail_embeddings.shape) == 2), \
-                "When inferring edges, ..."
+                "When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions."
 
             head_embeddings = head_embeddings.view(batch_size, 1, 1, self.embedding_dimensions)
             tail_embeddings = tail_embeddings.view(batch_size, 1, self.embedding_dimensions)
@@ -529,6 +531,12 @@ class DistMult(BilinearDecoder):
 
     Attributes
     ----------
+    embedding_dimensions: int
+        Dimensions of embeddings.
+    node_count: int
+        Number of nodes in the knowledge graph.
+    edge_count: int
+        Number of edges in the knowledge graph.
     TODO.inherited_attributes
     
     """
@@ -705,6 +713,8 @@ class DistMult(BilinearDecoder):
             When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
         AssertionError #3
             When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
+        ValueError
+            If none of the embeddings have a shape adapted to be inferred.
 
         Returns
         -------
@@ -721,7 +731,7 @@ class DistMult(BilinearDecoder):
 
         if len(head_embeddings.shape) == 3:
             assert (len(tail_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 2), \
-                "When inferring heads, ..."
+                "When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions."
 
             tail_edge_embeddings = (edge_embeddings * tail_embeddings).view(batch_size, 1, self.embedding_dimensions)
             
@@ -729,7 +739,7 @@ class DistMult(BilinearDecoder):
         
         elif len(tail_embeddings.shape) == 3:
             assert (len(head_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 2), \
-                "When inferring tails, ..."
+                "When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions."
             
             head_edge_embeddings = (head_embeddings * edge_embeddings).view(batch_size, 1, self.embedding_dimensions)
             
@@ -737,7 +747,7 @@ class DistMult(BilinearDecoder):
         
         elif len(edge_embeddings.shape) == 3:
             assert (len(head_embeddings.shape) == 2) and (len(tail_embeddings.shape) == 2), \
-                "When inferring edges, ..."
+                "When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions."
 
             head_edge_embeddings = (head_embeddings.view(batch_size, 1, self.embedding_dimensions) * edge_embeddings)
             
@@ -760,10 +770,13 @@ class ComplEx(BilinearDecoder):
     ---------
     embedding_dimensions: int
         Dimensions of embeddings.
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
+
+    Arguments
+    ---------
+    embedding_dimensions: int
+        Dimensions of embeddings.
+    embedding_spaces: int
+        TODO.what_that_variable_is_or_does
         
     Attributes
     ----------
@@ -905,6 +918,8 @@ class ComplEx(BilinearDecoder):
             When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
         AssertionError #3
             When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
+        ValueError
+            If none of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.
 
         Returns
         -------
@@ -925,7 +940,7 @@ class ComplEx(BilinearDecoder):
 
         if len(real_head_embeddings.shape) == 3:
             assert (len(real_tail_embeddings.shape) == 2) and (len(real_edge_embeddings.shape) == 2), \
-                "When inferring heads, ..."
+                "When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions."
             
             return (real_head_embeddings * 
                         (real_edge_embeddings * real_tail_embeddings 
@@ -939,7 +954,7 @@ class ComplEx(BilinearDecoder):
 
         elif len(real_tail_embeddings.shape) == 3:
             assert (len(real_head_embeddings.shape) == 2) and (len(real_edge_embeddings.shape) == 2), \
-                "When inferring tails, ..."
+                "When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions."
             
             return ((real_head_embeddings * real_edge_embeddings
                         - imaginary_head_embeddings * imaginary_edge_embeddings
@@ -953,7 +968,7 @@ class ComplEx(BilinearDecoder):
 
         elif len(real_edge_embeddings.shape) == 3:
             assert (len(real_head_embeddings.shape) == 2) and (len(real_tail_embeddings.shape) == 2), \
-                "When inferring edges, ..."
+                "When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions."
             
             return ((real_head_embeddings * real_tail_embeddings
                         + imaginary_head_embeddings * imaginary_tail_embeddings
