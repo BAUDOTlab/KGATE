@@ -365,11 +365,9 @@ def count_triplets( kg1: KnowledgeGraph,
     Returns
     -------
     duplicate_count: int
-        Number of triplets in kg2 that have their duplicate triplet
-        in kg1
+        Number of triplets in kg2 that have their duplicate triplet in kg1.
     reverse_duplicate_count: int
-        Number of triplets in kg2 that have their reverse duplicate
-        triplet in kg1.
+        Number of triplets in kg2 that have their reverse duplicate triplet in kg1.
         
     """
     duplicate_count = 0
@@ -604,11 +602,11 @@ def merge_kg(kg_list: List[KnowledgeGraph],
     Raises
     ------
     AssertionError #1
-        Knowledge graphs in kg_list must have the same node_to_index (ent2ix).
+        Knowledge graphs in kg_list must have the same node_to_index.
     AssertionError #2
-        Knowledge graphs in kg_list must have the same edge_to_index (rel2ix).
+        Knowledge graphs in kg_list must have the same edge_to_index.
     AssertionError #3
-        Knowledge graphs in kg_list must have the same node_type_to_index (nt2ix).
+        Knowledge graphs in kg_list must have the same node_type_to_index.
     AssertionError #4
         Knowledge graphs in kg_list must have the same triplet_types.
     
@@ -621,9 +619,9 @@ def merge_kg(kg_list: List[KnowledgeGraph],
     first_kg = kg_list[0]
     for kg in kg_list:
         kg.clean()
-    assert all(first_kg.node_to_index == kg.node_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_to_index (ent2ix)."
-    assert all(first_kg.edge_to_index == kg.edge_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different edge_to_index (rel2ix)."
-    assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_type_to_index (nt2ix)."
+    assert all(first_kg.node_to_index == kg.node_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_to_index."
+    assert all(first_kg.edge_to_index == kg.edge_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different edge_to_index."
+    assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_type_to_index."
     assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triplet_types."
 
     new_graphindices = cat([kg.graphindices for kg in kg_list], dim = 1)
@@ -688,10 +686,11 @@ def get_average_heads_per_tail( graphindices: Tensor
     Returns
     -------
     average_heads_per_tail: Dict[float,float]
-        Keys: relation indices; Values: average number of heads per tail
+        Keys: relation indices
+        Values: average number of heads per tail
         
     """
-    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head","tail","edge","triplet"])
+    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head", "tail", "edge", "triplet"])
     dataframe = dataframe.groupby(["edge", "tail"]).count().groupby("edge").mean()
     dataframe.reset_index(inplace = True)
     
@@ -715,7 +714,7 @@ def get_average_tails_per_head( graphindices: Tensor
         Keys: relation indices; Values: average number of tails per head
     
     """
-    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head","tail","edge","triplet"])
+    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head", "tail", "edge", "triplet"])
     dataframe = dataframe.groupby(["head", "edge"]).count().groupby("edge").mean()
     dataframe.reset_index(inplace = True)
     
@@ -732,6 +731,11 @@ def get_bernoulli_probabilities(knowledge_graph: KnowledgeGraph
     ---------
     knowledge_graph: kgate.KnowledgeGraph
         The knowledge graph to sample bernoulli probabilities from.
+
+    Raises
+    ------
+    AssertionError
+        TODO.errors
     
     Returns
     -------
