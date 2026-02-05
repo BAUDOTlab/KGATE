@@ -17,7 +17,7 @@ def permute_tails(kg: KnowledgeGraph,
     Arguments
     ---------
     kg: KnowledgeGraph
-        The KnowledgeGraph instance on which to perform the permutation.
+        Knowledge graph on which the permutation will be done.
     edge_name: str
         The name of the edge for which `tails` should be permuted.
     preserve_node_degree: bool, optional, default to True
@@ -25,10 +25,10 @@ def permute_tails(kg: KnowledgeGraph,
 
     Raises
     ------
-    error_name
-        TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-    error_name
-        TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+    AssertionError #1
+        The tails node degree is not conserved after permutation.
+    AssertionError #2
+        Self-loops introduced after permutation.
     
     Returns
     -------

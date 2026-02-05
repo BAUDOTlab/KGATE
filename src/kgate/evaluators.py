@@ -10,7 +10,7 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 The modifications are licensed under the BSD license according to the source license.
 """
 
-from typing import Dict
+from typing import Dict, Tuple
 
 from tqdm import tqdm
 
@@ -19,20 +19,134 @@ from torch import empty, zeros, cat, Tensor
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-import torchkge.evaluation as eval
-from torchkge.utils import get_rank
-from torchkge.data_structures import SmallKG
-from torchkge.models import Model
-
 from torch_geometric.utils import k_hop_subgraph
 
-from .knowledgegraph import KnowledgeGraph
-from .utils import filter_scores
-from .samplers import PositionalNegativeSampler
+from torchkge.utils import get_rank
+from torchkge.data_structures import SmallKG
+
+from .architect import Architect
+from .decoders import BilinearDecoder, ConvolutionalDecoder, TranslationalDecoder
 from .encoders import GNN, DefaultEncoder
+from .knowledgegraph import KnowledgeGraph
+from .samplers import PositionalNegativeSampler
+from .utils import filter_scores
 
 
-class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
+
+class Predictions:
+    """
+    Object holding the predictions output of an Evaluator.
+    
+    Predictions are available as a dataframe, but can also be accessed through
+    builtin methods to get specific metrics.
+
+    Arguments
+    ---------
+    true_predictions_rank: torch.Tensor
+        TODO.What_that_argument_is_or_does
+    filtered_true_predictions_rank: torch.Tensor
+        TODO.What_that_argument_is_or_does
+
+    Attributes
+    ----------
+    true_predictions_rank: torch.Tensor
+        TODO.What_that_argument_is_or_does
+    filtered_true_predictions_rank: torch.Tensor
+        TODO.What_that_argument_is_or_does
+    
+    
+    """
+    def __init__(self,
+                true_predictions_rank: Tensor,
+                filtered_true_predictions_rank: Tensor):
+
+        self.true_predictions_rank = true_predictions_rank
+        self.filtered_true_predictions_rank = filtered_true_predictions_rank
+    
+    
+    def __str__(self):
+        k = 10
+        message = f"""
+        Hit@{k}: {round(self.hit_at_k(k)[0],3)} \t Filtered Hit@{k}: {round(self.hit_at_k(k)[1],3)} 
+
+        MRR: {round(self.mrr()[0],3)} \t Filtered MRR: {round(self.mrr()[1],3)}
+
+        Mean Rank: {int(self.mean_rank()[0])} \t Filtered Mean Rank: {int(self.mean_rank()[1])}
+        """
+        
+        return message
+
+
+    def mean_rank(self) -> Tuple[float, float]:
+        """
+        Mean rank metric
+        
+        TODO.What_the_function_does_about_globally
+
+        Returns
+        -------
+        mean_rank_score: float
+            TODO.What_that_variable_is_or_does
+        filtered_mean_rank_score: float
+            TODO.What_that_variable_is_or_does
+        
+        """
+        mean_rank_score = self.true_predictions_rank.float().mean().item()
+
+        filtered_mean_rank_score = self.filtered_true_predictions_rank.float().mean().item()
+
+        return mean_rank_score, filtered_mean_rank_score
+    
+    
+    def hit_at_k(self,
+                k: int = 10
+                ) -> Tuple[float, float]:
+        """
+        Return the frequence at which the true triplet is within the k first predictions.
+        
+        Arguments
+        ---------
+        k: int, default to 10
+            The true triplet must be within the k first predictions.
+        
+        Returns
+        -------
+        true_prediction_hit: float
+            TODO.What_that_variable_is_or_does
+        filtered_true_prediction_hit: float
+            TODO.What_that_variable_is_or_does
+        
+        """
+        true_prediction_hit = (self.true_predictions_rank <= k).float().mean().item()
+        filtered_true_prediction_hit = (self.filtered_true_predictions_rank <= k).float().mean().item()
+        
+        return true_prediction_hit, filtered_true_prediction_hit
+    
+    
+    def mrr(self) -> Tuple[float, float]:
+        """
+        Mean reciprocal rank
+        
+        TODO.What_the_function_does_about_globally
+
+        Returns
+        -------
+        mrr: float
+            TODO.What_that_variable_is_or_does
+            Inverse of the position of the true triplet prediction.
+            If the true triplet is predicted in 100th position, then mrr = 0.01
+        filtered_mrr: float
+            TODO.What_that_variable_is_or_does
+        
+        """
+        mrr = self.true_predictions_rank.float()**(-1).mean().item()
+        filtered_mrr = self.filtered_true_predictions_rank.float()**(-1).mean().item()
+
+        return mrr, filtered_mrr
+
+
+
+class LinkPredictionEvaluator:
     """
     Evaluate performance of given embedding using link prediction method.
 
@@ -46,32 +160,30 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
 
     Arguments
     ---------
-    full_graphindices: Tensor
+    full_graphindices: torch.Tensor
         Tensor of shape [4, triplet_count] containing every true triplet.
 
     Attributes
     ----------
     full_graphindices: torch.Tensor
-        TODO.What_that_variable_is_or_does
+        Tensor of shape [4, triplet_count] containing every true triplet.
     evaluated: bool
-        Indicates if the method LinkPredictionEvaluator.evaluate has already
+        Indicate whether the method LinkPredictionEvaluator.evaluate has already
         been called.
-    model: torchkge.models.interfaces.Model
-        Embedding model inheriting from the right interface.
-    kg: torchkge.data_structures.KnowledgeGraph
+    kg: KnowledgeGraph
         Knowledge graph on which the evaluation will be done.
-    rank_true_heads: torch.Tensor, shape: (triplet_count), dtype: `torch.int`
+    rank_true_heads: torch.Tensor, shape: [triplet_count], dtype: `torch.int`
         For each fact, this is the rank of the true head when all nodes
         are ranked as possible replacement of the head node. They are
         ranked in decreasing order of scoring function :math:`f_r(h,t)`.
-    rank_true_tails: torch.Tensor, shape: (triplet_count), dtype: `torch.int`
+    rank_true_tails: torch.Tensor, shape: [triplet_count], dtype: `torch.int`
         For each fact, this is the rank of the true tail when all nodes
         are ranked as possible replacement of the tail node. They are
         ranked in decreasing order of scoring function :math:`f_r(h,t)`.
-    filtered_rank_true_heads: torch.Tensor, shape: (triplet_count), dtype: `torch.int`
+    filtered_rank_true_heads: torch.Tensor, shape: [triplet_count], dtype: `torch.int`
         This is the same as the `rank_of_true_heads` when in the filtered
         case. See referenced paper by Bordes et al. for more information.
-    filtered_rank_true_tails: torch.Tensor, shape: (triplet_count), dtype: `torch.int`
+    filtered_rank_true_tails: torch.Tensor, shape: [triplet_count], dtype: `torch.int`
         This is the same as the `rank_of_true_tails` when in the filtered
         case. See referenced paper by Bordes et al. for more information.
 
@@ -84,7 +196,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
     def evaluate(self,
                 batch_size: int,
                 encoder: DefaultEncoder | GNN,
-                decoder: Model,
+                decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
                 kg: KnowledgeGraph,
                 node_embeddings: nn.ParameterList,
                 edge_embeddings: nn.Embedding,
@@ -98,19 +210,18 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             Size of the current batch.
         encoder: DefaultEncoder or GNN
             Encoder model to embed the nodes. Deactivated with DefaultEncoder.
-        decoder: any specific decoder type supported by KGATE
-            Decoder model to evaluate, inheriting from the torchkge.Model class.
-        knowledge_graph: kgate.KnowledgeGraph
-            The test Knowledge Graph that will be used for the evaluation.
-        node_embeddings: nn.ParameterList
-            TODO.What_that_argument_is_or_does
-        edge_embeddings: nn.Embedding
-            A tensor containing one embedding by edge type.
-        mappings: kgate.HeteroMappings
-            An object containing mapping between the knowledge graph and 
-            embeddings.
+        decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
+            Decoder model to evaluate.
+        kg: KnowledgeGraph
+            Knowledge graph on which the evaluation will be done.
+        node_embeddings: nn.ParameterList, keyword-only
+            A list containing all embeddings for each node type.
+            keys: node type index
+            values: tensors of shape (node_count, embedding_dimensions)
+        edge_embeddings: nn.Embedding, keyword-only
+            A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
         verbose: bool
-            Indicates whether a progress bar should be displayed during
+            Indicate whether a progress bar should be displayed during
             evaluation.
         
         """
@@ -161,14 +272,14 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             else:
                 node_embeddings = node_embeddings[0].data
 
-            head_embeddings, tail_embeddings, edge_embeddings, candidates = decoder.inference_prepare_candidates(head_index = head_index, 
-                                                                                                                tail_index = tail_index, 
-                                                                                                                edge_index = edge_index, 
+            head_embeddings, tail_embeddings, edge_embeddings, candidates = decoder.inference_prepare_candidates(head_indices = head_index, 
+                                                                                                                tail_indices = tail_index, 
+                                                                                                                edge_indices = edge_index, 
                                                                                                                 node_embeddings = node_embeddings, 
                                                                                                                 edge_embeddings = edge_embeddings,
                                                                                                                 node_inference = True)
 
-            scores = decoder.inference_scoring_function(head_embeddings, candidates, edge_embeddings)
+            scores = decoder.inference_score(head_embeddings, candidates, edge_embeddings)
             filtered_scores = filter_scores(
                 scores = scores, 
                 graphindices = self.full_graphindices.to(device),
@@ -180,7 +291,7 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
             self.rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(scores, tail_index).detach()
             self.filtered_rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(filtered_scores, tail_index).detach()
 
-            scores = decoder.inference_scoring_function(candidates, tail_embeddings, edge_embeddings)
+            scores = decoder.inference_score(candidates, tail_embeddings, edge_embeddings)
             filtered_scores = filter_scores(
                 scores = scores, 
                 graphindices = self.full_graphindices.to(device),
@@ -194,15 +305,13 @@ class LinkPredictionEvaluator(eval.LinkPredictionEvaluator):
 
         self.evaluated = True
 
-        if use_cuda:
-            self.rank_true_heads = self.rank_true_heads.cpu()
-            self.rank_true_tails = self.rank_true_tails.cpu()
-            self.filtered_rank_true_heads = self.filtered_rank_true_heads.cpu()
-            self.filtered_rank_true_tails = self.filtered_rank_true_tails.cpu()
+        head_predictions = Predictions(self.rank_true_heads.cpu(), self.filtered_rank_true_heads.cup())
+        tail_predictions = Predictions(self.rank_true_tails.cpu(), self.filtered_rank_true_tails.cpu())
+
+        return head_predictions, tail_predictions
 
 
-
-class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
+class TripletClassificationEvaluator:
     """
     Evaluates performance of given embedding using triplet classification
     method.
@@ -216,7 +325,7 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
 
     Arguments
     ---------
-    architect: torchkge.models.interfaces.Model
+    architect: Architect
         Embedding model inheriting from the right interface.
     kg_validation: torchkge.data_structures.KnowledgeGraph
         Knowledge graph on which the validation thresholds will be computed.
@@ -225,27 +334,27 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
 
     Attributes
     ----------
-    architect: torchkge.models.interfaces.Model
+    architect: Architect
         Embedding model inheriting from the right interface.
-    kg_validation: torchkge.data_structures.KnowledgeGraph
+    kg_validation: KnowledgeGraph
         Knowledge graph on which the validation thresholds will be computed.
-    kg_test: torchkge.data_structures.KnowledgeGraph
+    kg_test: KnowledgeGraph
         Knowledge graph on which the evaluation will be done.
     is_cuda: str, default to "cuda"
         TODO.What_that_variable_is_or_does
     evaluated: bool, default to False
-        Indicate whether the `evaluate` function has been called.
+        Indicate whether the `evaluate` function has already been called.
     thresholds: float
         Value of the thresholds for the scoring function to consider a
         triplet as true. It is defined by calling the `evaluate` method.
-    sampler: torchkge.sampling.NegativeSampler
+    sampler: torchkge.sampling.NegativeSampler TODO.NegativeSampler_super_class_maybe
         Negative sampler.
 
     """
     def __init__(self,
-                architect,
-                kg_validation,
-                kg_test):
+                architect: Architect,
+                kg_validation: KnowledgeGraph,
+                kg_test: KnowledgeGraph):
         
         self.architect = architect
         self.kg_validation = kg_validation
@@ -262,7 +371,8 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
                     heads: Tensor,
                     tails: Tensor,
                     edges: Tensor,
-                    batch_size: int):
+                    batch_size: int
+                    ) -> Tensor:
         """
         With head, tail and edge indices, compute the value of the
         scoring function of the model.
@@ -270,18 +380,19 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
         Arguments
         ---------
         heads: torch.Tensor, dtype: torch.long, shape: triplet_count
-            List of heads indices.
+            List of head indices.
         tails: torch.Tensor, dtype: torch.long, shape: triplet_count
-            List of tails indices.
+            List of tail indices.
         edges: torch.Tensor, dtype: torch.long, shape: triplet_count
             List of edge indices.
         batch_size: int
+            Size of the current batch.
 
         Returns
         -------
         scores: torch.Tensor, dtype: torch.float, shape: triplet_count
             List of scores of each triplet.
-            
+        
         """
         
         scores = []
@@ -295,7 +406,7 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
             dataloader = DataLoader(small_kg,
                                     batch_size = batch_size)
 
-        for i, batch in enumerate(dataloader):
+        for _, batch in enumerate(dataloader):
             head_index, tail_index, edge_index = batch[0].to(self.architect.device), batch[1].to(self.architect.device), batch[2].to(self.architect.device)
             scores.append(self.architect.scoring_function(head_index, tail_index, edge_index, train = False))
 
@@ -315,9 +426,9 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
         Arguments
         ---------
         batch_size: int
-            Batch size.
+            Size of the current batch.
         kg: KnowledgeGraph
-            Knowledge graph.
+            Knowledge graph on which the evaluation will be done.
             
         """
         sampler = PositionalNegativeSampler(kg)
@@ -347,16 +458,17 @@ class TripletClassificationEvaluator(eval.TripletClassificationEvaluator):
     def accuracy(self,
                 batch_size: int,
                 kg_test: KnowledgeGraph,
-                kg_validation: KnowledgeGraph | None = None):
+                kg_validation: KnowledgeGraph | None = None
+                ) -> float:
         
         """
         Arguments
         ---------
         batch_size: int
-            Batch size.
+            Size of the current batch.
         kg_test: KnowledgeGraph
             Test split from the knowledge graph.
-        kg_validation: KnowledgeGraph, optional, default to None
+        kg_validation: KnowledgeGraph, optional
             Validation split from the knowledge graph.
 
         Returns

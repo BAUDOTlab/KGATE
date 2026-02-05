@@ -1,4 +1,7 @@
-"""Utility functions for Knowledge Graph manipulation, data visualisation or file handling."""
+"""
+Utility functions for Knowledge Graph manipulation, data visualisation or file handling.
+
+"""
 
 import os
 import tomllib
@@ -7,7 +10,7 @@ import logging
 import pickle
 from pathlib import Path
 from importlib.resources import open_binary
-from typing import List, Tuple, Literal
+from typing import List, Tuple, Literal, Dict
 
 import pandas as pd 
 import numpy as np
@@ -32,30 +35,33 @@ def parse_config(config_path: str,
                 config_dictionnary: dict
                 ) -> dict:
     """
-        TODO.What_the_function_does_about_globally
-
-        References
-        ----------
-        TODO
-
-        Arguments
-        ---------
-        config_path: str
-            TODO.What_that_argument_is_or_does
-        config_dictionnary: dict
-            TODO.What_that_argument_is_or_does
-
-        Raises
-        ------
-        FileNotFoundError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-
-        Returns
-        -------
-        config: dict
-            TODO.What_that_variable_is_or_does
-            
-        """
+    TODO.What_the_function_does_about_globally
+    
+    References
+    ----------
+    TODO
+    
+    Arguments
+    ---------
+    config_path: str
+        The complete path to the configuration file. If one already exists, it will be overwritten.
+    config_dictionnary: dict, optional
+        The parsed configuration as a python dictionnary.
+        
+    Raises
+    ------
+    FileNotFoundError
+        The configuration file is not found at the indicated path.
+        Check that you gave the correct path, and that it is a str.
+        If you give a relative path, it must be relative to the run script path.
+    
+    Returns
+    -------
+    config: dict
+        The final parsed configuration as a python dictionnary.
+        Using priority orders: inline configuration, configuration file, default configuration
+        
+    """
     if config_path != "" and not Path(config_path).exists():
         raise FileNotFoundError(f"Configuration file {config_path} not found.")
 
@@ -85,36 +91,36 @@ def set_config_key( key: str,
                     inline: dict | None = None
                     ) -> str | int | list | dict:
     """
-        TODO.What_the_function_does_about_globally
+    TODO.What_the_function_does_about_globally
 
-        References
-        ----------
-        TODO
+    References
+    ----------
+    TODO
 
-        Arguments
-        ---------
-        default: dict
-            TODO.What_that_argument_is_or_does
-        config: dict, optional, default to None
-            TODO.What_that_argument_is_or_does
-        inline: dict, optional, default to None
-            TODO.What_that_argument_is_or_does
+    Arguments
+    ---------
+    default: dict
+        The default parsed configuration as a python dictionnary.
+    config: dict, optional
+        The configuration parsed from the config file.
+    inline: dict, optional
+        The inline parsed configuration as a python dictionnary.
 
-        Raises
-        ------
-        ValueError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+    Raises
+    ------
+    ValueError
+        A parameter without a default value is required but not set.
 
-        Returns
-        -------
-        inline_value: TODO.type
-            TODO.What_that_variable_is_or_does
-        config_value: TODO.type
-            TODO.What_that_variable_is_or_does
-        default[key]: TODO.type
-            TODO.What_that_variable_is_or_does
-            
-        """
+    Returns
+    -------
+    inline_value: TODO.type
+        TODO.What_that_variable_is_or_does
+    config_value: TODO.type
+        TODO.What_that_variable_is_or_does
+    default[key]: TODO.type
+        TODO.What_that_variable_is_or_does
+    
+    """
     if inline is not None and key in inline:
         inline_value = inline[key]
     else:
@@ -184,19 +190,19 @@ def load_knowledge_graph(pickle_filename: Path
     Arguments
     ---------
     pickle_filename: Path
-        TODO.What_that_argument_is_or_does
+        The complete path to the pickle file (.pkl).
 
     Returns
     -------
     kg_train: KnowledgeGraph
-        TODO.What_that_variable_is_or_does
+        Train split from the knowledge graph, directly loaded from the pickle file.
     kg_validation: KnowledgeGraph
-        TODO.What_that_variable_is_or_does
+        Validation split from the knowledge graph, directly loaded from the pickle file.
     kg_test: KnowledgeGraph
-        TODO.What_that_variable_is_or_does
+        Test split from the knowledge graph, directly loaded from the pickle file.
     
     """
-    logging.info(f"Will not run the preparation step. Using KG stored in: {pickle_filename}")
+    logging.info(f"Will not run the preparation step. Using knowledge graph stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:
         kg_train = pickle.load(file)
         kg_validation = pickle.load(file)
@@ -228,12 +234,12 @@ def extract_node_type(node_name: str):
     Arguments
     ---------
     node_name: str
-        TODO.What_that_argument_is_or_does
+        The name of the node to extract the type from.
 
     Returns
     -------
-    TODO.result_name: TODO.type
-        TODO.What_that_variable_is_or_does
+    node_type: str
+        The node type extracted.
     
     """
     return node_name.split("_")[0]
@@ -245,16 +251,16 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph,
                                 ) -> dict:
     """
     Computes the proportion of triplets for each edge in each of the KnowledgeGraphs
-    (train, test, val) relative to the total number of triplets for that edge.
+    (train, test, validation) relative to the total number of triplets for that edge.
 
     Arguments
     ---------
     kg_train: KnowledgeGraph
-        The training KnowledgeGraph instance.
+        Train split from the knowledge graph.
     kg_test: KnowledgeGraph
-        The test KnowledgeGraph instance.
+        Test split from the knowledge graph.
     kg_validation: KnowledgeGraph
-        The validation KnowledgeGraph instance.
+        Validation split from the knowledge graph.
 
     Returns
     -------
@@ -297,25 +303,29 @@ def concat_kgs( kg_train: KnowledgeGraph,
                 kg_test: KnowledgeGraph
                 ) -> Tuple[Tensor, Tensor, Tensor]:
     """
-    TODO.What_the_function_does_about_globally
+    Merge the 3 splits of a knowledge graph into the original knowledge graph.
 
     Arguments
     ---------
     kg_train: KnowledgeGraph
-        The training KnowledgeGraph instance.
+        Train split from the knowledge graph.
     kg_test: KnowledgeGraph
-        The test KnowledgeGraph instance.
+        Test split from the knowledge graph.
     kg_validation: KnowledgeGraph
-        The validation KnowledgeGraph instance.
+        Validation split from the knowledge graph.
 
     Returns
     -------
-    head: torch.Tensor
-        TODO.What_that_variable_is_or_does
-    tail: torch.Tensor
-        TODO.What_that_variable_is_or_does
-    edge: torch.Tensor
-        TODO.What_that_variable_is_or_does
+    head: torch.Tensor, shape: [merged_kg.node_count]
+        List of head indices.
+    tail: torch.Tensor, shape: [merged_kg.node_count]
+        List of tail indices.
+    edge: torch.Tensor, shape: [merged_kg.node_count]
+        List of edge indices.
+    
+    Notes
+    -----
+    (merged_kg.node_count) is the number of nodes of the newly merged knowledge graph.
     
     """
     head = cat((kg_train.head_indices,
@@ -344,9 +354,9 @@ def count_triplets( kg1: KnowledgeGraph,
     Arguments
     ---------
     kg1: KnowledgeGraph
-        TODO.What_that_argument_is_or_does
+        First knowledge graph.
     kg2: KnowledgeGraph
-        TODO.What_that_argument_is_or_does
+        Second knowledge graph.
     duplicates: List[Tuple[int, int]]
         List returned by torchkge.utils.data_redundancy.duplicates.
     reverse_duplicates: List[Tuple[int, int]]
@@ -355,11 +365,9 @@ def count_triplets( kg1: KnowledgeGraph,
     Returns
     -------
     duplicate_count: int
-        Number of triplets in kg2 that have their duplicate triplet
-        in kg1
+        Number of triplets in kg2 that have their duplicate triplet in kg1.
     reverse_duplicate_count: int
-        Number of triplets in kg2 that have their reverse duplicate
-        triplet in kg1.
+        Number of triplets in kg2 that have their reverse duplicate triplet in kg1.
         
     """
     duplicate_count = 0
@@ -547,7 +555,7 @@ def filter_scores(  scores: Tensor,
     -------
     filtered_scores: torch.Tensor
         Tensor of shape [batch_size, n] with -Inf values for all true node/edge index except the ones being predicted.
-        
+    
     """
     batch_size = scores.shape[0]
     filtered_scores = scores.clone()
@@ -587,20 +595,20 @@ def merge_kg(kg_list: List[KnowledgeGraph],
     Arguments
     ---------
     kg_list: List[KnowledgeGraph]
-        The list of all KG to be merged
+        The list of all knowledge graphs to be merged.
     complete_graphindices: bool, default to False
         Whether or not the removed_triplets tensor should be integrated into the final KG's graphindices.
 
-        Raises
-        ------
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+    Raises
+    ------
+    AssertionError #1
+        Knowledge graphs in kg_list must have the same node_to_index.
+    AssertionError #2
+        Knowledge graphs in kg_list must have the same edge_to_index.
+    AssertionError #3
+        Knowledge graphs in kg_list must have the same node_type_to_index.
+    AssertionError #4
+        Knowledge graphs in kg_list must have the same triplet_types.
     
     Returns
     -------
@@ -611,9 +619,9 @@ def merge_kg(kg_list: List[KnowledgeGraph],
     first_kg = kg_list[0]
     for kg in kg_list:
         kg.clean()
-    assert all(first_kg.node_to_index == kg.node_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_to_index (ent2ix)."
-    assert all(first_kg.edge_to_index == kg.edge_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different edge_to_index (rel2ix)."
-    assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_type_to_index (nt2ix)."
+    assert all(first_kg.node_to_index == kg.node_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_to_index."
+    assert all(first_kg.edge_to_index == kg.edge_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different edge_to_index."
+    assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_type_to_index."
     assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triplet_types."
 
     new_graphindices = cat([kg.graphindices for kg in kg_list], dim = 1)
@@ -627,4 +635,120 @@ def merge_kg(kg_list: List[KnowledgeGraph],
         edge_to_index = first_kg.edge_to_index,
         node_type_to_index = first_kg.node_type_to_index,
         triplet_types = first_kg.triplet_types
-    )
+        )
+
+
+def get_dictionary_mapping( dataframe: pd.DataFrame,
+                            nodes = True
+                            ) -> Dict[str, int]:
+    """
+    Build the dictionary used to map either the node or edge identifiers to their index in the graph.
+
+    Arguments
+    ---------
+    dataframe: pd.DataFrame
+        Pandas dataframe containing at least three columns : "head", "edge" and "tail".
+        Other columns are ignored.
+    nodes: bool, optional, default to True
+        If True will build the dictionary for the nodes mapping, otherwise will build
+        the dictionary for the edge mapping.
+    
+    Returns
+    -------
+    node_to_index or edge_to_index: Dict[str, int]
+        Mapping dictionary for nodes or edges.
+
+    Notes
+    -----
+    This function is adapted from the torchkge.utils.operations.get_dictionaries() from the TorchKGE package.
+    
+    """
+    if nodes:
+        unique_nodes = list(set(dataframe["head"].unique()).union(set(dataframe["tail"]).unique()))
+        return {node: index for index, node in enumerate(sorted(unique_nodes))}
+    
+    else:
+        unique_edges = list(dataframe["edge"].unique())
+        return {edge: index for index, edge in enumerate(sorted(unique_edges))}
+
+
+def get_average_heads_per_tail( graphindices: Tensor
+                                ) -> Dict[float, float]:
+    """
+    Get the average number of heads per tail across each edges.
+
+    Arguments
+    ---------
+    graphindices: torch.Tensor, dtype: torch.long, shape: [4, triplet_count]
+        The knowledge graph representation as a tensor with four rows, respectively
+        the head, tail, edge and triplet indices.
+    
+    Returns
+    -------
+    average_heads_per_tail: Dict[float,float]
+        Keys: relation indices
+        Values: average number of heads per tail
+        
+    """
+    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head", "tail", "edge", "triplet"])
+    dataframe = dataframe.groupby(["edge", "tail"]).count().groupby("edge").mean()
+    dataframe.reset_index(inplace = True)
+    
+    return {dataframe.loc[i].values[0]: dataframe.loc[i].values[1] for i in dataframe.index}
+
+
+def get_average_tails_per_head( graphindices: Tensor
+                                ) -> Dict[float, float]:
+    """
+    Get the average number of tails per head across each edges.
+
+    Arguments
+    ---------
+    graphindices: torch.Tensor, dtype: torch.long, shape: [4, triplet_count]
+        The knowledge graph representation as a tensor with four rows, respectively
+        the head, tail, edge and triplet indices.
+    
+    Returns
+    -------
+    average_tails_per_head: Dict[float,float]
+        Keys: relation indices; Values: average number of tails per head
+    
+    """
+    dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head", "tail", "edge", "triplet"])
+    dataframe = dataframe.groupby(["head", "edge"]).count().groupby("edge").mean()
+    dataframe.reset_index(inplace = True)
+    
+    return {dataframe.loc[i].values[0]: dataframe.loc[i].values[1] for i in dataframe.index}
+
+
+def get_bernoulli_probabilities(knowledge_graph: KnowledgeGraph
+                                ) -> Dict[float, float]:
+    """
+    Evaluate the Bernoulli probabilities for negative sampling as in the
+    TransH original paper by Wang et al. (2014).
+
+    Arguments
+    ---------
+    knowledge_graph: kgate.KnowledgeGraph
+        The knowledge graph to sample bernoulli probabilities from.
+
+    Raises
+    ------
+    AssertionError
+        TODO.errors
+    
+    Returns
+    -------
+    bernoulli_probabilities: Dict[int, float]
+        Sampled probabilities of tails for each head. Keys: edge indices; Values: probabilities.
+    
+    """
+    heads_per_tail = get_average_heads_per_tail(knowledge_graph.graphindices)
+    tails_per_head = get_average_tails_per_head(knowledge_graph.graphindices)
+
+    assert heads_per_tail.keys() == tails_per_head.keys(), "The edges between heads_per_tail and tails_per_edge sets do not correspond."
+
+    for edge in tails_per_head.keys():
+        tails_per_head[edge] = tails_per_head[edge] / (tails_per_head[edge] + heads_per_tail[edge])
+    
+    return tails_per_head

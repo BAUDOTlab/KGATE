@@ -1,4 +1,7 @@
-"""Collections of encoder classes to embed the graph structure into a latent space."""
+"""
+Collections of encoder classes to embed the graph structure into a latent space.
+
+"""
 
 import sys
 import logging
@@ -24,6 +27,8 @@ logging.basicConfig(
 
 class DefaultEncoder(nn.Module):
     """
+    Interface for encoders of KGATE.
+
     TODO.What_the_class_is_about_globally
 
     References
@@ -32,7 +37,7 @@ class DefaultEncoder(nn.Module):
 
     Attributes
     ----------
-    deep: bool, defaul to False
+    deep: bool, default to False
         TODO.What_that_variable_is_or_does
     TODO.inherited_attributes
     
@@ -96,7 +101,8 @@ class GNN(nn.Module):
 
     def forward(self,
                 x_dict: Dict[str, Tensor],
-                edge_index_dict: Dict[Tuple[str, str, str,], Tensor]):
+                edge_index_dict: Dict[Tuple[str, str, str,], Tensor]
+                ) -> Dict[str, Tensor]:
         """
         TODO.What_the_function_does_about_globally
 
@@ -107,14 +113,20 @@ class GNN(nn.Module):
         Arguments
         ---------
         x_dict: Dict[str, Tensor]
-            TODO.What_that_argument_is_or_does
+            Key (str): node type
+            Value (Tensor): [node_count for the node_type, embedding_dimension]
+            PyTorch Geometric equivalent to node_embeddings.
         edge_index_dict: Dict[Tuple[str, str, str,], Tensor]
-            TODO.What_that_argument_is_or_does
+            Key (Tuple[str, str, str,]): Tuple[head_type, edge_type, tail_type]
+            Value (Tensor): [head_index, tail_index] for the corresponding head_type and tail_type
+            PyTorch Geometric equivalent to triplet_type.
 
         Returns
         -------
-        x_dict: TODO.type
-            TODO.What_that_variable_is_or_does
+        x_dict: Dict[str, Tensor]
+            Key (str): node type
+            Value (Tensor): [node_count for the node_type, embedding_dimension]
+            PyTorch Geometric equivalent to node_embeddings.
             
         """
         for _, conv in enumerate(self.convolutions):
