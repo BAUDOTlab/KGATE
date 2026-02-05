@@ -278,6 +278,7 @@ class TranslationalDecoder(Module):
                 tail_embeddings = tail_embeddings.view(batch_size, -1, tail_embeddings.size(1))
 
             return - self.dissimilarity(head_embeddings + edge_embeddings, tail_embeddings)
+        # TODO: would a ValueError else be needed?
 
 
 
@@ -340,7 +341,7 @@ class TransE(TranslationalDecoder):
         tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
         edge_embeddings: torch.Tensor, keyword-only
-            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
+            The edge embeddings, of size (edge_count, edge_embedding_dimensions)
 
         Returns
         -------
@@ -456,9 +457,15 @@ class TransH(TranslationalDecoder):
 
     Attributes
     ----------
+    normal_vector: TODO.type
+        TODO.what_that_variable_is_or_does
     dissimilarity: function described in `torchkge.utils.dissimilarities`
         The dissimilarity function used to compare translated head embeddings 
         to tail embeddings.
+    evaluated_projections: bool
+        TODO.what_that_variable_is_or_does
+    projected_nodes: TODO.type
+        TODO.what_that_variable_is_or_does
     
     """
     def __init__(self,
@@ -515,7 +522,7 @@ class TransH(TranslationalDecoder):
         tail_embeddings: torch.Tensor, keyword-only
             Embeddings of the tail nodes in the knowledge graph.
         edge_embeddings: torch.Tensor, keyword-only
-            The edge embeddings, of size (n_rel, rel_emb_dim) corresponding to (edge_count, edge_embedding_dimensions)
+            The edge embeddings, of size (edge_count, edge_embedding_dimensions)
         edge_indices: torch.Tensor, keyword-only
             The indices of the edges (from KG).
 
@@ -575,7 +582,7 @@ class TransH(TranslationalDecoder):
 
         Returns
         -------
-        result_1: Dict[str, Tensor]
+        normal_vector: Dict[str, Tensor]
             TODO.What_that_variable_is_or_does
             
         """
@@ -631,13 +638,13 @@ class TransH(TranslationalDecoder):
         edge_embeddings_inference = edge_embeddings(edge_indices)
 
         if node_inference:
-            head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: (batch_size, self.emb_dim)
-            tail_embeddings = self.projected_nodes[edge_indices, tail_indices]  # shape: (batch_size, self.emb_dim)
-            candidates = self.projected_nodes[edge_indices]  # shape: (batch_size, self.n_rel, self.emb_dim)
+            head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: (batch_size, self.node_embedding_dimensions)
+            tail_embeddings = self.projected_nodes[edge_indices, tail_indices]  # shape: (batch_size, self.node_embedding_dimensions)
+            candidates = self.projected_nodes[edge_indices]  # shape: (batch_size, self.edge_count, self.node_embedding_dimensions)
         else:
-            head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.emb_dim)
-            tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.emb_dim)
-            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, self.n_rel, self.emb_dim)  # shape: (batch_size, self.n_rel, self.emb_dim)
+            head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: (batch_size, self.edge_count, self.node_embedding_dimensions)
+            tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: (batch_size, self.edge_count, self.node_embedding_dimensions)
+            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, self.n_rel, self.emb_dim)  # shape: (batch_size, self.edge_count, self.node_embedding_dimensions)
 
         return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
 
@@ -704,9 +711,23 @@ class TransR(TranslationalDecoder):
 
     Attributes
     ----------
+    node_count: int
+        Number of nodes in the knowledge graph.
+    edge_count: int
+        Number of edges in the knowledge graph.
+    node_embedding_dimensions: int
+        Dimensions of node embeddings.
+    edge_embedding_dimensions: int
+        Dimensions of edge embeddings.
+    projection_matrix: TODO.type
+        TODO.what_that_variable_is_or_does
     dissimilarity: function described in `torchkge.utils.dissimilarities`
         The dissimilarity function used to compare translated head embeddings 
         to tail embeddings.
+    evaluated_projections: bool
+        TODO.what_that_variable_is_or_does
+    projected_nodes: TODO.type
+        TODO.what_that_variable_is_or_does
     
     """
     def __init__(self,
@@ -837,7 +858,7 @@ class TransR(TranslationalDecoder):
 
         Returns
         -------
-        result_1: Dict[str, Tensor]
+        projection_matrix: Dict[str, Tensor]
             TODO.What_that_variable_is_or_does
             
         """
@@ -970,9 +991,25 @@ class TransD(TranslationalDecoder):
 
     Attributes
     ----------
+    node_count: int
+        Number of nodes in the knowledge graph.
+    edge_count: int
+        Number of edges in the knowledge graph.
+    node_embedding_dimensions: int
+        Dimensions of node embeddings.
+    edge_embedding_dimensions: int
+        Dimensions of edge embeddings.
+    node_projection_vector: TODO.type
+        TODO.what_that_variable_is_or_does
+    edge_projection_vector: TODO.type
+        TODO.what_that_variable_is_or_does
     dissimilarity: function described in `torchkge.utils.dissimilarities`
         The dissimilarity function used to compare translated head embeddings 
         to tail embeddings.
+    evaluated_projections: bool
+        TODO.what_that_variable_is_or_does
+    projected_nodes: TODO.type
+        TODO.what_that_variable_is_or_does
     
     """
     def __init__(self,
@@ -980,12 +1017,13 @@ class TransD(TranslationalDecoder):
                 edge_embedding_dimensions: int,
                 node_count: int,
                 edge_count: int):
+        
         self.node_count = node_count
         self.edge_count = edge_count
         self.node_embedding_dimensions = node_embedding_dimensions
         self.edge_embedding_dimensions = edge_embedding_dimensions
 
-        # Might be changed to have 2 embedding spaces instead (meaning it will be encoded by a GNN if present)
+        # TODO: Might be changed to have 2 embedding spaces instead (meaning it will be encoded by a GNN if present)
         self.node_projection_vector = initialize_embedding(self.node_count, self.node_embedding_dimensions)
         self.edge_projection_vector = initialize_embedding(self.edge_count, self.edge_embedding_dimensions)
 
@@ -1026,7 +1064,7 @@ class TransD(TranslationalDecoder):
 
         Returns
         -------
-        result_1: torch.Tensor
+        dissimilarity: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
@@ -1176,13 +1214,13 @@ class TransD(TranslationalDecoder):
         edge_embeddings_inference = edge_embeddings(edge_indices)
 
         if node_inference:
-            head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: (batch_size, self.emb_dim)
-            tail_embeddings = self.projected_nodes[edge_indices, tail_indices]  # shape: (batch_size, self.emb_dim)
-            candidates = self.projected_nodes[edge_indices]  # shape: (batch_size, self.n_rel, self.emb_dim)
+            head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: (batch_size, self.node_embedding_dimensions)
+            tail_embeddings = self.projected_nodes[edge_indices, tail_indices]  # shape: (batch_size, self.node_embedding_dimensions)
+            candidates = self.projected_nodes[edge_indices]  # shape: (batch_size, self.edge_count, self.node_embedding_dimensions)
         else:
-            head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.rel_emb_dim)
-            tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: (batch_size, self.n_rel, self.rel_emb_dim)
-            candidates = self.rel_emb.weight.data.unsqueeze(0).expand(batch_size, self.n_rel, self.rel_emb_dim)  # shape: (batch_size, self.n_rel, self.emb_dim)
+            head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: (batch_size, self.edge_count, self.edge_embedding_dimensions)
+            tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: (batch_size, self.edge_count, self.edge_embedding_dimensions)
+            candidates = self.rel_emb.weight.data.unsqueeze(0).expand(batch_size, self.edge_count, self.edge_embedding_dimensions)  # shape: (batch_size, self.edge_count, self.node_embedding_dimensions)
 
         return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
 
@@ -1219,7 +1257,7 @@ class TransD(TranslationalDecoder):
             node_projection_vector = self.node_projection_vector.weight[i]
 
             scalar_product = (node_projection_vector * masked_node_embeddings).sum(dim = 0)
-            projected_nodes = scalar_product * edge_projection_vector + masked_node_embeddings[:self.rel_emb_dim].view(1, -1)
+            projected_nodes = scalar_product * edge_projection_vector + masked_node_embeddings[:self.edge_embedding_dimensions].view(1, -1)
 
             self.projected_nodes[:, i, :] = projected_nodes
 
@@ -1259,6 +1297,8 @@ class TorusE(TranslationalDecoder):
     dissimilarity: function described in `torchkge.utils.dissimilarities`
         The dissimilarity function used to compare translated head embeddings 
         to tail embeddings.
+    normalized: bool
+        TODO.what_that_variable_is_or_does
     
     """
     def __init__(self,
