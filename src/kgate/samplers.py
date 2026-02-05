@@ -21,13 +21,26 @@ from torch.types import Number, Tensor
 from .knowledgegraph import KnowledgeGraph
 from .utils import get_bernoulli_probabilities
 
+
+
 class NegativeSampler:
-    """This class is a simple interface to ease typing and use of negative samplers."""
+    """
+    This class is a simple interface to ease typing and use of negative samplers.
+    TODO
+    
+    """
+    
     def corrupt_batch(  self,
                         batch: torch.Tensor,
                         negative_triplet_count = None
                         ) -> Tensor:
+        """
+        TODO
+    
+        """
         raise NotImplementedError()
+
+
 
 class UniformNegativeSampler:
     """
@@ -48,8 +61,7 @@ class UniformNegativeSampler:
     kg: KnowledgeGraph
         Knowledge graph on which the sampling will be done.
     negative_triplet_count: int, optional, default to 1
-        Number of negative samples to create from each triplet. If None, the class-level
-        `n_neg` value is used.
+        Number of negative samples to create from each triplet.
 
     Attributes
     ----------
@@ -60,12 +72,10 @@ class UniformNegativeSampler:
         values: edge name
     kg: KnowledgeGraph
         Knowledge graph on which the sampling will be done.
-    n_neg: int
+    negative_triplet_count: int
         Number of negative samples to create from each triplet.
-        Inherited attribute, equivalent to negative_triplet_count.
-    n_ent: int
+    node_count: int
         Number of nodes.
-        Inherited attribute equivalent to node_count.
     
     TODO.inherited_attributes
     
@@ -75,8 +85,8 @@ class UniformNegativeSampler:
                 negative_triplet_count = 1):
         
         self.knowledge_graph = knowledge_graph
-        self.index_to_node_type: Dict[int, str] = {value: key for key,value in self.knowledge_graph.node_type_to_index.items()}
-        self.edge_types: Dict[int, str] = {value: key for key,value in self.knowledge_graph.edge_to_index.items()}
+        self.index_to_node_type: Dict[int, str] = {value: key for key, value in self.knowledge_graph.node_type_to_index.items()}
+        self.edge_types: Dict[int, str] = {value: key for key, value in self.knowledge_graph.edge_to_index.items()}
     
         self.negative_triplet_count = negative_triplet_count
     
@@ -107,8 +117,6 @@ class UniformNegativeSampler:
             Here, batch_size is batch.shape[1].
             
         """
-        negative_triplet_count = negative_triplet_count or self.negative_triplet_count
-
         device = batch.device
         batch_size = batch.shape[1]
         negative_triplet_heads = batch[0].repeat(negative_triplet_count)
@@ -119,10 +127,10 @@ class UniformNegativeSampler:
                                 device = device) / 2).double()
         corrupted_head_count = int(mask.sum().item())
 
-        negative_triplet_heads[mask == 1] = randint(1, self.n_ent,
+        negative_triplet_heads[mask == 1] = randint(1, self.node_count,
                                                     (corrupted_head_count,),
                                                     device = device)
-        negative_triplet_tails[mask == 0] = randint(1, self.n_ent,
+        negative_triplet_tails[mask == 0] = randint(1, self.node_count,
                                                     (batch_size * negative_triplet_count - corrupted_head_count,),
                                                     device = device)
         
@@ -182,8 +190,7 @@ class BernoulliNegativeSampler:
     kg: KnowledgeGraph
         Knowledge graph on which the sampling will be done.
     negative_triplet_count: int, optional, default to 1
-        Number of negative samples to create from each triplet. If None, the class-level
-        `n_neg` value is used.
+        Number of negative samples to create from each triplet.
 
     Attributes
     ----------
@@ -194,12 +201,10 @@ class BernoulliNegativeSampler:
         values: edge name
     kg: KnowledgeGraph
         Knowledge graph on which the sampling will be done.
-    n_neg: int
+    negative_triplet_count: int
         Number of negative samples to create from each triplet.
-        Inherited attribute, equivalent to negative_triplet_count.
-    n_ent: int
+    node_count: int
         Number of nodes.
-        Inherited attribute equivalent to node_count.
     bernoulli_probabilities: torch.Tensor, dtype: torch.float, shape: [edge_count]
         Tensor containing the probabilities of sampling a head for each edge.
     TODO.inherited_attributes
@@ -242,6 +247,7 @@ class BernoulliNegativeSampler:
 
         return torch.tensor(final_probabilities).float()
 
+    
     def corrupt_batch(  self,
                         batch: torch.LongTensor,
                         negative_triplet_count = None):
@@ -257,8 +263,7 @@ class BernoulliNegativeSampler:
             of the edges in the current batch.
             Here, batch_size is batch.shape[1].
         negative_triplet_count: int, optional
-            Number of negative samples to create from each triplet. If None, the class-level
-            `n_neg` value is used.
+            Number of negative samples to create from each triplet.
 
         Returns
         -------
@@ -268,8 +273,6 @@ class BernoulliNegativeSampler:
             Here, batch_size is batch.shape[1].
             
         """
-        negative_triplet_count = negative_triplet_count or self.n_neg
-
         device = batch.device
         batch_size = batch.shape[1]
         negative_triplet_heads = batch[0].repeat(negative_triplet_count)
@@ -281,11 +284,11 @@ class BernoulliNegativeSampler:
         corrupted_head_count = int(mask.sum().item())
 
         negative_triplet_heads[mask == 1] = randint(1,
-                                                    self.n_ent,
+                                                    self.node_count,
                                                     (corrupted_head_count,),
                                                     device = device)
         negative_triplet_tails[mask == 0] = randint(1,
-                                                    self.n_ent,
+                                                    self.node_count,
                                                     (batch_size * negative_triplet_count - corrupted_head_count,),
                                                     device = device)
         
@@ -343,7 +346,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
     Arguments
     ---------
     kg: kgate.data_structure.KnowledgeGraph
-        Knowledge Graph from which the corrupted triplets will be created.
+        Knowledge graph from which the corrupted triplets will be created.
 
     Attributes
     ----------
@@ -585,19 +588,18 @@ class MixedNegativeSampler:
     negative_triplet_count: int, optional, default to 1
         Third of the number of negative samples to create from each triplet. Since it uses 3 sampler
         methods, it generates 3 times the amount of negative_triplet_count indicated.
-        If None, the class-level `n_neg` value is used.
 
     Attributes
     ----------
-    n_neg: int
+    negative_triplet_count: int
         Number of negative samples to create from each triplet.
         Inherited attribute, equivalent to negative_triplet_count.
     uniform_sampler: UniformNegativeSampler
-        TODO.brief_description_of_the_class
+        TODO.what_that_variable_is_or_does
     bernoulli_sampler: BernoulliNegativeSampler
-        TODO.brief_description_of_the_class
+        TODO.what_that_variable_is_or_does
     positional_sampler: PositionalNegativeSampler
-        TODO.brief_description_of_the_class
+        TODO.what_that_variable_is_or_does
     TODO.inherited_attributes
     
     Notes
@@ -606,7 +608,6 @@ class MixedNegativeSampler:
     unexpected behaviour if used as is.
     
     """
-    
     def __init__(self,
                 knowledge_graph: KnowledgeGraph,
                 negative_triplet_count = 1):
@@ -638,8 +639,7 @@ class MixedNegativeSampler:
             of the edges in the current batch.
             Here, batch_size is batch.shape[1].
         negative_triplet_count: int, optional, default to None
-            Number of negative samples to create from each triplet. If None, the class-level
-            `n_neg` value is used.
+            Number of negative samples to create from each triplet.
 
         Returns
         -------
@@ -648,8 +648,6 @@ class MixedNegativeSampler:
             Here, batch_size is batch.shape[1].
         
         """
-        negative_triplet_count = negative_triplet_count or self.n_neg
-
         # Get negative samples from Uniform sampler
         uniform_negative_triplets_batch = self.uniform_sampler.corrupt_batch(
             batch, negative_triplet_count = negative_triplet_count
