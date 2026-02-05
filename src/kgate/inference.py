@@ -41,7 +41,7 @@ class Inference_KG(Dataset):
     Raises
     ------
     AssertionError
-        Index tensors are of different sizes.
+        Both index tensors must be of the same size.
 
     Notes
     -----
