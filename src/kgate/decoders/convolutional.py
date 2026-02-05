@@ -423,25 +423,25 @@ class ConvKB(ConvolutionalDecoder):
 
         if len(head_embeddings.shape) == 4:
             assert (len(tail_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 2), \
-                "When inferring heads..."
+                "When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions."
             concatenation = cat((head_embeddings,
                             edge_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.node_count, 1, self.embedding_dimensions),
                             tail_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.node_count, 1, self.embedding_dimensions)), dim = 2)
 
         elif len(tail_embeddings.shape) == 4:
             assert (len(head_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 2), \
-                "When inferring tails..."
+                "WWhen inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions."
             concatenation = cat((head_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.node_count, 1, self.embedding_dimensions),
                                 edge_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.node_count, 1, self.embedding_dimensions),
                                 tail_embeddings), dim=2)
         
         elif len(edge_embeddings.shape) == 4:
             assert (len(head_embeddings.shape) == 2) and (len(tail_embeddings.shape) == 2), \
-                "When inferring edges..."
+                "When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions."
             concatenation = cat((head_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.edge_count, 1, self.embedding_dimensions),
                                 edge_embeddings,
                                 tail_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.edge_count, 1, self.embedding_dimensions)), dim = 2)
-        
+        # TODO: is a ValueError else needed here?
         concatenation = concatenation.reshape(-1, 3, self.embedding_dimensions)
 
         convolution = self.convolution_layer(concatenation).reshape(concatenation.shape[0], -1)
