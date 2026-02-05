@@ -127,6 +127,7 @@ class Architect(Module):
     ------
     ValueError
         If the `config.metadata_csv` file exists but cannot be parsed, or if `kg` is given, but not a tuple of KnowledgeGraph and `config.run_kg_preprocessing` is set to false.
+    TODO.missing_errors
 
     Examples
     --------
@@ -302,7 +303,7 @@ class Architect(Module):
 
         Returns
         -------
-        encoder: DefaultEncoder or GCNEncoder or GATEncoder
+        encoder: DefaultEncoder or GCNEncoder or GATEncoder or Node2VecEncoder
             The encoder object.
         
         """
@@ -492,7 +493,7 @@ class Architect(Module):
 
         Returns
         -------
-        negative_sampler: torchkge.sampling.NegativeSampler TODO.NegativeSampler_super_class_maybe
+        negative_sampler: NegativeSampler TODO.NegativeSampler_super_class_maybe
             The initialized sampler.
         
         """
@@ -825,7 +826,7 @@ class Architect(Module):
             Arguments
             ---------
             engine: Engine
-                TODO.What_that_argument_is_or_does
+                Runner managing the training.
 
             """
             # Move models to CPU before saving
@@ -924,14 +925,14 @@ class Architect(Module):
         remaining_edges = all_edges - set(list_rel_1) - set(list_rel_2)
         remaining_edges = list(remaining_edges)
 
-        total_metrics_sum_list_1, fact_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_relations(
+        total_metrics_sum_list_1, triplet_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_relations(
             self.kg_test, list_rel_1)
-        total_metrics_sum_list_2, fact_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_relations(
+        total_metrics_sum_list_2, triplet_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_relations(
             self.kg_test, list_rel_2)
-        total_metrics_sum_remaining, fact_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
+        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
             self.kg_test, remaining_edges)
 
-        global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (fact_count_list_1 + fact_count_list_2 + fact_count_remaining)
+        global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (triplet_count_list_1 + triplet_count_list_2 + triplet_count_remaining)
 
         logging.info(f"Final Test metrics with best model: {global_metrics}")
 
@@ -1106,7 +1107,7 @@ class Architect(Module):
 
         Raises
         ------
-        TODO.error_1
+        Error
             No best model was found in the checkpoint directory.
             Make sure to run the training first and not rename checkpoint files before running evaluation.
         
@@ -1194,8 +1195,8 @@ class Architect(Module):
 
         Returns
         -------
-        TODO.result_name: torch.types.Number
-            TODO.What_that_variable_is_or_does
+        loss_value: torch.types.Number
+            Training loss value of the model for this epoch.
             
         """
         batch = batch.T.to(self.device)
@@ -1249,7 +1250,7 @@ class Architect(Module):
         
         if isinstance(self.encoder, GNN):
             seed_nodes = batch[:2].unique()
-            hop_count = self.encoder.n_layers
+            hop_count = self.encoder.layer_count
             edge_list = kg.edge_list
             
             _,_,_, edge_mask = k_hop_subgraph(
@@ -1304,7 +1305,7 @@ class Architect(Module):
             input = self.kg_train.get_encoder_input(self.kg_train.graphindices.to(self.device), self.node_embeddings)
 
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_list)
-            node_embeddings: torch.Tensor = torch.zeros((self.n_ent, self.encoder_node_embedding_dimensions),
+            node_embeddings: torch.Tensor = torch.zeros((self.node_count, self.encoder_node_embedding_dimensions),
                                                         device = self.device,
                                                         dtype = torch.float)
 
@@ -1345,7 +1346,7 @@ class Architect(Module):
             assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the node embedding and the edge embedding."
             self.node_embeddings, self.edge_embeddings = normalized_embeddings
             
-        logging.debug(f"Normalized all embeddings")
+        logging.debug(f"Normalized all embeddings.")
 
 
     def log_metrics_to_csv(self, engine: Engine):
@@ -1355,7 +1356,7 @@ class Architect(Module):
         Arguments
         ---------
         engine: Engine
-            TODO.What_that_argument_is_or_does
+            Runner managing the training.
             
         """
         epoch = engine.state.epoch
@@ -1391,7 +1392,7 @@ class Architect(Module):
         Arguments
         ---------
         engine: Engine
-            TODO.What_that_argument_is_or_does
+            Runner managing the training.
             
         """
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
@@ -1428,7 +1429,7 @@ class Architect(Module):
         Arguments
         ---------
         engine: Engine
-            TODO.What_that_argument_is_or_does
+            Runner managing the training.
 
         Returns
         -------
@@ -1447,7 +1448,7 @@ class Architect(Module):
         Arguments
         ---------
         engine: Engine
-            TODO.What_that_argument_is_or_does
+            Runner managing the training.
         
         """
         logging.info(f"Training completed after {engine.state.epoch} epochs.")
