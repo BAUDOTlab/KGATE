@@ -10,7 +10,7 @@ import logging
 import pickle
 from pathlib import Path
 from importlib.resources import open_binary
-from typing import List, Tuple, Literal, Dict
+from typing import List, Tuple, Literal, Dict, TYPE_CHECKING
 
 import pandas as pd 
 import numpy as np
@@ -21,7 +21,8 @@ import torch
 import torch.nn as nn
 from torch import cat, Tensor
 
-from .knowledgegraph import KnowledgeGraph
+if TYPE_CHECKING:
+    from .knowledgegraph import KnowledgeGraph
 
 
 logging_level = logging.INFO
@@ -183,7 +184,7 @@ def save_config(config: dict,
 
 
 def load_knowledge_graph(pickle_filename: Path
-                        ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
+                        ) -> Tuple["KnowledgeGraph", "KnowledgeGraph", "KnowledgeGraph"]:
     """
     Load the knowledge graph from pickle files.
     
@@ -245,9 +246,9 @@ def extract_node_type(node_name: str):
     return node_name.split("_")[0]
 
 
-def compute_triplet_proportions(kg_train: KnowledgeGraph,
-                                kg_test: KnowledgeGraph,
-                                kg_validation: KnowledgeGraph
+def compute_triplet_proportions(kg_train: "KnowledgeGraph",
+                                kg_test: "KnowledgeGraph",
+                                kg_validation: "KnowledgeGraph"
                                 ) -> dict:
     """
     Computes the proportion of triplets for each edge in each of the KnowledgeGraphs
@@ -298,9 +299,9 @@ def compute_triplet_proportions(kg_train: KnowledgeGraph,
     return proportions
 
 
-def concat_kgs( kg_train: KnowledgeGraph,
-                kg_validation: KnowledgeGraph,
-                kg_test: KnowledgeGraph
+def concat_kgs( kg_train: "KnowledgeGraph",
+                kg_validation: "KnowledgeGraph",
+                kg_test: "KnowledgeGraph"
                 ) -> Tuple[Tensor, Tensor, Tensor]:
     """
     Merge the 3 splits of a knowledge graph into the original knowledge graph.
@@ -343,8 +344,8 @@ def concat_kgs( kg_train: KnowledgeGraph,
     return head, tail, edge
 
 
-def count_triplets( kg1: KnowledgeGraph,
-                    kg2: KnowledgeGraph,
+def count_triplets( kg1: "KnowledgeGraph",
+                    kg2: "KnowledgeGraph",
                     duplicates: List[Tuple[int, int]],
                     reverse_duplicates: List[Tuple[int, int]]
                     ) -> Tuple[int, int]:
@@ -586,9 +587,9 @@ def filter_scores(  scores: Tensor,
     return filtered_scores
 
 
-def merge_kg(kg_list: List[KnowledgeGraph],
+def merge_kg(kg_list: List["KnowledgeGraph"],
             complete_graphindices: bool = False
-            ) -> KnowledgeGraph:
+            ) -> "KnowledgeGraph":
     """
     Merge multiple KnowledgeGraph objects into a unique one.
     
@@ -664,7 +665,7 @@ def get_dictionary_mapping( dataframe: pd.DataFrame,
     
     """
     if nodes:
-        unique_nodes = list(set(dataframe["head"].unique()).union(set(dataframe["tail"]).unique()))
+        unique_nodes = list(set(dataframe["head"].unique()).union(set(dataframe["tail"])))
         return {node: index for index, node in enumerate(sorted(unique_nodes))}
     
     else:
@@ -721,7 +722,7 @@ def get_average_tails_per_head( graphindices: Tensor
     return {dataframe.loc[i].values[0]: dataframe.loc[i].values[1] for i in dataframe.index}
 
 
-def get_bernoulli_probabilities(knowledge_graph: KnowledgeGraph
+def get_bernoulli_probabilities(knowledge_graph: "KnowledgeGraph"
                                 ) -> Dict[float, float]:
     """
     Evaluate the Bernoulli probabilities for negative sampling as in the
