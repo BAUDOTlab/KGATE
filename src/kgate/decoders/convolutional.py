@@ -159,11 +159,11 @@ class ConvolutionalDecoder(Module):
         
         Arguments
         ---------
-        head_indices: torch.Tensor, keyword-only
+        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, keyword-only
+        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, keyword-only
+        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the edges (from KG).
         node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
@@ -200,7 +200,9 @@ class ConvolutionalDecoder(Module):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        TODO.what_that_function_does
+        Link prediction evaluation helper function. Compute the scores
+        of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        The arguments should match the ones of `inference_prepare_candidates`.
 
         Refer to the specific decoder for details on this function's implementation.
         While all arguments are given when called from the Architect class, most 
@@ -223,7 +225,7 @@ class ConvolutionalDecoder(Module):
 
         Returns
         -------
-        score: torch.Tensor, shape: [batch_size, candidate_count]
+        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
             Tensor of score values.
             First dimension: incomplete triplets tested
             Second dimension: candidate indices
@@ -242,22 +244,35 @@ class ConvKB(ConvolutionalDecoder):
 
     References
     ----------
-    TODO
-
+    Dai Quoc Nguyen, Tu Dinh Nguyen, Dat Quoc Nguyen, Dinh Phung
+    `A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network`
+    https://arxiv.org/abs/1712.02121
+    In Proceedings of the 2018 Conference of the North American Chapter of the Association for Computational
+    Linguistics: Human Language Technologies (2018), vol. 2, pp. 327–333.
+    
     Arguments
     ---------
     embedding_dimensions: int
         Dimensions of embeddings.
     filter_count: int
-        TODO.What_that_argument_is_or_does
+        Number of filters used for convolution.
     node_count: int
         Number of nodes in the knowledge graph.
     edge_count: int
         Number of edges in the knowledge graph.
-
+    
     Attributes
     ----------
-    TODO.inherited_attributes
+    embedding_dimensions: int
+        Dimensions of embeddings.
+    node_count: int
+        Number of nodes in the knowledge graph.
+    edge_count: int
+        Number of edges in the knowledge graph.
+    convolution_layer: torch.nn.Sequential
+        TODO
+    output: torch.nn.Sequential
+        TODO
     
     """
     def __init__(self,
@@ -287,7 +302,10 @@ class ConvKB(ConvolutionalDecoder):
                 edge_embeddings: Tensor,
                 **_) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
+        Compute the score function for the triplets given as argument.
+        
+        See referenced paper for more details on the score:
+        https://arxiv.org/abs/1712.02121
 
         Arguments
         ---------
@@ -336,11 +354,11 @@ class ConvKB(ConvolutionalDecoder):
         
         Arguments
         ---------
-        head_indices: torch.Tensor, keyword-only
+        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, keyword-only
+        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, keyword-only
+        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the edges (from KG).
         node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
@@ -388,7 +406,9 @@ class ConvKB(ConvolutionalDecoder):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        TODO.what_that_function_does
+        Link prediction evaluation helper function. Compute the scores
+        of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        The arguments should match the ones of `inference_prepare_candidates`.
         
         Arguments
         ---------
@@ -410,7 +430,7 @@ class ConvKB(ConvolutionalDecoder):
 
         Returns
         -------
-        score: torch.Tensor, shape: [batch_size, candidate_count]
+        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
             Tensor of score values.
             First dimension: incomplete triplets tested
             Second dimension: candidate indices

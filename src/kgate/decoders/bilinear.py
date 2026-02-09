@@ -169,15 +169,15 @@ class BilinearDecoder(Module):
         
         Arguments
         ---------
-        head_indices: torch.Tensor, keyword-only
+        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, keyword-only
+        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, keyword-only
+        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, keyword-only
             Embeddings of all edges.
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
@@ -210,7 +210,9 @@ class BilinearDecoder(Module):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        TODO.what_that_function_does
+        Link prediction evaluation helper function. Compute the scores
+        of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        The arguments should match the ones of `inference_prepare_candidates`.
 
         Refer to the specific decoder for details on this function's implementation.
         While all arguments are given when called from the Architect class, most 
@@ -233,7 +235,7 @@ class BilinearDecoder(Module):
 
         Returns
         -------
-        score: torch.Tensor, shape: [batch_size, candidate_count]
+        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
             Tensor of score values.
             First dimension: incomplete triplets tested
             Second dimension: candidate indices
@@ -300,7 +302,8 @@ class RESCAL(BilinearDecoder):
                 **_
                 ) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
+        Compute the score function for the triplets given as argument.
+        See referenced paper for more details on the score: TODO.reference_link
 
         Arguments
         ---------
@@ -364,7 +367,7 @@ class RESCAL(BilinearDecoder):
 
     def get_embeddings(self) -> Dict[str, Tensor]:
         """
-        TODO.What_the_function_does_about_globally
+        Return the tensors representing nodes and edges in current model.
 
         Returns
         -------
@@ -391,15 +394,15 @@ class RESCAL(BilinearDecoder):
 
         Arguments
         ---------
-        head_indices: torch.Tensor, keyword-only
+        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, keyword-only
+        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, keyword-only
+        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, keyword-only
             Unused.
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
@@ -440,7 +443,9 @@ class RESCAL(BilinearDecoder):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
+        Link prediction evaluation helper function. Compute the scores
+        of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        The arguments should match the ones of `inference_prepare_candidates`.
 
         Arguments
         ---------
@@ -466,7 +471,7 @@ class RESCAL(BilinearDecoder):
 
         Returns
         -------
-        score: torch.Tensor, shape: [batch_size, candidate_count]
+        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
             Tensor of score values.
             First dimension: incomplete triplets tested
             Second dimension: candidate indices
@@ -558,7 +563,8 @@ class DistMult(BilinearDecoder):
                 **_
                 ) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
+        Compute the score function for the triplets given as argument.
+        See referenced paper for more details on the score: TODO.reference_link
 
         Arguments
         ---------
@@ -643,15 +649,15 @@ class DistMult(BilinearDecoder):
         
         Arguments
         ---------
-        head_indices: torch.Tensor, keyword-only
+        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, keyword-only
+        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, keyword-only
+        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, keyword-only
             Embeddings of all edges.
         node_inference: bool, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
@@ -694,7 +700,9 @@ class DistMult(BilinearDecoder):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
+        Link prediction evaluation helper function. Compute the scores
+        of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        The arguments should match the ones of `inference_prepare_candidates`.
 
         Arguments
         ---------
@@ -718,7 +726,7 @@ class DistMult(BilinearDecoder):
 
         Returns
         -------
-        score: torch.Tensor, shape: [batch_size, candidate_count]
+        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
             Tensor of score values.
             First dimension: incomplete triplets tested
             Second dimension: candidate indices
@@ -797,7 +805,8 @@ class ComplEx(BilinearDecoder):
                 **_
                 ) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
+        Compute the score function for the triplets given as argument.
+        See referenced paper for more details on the score: TODO.reference_link
 
         Arguments
         ---------
@@ -847,15 +856,15 @@ class ComplEx(BilinearDecoder):
 
         Arguments
         ---------
-        head_indices: torch.Tensor, keyword-only
+        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, keyword-only
+        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, keyword-only
+        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, keyword-only
             Embeddings of all edges.
         node_inference: bool, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
@@ -899,7 +908,9 @@ class ComplEx(BilinearDecoder):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
+        Link prediction evaluation helper function. Compute the scores
+        of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        The arguments should match the ones of `inference_prepare_candidates`.
 
         Arguments
         ---------
@@ -923,7 +934,7 @@ class ComplEx(BilinearDecoder):
 
         Returns
         -------
-        score: torch.Tensor, shape: [batch_size, candidate_count]
+        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
             Tensor of score values.
             First dimension: incomplete triplets tested
             Second dimension: candidate indices
@@ -982,4 +993,3 @@ class ComplEx(BilinearDecoder):
         
         else:
             raise ValueError("None of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.")
-    
