@@ -103,8 +103,6 @@ class EncoderInput:
 
         return message
 
-
-
 class KnowledgeGraph(Dataset):
     """
     TODO.What_the_class_is_about_globally
@@ -225,7 +223,6 @@ class KnowledgeGraph(Dataset):
             self.add_metadata(metadata)
 
         if dataframe is None:
-            self.node_count = cat([self.head_indices, self.tail_indices]).unique().size(0)
             # The mapping is done on the absolute index of nodes. However, subgraphs don't have all the nodes
             # Thus, we must initialize the tensor at -1 to avoid downstream issue with the node_type 0 being 
             # broadcasted to missing nodes in subgraphs.
@@ -260,7 +257,6 @@ class KnowledgeGraph(Dataset):
                 mapping_dataframe = dataframe
 
             triplet_type_counter = 0
-            self.node_count = self.node_count
             self.node_types = torch.ones(self.node_count, dtype = torch.long).neg()
 
             for edge_name, group in mapping_dataframe.groupby("edge"):
@@ -578,7 +574,7 @@ class KnowledgeGraph(Dataset):
                 node_to_index = self.node_to_index,
                 edge_to_index = self.edge_to_index,
                 node_type_to_index = self.node_type_to_index,
-                removed_triples = self.removed_triplets
+                removed_triplets = self.removed_triplets
             ),
             self.__class__(
                 graphindices = self.graphindices[:, mask_validation], 

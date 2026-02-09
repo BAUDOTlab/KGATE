@@ -10,7 +10,7 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 The modifications are licensed under the BSD license according to the source license.
 """
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, TYPE_CHECKING
 
 from tqdm import tqdm
 
@@ -24,7 +24,8 @@ from torch_geometric.utils import k_hop_subgraph
 from torchkge.utils import get_rank
 from torchkge.data_structures import SmallKG
 
-from .architect import Architect
+if TYPE_CHECKING:
+    from .architect import Architect
 from .decoders import BilinearDecoder, ConvolutionalDecoder, TranslationalDecoder
 from .encoders import GNN, DefaultEncoder
 from .knowledgegraph import KnowledgeGraph
@@ -352,7 +353,7 @@ class TripletClassificationEvaluator:
 
     """
     def __init__(self,
-                architect: Architect,
+                architect: "Architect",
                 kg_validation: KnowledgeGraph,
                 kg_test: KnowledgeGraph):
         

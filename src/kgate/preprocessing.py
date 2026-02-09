@@ -209,10 +209,10 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
         duplicate_edges, reverse_duplicate_edges = kg.duplicates(theta_first_edge_type = theta_first_edge_type,
                                                                 theta_second_edge_type = theta_second_edge_type)
         if duplicate_edges:
-            logging.info(f"Adding {len(duplicate_edges)} synonymous edges ({[index_to_edge_name[edge] for edge in duplicate_edges]}) to the list of known duplicated edges.")
+            logging.info(f"Adding {len(duplicate_edges)} synonymous edges ({[index_to_edge_name[edge] for duplicate_pair in duplicate_edges for edge in duplicate_pair]}) to the list of known duplicated edges.")
             duplicated_edges_list.extend(duplicate_edges)
         if reverse_duplicate_edges:
-            logging.info(f"Adding {len(reverse_duplicate_edges)} anti-synonymous edges ({[index_to_edge_name[edge] for edge in reverse_duplicate_edges]}) to the list of known duplicated edges.")
+            logging.info(f"Adding {len(reverse_duplicate_edges)} anti-synonymous edges ({[index_to_edge_name[edge] for reverse_duplicate_pair in reverse_duplicate_edges for edge in reverse_duplicate_pair]}) to the list of known duplicated edges.")
             duplicated_edges_list.extend(reverse_duplicate_edges)
     
     if config["preprocessing"]["make_directed"]:
