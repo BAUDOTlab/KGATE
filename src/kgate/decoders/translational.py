@@ -71,18 +71,18 @@ class TranslationalDecoder(Module):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
-            The embeddings of the head entities for the current batch of length `batch_size`.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
-            The embeddings of the tail entities for the current batch of length `batch_size`.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
-            The embeddings of the edges for the current batch of length `batch_size`.
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            The embeddings of the head entities for the current batch.
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            The embeddings of the tail entities for the current batch.
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+            The embeddings of the edges for the current batch.
         head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head entities for the current batch of length `batch_size`.
+            The indices of the head entities for the current batch.
         tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail entities for the current batch of length `batch_size`.
+            The indices of the tail entities for the current batch.
         edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges for the current batch of length `batch_size`.
+            The indices of the edges for the current batch.
         
         Raises
         ------
@@ -92,7 +92,7 @@ class TranslationalDecoder(Module):
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
+        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
             The score of each triplet as a tensor.
         
         Notes
@@ -100,7 +100,7 @@ class TranslationalDecoder(Module):
         The batch can be the whole graph if it fits in memory.
         
         """
-        raise NotImplementedError("The score method must be implemented by the translational decoder.")
+        raise NotImplementedError("The `score` method must be implemented by the translational decoder.")
 
 
     def normalize_parameters(self,
@@ -114,18 +114,18 @@ class TranslationalDecoder(Module):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             The edge embedding as a ParameterList containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             The normalized edges embedding object.
         
         Notes
@@ -162,12 +162,12 @@ class TranslationalDecoder(Module):
 
 
     def inference_prepare_candidates(self,
-                                    *, 
-                                    head_indices: Tensor, 
-                                    tail_indices: Tensor, 
-                                    edge_indices: Tensor, 
-                                    node_embeddings: Tensor, 
+                                    *,
+                                    node_embeddings: Tensor,
                                     edge_embeddings: nn.Embedding,
+                                    head_indices: Tensor,
+                                    tail_indices: Tensor,
+                                    edge_indices: Tensor,
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -181,16 +181,16 @@ class TranslationalDecoder(Module):
         
         Arguments
         ---------
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            Embeddings of all nodes.
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+            Embeddings of all edges.
         head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the head nodes (from KG).
         tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the tail nodes (from KG).
         edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, keyword-only
-            Embeddings of all edges.
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
         
@@ -202,17 +202,17 @@ class TranslationalDecoder(Module):
             
         Returns
         -------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             Head node embeddings.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             Tail node embeddings.
-        edge_embeddings_inference: torch.Tensor
+        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             Edge embeddings.
         candidates: torch.Tensor
             Candidate embeddings for nodes or edges.
         
         """
-        raise NotImplementedError("The inference_prepare_candidates method must be implemented by the translational decoder.")
+        raise NotImplementedError("The `inference_prepare_candidates` method must be implemented by the translational decoder.")
 
 
     def inference_score(self, 
@@ -232,11 +232,11 @@ class TranslationalDecoder(Module):
         
         Arguments
         ---------
-        head_embeddings: torch.Tensor, keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, keyword-only
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             Embeddings of the edges in the knowledge graph.
         
         Raises
@@ -259,16 +259,16 @@ class TranslationalDecoder(Module):
         """
         batch_size = head_embeddings.shape[0]
 
-        # When the shape of the edges is [batch_size, embedding_dimensions]
+        # When the shape of the edges is [batch_size, node_embedding_dimensions]
         if len(edge_embeddings.shape) == 2:
             if len(tail_embeddings.shape) == 3:
-                assert len(head_embeddings.shape) == 2, "When inferring tails, the head_embeddings tensor should be of shape [batch_size, embedding_dimensions]"
+                assert len(head_embeddings.shape) == 2, "When inferring tails, the `head_embeddings` tensor should be of shape [batch_size, node_embedding_dimensions]"
 
                 translated_heads = (head_embeddings + edge_embeddings).view(batch_size, 1, edge_embeddings.size(1))
                 return - self.dissimilarity(translated_heads, tail_embeddings)
             
             else:
-                assert (len(head_embeddings.shape) == 3) and (len(tail_embeddings) == 2), "When inferring heads, the head_embeddings tensor should be of shape [batch_size, embedding_dimensions]"
+                assert (len(head_embeddings.shape) == 3) and (len(tail_embeddings) == 2), "When inferring heads, the `head_embeddings` tensor should be of shape [batch_size, node_embedding_dimensions]"
 
                 edges_extended = edge_embeddings.view(batch_size, 1, edge_embeddings.size(1))
                 tails_extended = tail_embeddings.view(batch_size, 1, edge_embeddings.size(1))
@@ -285,7 +285,7 @@ class TranslationalDecoder(Module):
                 tail_embeddings = tail_embeddings.view(batch_size, -1, tail_embeddings.size(1))
 
             return - self.dissimilarity(head_embeddings + edge_embeddings, tail_embeddings)
-        # TODO: would a ValueError else be needed?
+        # TODO: would a ValueError in an 'else' be needed?
 
 
 
@@ -304,12 +304,6 @@ class TransE(TranslationalDecoder):
 
     Arguments
     ---------
-    embedding_dimensions: int
-        Dimensions of embeddings.
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
     dissimilarity_type: Literal["L1", "L2"], default to "L2"
         The type of dissimilarity function that will be used,
         either "L1" or "L2".
@@ -352,16 +346,16 @@ class TransE(TranslationalDecoder):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
-            The edge embeddings, of shape [edge_count, edge_embedding_dimensions]
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
+            The edge embeddings.
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
+        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
             The score of each triplet as a tensor.
             
         """
@@ -385,17 +379,17 @@ class TransE(TranslationalDecoder):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The edge embeddings, which are not normalized as per the paper's recommendation.
         
         Returns
         -------
-        node_embeddings : torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings : torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The normalized node embedding object.
-        edge_embeddings : torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings : torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The untouched edge embedding object.
         
         """
@@ -406,12 +400,12 @@ class TransE(TranslationalDecoder):
 
 
     def inference_prepare_candidates(self,
-                                    *, 
-                                    head_indices: Tensor, 
-                                    tail_indices: Tensor, 
-                                    edge_indices: Tensor, 
-                                    node_embeddings: Tensor, 
+                                    *,
+                                    node_embeddings: Tensor,
                                     edge_embeddings: nn.Embedding,
+                                    head_indices: Tensor,
+                                    tail_indices: Tensor,
+                                    edge_indices: Tensor,
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -421,26 +415,26 @@ class TransE(TranslationalDecoder):
 
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
             Embeddings of all edges.
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes (from KG).
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes (from KG).
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the edges (from KG).
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
         
         Returns
         -------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             Head node embeddings.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             Tail node embeddings.
-        edge_embeddings_inference: torch.Tensor
+        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             Edge embeddings.
         candidates: torch.Tensor
             Candidate embeddings for nodes or edges.
@@ -451,7 +445,7 @@ class TransE(TranslationalDecoder):
         # Get head, tail and edge embeddings
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
-        edge_embeddings_inference = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings(edge_indices)
 
         if node_inference:
             # Prepare candidates for every node
@@ -462,7 +456,7 @@ class TransE(TranslationalDecoder):
         
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
 
-        return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
+        return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
     
     
     
@@ -479,6 +473,15 @@ class TransH(TranslationalDecoder):
     https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531
     In Twenty-Eighth AAAI Conference on Artificial Intelligence, June 2014.
 
+    Arguments
+    ---------
+    node_count: int
+        Number of nodes in the knowledge graph.
+    edge_count: int
+        Number of edges in the knowledge graph.
+    embedding_dimensions: int
+        Dimensions of node and edge embeddings.
+
     Attributes
     ----------
     normal_vector: torch.nn.Embedding, shape: [edge_count, embedding_dimensions]
@@ -492,7 +495,7 @@ class TransH(TranslationalDecoder):
     evaluated_projections: bool
         Indicates whether `projected_nodes` has been computed.
         This should be set to True every time a backward pass is done in train mode.
-    projected_nodes: torch.nn.Parameter, shape: [edge_count, node_count, edge_embedding_dimensions]
+    projected_nodes: torch.nn.Parameter, shape: [edge_count, node_count, embedding_dimensions]
         Contains the projection of each node in each edge-specific sub-space.
     
     """
@@ -527,7 +530,7 @@ class TransH(TranslationalDecoder):
         
         Returns
         -------
-        projected_nodes_tensor: torch.Tensor, shape: [edge_count, node_count, edge_embedding_dimensions]
+        projected_nodes_tensor: torch.Tensor, shape: [edge_count, node_count, embedding_dimensions]
             Give the value of the `self.projected_nodes` nn.Parameter object when called.
         
         """
@@ -551,18 +554,18 @@ class TransH(TranslationalDecoder):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape [batch_size, embedding_dimensions], keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape [batch_size, embedding_dimensions], keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, keyword-only
-            The edge embeddings, of shape [edge_count, edge_embedding_dimensions]
-        edge_indices: torch.Tensor, keyword-only
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape [batch_size, embedding_dimensions], keyword-only
+            Embeddings of edges.
+        edge_indices: torch.Tensor, dtype: torch.long, shape [batch_size], keyword-only
             The indices of the edges (from KG).
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
+        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
             The score of each triplet as a tensor.
             
         """
@@ -589,18 +592,18 @@ class TransH(TranslationalDecoder):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The edge embedding as a ParameterList containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The normalized edges embedding object.
     
         """
@@ -627,12 +630,12 @@ class TransH(TranslationalDecoder):
     
     
     def inference_prepare_candidates(self,
-                                    *, 
-                                    head_indices: Tensor, 
-                                    tail_indices: Tensor, 
-                                    edge_indices: Tensor, 
-                                    node_embeddings: Tensor, 
+                                    *,
+                                    node_embeddings: Tensor,
                                     edge_embeddings: nn.Embedding,
+                                    head_indices: Tensor,
+                                    tail_indices: Tensor,
+                                    edge_indices: Tensor,
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -642,28 +645,28 @@ class TransH(TranslationalDecoder):
 
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
             Embeddings of all edges.
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes (from KG).
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes (from KG).
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the edges (from KG).
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             Head node embeddings.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             Tail node embeddings.
-        edge_embeddings_inference: torch.Tensor
+        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             Edge embeddings.
-        candidates: torch.Tensor
+        candidates: torch.Tensor, dtype: TODO, shape: [batch_size, edge_count, embedding_dimensions]
             Candidate embeddings for nodes or edges.
 
         """
@@ -672,18 +675,18 @@ class TransH(TranslationalDecoder):
         if not self.evaluated_projections:
             self.evaluate_projections(node_embeddings)
 
-        edge_embeddings_inference = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings(edge_indices)
 
         if node_inference:
-            head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: [batch_size, self.node_embedding_dimensions]
-            tail_embeddings = self.projected_nodes[edge_indices, tail_indices]  # shape: [batch_size, self.node_embedding_dimensions]
-            candidates = self.projected_nodes[edge_indices]  # shape: [batch_size, self.edge_count, self.node_embedding_dimensions]
+            head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: [batch_size, self.embedding_dimensions]
+            tail_embeddings = self.projected_nodes[edge_indices, tail_indices]  # shape: [batch_size, self.embedding_dimensions]
+            candidates = self.projected_nodes[edge_indices]  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
         else:
-            head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.node_embedding_dimensions]
-            tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.node_embedding_dimensions]
-            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, self.edge_count, self.node_embedding_dimensions)  # shape: [batch_size, self.edge_count, self.node_embedding_dimensions]
+            head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
+            tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
+            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, self.edge_count, self.embedding_dimensions)  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
 
-        return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
+        return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
 
 
     def evaluate_projections(self,
@@ -696,7 +699,7 @@ class TransH(TranslationalDecoder):
 
         Arguments
         ---------
-        node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
             Embeddings of all nodes.
         
         Notes
@@ -710,8 +713,7 @@ class TransH(TranslationalDecoder):
 
         for i in tqdm(range(self.node_count), unit = "nodes", desc = "Projecting nodes"):
 
-            # TODO: check that 'edge_embedding_dimensions' should not be 'node_embedding_dimensions'
-            normal_vector = self.normal_vector.weight.data.view(self.edge_count, self.edge_embedding_dimensions)
+            normal_vector = self.normal_vector.weight.data.view(self.edge_count, self.embedding_dimensions)
             mask = tensor([i], device = normal_vector.device).long()
 
             if normal_vector.is_cuda:
@@ -746,14 +748,14 @@ class TransR(TranslationalDecoder):
 
     Arguments
     ---------
-    node_embedding_dimensions: int
-        Dimensions of node embeddings.
-    edge_embedding_dimensions: int
-        Dimensions of edge embeddings.
     node_count: int
         Number of nodes in the knowledge graph.
     edge_count: int
         Number of edges in the knowledge graph.
+    node_embedding_dimensions: int
+        Dimensions of node embeddings.
+    edge_embedding_dimensions: int
+        Dimensions of edge embeddings.
 
     Attributes
     ----------
@@ -779,10 +781,10 @@ class TransR(TranslationalDecoder):
     
     """
     def __init__(self,
-                node_embedding_dimensions: int,
-                edge_embedding_dimensions: int,
                 node_count: int,
-                edge_count: int):
+                edge_count: int,
+                node_embedding_dimensions: int,
+                edge_embedding_dimensions: int):
         
         self.node_count = node_count
         self.edge_count = edge_count
@@ -815,11 +817,11 @@ class TransR(TranslationalDecoder):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             The edge embeddings, of shape [edge_count, edge_embedding_dimensions]
         edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the edges (from KG).
@@ -882,18 +884,18 @@ class TransR(TranslationalDecoder):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             The edge embedding as a ParameterList containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, shape: [batch_size, edge_embedding_dimensions]
             The normalized edges embedding object.
         
         """
@@ -922,12 +924,12 @@ class TransR(TranslationalDecoder):
     
     
     def inference_prepare_candidates(self,
-                                    *, 
-                                    head_indices: Tensor, 
-                                    tail_indices: Tensor, 
-                                    edge_indices: Tensor, 
-                                    node_embeddings: Tensor, 
+                                    *,
+                                    node_embeddings: Tensor,
                                     edge_embeddings: nn.Embedding,
+                                    head_indices: Tensor,
+                                    tail_indices: Tensor,
+                                    edge_indices: Tensor,
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -937,26 +939,26 @@ class TransR(TranslationalDecoder):
 
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             Embeddings of all edges.
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes (from KG).
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes (from KG).
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the edges (from KG).
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             Head node embeddings.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             Tail node embeddings.
-        edge_embeddings_inference: torch.Tensor
+        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             Edge embeddings.
         candidates: torch.Tensor
             Candidate embeddings for nodes or edges.
@@ -968,7 +970,7 @@ class TransR(TranslationalDecoder):
             self.evaluate_projections(node_embeddings)
 
         # TODO: check that, below, all 'edge_embedding_dimensions' should not be 'node_embedding_dimensions'
-        edge_embeddings_inference = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings(edge_indices)
         if node_inference:
             head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: [batch_size, self.edge_embedding_dimensions]
             tail_embeddings = self.projected_nodes[edge_indices, tail_indices]  # shape: [batch_size, self.edge_embedding_dimensions]
@@ -978,7 +980,7 @@ class TransR(TranslationalDecoder):
             tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
             candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, edge_embeddings.num_embeddings, edge_embeddings.embedding_dim)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
 
-        return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
+        return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
     
     
     def evaluate_projections(self,
@@ -991,7 +993,7 @@ class TransR(TranslationalDecoder):
 
         Arguments
         ---------
-        node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
 
         Notes
@@ -1044,14 +1046,14 @@ class TransD(TranslationalDecoder):
 
     Arguments
     ---------
-    node_embedding_dimensions: int
-        Dimensions of node embeddings.
-    edge_embedding_dimensions: int
-        Dimensions of edge embeddings.
     node_count: int
         Number of nodes in the knowledge graph.
     edge_count: int
         Number of edges in the knowledge graph.
+    node_embedding_dimensions: int
+        Dimensions of node embeddings.
+    edge_embedding_dimensions: int
+        Dimensions of edge embeddings.
 
     Attributes
     ----------
@@ -1081,10 +1083,10 @@ class TransD(TranslationalDecoder):
     
     """
     def __init__(self,
-                node_embedding_dimensions: int,
-                edge_embedding_dimensions: int,
                 node_count: int,
-                edge_count: int):
+                edge_count: int,
+                node_embedding_dimensions: int,
+                edge_embedding_dimensions: int):
         
         self.node_count = node_count
         self.edge_count = edge_count
@@ -1120,11 +1122,11 @@ class TransD(TranslationalDecoder):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             The edge embeddings, of shape [edge_count, edge_embedding_dimensions]
         head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the head nodes (from KG).
@@ -1137,7 +1139,7 @@ class TransD(TranslationalDecoder):
         -------
         batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
             The score of each triplet as a tensor.
-            
+        
         """
         head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
@@ -1199,18 +1201,18 @@ class TransD(TranslationalDecoder):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             The edge embedding as a ParameterList containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             The normalized edges embedding object.
         
         """
@@ -1241,12 +1243,12 @@ class TransD(TranslationalDecoder):
     
     
     def inference_prepare_candidates(self,
-                                    *, 
-                                    head_indices: Tensor, 
-                                    tail_indices: Tensor, 
-                                    edge_indices: Tensor, 
-                                    node_embeddings: Tensor, 
+                                    *,
+                                    node_embeddings: Tensor,
                                     edge_embeddings: nn.Embedding,
+                                    head_indices: Tensor,
+                                    tail_indices: Tensor,
+                                    edge_indices: Tensor,
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -1256,26 +1258,26 @@ class TransD(TranslationalDecoder):
 
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             Embeddings of all edges.
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes (from KG).
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes (from KG).
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the edges (from KG).
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             Head node embeddings.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             Tail node embeddings.
-        edge_embeddings_inference: torch.Tensor
+        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             Edge embeddings.
         candidates: torch.Tensor
             Candidate embeddings for nodes or edges.
@@ -1286,7 +1288,7 @@ class TransD(TranslationalDecoder):
         if not self.evaluated_projections:
             self.evaluate_projections(node_embeddings)
 
-        edge_embeddings_inference = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings(edge_indices)
 
         if node_inference:
             head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: [batch_size, self.node_embedding_dimensions]
@@ -1297,7 +1299,7 @@ class TransD(TranslationalDecoder):
             tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
             candidates = self.rel_emb.weight.data.unsqueeze(0).expand(batch_size, self.edge_count, self.edge_embedding_dimensions)  # shape: [batch_size, self.edge_count, self.node_embedding_dimensions]
 
-        return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
+        return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
 
 
     def evaluate_projections(self,
@@ -1310,7 +1312,7 @@ class TransD(TranslationalDecoder):
 
         Arguments
         ---------
-        node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
 
         Notes
@@ -1359,12 +1361,6 @@ class TorusE(TranslationalDecoder):
 
     Arguments
     ---------
-    embedding_dimensions: int
-        Dimensions of embeddings.
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
     dissimilarity_type: Literal["L1", "torus_L1", "torus_L2", "torus_eL2"]
         The type of dissimilarity function that will be used,
         either "L1", "torus_L1", "torus_L2" or "torus_eL2".
@@ -1397,7 +1393,7 @@ class TorusE(TranslationalDecoder):
             case "torus_eL2":
                 self.dissimilarity = el2_torus_dissimilarity
             case _:
-                raise ValueError(f"TorusE decoder can only use L1, torus_L1, torus_L2 or torus_eL2 dissimilarity, but got \"{dissimilarity_type}\"")
+                raise ValueError(f"TorusE decoder can only use `L1`, `torus_L1`, `torus_L2` or `torus_eL2` dissimilarity, but got \"{dissimilarity_type}\"")
 
         self.normalized = False
     
@@ -1416,12 +1412,12 @@ class TorusE(TranslationalDecoder):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
-            The edge embeddings, of shape [edge_count, edge_embedding_dimensions]
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+            Embeddings of edges.
 
         Returns
         -------
@@ -1453,18 +1449,18 @@ class TorusE(TranslationalDecoder):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             The edge embedding as a ParameterList containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             The normalized edges embedding object.
         
         """
@@ -1478,12 +1474,12 @@ class TorusE(TranslationalDecoder):
     
     
     def inference_prepare_candidates(self,
-                                    *, 
-                                    head_indices: Tensor, 
-                                    tail_indices: Tensor, 
-                                    edge_indices: Tensor, 
-                                    node_embeddings: Tensor, 
+                                    *,
+                                    node_embeddings: Tensor,
                                     edge_embeddings: nn.Embedding,
+                                    head_indices: Tensor,
+                                    tail_indices: Tensor,
+                                    edge_indices: Tensor,
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -1493,26 +1489,26 @@ class TorusE(TranslationalDecoder):
 
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
-            The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             Embeddings of all edges.
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes (from KG).
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes (from KG).
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the edges (from KG).
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             Head node embeddings.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             Tail node embeddings.
-        edge_embeddings_inference: torch.Tensor
+        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             Edge embeddings.
         candidates: torch.Tensor
             Candidate embeddings for nodes or edges.
@@ -1527,7 +1523,7 @@ class TorusE(TranslationalDecoder):
 
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
-        edge_embeddings_inference = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings(edge_indices)
 
         if node_inference:
             # Prepare candidates for every node
@@ -1538,4 +1534,4 @@ class TorusE(TranslationalDecoder):
             
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         
-        return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
+        return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates

@@ -49,11 +49,11 @@ class ConvolutionalDecoder(Module):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             The embeddings of the head nodes for the current batch of length `batch_size`.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             The embeddings of the tail nodes for the current batch of length `batch_size`.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             The embeddings of the edges for the current batch of length `batch_size`.
         head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the head nodes for the current batch of length `batch_size`.
@@ -92,18 +92,18 @@ class ConvolutionalDecoder(Module):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, shape: [node_count, embedding_dimensions]
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, shape: [node_count, embedding_dimensions]
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             The edge embedding as a ParameterList containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             The normalized edges embedding object.
         
         Notes
@@ -159,15 +159,15 @@ class ConvolutionalDecoder(Module):
         
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
             Embeddings of all edges.
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
@@ -177,14 +177,14 @@ class ConvolutionalDecoder(Module):
         NotImplementedError
             The inference_prepare_candidates method must be implemented by a convolutional decoder
             inheriting from this interface.
-            
+        
         Returns
         -------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions]
             Head node embeddings.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions]
             Tail node embeddings.
-        edge_embeddings_inference: torch.Tensor
+        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
             Edge embeddings.
         candidates: torch.Tensor
             Candidate embeddings for nodes or edges.
@@ -210,11 +210,11 @@ class ConvolutionalDecoder(Module):
         
         Arguments
         ---------
-        head_embeddings: torch.Tensor, keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, keyword-only
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
             Embeddings of the edges in the knowledge graph.
         
         Raises
@@ -240,7 +240,9 @@ class ConvolutionalDecoder(Module):
 
 class ConvKB(ConvolutionalDecoder):
     """
-    TODO.What_the_class_is_about_globally
+    Implementation of ConvKB model detailed in the paper referenced below.
+    
+    This class inherits from the ConvolutionalDecoder interface. It inherites its attributes as well.
 
     References
     ----------
@@ -263,12 +265,12 @@ class ConvKB(ConvolutionalDecoder):
     
     Attributes
     ----------
-    embedding_dimensions: int
-        Dimensions of embeddings.
     node_count: int
         Number of nodes in the knowledge graph.
     edge_count: int
         Number of edges in the knowledge graph.
+    embedding_dimensions: int
+        Dimensions of embeddings.
     convolution_layer: torch.nn.Sequential
         TODO
     output: torch.nn.Sequential
@@ -276,14 +278,14 @@ class ConvKB(ConvolutionalDecoder):
     
     """
     def __init__(self,
-                embedding_dimensions: int,
-                filter_count: int,
                 node_count: int,
-                edge_count: int):
+                edge_count: int,
+                embedding_dimensions: int,
+                filter_count: int):
         
-        self.embedding_dimensions = embedding_dimensions
         self.node_count = node_count
         self.edge_cont = edge_count
+        self.embedding_dimensions = embedding_dimensions
 
         self.convolution_layer = nn.Sequential(
             nn.Conv1d(3, filter_count, 1, stride = 1),
@@ -294,7 +296,7 @@ class ConvKB(ConvolutionalDecoder):
             nn.Softmax(dim = 1)
         )
 
-        
+    
     def score(  self,
                 *,
                 head_embeddings: Tensor,
@@ -309,11 +311,11 @@ class ConvKB(ConvolutionalDecoder):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             The embeddings of the head nodes for the current batch of length `batch_size`.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             The embeddings of the tail nodes for the current batch of length `batch_size`.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             The embeddings of the edges for the current batch of length `batch_size`.
 
         Returns
@@ -354,26 +356,26 @@ class ConvKB(ConvolutionalDecoder):
         
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: batch_size, keyword-only
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, shape: [node_count, node_embedding_dimensions], keyword-only
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, keyword-only
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
             Embeddings of all edges.
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
-        head_embeddings: torch.Tensor
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions]
             Head node embeddings.
-        tail_embeddings: torch.Tensor
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions]
             Tail node embeddings.
-        edge_embeddings_inference: torch.Tensor
+        edge_embeddings_inferred: torch.Tensor
             Edge embeddings.
         candidates: torch.Tensor
             Candidate embeddings for nodes or edges.
@@ -384,7 +386,7 @@ class ConvKB(ConvolutionalDecoder):
         # Get head, tail and edge embeddings
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
-        edge_embeddings_inference = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings(edge_indices)
 
         if node_inference:
             # Prepare candidates for every node
@@ -396,7 +398,7 @@ class ConvKB(ConvolutionalDecoder):
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         candidates = candidates.view(batch_size, -1, 1, self.embedding_dimensions)
 
-        return head_embeddings, tail_embeddings, edge_embeddings_inference, candidates
+        return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
 
 
     def inference_score(self,
@@ -412,11 +414,11 @@ class ConvKB(ConvolutionalDecoder):
         
         Arguments
         ---------
-        head_embeddings: torch.Tensor, keyword-only
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, keyword-only
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, keyword-only
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
             Embeddings of the edges in the knowledge graph.
         
         Raises
@@ -443,25 +445,25 @@ class ConvKB(ConvolutionalDecoder):
 
         if len(head_embeddings.shape) == 4:
             assert (len(tail_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 2), \
-                "When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions."
+                "When inferring heads, the tensors `tail_embeddings` and `edge_embeddings` must have 2 dimensions."
             concatenation = cat((head_embeddings,
                             edge_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.node_count, 1, self.embedding_dimensions),
                             tail_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.node_count, 1, self.embedding_dimensions)), dim = 2)
 
         elif len(tail_embeddings.shape) == 4:
             assert (len(head_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 2), \
-                "WWhen inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions."
+                "WWhen inferring tails, the tensors `head_embeddings` and `edge_embeddings` must have 2 dimensions."
             concatenation = cat((head_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.node_count, 1, self.embedding_dimensions),
                                 edge_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.node_count, 1, self.embedding_dimensions),
                                 tail_embeddings), dim=2)
         
         elif len(edge_embeddings.shape) == 4:
             assert (len(head_embeddings.shape) == 2) and (len(tail_embeddings.shape) == 2), \
-                "When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions."
+                "When inferring edges, the tensors `head_embeddings` and `tail_embeddings` must have 2 dimensions."
             concatenation = cat((head_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.edge_count, 1, self.embedding_dimensions),
                                 edge_embeddings,
                                 tail_embeddings.view(batch_size, 1, 1, self.embedding_dimensions).expand(batch_size, self.edge_count, 1, self.embedding_dimensions)), dim = 2)
-        # TODO: is a ValueError else needed here?
+        # TODO: is a ValueError within an 'else' needed here?
         concatenation = concatenation.reshape(-1, 3, self.embedding_dimensions)
 
         convolution = self.convolution_layer(concatenation).reshape(concatenation.shape[0], -1)
