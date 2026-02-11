@@ -52,7 +52,9 @@ class TranslationalDecoder(Module):
         See details from torchkge here: https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities
     
     """
-    
+    def __init__(self):
+        super().__init__()
+        
     def score(  self,
                 *,
                 head_embeddings: Tensor,
@@ -268,7 +270,7 @@ class TranslationalDecoder(Module):
                 return - self.dissimilarity(translated_heads, tail_embeddings)
             
             else:
-                assert (len(head_embeddings.shape) == 3) and (len(tail_embeddings) == 2), "When inferring heads, the `head_embeddings` tensor should be of shape [batch_size, node_embedding_dimensions]"
+                assert (len(head_embeddings.shape) == 3) and (len(tail_embeddings.shape) == 2), "When inferring heads, the `head_embeddings` tensor should be of shape [batch_size, node_embedding_dimensions]"
 
                 edges_extended = edge_embeddings.view(batch_size, 1, edge_embeddings.size(1))
                 tails_extended = tail_embeddings.view(batch_size, 1, edge_embeddings.size(1))
@@ -322,7 +324,7 @@ class TransE(TranslationalDecoder):
     
     """
     def __init__(self, dissimilarity_type: Literal["L1", "L2"] = "L2"):
-        
+        super().__init__()
         match dissimilarity_type:
             case "L1":
                 self.dissimilarity = l1_dissimilarity
@@ -500,9 +502,10 @@ class TransH(TranslationalDecoder):
     
     """
     def __init__(self,
+                embedding_dimensions: int,
                 node_count: int,
-                edge_count: int,
-                embedding_dimensions: int):
+                edge_count: int):
+        super().__init__()
         self.normal_vector = initialize_embedding(edge_count, embedding_dimensions)
         self.dissimilarity = l2_dissimilarity
 
@@ -785,7 +788,8 @@ class TransR(TranslationalDecoder):
                 edge_count: int,
                 node_embedding_dimensions: int,
                 edge_embedding_dimensions: int):
-        
+        super().__init__()
+
         self.node_count = node_count
         self.edge_count = edge_count
         self.node_embedding_dimensions = node_embedding_dimensions
@@ -1087,7 +1091,8 @@ class TransD(TranslationalDecoder):
                 edge_count: int,
                 node_embedding_dimensions: int,
                 edge_embedding_dimensions: int):
-        
+        super().__init__()
+
         self.node_count = node_count
         self.edge_count = edge_count
         self.node_embedding_dimensions = node_embedding_dimensions
@@ -1381,8 +1386,9 @@ class TorusE(TranslationalDecoder):
     
     """
     def __init__(self,
-                dissimilarity_type: Literal["L1", "torus_L1", "torus_L2", "torus_eL2"]):
-        
+                 dissimilarity_type: Literal["L1", "torus_L1", "torus_L2", "torus_eL2"]):
+        super().__init__()
+
         match dissimilarity_type:
             case "L1":
                 self.dissimilarity = l1_dissimilarity

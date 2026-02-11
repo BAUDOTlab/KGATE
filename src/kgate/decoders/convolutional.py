@@ -30,6 +30,8 @@ class ConvolutionalDecoder(Module):
     Furthermore, this interface doesn't implement anything but is a type helper.
     
     """
+    def __init__(self):
+        super().__init__()
     
     def score(  self,
                 *,
@@ -282,6 +284,7 @@ class ConvKB(ConvolutionalDecoder):
                 edge_count: int,
                 embedding_dimensions: int,
                 filter_count: int):
+        super().__init__()
         
         self.node_count = node_count
         self.edge_cont = edge_count
@@ -289,7 +292,7 @@ class ConvKB(ConvolutionalDecoder):
 
         self.convolution_layer = nn.Sequential(
             nn.Conv1d(3, filter_count, 1, stride = 1),
-            nn.ReLu()
+            nn.ReLU()
         )
         self.output = nn.Sequential(
             nn.Linear(self.embedding_dimensions * filter_count, 2),

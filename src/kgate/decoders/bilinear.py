@@ -34,7 +34,9 @@ class BilinearDecoder(Module):
     However, functions from this class returning None can be used directly from inheriting classes.
     
     """
-    
+    def __init__(self):
+        super().__init__()
+
     def score(  self,
                 *,
                 head_embeddings: Tensor,
@@ -205,9 +207,9 @@ class BilinearDecoder(Module):
 
     def inference_score(self, 
                         *,
-                        head_embeddings: Tensor,
-                        tail_embeddings: Tensor,
-                        edge_embeddings: Tensor
+                        head_embeddings: Tensor | Tuple,
+                        tail_embeddings: Tensor | Tuple,
+                        edge_embeddings: Tensor | Tuple
                         ) -> Tensor:
         """
         Link prediction evaluation helper function. Compute the scores
@@ -291,6 +293,7 @@ class RESCAL(BilinearDecoder):
                 node_count: int,
                 edge_count: int,
                 embedding_dimensions: int):
+        super().__init__()
         
         self.node_count = node_count
         self.edge_count = edge_count
@@ -557,7 +560,9 @@ class DistMult(BilinearDecoder):
                 node_count: int,
                 edge_count: int,
                 embedding_dimensions: int):
-        
+        super().__init__()
+
+        self.embedding_dimensions = embedding_dimensions
         self.node_count = node_count
         self.edge_count = edge_count
         self.embedding_dimensions = embedding_dimensions
@@ -804,6 +809,8 @@ class ComplEx(BilinearDecoder):
     """
     def __init__(self,
                 embedding_dimensions: int):
+        super().__init__()
+
         self.embedding_dimensions = embedding_dimensions
         self.embedding_spaces = 2
 
@@ -903,7 +910,7 @@ class ComplEx(BilinearDecoder):
         if node_inference:
             real_candidates, imaginary_candidates = tensor_split(node_embeddings, 2, dim = 1)
         else:
-            real_candidates, imaginary_candidates = tensor_split(edge_embeddings, 2, dim = 1)
+            real_candidates, imaginary_candidates = tensor_split(edge_embeddings.weight.data, 2, dim = 1)
         
         real_candidates = real_candidates.unsqueeze(0).expand(batch_size, -1, -1)
         imaginary_candidates = imaginary_candidates.unsqueeze(0).expand(batch_size, -1, -1)
@@ -916,9 +923,9 @@ class ComplEx(BilinearDecoder):
     
     def inference_score(self,
                         *,
-                        head_embeddings: Tensor,
-                        tail_embeddings: Tensor,
-                        edge_embeddings: Tensor
+                        head_embeddings: Tuple[Tensor, Tensor],
+                        tail_embeddings: Tuple[Tensor, Tensor],
+                        edge_embeddings: Tuple[Tensor, Tensor]
                         ) -> Tensor:
         """
         Link prediction evaluation helper function. Compute the scores
@@ -927,12 +934,15 @@ class ComplEx(BilinearDecoder):
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the edges in the knowledge graph.
+        head_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
+            Embeddings of the head nodes in the knowledge graph. 
+            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
+        tail_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
+            Embeddings of the tail nodes in the knowledge graph. 
+            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
+        edge_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
+            Embeddings of the edges in the knowledge graph. 
+            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
 
         Raises
         ------
@@ -956,9 +966,9 @@ class ComplEx(BilinearDecoder):
             Second dimension: tail_indices
         
         """
-        real_head_embeddings, imaginary_head_embeddings = tensor_split(head_embeddings, 2, dim = 1)
-        real_tail_embeddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim = 1)
-        real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim = 1)
+        real_head_embeddings, imaginary_head_embeddings = head_embeddings
+        real_tail_embeddings, imaginary_tail_embeddings = tail_embeddings
+        real_edge_embeddings, imaginary_edge_embeddings = edge_embeddings
         
         batch_size = real_head_embeddings.shape[0]
 

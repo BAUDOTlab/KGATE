@@ -238,7 +238,7 @@ class Architect(Module):
                 self.kg_train, self.kg_validation, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
                 logging.info("Done")
 
-        super().__init__(self.kg_train.node_count, self.kg_train.edge_count)
+        super().__init__()
         # Initialize attributes
         self.encoder: DefaultEncoder | GNN = None
         self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
@@ -346,7 +346,7 @@ class Architect(Module):
 
     def initialize_decoder( self,
                             decoder_name: str = "",
-                            dissimilarity: Literal["L1", "L2", ""] = "",
+                            dissimilarity: Literal["L1", "L2", "torus_L1", "torus_L2", "torus_eL2", ""] = "",
                             margin: int = 0,
                             filter_count: int = 0
                             ) -> Tuple[
@@ -415,29 +415,46 @@ class Architect(Module):
         # Translational models
         match decoder_name:
             case "TransE":
-                decoder = TransE(self.embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count,
-                                    dissimilarity_type = dissimilarity)
+                decoder = TransE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
             case "TransH":
-                decoder = TransH(self.embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
+                decoder = TransH(embedding_dimensions = self.embedding_dimensions,
+                                 node_count = self.kg_train.node_count,
+                                 edge_count = self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransR":
-                decoder = TransR(self.embedding_dimensions, self.edge_embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
+                decoder = TransR(node_embedding_dimensions = self.embedding_dimensions,
+                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
+                                 node_count = self.kg_train.node_count, 
+                                 edge_count = self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransD":
-                decoder = TransD(self.embedding_dimensions, self.edge_embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
+                decoder = TransD(node_embedding_dimensions = self.embedding_dimensions,
+                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
+                                 node_count = self.kg_train.node_count, 
+                                 edge_count = self.kg_train.edge_count)
+                decoder_loss = MarginLoss(margin)
+            case "TorusE":
+                decoder = TorusE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
             case "RESCAL":
-                decoder = RESCAL(self.embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
+                decoder = RESCAL(embedding_dimensions = self.embedding_dimensions,
+                                 node_count = self.kg_train.node_count,
+                                 edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "DistMult":
-                decoder = DistMult(self.embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
+                decoder = DistMult(embedding_dimensions = self.embedding_dimensions,
+                                 node_count = self.kg_train.node_count,
+                                 edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "ComplEx":
-                decoder = ComplEx(self.embedding_dimensions, self.kg_train.node_count, self.kg_train.edge_count)
+                decoder = ComplEx(embedding_dimensions = self.embedding_dimensions)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "ConvKB":
-                decoder = ConvKB(self.embedding_dimensions, filter_count, self.kg_train.node_count, self.kg_train.edge_count)
+                decoder = ConvKB(embedding_dimensions = self.embedding_dimensions, 
+                                 filter_count = filter_count, 
+                                 node_count = self.kg_train.node_count, 
+                                 edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
@@ -616,7 +633,7 @@ class Architect(Module):
                     self.kg_test.graphindices,
                     self.kg_test.removed_triplets
                 ], dim=1)
-                evaluator = LinkPredictionEvaluator(full_graphindices = full_graphindices)
+                evaluator = LinkPredictionEvaluator(full_graphindices = full_graphindices, embedding_dimensions = self.embedding_dimensions)
                 self.validation_metric = "MRR"
             case "Triplet Classification":
                 evaluator = TripletClassificationEvaluator(architect = self,
@@ -1191,6 +1208,7 @@ class Architect(Module):
 
 
     def process_batch(self,
+                    engine: Engine,
                     batch: Tensor
                     ) -> torch.types.Number:
         """
@@ -1259,14 +1277,14 @@ class Architect(Module):
         head_indices, tail_indices, edge_indices = batch[0], batch[1], batch[2]
         
         if isinstance(self.encoder, GNN):
-            seed_nodes = batch[:2].unique()
-            hop_count = self.encoder.layer_count
-            edge_list = kg.edge_list
+            seed_nodes: Tensor = batch[:2].unique()
+            hop_count: int = self.encoder.layer_count
+            edge_list: Tensor = kg.edge_list
             
             _,_,_, edge_mask = k_hop_subgraph(
                 node_idx = seed_nodes,
                 num_hops = hop_count,
-                edge_list = edge_list
+                edge_index = edge_list
                 )
                 
             input = kg.get_encoder_input(kg.graphindices[:, edge_mask].to(self.device), self.node_embeddings)
@@ -1285,7 +1303,7 @@ class Architect(Module):
                 embeddings[index] = encoder_output[node_type]
 
         else:
-            embeddings = self.node_embeddings.weight
+            embeddings = self.node_embeddings[0]
         
         head_embeddings = embeddings[head_indices]
         edge_embeddings = self.edge_embeddings(edge_indices)  # Edges are unchanged
@@ -1656,7 +1674,7 @@ class Architect(Module):
         if not isinstance(self.evaluator, LinkPredictionEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Link Prediction method for {type(self.evaluator)} evaluator.")
 
-        self.evaluator.evaluate(batch_size = self.evaluation_batch_size,
+        head_predictions, tail_predictions = self.evaluator.evaluate(batch_size = self.evaluation_batch_size,
                                 encoder = self.encoder,
                                 decoder = self.decoder,
                                 kg = kg,
@@ -1664,7 +1682,7 @@ class Architect(Module):
                                 edge_embeddings = self.edge_embeddings,
                                 verbose = True)
         
-        test_mrr = self.evaluator.mrr()[1]
+        test_mrr = (head_predictions.mrr[1] + tail_predictions.mrr[1]) / 2
         
         return test_mrr
     
