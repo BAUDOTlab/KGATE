@@ -463,6 +463,8 @@ class TripletClassificationEvaluator:
                 ) -> float:
         
         """
+        TODO.what_that_function_does
+        
         Arguments
         ---------
         batch_size: int

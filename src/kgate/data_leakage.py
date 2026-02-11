@@ -1,3 +1,8 @@
+"""
+Data leakage management, specific to KGATE.
+
+"""
+
 import random
 from collections import Counter
 
@@ -7,19 +12,19 @@ from .knowledgegraph import KnowledgeGraph
 
 
 def permute_tails(kg: KnowledgeGraph,
-                edge_name: str,
+                edge_type: str,
                 preserve_node_degree = True
                 ) -> KnowledgeGraph:
     """
-    Randomly permutes the `tails` for a given edge while maintaining the original degree
+    Randomly permutes the `tails` for a given edge type while maintaining the original degree
     of `heads` and `tails`, ensuring there are no triplets of the form (a, edge, a) where `head == tail`.
 
     Arguments
     ---------
     kg: KnowledgeGraph
         Knowledge graph on which the permutation will be done.
-    edge_name: str
-        The name of the edge for which `tails` should be permuted.
+    edge_type: str
+        The name of the edge type for which `tails` should be permuted.
     preserve_node_degree: bool, optional, default to True
         Whether or not the permuted tails should keep the same node degree.
 
@@ -40,7 +45,7 @@ def permute_tails(kg: KnowledgeGraph,
     triplets_types = kg.triplet_types
 
     index_to_node_type = {value: key for key,value in kg.node_type_to_index.items()}
-    edge_index = kg.edge_to_index[edge_name]
+    edge_index = kg.edge_to_index[edge_type]
 
     # Mask only the target edge
     mask = (kg.edge_indices == edge_index)
@@ -84,7 +89,7 @@ def permute_tails(kg: KnowledgeGraph,
         if len(kg.node_type_to_index) > 1:
             permuted_triplet = (
                     index_to_node_type[node_types[heads_for_this_edge[i]].item()],
-                    edge_name,
+                    edge_type,
                     index_to_node_type[node_types[permuted_tails[i]].item()]
                 )
             # Add it if it doesn't already exist

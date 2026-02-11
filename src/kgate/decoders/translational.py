@@ -1020,7 +1020,7 @@ class TransR(TranslationalDecoder):
             projected_masked_node_embeddings = matmul(projection_matrices, masked_node_embeddings.view(self.node_embedding_dimension))
             projected_masked_node_embeddings = projected_masked_node_embeddings.view(self.edge_count, self.edge_embedding_dimensions, 1)
             self.projected_nodes[:, i, :] = projected_masked_node_embeddings.view(self.edge_count, self.edge_embedding_dimensions)
-            # TODO: comment that projected_nodes equivalent to projected_masked_node_embeddings
+            # projected_nodes is an object equivalent to projected_masked_node_embeddings
 
             del projected_masked_node_embeddings
 

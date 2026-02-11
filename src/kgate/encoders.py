@@ -6,7 +6,7 @@ Collections of encoder classes to embed the graph structure into a latent space.
 import sys
 import logging
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Literal
 
 from tqdm import tqdm
 
@@ -274,15 +274,17 @@ class Node2VecEncoder:
         TODO.What_that_argument_is_or_does
     context_size: int
         TODO.What_that_argument_is_or_does
-    device: torch.device
-        TODO.What_that_argument_is_or_does
+    device: torch.device or Literal["cuda", "cpu"]
+        Indicate if data should be sent to GPU or CPU.
+        GPU is referenced to as Cuda.
     output_directory: Path
         TODO.What_that_argument_is_or_does
 
     Attributes
     ----------
     device: torch.device
-        TODO.What_that_variable_is_or_does
+        Indicate if data should be sent to GPU or CPU.
+        GPU is referenced to as Cuda.
     output_directory: Path
         TODO.What_that_variable_is_or_does
     model: TODO.type
@@ -298,7 +300,7 @@ class Node2VecEncoder:
                 embedding_dimensions: int,
                 walk_length: int,
                 context_size: int,
-                device: torch.device,
+                device: torch.device | Literal["cuda", "cpu"],
                 output_directory: Path,
                 **node2vec_kwargs):
         self.device = device

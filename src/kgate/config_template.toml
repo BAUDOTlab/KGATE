@@ -107,10 +107,11 @@ name = "Adam"
 weight_decay = 0.001
 
 # This is the initial learning rate, which might be modified by a learning rate scheduler (see below)
-learning_rate = 0.001
+# The name must rename unchanged, as it is directly called by PyTorch
+lr = 0.001
 
 [learning_rate_scheduler]
-# The Learning Rate Scheduler is an optional module that alter the learning rate throughout the training.
+# The Learning Rate Scheduler is an optional module that alters the learning rate throughout the training.
 # They follow different patterns following the type of LR scheduler and parameters.
 # learning_rate_scheduler.params are the parameters passed to the LR scheduler. The name of the parameters must be the same
 # as those found in Pytorch's torch.optim.lr_scheduler documentation.
@@ -127,6 +128,7 @@ learning_rate = 0.001
 # - OneCycleLR: Increases the learning rate to a maximum learning rate before reducing it to a minimum.
 # - CyclicLR: Cycles the learning rate between two boundaries with a constant frequency.
 type = ""
+
 [learning_rate_scheduler.params]
 
 

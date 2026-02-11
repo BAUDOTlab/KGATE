@@ -85,7 +85,7 @@ class Architect(Module):
     Attributes
     ----------
     checkpoints_directory: Path
-        TODO.What_that_variable_is_or_does
+        Path to the directory containing checkpoint files.
     config: dict
         The parsed configuration as a python dictionnary.
     decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
@@ -93,15 +93,16 @@ class Architect(Module):
     decoder_loss: MarginLoss or BinaryCrossEntropyLoss
         The loss object.
     device: torch.device
-        TODO.What_that_variable_is_or_does
+        Indicate if data should be sent to GPU or CPU.
+        GPU is referenced to as Cuda.
     edge_embedding_dimensions: int
-        TODO.What_that_variable_is_or_does
-    embedding_dimensions: int
-        TODO.What_that_variable_is_or_does
+        Dimensions of edge embeddings.
+    node_embedding_dimensions: int
+        Dimensions of node embeddings, or both node and edge embeddings if they are confounded.
     encoder: DefaultEncoder or GNN
         Encoder model to embed the nodes.
     evaluation_batch_size: int
-        TODO.What_that_variable_is_or_does
+        Size of an evaluation and inference batch.
     evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
         The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
     kg_test: KnowledgeGraph
@@ -115,31 +116,42 @@ class Architect(Module):
     node_embeddings: nn.ParameterList
         A list containing all embeddings for each node type.
         keys: node type index
-        values: tensors of shape (node_count, embedding_dimensions)
+        values: tensors of shape (node_count, node_embedding_dimensions)
     optimizer: optim.Optimizer
         Initialized optimizer.
-    sampler: torchkge.sampling.NegativeSampler TODO.NegativeSampler_super_class_maybe
+    sampler: NegativeSampler
         Negative sampler.
     scheduler: learning_rate_scheduler.LRScheduler or None
-        TODO.What_that_variable_is_or_does
+        Learning rate scheduler of KGATE.
+        Modules that alter the learning rate throughout the training.
     
     Raises
     ------
-    ValueError
-        If the `config.metadata_csv` file exists but cannot be parsed, or if `kg` is given, but not a tuple of KnowledgeGraph and `config.run_kg_preprocessing` is set to false.
-    TODO.missing_errors
+    InvalidColumnName
+        Pandas error.
+        The metadata dataframe must have columns named "id" and "type".
+    ValueError #1
+        If the file referenced as `metadata_csv` in the config file exists but cannot be parsed.
+    ValueError #2
+        The metadata csv file uses a non supported separator.
+        Supported separators are comma (,), tabulation (    ) and semi-colon (;).
+    ValueError #3
+        If the `run_kg_preprocessing` setting in the config file is set to False,
+        but the knowledge graph `kg` is given but not as a tuple.
+        The knowledge graph must either be preprocessed and given as a tuple (training, validation and test),
+        or `run_kg_preprocessing` must be set to True.
 
     Examples
     --------
     Inline hyperparameter declaration
-    >>> model_params = {"embedding_dimensions": 100, "decoder": {"name":"DistMult"}}
+    >>> model_params = {"node_embedding_dimensions": 100, "decoder": {"name":"DistMult"}}
     >>> sampler_params = {"negative_triplet_count":5}
     >>> run_preprocessing = True
     >>> architect = Architect("/path/to/configuration", model = model_params, sampler = sampler_params, run_kg_preprocessing = run_preprocessing)
 
     Notes
     -----
-    While it is possible to give any part of the configuration, even everything, as kwargs, it is recommended
+    While it is possible to give any part of the configuration as kwargs, even everything, it is strongly recommended
     to use a separated configuration file to ensure reproducibility of training.
     
     """
@@ -177,7 +189,7 @@ class Architect(Module):
         output_directory: Path = Path(self.config["output_directory"])
         # Create output folder if it doesn't exist
         logging.info(f"Output folder: {output_directory}")
-        output_directory.mkdir(parents=True, exist_ok=True)
+        output_directory.mkdir(parents = True, exist_ok = True)
         self.checkpoints_directory: Path = output_directory.joinpath("checkpoints")
 
 
@@ -186,10 +198,10 @@ class Architect(Module):
 
         set_random_seeds(self.config["seed"])
 
-        self.embedding_dimensions: int = self.config["model"]["embedding_dimensions"]
+        self.node_embedding_dimensions: int = self.config["model"]["node_embedding_dimensions"]
         self.edge_embedding_dimensions: int = self.config["model"]["edge_embedding_dimensions"]
         if self.edge_embedding_dimensions == -1:
-            self.edge_embedding_dimensions = self.embedding_dimensions
+            self.edge_embedding_dimensions = self.node_embedding_dimensions
         self.evaluation_batch_size: int = self.config["training"]["evaluation_batch_size"]
 
         if metadata is not None and not set(["id", "type"]).issubset(metadata.keys()):
@@ -200,7 +212,7 @@ class Architect(Module):
         if metadata is None and self.config["metadata_csv"] != "" and Path(self.config["metadata_csv"]).exists():
             for separator in SUPPORTED_SEPARATORS:
                 try:
-                    self.metadata = pd.read_csv(self.config["metadata_csv"], sep=separator, usecols=["type", "id"])
+                    self.metadata = pd.read_csv(self.config["metadata_csv"], sep = separator, usecols = ["type", "id"])
                     break
                 except ValueError:
                     continue
@@ -220,7 +232,7 @@ class Architect(Module):
                 if isinstance(kg, tuple):
                     self.kg_train, self.kg_validation, self.kg_test = kg
                 else:
-                    raise ValueError("Given KG needs to be a tuple of training, validation and test KG if it is preprocessed.")
+                    raise ValueError("The KG needs to be preprocessed and given as a tuple of training, validation and test KG. Otherwise, set `run_kg_preprocessing` to True in the config file.")
             else:
                 logging.info("Loading KG...")
                 self.kg_train, self.kg_validation, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
@@ -245,14 +257,14 @@ class Architect(Module):
 
         Returns
         -------
-        embedding_dimensions: int
-            TODO.What_that_variable_is_or_does
+        node_embedding_dimensions: int
+        Dimensions of node embeddings.
             
         """
         if self.decoder is not None and hasattr(self.decoder, "embedding_spaces"):
-            return self.embedding_dimensions * self.decoder.embedding_spaces
+            return self.node_embedding_dimensions * self.decoder.embedding_spaces
         
-        return self.embedding_dimensions
+        return self.node_embedding_dimensions
 
 
     @property
@@ -262,8 +274,8 @@ class Architect(Module):
 
         Returns
         -------
-        edge_embedding_dimensions: TODO.type
-            TODO.What_that_variable_is_or_does
+        edge_embedding_dimensions: int
+        Dimensions of node embeddings.
             
         """
         if self.decoder is not None and hasattr(self.decoder, "embedding_spaces"):
@@ -374,7 +386,7 @@ class Architect(Module):
         margin: int, optional, default to 0
             Margin to be used with MarginLoss. Unused with bilinear models.
         filter_count: int, optional, default to 0
-            TODO.What_that_argument_is_or_does
+            Number of filters used for convolution.
 
         Raises
         ------
@@ -493,7 +505,7 @@ class Architect(Module):
 
         Returns
         -------
-        negative_sampler: NegativeSampler TODO.NegativeSampler_super_class_maybe
+        negative_sampler: NegativeSampler
             The initialized sampler.
         
         """
@@ -966,7 +978,7 @@ class Architect(Module):
                             "Infrequent_metrics": infrequent_metrics,
                             "Threshold": threshold
                             }
-                
+        
         self.test_results = results
         
         with open(metrics_file, "w") as file:
@@ -1107,7 +1119,7 @@ class Architect(Module):
 
         Raises
         ------
-        Error
+        ValueError
             No best model was found in the checkpoint directory.
             Make sure to run the training first and not rename checkpoint files before running evaluation.
         
@@ -1120,9 +1132,7 @@ class Architect(Module):
         best_model = find_best_model(self.checkpoints_directory)
 
         if not best_model:
-            # TODO: rewrite to clarify between a warning and an error, by raising instead of returning
-            logging.error(f"No best model was found in {self.checkpoints_directory}. Make sure to run the training first and not rename checkpoint files before running evaluation.")
-            return
+            raise ValueError(f"No best model was found in {self.checkpoints_directory}. Make sure to run the training first and not rename checkpoint files before running evaluation.")
         
         logging.info(f"Best model is {self.checkpoints_directory.joinpath(best_model)}")
         checkpoint = self.load_checkpoint(self.checkpoints_directory.joinpath(best_model))
@@ -1333,7 +1343,7 @@ class Architect(Module):
         Raises
         ------
         AssertionError
-            The decoder.normalize_params method should return exactly two elements, the node embedding and the edge embedding.
+            The `decoder.normalize_params` method should return exactly two elements: the node embedding and the edge embedding.
             
         """
         # Some decoders should not normalize parameters or do so in a different way.
@@ -1362,7 +1372,7 @@ class Architect(Module):
         epoch = engine.state.epoch
         train_loss = engine.state.metrics["loss_running_average"]
         validation_metric_value = engine.state.metrics.get("validation_metric_value", 0)
-        learning_rate = self.optimizer.param_groups[0]["learning_rate"]
+        learning_rate = self.optimizer.param_groups[0]["lr"]
 
         self.train_losses.append(train_loss)
         self.validation_metric_value.append(validation_metric_value)
@@ -1378,7 +1388,7 @@ class Architect(Module):
     def clean_memory(self):
         """
         Memory cleaning.
-            
+        
         """
         torch.cuda.empty_cache()
         gc.collect()
@@ -1476,7 +1486,7 @@ class Architect(Module):
         Raises
         ------
         ValueError
-            An edge from edge_name does not exist in the training knowledge graph.
+            An edge from `edge_name` does not exist in the training knowledge graph.
 
         Returns
         -------
@@ -1533,21 +1543,26 @@ class Architect(Module):
         kg: KnowledgeGraph
             Knowledge graph on which the metrics will be calculated.
         edge_indices: List[str]
-            TODO.What_that_argument_is_or_does
+            Indices of edges.
 
         Returns
         -------
         metrics_sum: float
-            TODO.What_that_variable_is_or_does
+            Sum of all individual metrics.
         triplet_count: int
-            TODO.What_that_variable_is_or_does
+            Number of triplets considered.
         individual_metrics: Dict[str, float]
-            TODO.What_that_variable_is_or_does
+            Metrics computed for a single edge.
         group_metrics: float
-            TODO.What_that_variable_is_or_does
-            
+            Global metrics computed for the edge group.
+        
+        Notes
+        -----
+        The metrics calculated here are only the Mean Reciprocal Rank (MRR).
+        More could be implemented in the future.
+        
         """
-        # MRR computed by ponderating for each edge
+        # Mean Reciprocal Rank (MRR) computed by ponderating for each edge
         metrics_sum = 0.0
         triplet_count = 0
         individual_metrics = {} 
@@ -1644,7 +1659,7 @@ class Architect(Module):
         self.evaluator.evaluate(batch_size = self.evaluation_batch_size,
                                 encoder = self.encoder,
                                 decoder = self.decoder,
-                                knowledge_graph = kg,
+                                kg = kg,
                                 node_embeddings = self.node_embeddings, 
                                 edge_embeddings = self.edge_embeddings,
                                 verbose = True)
@@ -1659,7 +1674,7 @@ class Architect(Module):
                                 kg_test: KnowledgeGraph
                                 ) -> float:
         """
-        Triplet Classification evaluation
+        Triplet Classification evaluation.
 
         Arguments
         ---------
@@ -1677,23 +1692,24 @@ class Architect(Module):
         Returns
         -------
         accuracy: float
-            TODO.What_that_variable_is_or_does
+            Accuracy of the triplet classification.
         
         """
         if not isinstance(self.evaluator, TripletClassificationEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Triplet Classification method for {type(self.evaluator)} evaluator.")
         
-        # TODO: bad function call, missing arguments
         self.evaluator.evaluate(batch_size = self.evaluation_batch_size,
-                                knowledge_graph = kg_validation)
+                                kg = kg_validation)
         
-        return self.evaluator.accuracy(self.evaluation_batch_size, kg_test = kg_test)
+        return self.evaluator.accuracy( batch_size = self.evaluation_batch_size,
+                                        kg_test = kg_test,
+                                        kg_validation = kg_validation)
 
 
     def run_data_leakage(self, attributes: Dict[str, pd.DataFrame] = {}):
         """
-        TODO.What_the_function_does_about_globally
-
+        Data leakage evaluation, specific to KGATE.
+        
         Arguments
         ---------
         attributes: Dict[str, pd.DataFrame], optional
@@ -1703,18 +1719,18 @@ class Architect(Module):
         ------
         ValueError
             An edge was not found in the knowledge graph.
-            
+        
         """
-        logging.info("Preparing KG for data leakage evaluation pocedure...")
+        logging.info("Preparing KG for data leakage evaluation procedure...")
         data_leakage_config = self.config["data_leakage"]
 
         kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test])
 
-        for edge in data_leakage_config["permuted_edges"]:
-            if edge not in self.kg_train.edge_to_index:
-                raise ValueError(f"Edge name {edge} was not found in the knowledge graph.")
-            logging.info(f"Permutting tails of edge {edge}")
-            self.kg_train = permute_tails(self.kg_train, edge)
+        for edge_type in data_leakage_config["permuted_edges"]:
+            if edge_type not in self.kg_train.edge_to_index:
+                raise ValueError(f"Edge type {edge_type} was not found in the knowledge graph.")
+            logging.info(f"Permuting tails of edge type {edge_type}")
+            self.kg_train = permute_tails(self.kg_train, edge_type)
 
         self.kg_train, self.kg_validation, self.kg_test = kg.split_kg(split_proportions = self.config["preprocessing"]["split"])
 
