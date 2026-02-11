@@ -250,7 +250,7 @@ class BernoulliNegativeSampler:
     
     def corrupt_batch(  self,
                         batch: torch.LongTensor,
-                        negative_triplet_count = None):
+                        negative_triplet_count: int = 1):
         """
         For each true triplet, produce a corrupted one not different from
         any other true triplet. If `heads` and `tails` are cuda objects,
@@ -262,7 +262,7 @@ class BernoulliNegativeSampler:
             Tensor containing the integer key of heads, tails, edges and triplets
             of the edges in the current batch.
             Here, batch_size is batch.shape[1].
-        negative_triplet_count: int, optional
+        negative_triplet_count: int, optional, default to 1
             Number of negative samples to create from each triplet.
 
         Returns
@@ -284,11 +284,11 @@ class BernoulliNegativeSampler:
         corrupted_head_count = int(mask.sum().item())
 
         negative_triplet_heads[mask == 1] = randint(1,
-                                                    self.node_count,
+                                                    self.knowledge_graph.node_count,
                                                     (corrupted_head_count,),
                                                     device = device)
         negative_triplet_tails[mask == 0] = randint(1,
-                                                    self.node_count,
+                                                    self.knowledge_graph.node_count,
                                                     (batch_size * negative_triplet_count - corrupted_head_count,),
                                                     device = device)
         
@@ -386,7 +386,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
     
     """
     def __init__(self, knowledge_graph: KnowledgeGraph):
-        super.__init__(knowledge_graph)
+        super().__init__(knowledge_graph)
 
         self.possible_heads, self.possible_tails, \
             self.possible_head_count, self.possible_tail_count = self.find_possibilities()
@@ -441,7 +441,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
 
     def corrupt_batch(  self,
                         batch: Tensor,
-                        _: int = 0
+                        _: int = 1
                         ) -> Tensor:
         """
         For each true triplet, produce a corrupted one not different from
@@ -506,7 +506,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
             if len(choices) == 0:
                 # In this case the edge i has never been used with any head
                 # Choose one node at random
-                corrupted_head_index = randint(low = 0, high = self.node_count, size = (1,)).item()
+                corrupted_head_index = randint(low = 0, high = self.knowledge_graph.node_count, size = (1,)).item()
             else:
                 corrupted_head_index = choices[chosen_head[i].item()]
             corrupted_heads.append(corrupted_head_index)
@@ -544,7 +544,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
             if len(choices) == 0:
                 # In this case the edge i has never been used with any tail
                 # Choose one node at random
-                corrupted_tail_index = randint(low = 0, high = self.node_count, size = (1,)).item()
+                corrupted_tail_index = randint(low = 0, high = self.knowledge_graph.node_count, size = (1,)).item()
             else:
                 corrupted_tail_index = choices[chosen_tail[i].item()]
             # If we don't use metadata, there is only 1 node type
@@ -626,7 +626,7 @@ class MixedNegativeSampler:
         
     def corrupt_batch(  self,
                         batch: torch.LongTensor,
-                        negative_triplet_count = None):
+                        negative_triplet_count: int = 1):
         """
         For each true triplet, produce `negative_triplet_count` corrupted ones from the
         Uniform sampler, the Bernoulli sampler and the Positional sampler. If `heads` and `tails` are
@@ -638,7 +638,7 @@ class MixedNegativeSampler:
             Tensor containing the integer key of heads, tails, edges and triplets
             of the edges in the current batch.
             Here, batch_size is batch.shape[1].
-        negative_triplet_count: int, optional, default to None
+        negative_triplet_count: int, optional, default to 1
             Number of negative samples to create from each triplet.
 
         Returns

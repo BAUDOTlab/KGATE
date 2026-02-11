@@ -107,7 +107,7 @@ name = "Adam"
 weight_decay = 0.001
 
 # This is the initial learning rate, which might be modified by a learning rate scheduler (see below)
-learning_rate = 0.001
+lr = 0.001
 
 [learning_rate_scheduler]
 # The Learning Rate Scheduler is an optional module that alter the learning rate throughout the training.

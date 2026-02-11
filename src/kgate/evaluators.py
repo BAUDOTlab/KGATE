@@ -70,14 +70,14 @@ class Predictions:
         message = f"""
         Hit@{k}: {round(self.hit_at_k(k)[0],3)} \t Filtered Hit@{k}: {round(self.hit_at_k(k)[1],3)} 
 
-        MRR: {round(self.mrr()[0],3)} \t Filtered MRR: {round(self.mrr()[1],3)}
+        MRR: {round(self.mrr[0],3)} \t Filtered MRR: {round(self.mrr[1],3)}
 
-        Mean Rank: {int(self.mean_rank()[0])} \t Filtered Mean Rank: {int(self.mean_rank()[1])}
+        Mean Rank: {int(self.mean_rank[0])} \t Filtered Mean Rank: {int(self.mean_rank[1])}
         """
         
         return message
 
-
+    @property
     def mean_rank(self) -> Tuple[float, float]:
         """
         Mean rank metric
@@ -97,7 +97,6 @@ class Predictions:
         filtered_mean_rank_score = self.filtered_true_predictions_rank.float().mean().item()
 
         return mean_rank_score, filtered_mean_rank_score
-    
     
     def hit_at_k(self,
                 k: int = 10
@@ -123,7 +122,7 @@ class Predictions:
         
         return true_prediction_hit, filtered_true_prediction_hit
     
-    
+    @property
     def mrr(self) -> Tuple[float, float]:
         """
         Mean reciprocal rank
@@ -140,8 +139,8 @@ class Predictions:
             TODO.What_that_variable_is_or_does
         
         """
-        mrr = self.true_predictions_rank.float()**(-1).mean().item()
-        filtered_mrr = self.filtered_true_predictions_rank.float()**(-1).mean().item()
+        mrr = (self.true_predictions_rank.float()**(-1)).mean().item()
+        filtered_mrr = (self.filtered_true_predictions_rank.float()**(-1)).mean().item()
 
         return mrr, filtered_mrr
 
@@ -163,7 +162,9 @@ class LinkPredictionEvaluator:
     ---------
     full_graphindices: torch.Tensor
         Tensor of shape [4, triplet_count] containing every true triplet.
-
+    embedding_dimensions: int
+        TODO.What_that_variable_is_or_does 
+        
     Attributes
     ----------
     full_graphindices: torch.Tensor
@@ -171,8 +172,6 @@ class LinkPredictionEvaluator:
     evaluated: bool
         Indicate whether the method LinkPredictionEvaluator.evaluate has already
         been called.
-    kg: KnowledgeGraph
-        Knowledge graph on which the evaluation will be done.
     rank_true_heads: torch.Tensor, shape: [triplet_count], dtype: `torch.int`
         For each fact, this is the rank of the true head when all nodes
         are ranked as possible replacement of the head node. They are
@@ -189,8 +188,9 @@ class LinkPredictionEvaluator:
         case. See referenced paper by Bordes et al. for more information.
 
     """
-    def __init__(self, full_graphindices: Tensor):
+    def __init__(self, full_graphindices: Tensor, embedding_dimensions: int):
         self.full_graphindices = full_graphindices
+        self.embedding_dimensions = embedding_dimensions
         self.evaluated = False
 
 
@@ -198,7 +198,7 @@ class LinkPredictionEvaluator:
                 batch_size: int,
                 encoder: DefaultEncoder | GNN,
                 decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
-                kg: KnowledgeGraph,
+                knowledge_graph: KnowledgeGraph,
                 node_embeddings: nn.ParameterList,
                 edge_embeddings: nn.Embedding,
                 verbose: bool = True):
@@ -213,7 +213,7 @@ class LinkPredictionEvaluator:
             Encoder model to embed the nodes. Deactivated with DefaultEncoder.
         decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
             Decoder model to evaluate.
-        kg: KnowledgeGraph
+        knowledge_graph: KnowledgeGraph
             Knowledge graph on which the evaluation will be done.
         node_embeddings: nn.ParameterList, keyword-only
             A list containing all embeddings for each node type.
@@ -227,19 +227,18 @@ class LinkPredictionEvaluator:
         
         """
         device = edge_embeddings.weight.device
-        use_cuda = edge_embeddings.weight.is_cuda
 
-        self.rank_true_heads = empty(size = (kg.triplet_count,)).long().to(device)
-        self.rank_true_tails = empty(size = (kg.triplet_count,)).long().to(device)
-        self.filtered_rank_true_heads = empty(size = (kg.triplet_count,)).long().to(device)
-        self.filtered_rank_true_tails = empty(size = (kg.triplet_count,)).long().to(device)
+        self.rank_true_heads = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
+        self.rank_true_tails = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
+        self.filtered_rank_true_heads = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
+        self.filtered_rank_true_tails = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
 
-        dataloader = DataLoader(kg, batch_size = batch_size)
-        graphindices = kg.graphindices.to(device)
+        dataloader = DataLoader(knowledge_graph, batch_size = batch_size)
+        graphindices = knowledge_graph.graphindices.to(device)
         if decoder is not None and hasattr(decoder,"embedding_spaces"):
-            encoder_node_embedding_dimensions = decoder.emb_dim * decoder.embedding_spaces
+            encoder_node_embedding_dimensions: int = self.embedding_dimensions * decoder.embedding_spaces
         else:
-            encoder_node_embedding_dimensions = decoder.emb_dim
+            encoder_node_embedding_dimensions: int = self.embedding_dimensions
 
         for i, batch in tqdm(enumerate(dataloader),
                             total = len(dataloader),
@@ -250,9 +249,9 @@ class LinkPredictionEvaluator:
             head_index, tail_index, edge_index = batch[0], batch[1], batch[2]
 
             if isinstance(encoder, GNN):
-                seed_nodes = batch[:2].unique()
-                hop_count = encoder.n_layers
-                edge_list = kg.edge_list
+                seed_nodes: Tensor = batch[:2].unique()
+                hop_count: int = encoder.layer_count
+                edge_list: Tensor = knowledge_graph.edge_list
 
                 _, _, _, edge_mask = k_hop_subgraph(
                     node_idx = seed_nodes,
@@ -260,27 +259,31 @@ class LinkPredictionEvaluator:
                     edge_index = edge_list
                     )
                 
-                input = kg.get_encoder_input(graphindices[:, edge_mask], node_embeddings)
+                input = knowledge_graph.get_encoder_input(graphindices[:, edge_mask], node_embeddings)
                 encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
                 
-                node_embeddings: torch.Tensor = torch.zeros((kg.node_count,
+                evaluation_node_embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count,
                                                             encoder_node_embedding_dimensions),
                                                             device = device,
                                                             dtype = torch.float)
 
                 for node_type, index in input.mapping.items():
-                    node_embeddings[index] = encoder_output[node_type]
+                    evaluation_node_embeddings[index] = encoder_output[node_type]
             else:
-                node_embeddings = node_embeddings[0].data
+                evaluation_node_embeddings = node_embeddings[0].data
 
-            head_embeddings, tail_embeddings, edge_embeddings, candidates = decoder.inference_prepare_candidates(head_indices = head_index, 
+            head_embeddings, tail_embeddings, inference_edge_embeddings, candidates = decoder.inference_prepare_candidates(head_indices = head_index, 
                                                                                                                 tail_indices = tail_index, 
                                                                                                                 edge_indices = edge_index, 
-                                                                                                                node_embeddings = node_embeddings, 
+                                                                                                                node_embeddings = evaluation_node_embeddings, 
                                                                                                                 edge_embeddings = edge_embeddings,
                                                                                                                 node_inference = True)
 
-            scores = decoder.inference_score(head_embeddings, candidates, edge_embeddings)
+            scores = decoder.inference_score(
+                head_embeddings = head_embeddings, 
+                tail_embeddings = candidates, 
+                edge_embeddings = inference_edge_embeddings
+                )
             filtered_scores = filter_scores(
                 scores = scores, 
                 graphindices = self.full_graphindices.to(device),
@@ -292,7 +295,10 @@ class LinkPredictionEvaluator:
             self.rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(scores, tail_index).detach()
             self.filtered_rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(filtered_scores, tail_index).detach()
 
-            scores = decoder.inference_score(candidates, tail_embeddings, edge_embeddings)
+            scores = decoder.inference_score(
+                head_embeddings = candidates,
+                tail_embeddings = tail_embeddings,
+                edge_embeddings = inference_edge_embeddings)
             filtered_scores = filter_scores(
                 scores = scores, 
                 graphindices = self.full_graphindices.to(device),
@@ -306,7 +312,7 @@ class LinkPredictionEvaluator:
 
         self.evaluated = True
 
-        head_predictions = Predictions(self.rank_true_heads.cpu(), self.filtered_rank_true_heads.cup())
+        head_predictions = Predictions(self.rank_true_heads.cpu(), self.filtered_rank_true_heads.cpu())
         tail_predictions = Predictions(self.rank_true_tails.cpu(), self.filtered_rank_true_tails.cpu())
 
         return head_predictions, tail_predictions
@@ -401,8 +407,7 @@ class TripletClassificationEvaluator:
         small_kg = SmallKG(heads, tails, edges)
         if self.is_cuda:
             dataloader = DataLoader(small_kg,
-                                    batch_size = batch_size,
-                                    use_cuda = "batch")
+                                    batch_size = batch_size)
         else:
             dataloader = DataLoader(small_kg,
                                     batch_size = batch_size)
