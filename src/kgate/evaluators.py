@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 from .decoders import BilinearDecoder, ConvolutionalDecoder, TranslationalDecoder
 from .encoders import GNN, DefaultEncoder
 from .knowledgegraph import KnowledgeGraph
-from .samplers import PositionalNegativeSampler
+from .samplers import NegativeSampler, PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .utils import filter_scores
 
 
@@ -44,16 +44,18 @@ class Predictions:
     Arguments
     ---------
     true_predictions_rank: torch.Tensor
-        TODO.What_that_argument_is_or_does
+        Among the ranking of all predictions, the rank of the true result.
     filtered_true_predictions_rank: torch.Tensor
-        TODO.What_that_argument_is_or_does
+        Among the ranking of all filtered predictions, the rank of the true result.
+        True triplets that are not the target of the prediction are filtered out.
 
     Attributes
     ----------
     true_predictions_rank: torch.Tensor
-        TODO.What_that_argument_is_or_does
+        Among the ranking of all predictions, the rank of the true result.
     filtered_true_predictions_rank: torch.Tensor
-        TODO.What_that_argument_is_or_does
+        Among the ranking of all filtered predictions, the rank of the true result.
+        True triplets that are not the target of the prediction are filtered out.
     
     
     """
@@ -87,9 +89,12 @@ class Predictions:
         Returns
         -------
         mean_rank_score: float
-            TODO.What_that_variable_is_or_does
+            Mean value of `true_predictions_rank` scores.
+            Among the ranking of all predictions, `true_predictions_rank` is the rank of the true result.
         filtered_mean_rank_score: float
-            TODO.What_that_variable_is_or_does
+            Mean value of `filtered_true_predictions_rank` scores.
+            Among the ranking of all predictions, `filtered_true_predictions_rank` is the rank of the true result.
+            True triplets that are not the target of the prediction are filtered out.
         
         """
         mean_rank_score = self.true_predictions_rank.float().mean().item()
@@ -112,9 +117,10 @@ class Predictions:
         Returns
         -------
         true_prediction_hit: float
-            TODO.What_that_variable_is_or_does
+            Frequence at which the true triplet is within the k first predictions.
         filtered_true_prediction_hit: float
-            TODO.What_that_variable_is_or_does
+            Frequence at which the true triplet is within the k first predictions, when ranking among filtered triplets.
+            True triplets that are not the target of the prediction are filtered out.
         
         """
         true_prediction_hit = (self.true_predictions_rank <= k).float().mean().item()
@@ -132,11 +138,14 @@ class Predictions:
         Returns
         -------
         mrr: float
-            TODO.What_that_variable_is_or_does
             Inverse of the position of the true triplet prediction.
             If the true triplet is predicted in 100th position, then mrr = 0.01
+            Perfect score is 1.
         filtered_mrr: float
-            TODO.What_that_variable_is_or_does
+            Inverse of the position of the true triplet filtered prediction.
+            If the true triplet is predicted in 100th position, then mrr = 0.01
+            Perfect score is 1.
+            True triplets that are not the target of the prediction are filtered out.
         
         """
         mrr = (self.true_predictions_rank.float()**(-1)).mean().item()
@@ -163,7 +172,7 @@ class LinkPredictionEvaluator:
     full_graphindices: torch.Tensor
         Tensor of shape [4, triplet_count] containing every true triplet.
     embedding_dimensions: int
-        TODO.What_that_variable_is_or_does 
+        Dimensions of embeddings.
         
     Attributes
     ----------
@@ -201,7 +210,8 @@ class LinkPredictionEvaluator:
                 knowledge_graph: KnowledgeGraph,
                 node_embeddings: nn.ParameterList,
                 edge_embeddings: nn.Embedding,
-                verbose: bool = True):
+                verbose: bool = True
+                ) -> Tuple[Predictions, Predictions]:
         """
         Run the Link Prediction evaluation.
 
@@ -224,6 +234,13 @@ class LinkPredictionEvaluator:
         verbose: bool
             Indicate whether a progress bar should be displayed during
             evaluation.
+        
+        Returns
+        -------
+        head_predictions: Predictions
+            Predictions for heads.
+        tail_predictions: Predictions
+            Predictions for tails.
         
         """
         device = edge_embeddings.weight.device
@@ -347,14 +364,15 @@ class TripletClassificationEvaluator:
         Knowledge graph on which the validation thresholds will be computed.
     kg_test: KnowledgeGraph
         Knowledge graph on which the evaluation will be done.
-    is_cuda: str, default to "cuda"
-        TODO.What_that_variable_is_or_does
+    device: str, "cuda" or "cpu", default to "cuda"
+        Indicate if data should be sent to GPU or CPU.
+        GPU is referenced to as Cuda.
     evaluated: bool, default to False
         Indicate whether the `evaluate` function has already been called.
     thresholds: float
         Value of the thresholds for the scoring function to consider a
         triplet as true. It is defined by calling the `evaluate` method.
-    sampler: torchkge.sampling.NegativeSampler TODO.NegativeSampler_super_class_maybe
+    sampler: torchkge.sampling.NegativeSampler
         Negative sampler.
 
     """
@@ -366,11 +384,13 @@ class TripletClassificationEvaluator:
         self.architect = architect
         self.kg_validation = kg_validation
         self.kg_test = kg_test
-        self.is_cuda = self.architect.device.type == "cuda"
+        self.device = self.architect.device.type == "cuda"
 
         self.evaluated = False
         self.thresholds = None
 
+        # PositionalNegativeSampler specifically as done in TorchKGE
+        # following the original paper: https://nlp.stanford.edu/pubs/SocherChenManningNg_NIPS2013.pdf
         self.sampler = PositionalNegativeSampler(self.kg_validation)
 
 
