@@ -25,8 +25,12 @@ from .utils import get_bernoulli_probabilities
 
 class NegativeSampler:
     """
-    This class is a simple interface to ease typing and use of negative samplers.
-    TODO
+    Interface for negative samplers of KGATE.
+
+    The interface doesn't have an __init__ method as inheriting samplers are supposed
+    to take care of their initialization.
+
+    Furthermore, this interface doesn't implement anything but is a type helper.
     
     """
     
@@ -35,16 +39,36 @@ class NegativeSampler:
                         negative_triplet_count = None
                         ) -> Tensor:
         """
-        TODO
-    
+        For each true triplet, produce a corrupted one not different from
+        any other true triplet. If `heads` and `tails` are cuda objects,
+        then the returned tensors are on the GPU.
+
+        Arguments
+        ---------
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the integer key of heads, tails, edges and triplets
+            of the edges in the current batch.
+            Here, batch_size is batch.shape[1].
+        negative_triplet_count: int, optional, default to None
+            Number of negative samples to create from each triplet. If None, self.negative_triplet_count is used.
+
+        Raises
+        ------
+        NotImplementedError
+            The `corrupt_batch` method must be implemented by a negative sampler
+            inheriting from this interface.
+        
         """
-        raise NotImplementedError()
+        raise NotImplementedError("The `corrupt_batch` method must be implemented by the negative sampler.")
 
 
 
-class UniformNegativeSampler:
+class UniformNegativeSampler(NegativeSampler):
     """
+    This class inherits from the NegativeSampler interface.
+    
     TODO.What_the_class_is_about_globally
+    
     For each edge, choose simultenously head and tail from Bernoulli random distribution.
     
     Check that no true triplet is created by accident.
@@ -76,8 +100,6 @@ class UniformNegativeSampler:
         Number of negative samples to create from each triplet.
     node_count: int
         Number of nodes.
-    
-    TODO.inherited_attributes
     
     """
     def __init__(self,
@@ -171,9 +193,12 @@ class UniformNegativeSampler:
 
 
 
-class BernoulliNegativeSampler:
+class BernoulliNegativeSampler(NegativeSampler):
     """
+    This class inherits from the NegativeSampler interface.
+    
     TODO.What_the_class_is_about_globally
+    
     For each edge, choose head from Bernoulli random distribution, then tail from Bernoulli random distribution.
     
     Check that no true triplet is created by accident.
@@ -207,7 +232,6 @@ class BernoulliNegativeSampler:
         Number of nodes.
     bernoulli_probabilities: torch.Tensor, dtype: torch.float, shape: [edge_count]
         Tensor containing the probabilities of sampling a head for each edge.
-    TODO.inherited_attributes
     
     """
     def __init__(self,
@@ -334,6 +358,8 @@ class BernoulliNegativeSampler:
 
 class PositionalNegativeSampler(BernoulliNegativeSampler):
     """
+    This class inherits from the BernoulliNegativeSampler class. It inherites its attributes as well.
+    
     Adaptation of torchKGE's PositionalNegativeSampler to KGATE's graphindices format.
 
     Either the head or the tail of a triplet is replaced by another node
@@ -374,7 +400,8 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         Number of nodes.
     bernoulli_probabilities: torch.Tensor, dtype: torch.float, shape: [edge_count]
         Tensor containing the probabilities of sampling a head for each edge.
-    TODO.inherited_attributes
+    negative_triplet_count: int
+        Number of negative samples to create from each triplet.
     
     Notes
     -----
@@ -573,8 +600,10 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
 
 
 
-class MixedNegativeSampler:
+class MixedNegativeSampler(NegativeSampler):
     """
+    This class inherits from the NegativeSampler class.
+    
     A custom negative sampler that combines the BernoulliNegativeSampler, the UniformNegativeSampler
     and the PositionalNegativeSampler. 
     
@@ -595,12 +624,11 @@ class MixedNegativeSampler:
         Number of negative samples to create from each triplet.
         Inherited attribute, equivalent to negative_triplet_count.
     uniform_sampler: UniformNegativeSampler
-        TODO.what_that_variable_is_or_does
+        Initialization of the UniformNegativeSampler class as an attribute.
     bernoulli_sampler: BernoulliNegativeSampler
-        TODO.what_that_variable_is_or_does
+        Initialization of the BernoulliNegativeSampler class as an attribute.
     positional_sampler: PositionalNegativeSampler
-        TODO.what_that_variable_is_or_does
-    TODO.inherited_attributes
+        Initialization of the PositionalNegativeSampler class as an attribute.
     
     Notes
     -----

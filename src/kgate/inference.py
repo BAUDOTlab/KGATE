@@ -18,6 +18,9 @@ from .utils import filter_scores
 class Inference_KG(Dataset):
     """
     TODO.What_the_class_is_about_globally
+    
+    This class inherits from the PyTorch `utils.data.Dataset` class:
+    https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html
 
     References
     ----------

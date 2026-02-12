@@ -41,10 +41,6 @@ class DefaultEncoder(nn.Module):
 class GNN(nn.Module):
     """
     Interface for graph neural networks encoders of KGATE.
-
-    Furthermore, this interface doesn't implement anything but is a type helper.
-    However, functions from this class returning None can be used directly from inheriting classes.
-    Exception for the inference_score function, fully implemented in this class.
     
     This interface inherits from the PyTorch `nn.module` class:
     https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html
@@ -72,8 +68,8 @@ class GNN(nn.Module):
     """
     def __init__(self,
                 edge_types: List[Tuple[str, str, str]],
-                aggregation: Literal["sum", "mean", "min", "max", "cat", None] = "sum"):
-        
+                aggregation: Literal["sum", "mean", "min", "max", "cat", None] = "sum"
+                ):
         super().__init__()
         
         self.device = "cuda"
