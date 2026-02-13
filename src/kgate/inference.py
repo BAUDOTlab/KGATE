@@ -22,10 +22,6 @@ class Inference_KG(Dataset):
     This class inherits from the PyTorch `utils.data.Dataset` class:
     https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html
 
-    References
-    ----------
-    TODO
-
     Arguments
     ---------
     first_index_tensor: torch.Tensor
@@ -49,7 +45,8 @@ class Inference_KG(Dataset):
     Notes
     -----
     Either both tensors are nodes, or they are node and edge.
-    TODO.explain_getitem
+    The `__getitem__` method makes the `Inference_KG` object behave like a Python list when you try to
+    get items from it using square brackets, allowing calls like `inference_kg = Inference_KG(head_indices, tail_indices)`
     
     """
     def __init__(self,
@@ -105,10 +102,6 @@ class EdgeInference:
         """
         TODO.What_the_function_does_about_globally
 
-        References
-        ----------
-        TODO
-
         Arguments
         ---------
         head_indices: torch.Tensor
@@ -134,10 +127,10 @@ class EdgeInference:
 
         Returns
         -------
-        predictions: TODO.type
+        predictions: torch.Tensor
             TODO.What_that_variable_is_or_does
-        scores: TODO.type
-            Tensor of shape [batch_size, n] with -Inf values for all true node/edge index except the ones being predicted.
+        scores: torch.Tensor, shape [batch_size, n]
+            Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
             
         """
         with torch.no_grad():
@@ -228,10 +221,6 @@ class NodeInference:
         """
         TODO.What_the_function_does_about_globally
 
-        References
-        ----------
-        TODO
-
         Arguments
         ---------
         node_indices: torch.Tensor
@@ -260,10 +249,10 @@ class NodeInference:
 
         Returns
         -------
-        predictions: TODO.type
+        predictions: torch.Tensor
             TODO.What_that_variable_is_or_does
-        scores: TODO.type
-            TODO.What_that_variable_is_or_does
+        scores: torch.Tensor, shape [batch_size, n]
+            Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
             
         """
         with torch.no_grad():
