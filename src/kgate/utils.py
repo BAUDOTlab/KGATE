@@ -36,11 +36,9 @@ def parse_config(config_path: str,
                 config_dictionnary: dict
                 ) -> dict:
     """
-    TODO.What_the_function_does_about_globally
-    
-    References
-    ----------
-    TODO
+    Parse the configuration file and cross it with default and inline configurations to determine what
+    each parameter must be. For each parameter, the final parsed configuration will include in
+    priority order: inline configuration, configuration file, default configuration.
     
     Arguments
     ---------
@@ -81,7 +79,9 @@ def parse_config(config_path: str,
     # 2. Configuration file (config)
     # 3. Default configuration (default_config)
     # If a default value is None, consider it required and not defaultable
-    config = {key: set_config_key(key, default_config, config, config_dictionnary) for key in default_config}
+    config = {  key: set_config_key(key, default_config, config, config_dictionnary)
+                for key
+                in default_config}
 
     return config
 
@@ -92,11 +92,8 @@ def set_config_key( key: str,
                     inline: dict | None = None
                     ) -> str | int | list | dict:
     """
-    TODO.What_the_function_does_about_globally
-
-    References
-    ----------
-    TODO
+    For a specific parameter, a 'key', compare default, inline and user-made configurations to give
+    the key value with priority order: inline configuration, configuration file, default configuration.
 
     Arguments
     ---------
@@ -114,12 +111,16 @@ def set_config_key( key: str,
 
     Returns
     -------
-    inline_value: TODO.type
-        TODO.What_that_variable_is_or_does
-    config_value: TODO.type
-        TODO.What_that_variable_is_or_does
-    default[key]: TODO.type
-        TODO.What_that_variable_is_or_does
+    inline_value: str or int or float or List or dict or None
+        Value of the key given by the user in command line.
+        Can only be of types dict and List within the recursive call.
+    config_value: str or int or float or List or dict or None
+        Value of the key from the configuration file.
+        Can only be of types dict and List within the recursive call.
+    default[key]: str or int or float or List or dict or None
+        Value of the key from the default configuration file.
+        Can only be of types dict and List within the recursive call.
+        
     
     """
     if inline is not None and key in inline:
@@ -144,22 +145,19 @@ def set_config_key( key: str,
             # If they exist, keys are taken from inline inputs
             keys += (list(inline_value.keys()))
         for child_key in set(keys):
-            new_value.update({child_key: set_config_key(child_key, default[key], config_value,  inline_value)})
+            new_value.update({child_key: set_config_key(child_key, default[key], config_value, inline_value)})
         return new_value
     
     # Return the key value in priority from: inline, config, default
-    # TODO: invert conditions, starting with 'if inline_value is not None:', for lisibility
-    if inline_value is None:
-        if config_value is None:
-            if default[key] is None:
-                raise ValueError(f"Parameter {key} is required but not set without a default value.")
-            else:
-                logging.info(f"No value set for parameter {key}. Defaulting to {default[key]}")
-                return default[key]
-        else:
-            return config_value
-    else:
+    if inline_value is not None:
         return inline_value
+    elif config_value is not None:
+        return config_value
+    elif default[key] is not None:
+        logging.info(f"No value set for parameter {key}. Defaulting to {default[key]}")
+        return default[key]
+    else:
+        raise ValueError(f"Parameter {key} is required but not set without a default value.")
 
 
 def save_config(config: dict,
@@ -219,7 +217,9 @@ def set_random_seeds(seed: int) -> None:
     Arguments
     ---------
     seed: int
-        TODO.What_that_argument_is_or_does
+        Value determining the random.
+        When KGATE run with the same data and configuration with the
+        same random seeds twice, it should give the exact same result twice.
     
     """
     random.seed(seed)
@@ -350,7 +350,8 @@ def count_triplets( kg1: "KnowledgeGraph",
                     reverse_duplicates: List[Tuple[int, int]]
                     ) -> Tuple[int, int]:
     """
-    TODO.What_the_function_does_about_globally
+    Give the number of triplets that have duplicates ([head,edge,tail] = [head,edge,tail])
+    and the number of triplets that have reverse duplicates ([head,edge,tail] = [tail,edge,head]).
     
     Arguments
     ---------
@@ -398,32 +399,37 @@ def count_triplets( kg1: "KnowledgeGraph",
     return duplicate_count, reverse_duplicate_count
 
 
-def find_best_model(dir: Path):
+def find_best_model(dir: Path) -> Path:
     """
-    TODO.What_the_function_does_about_globally
+    Find all files having a model and compare their `validation_metrics` score
+    to return the path to the file with the best result.
     
     Arguments
     ---------
     dir: Path
-        TODO.What_that_argument_is_or_does
-        
+        Path to the directory containing the model files.
+    
     Returns
     -------
-    TODO.result_name: TODO.type
-        TODO.What_that_variable_is_or_does
+    best_model_path: path
+        Path to the file with the best model
 
     """
-    return max(
-        (filename
-        for filename
-        in os.listdir(dir)
-        if filename.startswith("best_model_checkpoint_validation_metrics=")
-        and filename.endswith(".pt")),
-        
-        key = lambda filename: float(filename.split("validation_metrics=")[1].rstrip(".pt")),
-        
-        default = None
-    )
+    
+    best_model = max(
+                    (filename
+                    for filename
+                    in os.listdir(dir)
+                    if filename.startswith("best_model_checkpoint_validation_metrics=")
+                    and filename.endswith(".pt")),
+
+                    key = lambda filename: float(filename.split("validation_metrics=")[1].rstrip(".pt")),
+
+                    default = None
+                    )
+    best_model_path = Path(best_model)
+    
+    return best_model_path
     
     
 def initialize_embedding(embedding_count: int,
@@ -431,21 +437,25 @@ def initialize_embedding(embedding_count: int,
                         device: str = "cpu"
                         ) -> nn.Embedding:
     """
-    TODO.What_the_function_does_about_globally
+    Initialize embeddings with number of nodes/edges and embedding dimensions.
+    
+    Use of a Xavier uniform distribution.
+    See PyTorch documentation: https://docs.pytorch.org/docs/stable/nn.init.html#torch.nn.init.xavier_uniform_
     
     Arguments
     ---------
     embedding_count: int
-        TODO.What_that_argument_is_or_does
+        Number of nodes/edges in the embedding.
     embedding_dimensions: int
-        TODO.What_that_argument_is_or_does
-    device: str, default to "cpu"
-        TODO.What_that_argument_is_or_does
+        Dimensions of embeddings.
+    device: str, "cuda" or "cpu", default to "cpu"
+        Indicate if data should be sent to GPU or CPU.
+        GPU is referenced to as Cuda.
         
     Returns
     -------
     embedding: nn.Embedding
-        TODO.What_that_variable_is_or_does
+        Embedding object with given parameters.
     
     """
     embedding = nn.Embedding(embedding_count, embedding_dimensions, device = device)
@@ -457,17 +467,17 @@ def initialize_embedding(embedding_count: int,
 def read_train_metrics(train_metrics_file: Path
                         ) -> pd.DataFrame:
     """
-    TODO.What_the_function_does_about_globally
+    Extract the data from a train metrics file into a dataframe.
     
     Arguments
     ---------
     train_metrics_file: Path
-        TODO.What_that_argument_is_or_does
+        Path to the directory with the train metrics file.
         
     Returns
     -------
     dataframe: pd.DataFrame
-        TODO.What_that_variable_is_or_does
+        Data extracted from the train metrics file.
     
     """
     dataframe = pd.read_csv(train_metrics_file)
@@ -486,14 +496,14 @@ def plot_learning_curves(train_metrics_file: Path,
                         output_directory: Path,
                         validation_metric_value: str):
     """
-    TODO.What_the_function_does_about_globally
+    Generate plots of loss and validation metric.
     
     Arguments
     ---------
     train_metrics_file: Path
-        TODO.What_that_argument_is_or_does
+        Path to the directory with the train metrics file.
     output_directory: Path
-        TODO.What_that_argument_is_or_does
+        Path to the directory where to save the plot files.
     validation_metric_value: str
         TODO.What_that_argument_is_or_does
     
@@ -736,7 +746,7 @@ def get_bernoulli_probabilities(knowledge_graph: "KnowledgeGraph"
     Raises
     ------
     AssertionError
-        TODO.errors
+        The edges between `heads_per_tail` and `tails_per_edge` must correspond.
     
     Returns
     -------

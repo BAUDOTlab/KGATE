@@ -9,7 +9,7 @@ import logging
 from collections import defaultdict
 from itertools import combinations
 from math import ceil
-from typing import Self, Dict, Tuple, List, Set
+from typing import Self, Dict, Tuple, List, Set, Literal
 
 import numpy as np
 import pandas as pd
@@ -36,10 +36,6 @@ logging.basicConfig(
 class EncoderInput:
     """
     TODO.What_the_class_is_about_globally
-
-    References
-    ----------
-    TODO
 
     Arguments
     ---------
@@ -105,11 +101,7 @@ class EncoderInput:
 
 class KnowledgeGraph(Dataset):
     """
-    TODO.What_the_class_is_about_globally
-
-    References
-    ----------
-    TODO
+    The main object of KGATE: the knowledge graph.
 
     Arguments
     ---------
@@ -144,7 +136,7 @@ class KnowledgeGraph(Dataset):
         TODO.What_that_variable_is_or_does
     node_type_to_index: Dict[str, int]
         TODO.What_that_variable_is_or_does
-    removed_triplets: torch.Tensor
+    removed_triplets: torch.Tensorm [4, triplet_count]
         TODO.What_that_variable_is_or_does
     triplet_count: int
         TODO.What_that_variable_is_or_does
@@ -502,7 +494,7 @@ class KnowledgeGraph(Dataset):
         Returns
         -------
         dataframe: pd.DataFrame
-            TODO.What_that_variable_is_or_does
+            Dataframe with columns ['head', 'tail', 'edge'].
         
         """
         index_to_node = {value: key for key, value in self.node_to_index.items()}
@@ -525,25 +517,22 @@ class KnowledgeGraph(Dataset):
                 sizes: Tuple[int, int, int] | None = None
                 ) -> Tuple[Self, Self, Self]:
         """
-        TODO.What_the_function_does_about_globally
-
-        References
-        ----------
-        TODO
+        Split a knowledge graph into 3 subsets: train, validation, test
 
         Arguments
         ---------
-        split_proportions: Tuple[float, float, float], default to (0.8, 0.1, 0.1)
-            TODO.What_that_argument_is_or_does
+        split_proportions: Tuple[float, float, float], optional, default to (0.8, 0.1, 0.1)
+            Proportions of the given knowledge graph data that must be attributed
+            respectively to the subsets train, validation and test.
         sizes: Tuple[int, int, int], optional, default to None
-            TODO.What_that_argument_is_or_does
+            Sizes of respectively to the subsets train, validation and test.
 
         Raises
         ------
-        TODO.error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
-        TODO.error_name
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        AssertionError #1
+            The sum of provided sizes must match the number of triplets.
+        AssertionError #2
+            The sum of provided shares (`split_proportions`) must be equal to 1.
 
         Returns
         -------
@@ -593,35 +582,34 @@ class KnowledgeGraph(Dataset):
         )
             
             
-    def get_mask(self, split_proportions):
+    def get_mask(self,
+                split_proportions: Tuple[float, float, float]
+                ) -> Tuple[Tensor, Tensor, Tensor]:
         """
         TODO.What_the_function_does_about_globally
 
-        References
-        ----------
-        TODO
-
         Arguments
         ---------
-        split_proportions: TODO.type
-            TODO.What_that_argument_is_or_does
+        split_proportions: Tuple[float, float, float]
+            Proportions of the given knowledge graph data that must be attributed
+            respectively to the subsets train, validation and test.
 
         Raises
         ------
         AssertionError #1
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+            The size of the mask subset must correspond to the number of unique edges.
         AssertionError #2
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+            The sum of train, validation and test sets sizes mus correspond to the mask subset size.
         AssertionError #3
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+            The train mask subset and the validation mask subset must not have any common item.
 
         Returns
         -------
-        TODO.result_name: TODO.type
+        train_mask: torch.Tensor
             TODO.What_that_variable_is_or_does
-        TODO.result_name: TODO.type
+        validation_mask: torch.Tensor
             TODO.What_that_variable_is_or_does
-        TODO.result_name: TODO.type
+        test_mask: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
@@ -665,7 +653,10 @@ class KnowledgeGraph(Dataset):
         
         assert not (train_mask & validation_mask).any().item()
         
-        return train_mask, validation_mask, ~(train_mask | validation_mask)
+        # Test mask is the inverse of the union of train and validation masks
+        test_mask = ~(train_mask | validation_mask)
+        
+        return train_mask, validation_mask, test_mask
 
 
     def keep_triplets(self,
@@ -673,7 +664,7 @@ class KnowledgeGraph(Dataset):
                     ) -> Self:
         """
         Keeps only the specified triplets in the knowledge graph and returns a new
-        KnowledgeGraph instance with these triplets. Updates the dictionnary of facts (TODO).
+        KnowledgeGraph instance with these triplets.
 
         Arguments
         ---------
@@ -800,11 +791,11 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        KnowledgeGraph: Self (TODO?)
+        kg: Self 
             The updated KnowledgeGraph with the dictionaries and tensors modified,
             and a list of pairs (old edge ID, new reverse edge ID).
         reverse_list: List[int]
-            TODO.What_that_variable_is_or_does
+            List of all original and reverse triplets, in all directions.
             
         """
         index_to_edge = {value: key for key, value in self.edge_to_index.items()}
@@ -933,21 +924,21 @@ class KnowledgeGraph(Dataset):
 
     def get_pairs(  self,
                     edge_type_index: int,
-                    type: str = "head_tail"
+                    type: Literal["head_tail", "tail_head"] = "head_tail"
                     ) -> Set[Tuple[Number, Number]]:
         """
-        TODO.What_the_function_does_about_globally
+        Give back the node pair associated to an edge.
 
         References
         ----------
-        TODO
+        Copied from TorchKGE.
 
         Arguments
         ---------
         edge_type_index: int
-            TODO.What_that_argument_is_or_does
-        type: str, default to "head_tail"
-            TODO.What_that_argument_is_or_does
+            Index of the edge type to get the node pair of.
+        type: Literal["head_tail", "tail_head"], default to "head_tail"
+            Format the node is given back as, either head then tail or tail then head.
 
         Raises
         ------
@@ -956,21 +947,23 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        TODO.result_name: Set[Tuple[Number, Number]
-            TODO.What_that_variable_is_or_does
+        node_pair: Set[Tuple[Number, Number]
+            The head/tail or tail/head pair associated to the given edge.
             
         """
         mask = (self.edge_indices == edge_type_index)
 
+        # TODO: clarify that piece of code
         if type == "head_tail":
             return set((i.item(), j.item()) for i, j in cat(
                 (self.head_indices[mask].view(-1, 1),
                 self.tail_indices[mask].view(-1, 1)), dim = 1))
-        else:
-            assert type == "tail_head"
+        elif type == "tail_head":
             return set((j.item(), i.item()) for i, j in cat(
                 (self.head_indices[mask].view(-1, 1),
                 self.tail_indices[mask].view(-1, 1)), dim = 1))
+        else:
+            raise ValueError(f"The `type` must be `head_tail` or `tail_head`.")
         
         
     def duplicates( self,
@@ -1121,10 +1114,6 @@ class KnowledgeGraph(Dataset):
         """
         TODO.What_the_function_does_about_globally
 
-        References
-        ----------
-        TODO
-
         Arguments
         ---------
         data: torch.Tensor
@@ -1229,7 +1218,7 @@ class KnowledgeGraph(Dataset):
 
     def clean(self):
         """
-        TODO.What_the_function_does_about_globally
+        Clean the KnowledgeGraph object by removing all self loops with "self" as their edge type.
         
         """
         self.triplet_types = [triplet for triplet in self.triplet_types if triplet[1] != "self"]
@@ -1251,7 +1240,7 @@ class KnowledgeGraph(Dataset):
             The knowledge graph as a KGATE KnowledgeGraph object.
             
         """
-        # TODO
+        # TODO for PyTorch Geometric compatibility
         pass
 
 
