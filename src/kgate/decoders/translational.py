@@ -36,8 +36,7 @@ class TranslationalDecoder(Module):
 
     This interface is largely inspired by TorchKGE's TranslationModel, and exposes
     the methods that all translational decoders must use to be compatible with KGATE.
-    The interface doesn't have an __init__ method as inheriting decoders are supposed
-    to take care of their initialization, and only requires one attribute to be set.
+    The interface inherits from the Module PyTorch class.
 
     Furthermore, this interface doesn't implement anything but is a type helper.
     However, functions from this class returning None can be used directly from inheriting classes.
