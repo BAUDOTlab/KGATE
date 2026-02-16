@@ -74,15 +74,15 @@ class TranslationalDecoder(Module):
         Arguments
         ---------
         head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            The embeddings of the head entities for the current batch.
+            The embeddings of the head nodes for the current batch.
         tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            The embeddings of the tail entities for the current batch.
+            The embeddings of the tail nodes for the current batch.
         edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             The embeddings of the edges for the current batch.
         head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head entities for the current batch.
+            The indices of the head nodes for the current batch.
         tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail entities for the current batch.
+            The indices of the tail nodes for the current batch.
         edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the edges for the current batch.
         
@@ -1541,3 +1541,180 @@ class TorusE(TranslationalDecoder):
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
+    
+class SpherE(TranslationalDecoder):
+    """
+    Implementation of SpherE model detailed in the paper referenced below.
+    
+    This class inherits from the TranslationDecoder interface. It inherites its attributes as well.
+
+    References
+    ----------
+    Zihao Li, Yuyi Ao, Jingrui He.
+    `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval.`
+    https://arxiv.org/pdf/2404.19130
+    TODO.where.
+
+    Attributes
+    ----------
+    dissimilarity: function described in `torchkge.utils.dissimilarities`
+        The dissimilarity function used to compare translated head embeddings 
+        to tail embeddings. Most translational vectors use either L1 or L2, but
+        TorusE has a specific set of dissimilarity functions.
+        See details from torchkge here: https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities
+    
+    """
+    def __init__(self):
+        super().__init__()
+        
+    def score(  self,
+                *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_embeddings: Tensor,
+                head_indices: Tensor,
+                tail_indices: Tensor,
+                edge_indices: Tensor
+                ) -> Tensor:
+        """
+        Compute the score function for the triplets given as argument.
+        
+        See referenced paper for more details on the score:
+        https://arxiv.org/pdf/2404.19130
+
+        Arguments
+        ---------
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            The embeddings of the head nodes for the current batch.
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            The embeddings of the tail nodes for the current batch.
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+            The embeddings of the edges for the current batch.
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes for the current batch.
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes for the current batch.
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the edges for the current batch.
+        
+        Raises
+        ------
+        NotImplementedError
+            The score method must be implemented by a translational decoder
+            inheriting from this interface.
+
+        Returns
+        -------
+        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
+            The score of each triplet as a tensor.
+        
+        Notes
+        -----
+        The batch can be the whole graph if it fits in memory.
+        
+        """
+        raise NotImplementedError("The `score` method of SpherE has yet to be implemented.")
+
+
+    def normalize_parameters(self,
+                            node_embeddings: nn.ParameterList,
+                            edge_embeddings: nn.Embedding
+                            ) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+        """
+        Normalize parameters for the TorusE model.
+        
+        According to the original paper, the node embeddings should be normalized.
+        
+        Arguments
+        ---------
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
+            The node embedding as a ParameterList containing one Parameter by node type,
+            or only one if there is no node type.
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
+            The edge embedding as a ParameterList containing one Parameter by edge type,
+            or only one if there is no node type.
+        
+        Returns
+        -------
+        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
+            The normalized node embedding object.
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
+            The untouched edges embedding object.
+        
+        """
+        for embedding in node_embeddings:
+            embedding.data = normalize(embedding.data, p = 2, dim = 1)
+            
+        return node_embeddings, edge_embeddings
+
+
+    def get_embeddings(self) -> Dict[str, Tensor] | None:
+        """
+        Get the decoder-specific embeddings.
+
+        Refer to the specific decoder for details on this function's implementation.
+        
+        Returns
+        -------
+        embeddings: Dict[str, torch.Tensor] or None
+            Decoder-specific embeddings, or None.
+        
+        Notes
+        -----
+        The get_embeddings method can be implemented by a translational decoder inheriting from this class
+        if it needed.
+        If the decoder doesn't have dedicated embeddings, nothing is returned. In 
+        this case, it is not necessary to implement this method from the interface.
+        
+        """
+        raise NotImplementedError("The `get_embeddings` method of SpherE has yet to be implemented.")
+
+
+    def inference_prepare_candidates(self,
+                                    *,
+                                    node_embeddings: Tensor,
+                                    edge_embeddings: nn.Embedding,
+                                    head_indices: Tensor,
+                                    tail_indices: Tensor,
+                                    edge_indices: Tensor,
+                                    node_inference: bool = True
+                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        """
+        Link prediction evaluation helper function. Get node embeddings
+        and edge embeddings. The output will be fed to the
+        `inference_score_function` method.
+        
+        Arguments
+        ---------
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            Embeddings of all nodes.
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+            Embeddings of all edges.
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes (from KG).
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes (from KG).
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the edges (from KG).
+        node_inference: bool, optional, default to True, keyword-only
+            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
+        Raises
+        ------
+        NotImplementedError
+            The inference_prepare_candidates method must be implemented by a translational decoder
+            inheriting from this interface.
+            
+        Returns
+        -------
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
+            Head node embeddings.
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
+            Tail node embeddings.
+        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
+            Edge embeddings.
+        candidates: torch.Tensor
+            Candidate embeddings for nodes or edges.
+        
+        """
+        raise NotImplementedError("The `inference_prepare_candidates` method of SpherE has yet to be implemented.")
