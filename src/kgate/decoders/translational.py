@@ -1541,7 +1541,9 @@ class TorusE(TranslationalDecoder):
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
-    
+
+
+
 class SpherE(TranslationalDecoder):
     """
     Implementation of SpherE model detailed in the paper referenced below.
@@ -1566,18 +1568,20 @@ class SpherE(TranslationalDecoder):
     """
     def __init__(self):
         super().__init__()
+        self.normalized = False
+        
         
     def score(  self,
                 *,
                 head_embeddings: Tensor,
                 tail_embeddings: Tensor,
-                edge_embeddings: Tensor,
-                head_indices: Tensor,
-                tail_indices: Tensor,
-                edge_indices: Tensor
+                edge_embeddings: Tensor
                 ) -> Tensor:
         """
         Compute the score function for the triplets given as argument.
+        
+        Score function:
+            - || normalize(head_embeddings) + edge_embeddings - normalize(tail_embeddings) ||^2
         
         See referenced paper for more details on the score:
         https://arxiv.org/pdf/2404.19130
@@ -1590,18 +1594,6 @@ class SpherE(TranslationalDecoder):
             The embeddings of the tail nodes for the current batch.
         edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             The embeddings of the edges for the current batch.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes for the current batch.
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes for the current batch.
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges for the current batch.
-        
-        Raises
-        ------
-        NotImplementedError
-            The score method must be implemented by a translational decoder
-            inheriting from this interface.
 
         Returns
         -------
@@ -1613,7 +1605,15 @@ class SpherE(TranslationalDecoder):
         The batch can be the whole graph if it fits in memory.
         
         """
-        raise NotImplementedError("The `score` method of SpherE has yet to be implemented.")
+        # TODO: check that it matches the original code
+        head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
+        tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
+        
+        translated_head = head_normalized_embeddings + edge_embeddings
+        
+        batch_score = - ((translated_head - tail_normalized_embeddings) ** 2).sum(dim = 1)
+    
+        return batch_score
 
 
     def normalize_parameters(self,
@@ -1642,32 +1642,13 @@ class SpherE(TranslationalDecoder):
             The untouched edges embedding object.
         
         """
+        # TODO: check that it matches the original code
         for embedding in node_embeddings:
             embedding.data = normalize(embedding.data, p = 2, dim = 1)
-            
+        
+        self.normalized = True
+        
         return node_embeddings, edge_embeddings
-
-
-    def get_embeddings(self) -> Dict[str, Tensor] | None:
-        """
-        Get the decoder-specific embeddings.
-
-        Refer to the specific decoder for details on this function's implementation.
-        
-        Returns
-        -------
-        embeddings: Dict[str, torch.Tensor] or None
-            Decoder-specific embeddings, or None.
-        
-        Notes
-        -----
-        The get_embeddings method can be implemented by a translational decoder inheriting from this class
-        if it needed.
-        If the decoder doesn't have dedicated embeddings, nothing is returned. In 
-        this case, it is not necessary to implement this method from the interface.
-        
-        """
-        raise NotImplementedError("The `get_embeddings` method of SpherE has yet to be implemented.")
 
 
     def inference_prepare_candidates(self,
@@ -1698,12 +1679,6 @@ class SpherE(TranslationalDecoder):
             The indices of the edges (from KG).
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
-        
-        Raises
-        ------
-        NotImplementedError
-            The inference_prepare_candidates method must be implemented by a translational decoder
-            inheriting from this interface.
             
         Returns
         -------
@@ -1717,4 +1692,91 @@ class SpherE(TranslationalDecoder):
             Candidate embeddings for nodes or edges.
         
         """
-        raise NotImplementedError("The `inference_prepare_candidates` method of SpherE has yet to be implemented.")
+        # TODO: check that it matches the original code
+        batch_size = head_indices.shape[0]
+
+        head_embeddings = node_embeddings[head_indices]
+        tail_embeddings = node_embeddings[tail_indices]
+        edge_embeddings_inferred = edge_embeddings(edge_indices)
+
+        if node_inference:
+            candidates = node_embeddings
+        else:
+            candidates = edge_embeddings.weight.data
+
+        candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
+
+        return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
+    
+    
+    def inference_score(self, 
+                        *,
+                        head_embeddings: Tensor,
+                        tail_embeddings: Tensor,
+                        edge_embeddings: Tensor
+                        ) -> Tensor:
+        """
+        Link prediction evaluation helper function. Compute the scores
+        of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        The arguments should match the ones of `inference_prepare_candidates`.
+        
+        Arguments
+        ---------
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            Embeddings of the head nodes in the knowledge graph.
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            Embeddings of the tail nodes in the knowledge graph.
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+            Embeddings of the edges in the knowledge graph.
+        
+        Raises
+        ------
+        AssertionError #1
+            When inferring heads, the head_embeddings tensor should be of shape [batch_size, embedding_dimensions].
+        AssertionError #2
+            When inferring tails, the head_embeddings tensor should be of shape [batch_size, embedding_dimensions].
+        ValueError
+            Embeddings do not have shapes adapted for inference.
+        NotImplementedError
+            Edge inference is not implemented for SpherE.
+
+        Returns
+        -------
+        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
+            Tensor of score values.
+            First dimension: incomplete triplets tested
+            Second dimension: candidate indices
+            For example, if the function is called to infer the score of tails:
+            First dimension: (head_indices, edge_indices)
+            Second dimension: tail_indices
+        
+        """
+        # TODO: check that it matches the original code
+
+        # When the shape of the edges is [batch_size, node_embedding_dimensions]
+        if len(edge_embeddings.shape) == 2:
+            if len(tail_embeddings.shape) == 3:
+                assert len(head_embeddings.shape) == 2, "When inferring tails, the `head_embeddings` tensor should be of shape [batch_size, node_embedding_dimensions]"
+
+                normalized_head = normalize(head_embeddings, p = 2, dim = 2)
+                normalized_tail = normalize(tail_embeddings, p = 2, dim = 1).unsqueeze(1)
+                
+                translated_heads = normalized_head + edge_embeddings.unsqueeze(1)
+                
+                return - ((translated_heads - normalized_tail) ** 2).sum(dim = 2)
+            
+            else:
+                assert (len(head_embeddings.shape) == 3) and (len(tail_embeddings.shape) == 2), "When inferring heads, the `head_embeddings` tensor should be of shape [batch_size, node_embedding_dimensions]"
+
+                normalized_head = normalize(head_embeddings, p = 2, dim = 1).unsqueeze(1)
+                normalized_tail = normalize(tail_embeddings, p = 2, dim = 2)
+
+                translated_heads = normalized_head + edge_embeddings.unsqueeze(1)
+
+                return - ((translated_heads - normalized_tail) ** 2).sum(dim = 2)
+        
+        elif len(edge_embeddings.shape) == 3:
+            raise NotImplementedError("Edge inference is not implemented for SpherE.")
+        
+        else:
+            raise ValueError("Embeddings do not have shapes adapted for inference.")
