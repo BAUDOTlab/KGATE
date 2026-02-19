@@ -15,6 +15,7 @@ from typing import Tuple, Dict, Literal
 
 from tqdm import tqdm
 
+import torch
 from torch import nn, tensor, matmul, Tensor, empty
 from torch.cuda import empty_cache
 from torch.nn.functional import normalize
@@ -1546,7 +1547,7 @@ class TorusE(TranslationalDecoder):
 
 class SpherE(TranslationalDecoder):
     """
-    Implementation of SpherE model detailed in the paper referenced below.
+    Inspired by SpherE model detailed in the paper referenced below.
     
     This class inherits from the TranslationDecoder interface. It inherites its attributes as well.
 
@@ -1559,18 +1560,84 @@ class SpherE(TranslationalDecoder):
 
     Attributes
     ----------
-    dissimilarity: function described in `torchkge.utils.dissimilarities`
-        The dissimilarity function used to compare translated head embeddings 
-        to tail embeddings. Most translational vectors use either L1 or L2, but
-        TorusE has a specific set of dissimilarity functions.
-        See details from torchkge here: https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities
+    node_embedding_dimensions : int
+        Total dimensionality of node embeddings.
+        Must be divisible by house_dimension.
+    house_dimension : int
+        Dimensionality of each Householder subspace.
+    house_number : int
+        Number of Householder reflections applied.
+    marginal_value : float, optional
+        Margin scaling coefficient used in SSHousE_r.
+    TODO.all_attributes
+    
+    Raises
+    ------
+    ValueError
+        The value of `node_embedding_dimensions` must be divisible by that of `house_dimension`.
     
     """
-    def __init__(self):
+    def __init__(self,
+                node_embedding_dimensions: int,
+                house_dimension: int,
+                house_number: int,
+                    householder_dimension: int,
+                    threshold: float,
+                marginal_value: float = 0.1,
+                **_):
         super().__init__()
-        self.normalized = False
         
+        if node_embedding_dimensions % house_dimension == 0:
+            self.node_embedding_dimensions = node_embedding_dimensions
+            self.house_dimension = house_dimension
+        else:
+            raise ValueError("The value of `node_embedding_dimensions` must be divisible by that of `house_dimension`.")
         
+        self.house_number = house_number
+        self.householder_dimension = householder_dimension
+        self.threshold = threshold
+        self.marginal_value = marginal_value
+        
+        # Derived dimension per house block
+        self.node_dimension = node_embedding_dimensions // house_dimension
+        
+        self.node_radius: nn.ParameterList = None  # lazy initialization
+        
+        #self.normalized = False
+    
+    
+    def initialize_node_radius( self,
+                                node_embeddings: nn.ParameterList
+                                ) -> None:
+        """
+        Initialize the `node_radius` argument
+
+        Arguments
+        ---------
+        node_embeddings: nn.ParameterList
+            A list containing all embeddings for each node type.
+            keys: node type index
+            values: tensors of shape [node_count, node_embedding_dimensions]
+        
+        Notes
+        -----
+        Could be done in the init function, but is here for clarity.
+        
+        """
+        self.node_radius = nn.ParameterList()
+        
+        for embedding in node_embeddings:
+            node_count = embedding.shape[0]
+            radius = nn.Parameter(
+                                0.1 * torch.ones(
+                                    node_count,
+                                    self.node_dimension,
+                                    device = embedding.device
+                                    )
+                                )
+            self.node_radius.append(radius)
+    
+    
     def score(  self,
                 *,
                 head_embeddings: Tensor,

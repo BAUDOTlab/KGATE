@@ -1344,13 +1344,13 @@ class Architect(Module):
         """
         batch = batch.T.to(self.device)
 
-        batch_count = self.sampler.corrupt_batch(batch)
-        batch_count = batch_count.to(self.device)
+        negative_batch = self.sampler.corrupt_batch(batch)
+        negative_batch = negative_batch.to(self.device)
         
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triplets
-        positive_triplet, negative_triplet = self(batch, batch_count)
+        positive_triplet, negative_triplet = self(batch, negative_batch)
         loss = self.decoder_loss(positive_triplet, negative_triplet)
         loss.backward()
 
