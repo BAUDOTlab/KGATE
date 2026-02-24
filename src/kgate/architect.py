@@ -439,7 +439,9 @@ class Architect(Module):
                                                 ] = "",
                             dissimilarity: Literal["L1", "L2", "torus_L1", "torus_L2", "torus_eL2", ""] = "",
                             margin: int = 0,
-                            filter_count: int = 0
+                            filter_count: int = 0,
+                            alpha: float = -1,
+                            beta: float = -1
                             ) -> Tuple[
                                         BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
                                         MarginLoss | BinaryCrossEntropyLoss
@@ -481,7 +483,11 @@ class Architect(Module):
         margin: int, optional, default to 0
             Margin to be used with MarginLoss. Unused with bilinear models.
         filter_count: int, optional, default to 0
-            Number of convolution filters.
+            Number of filters used for convolution.
+        alpha: float, optional, default to -1
+            Hyperparameter used for spheric scoring.
+        beta: float, optional, default to -1
+            Hyperparameter used for spheric scoring.
 
         Raises
         ------
@@ -506,6 +512,10 @@ class Architect(Module):
             margin = decoder_config["margin"]
         if filter_count == 0:
             filter_count = decoder_config["filter_count"]
+        if alpha == -1:
+            alpha = decoder_config["sphere_alpha"]
+        if beta == -1:
+            beta = decoder_config["sphere_beta"]
 
         # Translational models
         match decoder_name:
@@ -521,7 +531,9 @@ class Architect(Module):
                 decoder = TransR(node_embedding_dimensions = self.node_embedding_dimensions,
                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
                                 node_count = self.kg_train.node_count, 
-                                edge_count = self.kg_train.edge_count)
+                                edge_count = self.kg_train.edge_count,
+                                alpha = alpha,
+                                beta = beta)
                 decoder_loss = MarginLoss(margin)
             case "TransD":
                 decoder = TransD(node_embedding_dimensions = self.node_embedding_dimensions,

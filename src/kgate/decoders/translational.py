@@ -16,7 +16,7 @@ from typing import Tuple, Dict, Literal
 from tqdm import tqdm
 
 import torch
-from torch import nn, tensor, matmul, Tensor, empty
+from torch import nn, empty, matmul, tensor, Tensor, tensor_split
 from torch.cuda import empty_cache
 from torch.nn.functional import normalize
 from torch.nn import Module, Parameter, ParameterList
@@ -460,9 +460,9 @@ class TransE(TranslationalDecoder):
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
 
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
-    
-    
-    
+
+
+
 class TransH(TranslationalDecoder):
     """
     Implementation of TransH model detailed in the paper referenced below.
@@ -788,7 +788,9 @@ class TransR(TranslationalDecoder):
                 node_count: int,
                 edge_count: int,
                 node_embedding_dimensions: int,
-                edge_embedding_dimensions: int):
+                edge_embedding_dimensions: int,
+                alpha: float,
+                beta: float):
         super().__init__()
 
         self.node_count = node_count
@@ -805,6 +807,11 @@ class TransR(TranslationalDecoder):
                                                         node_count,
                                                         node_embedding_dimensions)),
                                                         requires_grad = False)
+        
+        # For SpherE
+        self.node_radii = initialize_embedding(self.node_count, 1)	# 1 for the sphere radius
+        self.alpha = alpha
+        self.beta = beta
 
 
     def score(  self,
@@ -921,7 +928,7 @@ class TransR(TranslationalDecoder):
         embeddings: Dict[str, torch.Tensor]
             Key: "projection_matrix"
             Value: tensors representing nodes and edges in current model
-            
+        
         """
         return {"projection_matrix": self.projection_matrix.weight.data.view(-1,
                                                         self.edge_embedding_dimensions,
@@ -1030,6 +1037,32 @@ class TransR(TranslationalDecoder):
             del projected_masked_node_embeddings
 
         self.evaluated_projections = True
+
+
+    def sphere_score(self,
+                    *,
+                    head_indices: Tensor,
+                    tail_indices: Tensor,
+                    dissimilarity_score: Tensor
+                    )-> Tensor:
+        
+        # Creation of node radii
+        head_radius = self.node_radii(head_indices)
+        tail_radius = self.node_radii(tail_indices)
+        
+        # Loss function from SpherE article
+        spheric_score = torch.stack(dissimilarity_score - head_radius - tail_radius,
+                                    - self.alpha * head_radius - self.beta * tail_radius)
+        
+        # We take the highest score for each triplet
+        # The value is the negative of the mathematical score function result
+        opposite_score, _ = torch.max(spheric_score, 0)
+        
+        # Score is positive for a positive triplet
+        # Score is negative for a negative triplet
+        score = - opposite_score
+        
+        return score
 
 
 

@@ -849,8 +849,15 @@ class ComplEx(BilinearDecoder):
         real_tail_embedddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim = 1)
         real_edge_embedddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim = 1)
         
-        return (real_head_embedddings * (real_edge_embedddings * real_tail_embedddings + imaginary_edge_embeddings * imaginary_tail_embeddings) + 
-                imaginary_head_embeddings * (real_edge_embedddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embedddings)).sum(dim = 1)
+        score = (
+                real_head_embedddings
+                * (real_edge_embedddings * real_tail_embedddings + imaginary_edge_embeddings * imaginary_tail_embeddings)
+                +
+                imaginary_head_embeddings
+                * (real_edge_embedddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embedddings)
+                ).sum(dim = 1)
+        
+        return score
     
     
     def inference_prepare_candidates(self,

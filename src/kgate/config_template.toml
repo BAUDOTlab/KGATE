@@ -84,6 +84,10 @@ dissimilarity = "L2"
 # Number of convolutional filter used by ConvKB
 filter_count = 3
 
+# Hyperparameters for SpherE score function.
+sphere_alpha = 0.1
+sphere_beta = 0.0
+
 [sampler]
 # Type of negative sampler to generate false triplets during the training.
 # Supported options are:
