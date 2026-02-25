@@ -313,7 +313,27 @@ class KnowledgeGraph(Dataset):
     def __getitem__(self, index) -> Tensor:
         return self.graphindices[:, index]
     
+    @property
+    def head_idx(self) -> Tensor:
+        """
+        TorchKGE alias for head_indices
+        """
+        return self.head_indices
+
+    @property
+    def tail_idx(self) -> Tensor:
+        """
+        TorchKGE alias for tail_indices
+        """
+        return self.tail_indices
     
+    @property
+    def relations(self) -> Tensor:
+        """
+        TorchKGE alias for edge_indices
+        """
+        return self.edge_indices
+
     @property
     def head_indices(self) -> Tensor:
         """
@@ -543,14 +563,17 @@ class KnowledgeGraph(Dataset):
         if sizes is not None:
             assert sum(sizes) == self.triplet_count, "The sum of provided sizes must match the number of triplets."
             
-            mask_train = cat([tensor([1] * sizes[1]),
-                           tensor([0 * (sizes[1] + sizes[2])])
+            mask_train = cat([
+                tensor([1] * (sizes[0])), 
+                tensor([0] * (sizes[1] + sizes[2]))
             ])
+            
             mask_validation = cat([
                 tensor([0] * sizes[0]),
                 tensor([1] * sizes[1]),
                 tensor([0] * sizes[2])
             ])
+            
             mask_test = ~(mask_train | mask_validation)
         else:
             assert sum(split_proportions) == 1, "The sum of provided shares (`split_proportions`) must be equal to 1."
