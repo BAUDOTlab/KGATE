@@ -566,19 +566,50 @@ class KnowledgeGraph(Dataset):
             mask_train = cat([
                 tensor([1] * (sizes[0])), 
                 tensor([0] * (sizes[1] + sizes[2]))
-            ])
+            ]).bool()
             
             mask_validation = cat([
                 tensor([0] * sizes[0]),
                 tensor([1] * sizes[1]),
                 tensor([0] * sizes[2])
-            ])
+            ]).bool()
             
             mask_test = ~(mask_train | mask_validation)
         else:
             assert sum(split_proportions) == 1, "The sum of provided shares (`split_proportions`) must be equal to 1."
             mask_train, mask_validation, mask_test = self.get_mask(split_proportions)
             
+
+        # Ensure the training set has all nodes
+        unique_nodes = np.arange(self.node_count)
+        unique_train_set_nodes = cat([self.head_indices[mask_train], self.tail_indices[mask_train]]).unique()
+        if len(unique_train_set_nodes) < self.node_count:
+            missing_nodes = tensor(list(set(unique_nodes.tolist()) - set(unique_train_set_nodes.tolist())),
+                                    dtype = torch.long)
+            if sizes is not None:
+                logging.warning(f"{self.node_count - len(unique_train_set_nodes)} nodes are not present in the training set \
+                                after splitting according to given size. To perform the training, a proportion of the missing nodes \
+                                will be moved from the validation or test set to the training set.")
+                split_proportions = [size*100/sum(sizes) for size in sizes]
+
+            for node in missing_nodes:
+                # Tensor of all the indices of triplets where this node is present as either head or tail
+                mask_subset = ((self.head_indices == node) |
+                                (self.tail_indices == node)).nonzero(as_tuple = False)[:, 0]
+                count = len(mask_subset)
+                random = torch.randperm(count)
+
+                train_set_size = max(1, int(count * split_proportions[0]))
+
+                # We put some nodes in the train set, then remove them from both validation
+                # and test set (they are in either one, but we don't know which one).
+                mask_train[mask_subset[random[:train_set_size]]] = True
+                mask_validation[mask_subset[random[:train_set_size]]] = False
+                mask_test[mask_subset[random[:train_set_size]]] = False
+        
+        assert not (mask_train & mask_validation & mask_test).any().item()
+        
+
         return (
             self.__class__(
                 graphindices = self.graphindices[:, mask_train], 
@@ -637,7 +668,6 @@ class KnowledgeGraph(Dataset):
             
         """
         unique_edges, edge_counts = self.edge_indices.unique(return_counts = True)
-        unique_nodes = np.arange(self.node_count)
 
         train_mask = torch.zeros_like(self.edge_indices).bool()
         validation_mask = torch.zeros_like(self.edge_indices).bool()
@@ -658,29 +688,9 @@ class KnowledgeGraph(Dataset):
             train_mask[mask_subset[random[:train_set_size]]] = True
             validation_mask[mask_subset[random[train_set_size:train_set_size + validation_set_size]]] = True
 
-        unique_nodes = cat([self.head_indices[train_mask], self.tail_indices[train_mask]]).unique()
-        if len(unique_nodes) < self.node_count:
-            missing_nodes = tensor(list(set(unique_nodes.tolist()) - set(unique_nodes.tolist())),
-                                    dtype = torch.long)
-            for node in missing_nodes:
-                mask_subset = ((self.head_indices == node) |
-                                (self.tail_indices == node)).nonzero(as_tuple = False)[:, 0]
-                count = len(mask_subset)
-                random = torch.randperm(count)
-
-                train_set_size = max(1, int(count * split_proportions[0]))
-                validation_set_size = min(count - train_set_size, ceil(count * split_proportions[1]))
-
-                train_mask[mask_subset[random[:train_set_size]]] = True
-                validation_mask[mask_subset[random[:train_set_size]]] = False
-        
-        assert not (train_mask & validation_mask).any().item()
-        
-        # Test mask is the inverse of the union of train and validation masks
         test_mask = ~(train_mask | validation_mask)
         
         return train_mask, validation_mask, test_mask
-
 
     def keep_triplets(self,
                     indices_to_keep: List[int] | torch.Tensor
