@@ -1117,12 +1117,12 @@ class Architect(Module):
         checkpoint = torch.load(path, map_location = self.device, weights_only = False)
 
         # Check node and edge dictionnary size
-        assert len(checkpoint["edges"]["weight"]) == self.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint['edges']['weight'])}) and the current configuration ({self.edge_count})!"
+        assert len(checkpoint["edges"]["weight"]) == self.kg_train.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint['edges']['weight'])}) and the current configuration ({self.kg_train.edge_count})!"
 
         if isinstance(self.encoder, GNN):
             assert len(checkpoint["nodes"]) == len(self.kg_train.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['nodes'])}) and the current configuration ({len(self.kg_train.node_type_to_index)})!"
         else:
-            assert len(checkpoint["nodes"]["weight"]) != self.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint['nodes'])}) and the current configuration ({self.node_count})!"
+            assert len(checkpoint["nodes"]["weight"]) != self.kg_train.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint['nodes'])}) and the current configuration ({self.kg_train.node_count})!"
 
         if "encoder" in checkpoint:
             assert checkpoint["encoder"].keys() == self.encoder.state_dict().keys(), "Mismatch between the checkpoint convolution layers and the current configuration's."
@@ -1143,7 +1143,7 @@ class Architect(Module):
         """
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
-        self.edge_embeddings = initialize_embedding(self.edge_count, self.encoder_edge_embedding_dimensions, self.device)
+        self.edge_embeddings = initialize_embedding(self.kg_train.edge_count, self.encoder_edge_embedding_dimensions, self.device)
 
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_directory)
@@ -1333,7 +1333,7 @@ class Architect(Module):
             input = self.kg_train.get_encoder_input(self.kg_train.graphindices.to(self.device), self.node_embeddings)
 
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_list)
-            node_embeddings: torch.Tensor = torch.zeros((self.node_count, self.encoder_node_embedding_dimensions),
+            node_embeddings: torch.Tensor = torch.zeros((self.kg_train.node_count, self.encoder_node_embedding_dimensions),
                                                         device = self.device,
                                                         dtype = torch.float)
 
