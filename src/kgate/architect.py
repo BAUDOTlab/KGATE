@@ -440,6 +440,7 @@ class Architect(Module):
                             dissimilarity: Literal["L1", "L2", "torus_L1", "torus_L2", "torus_eL2", ""] = "",
                             margin: int = 0,
                             filter_count: int = 0,
+                            sphere_embeddings: bool = False,
                             alpha: float = -1,
                             beta: float = -1
                             ) -> Tuple[
@@ -484,6 +485,9 @@ class Architect(Module):
             Margin to be used with MarginLoss. Unused with bilinear models.
         filter_count: int, optional, default to 0
             Number of filters used for convolution.
+        sphere_embeddings: bool, optional, default to False
+            If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
+            Adaptation of SpherE.
         alpha: float, optional, default to -1
             Hyperparameter used for spheric scoring.
         beta: float, optional, default to -1
@@ -512,6 +516,8 @@ class Architect(Module):
             margin = decoder_config["margin"]
         if filter_count == 0:
             filter_count = decoder_config["filter_count"]
+        if sphere_embeddings == "":
+            sphere_embeddings = decoder_config["sphere_embeddings"]
         if alpha == -1:
             alpha = decoder_config["sphere_alpha"]
         if beta == -1:
@@ -532,6 +538,7 @@ class Architect(Module):
                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
                                 node_count = self.kg_train.node_count, 
                                 edge_count = self.kg_train.edge_count,
+                                sphere_embeddings = sphere_embeddings,
                                 alpha = alpha,
                                 beta = beta)
                 decoder_loss = MarginLoss(margin)
@@ -544,8 +551,6 @@ class Architect(Module):
             case "TorusE":
                 decoder = TorusE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
-            case "SpherE":
-                raise NotImplementedError("SpherE has yet to be fully implemented.")
             case "RESCAL":
                 decoder = RESCAL(embedding_dimensions = self.node_embedding_dimensions,
                                 node_count = self.kg_train.node_count,

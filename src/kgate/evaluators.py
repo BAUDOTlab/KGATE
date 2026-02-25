@@ -45,41 +45,69 @@ class Predictions:
 
     Arguments
     ---------
-    true_predictions_rank: torch.Tensor
+    true_predictions_rank: torch.Tensor, optional, keyword only
         Among the ranking of all predictions, the rank of the true result.
-    filtered_true_predictions_rank: torch.Tensor
+    filtered_true_predictions_rank: torch.Tensor, optional, keyword only
         Among the ranking of all filtered predictions, the rank of the true result.
         True triplets that are not the target of the prediction are filtered out.
+    sphere_head_predictions: torch.Tensor, optional, keyword only
+        Head predictions when `sphere_embeddings` hyperparameter is true.
+    sphere_tail_predictions: torch.Tensor, optional, keyword only
+        Head predictions when `sphere_embeddings` hyperparameter is true.
+
+    Raises
+    ------
+    ValueError
+        The Predictions object must receive either a tensor of predictions from sphere embeddings, or both tensors `true_predictions_rank` and `filtered_true_predictions_rank`.
 
     Attributes
     ----------
-    true_predictions_rank: torch.Tensor
+    true_predictions_rank: torch.Tensor, optional, keyword only
         Among the ranking of all predictions, the rank of the true result.
-    filtered_true_predictions_rank: torch.Tensor
+    filtered_true_predictions_rank: torch.Tensor, optional, keyword only
         Among the ranking of all filtered predictions, the rank of the true result.
         True triplets that are not the target of the prediction are filtered out.
+    sphere_head_predictions: torch.Tensor, optional, keyword only
+        Head predictions when `sphere_embeddings` hyperparameter is true.
+    sphere_tail_predictions: torch.Tensor, optional, keyword only
+        Head predictions when `sphere_embeddings` hyperparameter is true.
     
     
     """
     def __init__(self,
-                true_predictions_rank: Tensor,
-                filtered_true_predictions_rank: Tensor):
+                *,
+                true_predictions_rank: Tensor = None,
+                filtered_true_predictions_rank: Tensor = None,
+                sphere_predictions: Tensor = None):
 
         self.true_predictions_rank = true_predictions_rank
         self.filtered_true_predictions_rank = filtered_true_predictions_rank
+        self.sphere_predictions = sphere_predictions
     
     
     def __str__(self):
-        k = 10
-        message = f"""
-        Hit@{k}: {round(self.hit_at_k(k)[0],3)} \t Filtered Hit@{k}: {round(self.hit_at_k(k)[1],3)} 
+        if self.true_predictions_rank is not None and self.filtered_true_predictions_rank is not None:
+            k = 10
+            message = f"""
+            Hit@{k}: {round(self.hit_at_k(k)[0],3)} \t Filtered Hit@{k}: {round(self.hit_at_k(k)[1],3)} 
 
-        MRR: {round(self.mrr[0],3)} \t Filtered MRR: {round(self.mrr[1],3)}
+            MRR: {round(self.mrr[0],3)} \t Filtered MRR: {round(self.mrr[1],3)}
 
-        Mean Rank: {int(self.mean_rank[0])} \t Filtered Mean Rank: {int(self.mean_rank[1])}
-        """
+            Mean Rank: {int(self.mean_rank[0])} \t Filtered Mean Rank: {int(self.mean_rank[1])}
+            """
+            return message
+    
+        elif self.sphere_predictions is not None:
+            message = f""" 
+            Sphere embeddings hyperparameter is set at true.
+            
+            Hit@K, MRR and Mean Rank evaluations are impossible, as predictions are unranked.
+            """
+            return message
         
-        return message
+        else:
+            raise ValueError("The Predictions object must receive either a tensor of predictions from sphere embeddings, or both tensors `true_predictions_rank` and `filtered_true_predictions_rank`.")
+    
 
 
     @property
@@ -89,10 +117,12 @@ class Predictions:
         
         TODO.What_the_function_does_about_globally
 
-        References
-        ----------
-        TODO.reference
-        
+        Raises
+        ------
+        ValueError
+            Mean Rank evaluation is impossible with predictions from sphere embeddings, as they are unranked.
+            To disable sphere embeddings, set the `sphere_embeddings` hyperparameter as false in the config file.
+
         Returns
         -------
         mean_rank_score: float
@@ -104,11 +134,16 @@ class Predictions:
             True triplets that are not the target of the prediction are filtered out.
         
         """
-        mean_rank_score = self.true_predictions_rank.float().mean().item()
+        if self.true_predictions_rank is not None and self.filtered_true_predictions_rank is not None:
+            mean_rank_score = self.true_predictions_rank.float().mean().item()
 
-        filtered_mean_rank_score = self.filtered_true_predictions_rank.float().mean().item()
+            filtered_mean_rank_score = self.filtered_true_predictions_rank.float().mean().item()
 
-        return mean_rank_score, filtered_mean_rank_score
+            return mean_rank_score, filtered_mean_rank_score
+        
+        else:
+            raise ValueError("Mean Rank evaluation is impossible with predictions from sphere embeddings, as they are unranked. To disable sphere embeddings, set the `sphere_embeddings` hyperparameter as false in the config file.")
+
     
     
     def hit_at_k(self,
@@ -125,6 +160,12 @@ class Predictions:
         ---------
         k: int, default to 10
             The true triplet must be within the k first predictions.
+
+        Raises
+        ------
+        ValueError
+            Hit@K evaluation is impossible with predictions from sphere embeddings, as they are unranked.
+            To disable sphere embeddings, set the `sphere_embeddings` hyperparameter as false in the config file.
         
         Returns
         -------
@@ -135,10 +176,15 @@ class Predictions:
             True triplets that are not the target of the prediction are filtered out.
         
         """
-        true_prediction_hit = (self.true_predictions_rank <= k).float().mean().item()
-        filtered_true_prediction_hit = (self.filtered_true_predictions_rank <= k).float().mean().item()
-        
-        return true_prediction_hit, filtered_true_prediction_hit
+        if self.true_predictions_rank is not None and self.filtered_true_predictions_rank is not None:
+            true_prediction_hit = (self.true_predictions_rank <= k).float().mean().item()
+            filtered_true_prediction_hit = (self.filtered_true_predictions_rank <= k).float().mean().item()
+
+            return true_prediction_hit, filtered_true_prediction_hit
+    
+        else:
+            raise ValueError("Hit@K evaluation is impossible with predictions from sphere embeddings, as they are unranked. To disable sphere embeddings, set the `sphere_embeddings` hyperparameter as false in the config file.")
+    
     
     
     @property
@@ -148,9 +194,11 @@ class Predictions:
         
         TODO.What_the_function_does_about_globally
 
-        References
-        ----------
-        TODO.reference
+        Raises
+        ------
+        ValueError
+            MRR evaluation is impossible with predictions from sphere embeddings, as they are unranked.
+            To disable sphere embeddings, set the `sphere_embeddings` hyperparameter as false in the config file.
 
         Returns
         -------
@@ -165,10 +213,14 @@ class Predictions:
             True triplets that are not the target of the prediction are filtered out.
         
         """
-        mrr = (self.true_predictions_rank.float()**(-1)).mean().item()
-        filtered_mrr = (self.filtered_true_predictions_rank.float()**(-1)).mean().item()
+        if self.true_predictions_rank is not None and self.filtered_true_predictions_rank is not None:
+            mrr = (self.true_predictions_rank.float()**(-1)).mean().item()
+            filtered_mrr = (self.filtered_true_predictions_rank.float()**(-1)).mean().item()
 
-        return mrr, filtered_mrr
+            return mrr, filtered_mrr
+
+        else:
+            raise ValueError("MRR evaluation is impossible with predictions from sphere embeddings, as they are unranked. To disable sphere embeddings, set the `sphere_embeddings` hyperparameter as false in the config file.")
 
 
 
@@ -227,8 +279,9 @@ class LinkPredictionEvaluator:
                 knowledge_graph: KnowledgeGraph,
                 node_embeddings: nn.ParameterList,
                 edge_embeddings: nn.Embedding,
+                sphere_embeddings: bool = False,
                 verbose: bool = True
-                ) -> Tuple[Predictions, Predictions]:
+                ) -> Tuple[Predictions, Predictions] | Tuple[Tensor, Tensor]:
         """
         Run the Link Prediction evaluation.
 
@@ -248,16 +301,19 @@ class LinkPredictionEvaluator:
             values: tensors of shape (node_count, embedding_dimensions)
         edge_embeddings: nn.Embedding, keyword-only
             A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
+        sphere_embeddings: bool, optional, default to False
+            If the given score was calculated from `spheric_score`.
+            Adaptation of SpherE.
         verbose: bool
             Indicate whether a progress bar should be displayed during
             evaluation.
         
         Returns
         -------
-        head_predictions: Predictions
-            Predictions for heads.
-        tail_predictions: Predictions
-            Predictions for tails.
+        head_predictions: Predictions or torch.Tensor
+            Predictions for heads. Is only ranked if `sphere_embeddings` is set to false.
+        tail_predictions: Predictions or torch.Tensor
+            Predictions for tails. Is only ranked if `sphere_embeddings` is set to false.
         
         """
         device = edge_embeddings.weight.device
@@ -306,50 +362,74 @@ class LinkPredictionEvaluator:
             else:
                 evaluation_node_embeddings = node_embeddings[0].data
 
-            head_embeddings, tail_embeddings, inference_edge_embeddings, candidates = decoder.inference_prepare_candidates(head_indices = head_index, 
-                                                                                                                tail_indices = tail_index, 
-                                                                                                                edge_indices = edge_index, 
-                                                                                                                node_embeddings = evaluation_node_embeddings, 
-                                                                                                                edge_embeddings = edge_embeddings,
-                                                                                                                node_inference = True)
+            head_embeddings, tail_embeddings, inference_edge_embeddings, candidates = decoder.inference_prepare_candidates( head_indices = head_index, 
+                                                                                                                            tail_indices = tail_index, 
+                                                                                                                            edge_indices = edge_index, 
+                                                                                                                            node_embeddings = evaluation_node_embeddings, 
+                                                                                                                            edge_embeddings = edge_embeddings,
+                                                                                                                            node_inference = True)
 
-            scores = decoder.inference_score(
+            # Inferring tails
+            scores_tails = decoder.inference_score(
                 head_embeddings = head_embeddings, 
                 tail_embeddings = candidates, 
                 edge_embeddings = inference_edge_embeddings
                 )
+
+            # Inferring heads
+            scores_heads = decoder.inference_score(
+                head_embeddings = candidates,
+                tail_embeddings = tail_embeddings,
+                edge_embeddings = inference_edge_embeddings
+                )
+
+        self.evaluated = True
+        
+        if sphere_embeddings:
+            # For sphere embeddings
+            # Get indices of all true triplets
+            # Here, `head_predictions` and  `tail_predictions` are Tensor of booleans
+            tail_predictions = (scores_tails >= 0).nonzero()[:, 0]
+            head_predictions = (scores_heads >= 0).nonzero()[:, 0]
+            
+            # Make Predictions object
+            tail_predictions = Predictions(sphere_predictions = tail_predictions)
+            head_predictions = Predictions(sphere_predictions = head_predictions)
+            
+            return head_predictions, tail_predictions
+        
+        else:
+            # Inferring tails
             filtered_scores = filter_scores(
-                scores = scores, 
+                scores = scores_tails, 
                 graphindices = self.full_graphindices.to(device),
                 missing = "tail",
                 first_index = head_index,
                 second_index = edge_index,
                 true_index = tail_index
             )
-            self.rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(scores, tail_index).detach()
+            self.rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(scores_tails, tail_index).detach()
             self.filtered_rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(filtered_scores, tail_index).detach()
-
-            scores = decoder.inference_score(
-                head_embeddings = candidates,
-                tail_embeddings = tail_embeddings,
-                edge_embeddings = inference_edge_embeddings)
+            
+            # Inferring heads
             filtered_scores = filter_scores(
-                scores = scores, 
+                scores = scores_heads, 
                 graphindices = self.full_graphindices.to(device),
                 missing = "head",
                 first_index = tail_index,
                 second_index = edge_index,
                 true_index = head_index
             )
-            self.rank_true_heads[i * batch_size: (i + 1) * batch_size] = get_rank(scores, head_index).detach()
+            self.rank_true_heads[i * batch_size: (i + 1) * batch_size] = get_rank(scores_heads, head_index).detach()
             self.filtered_rank_true_heads[i * batch_size: (i + 1) * batch_size] = get_rank(filtered_scores, head_index).detach()
 
-        self.evaluated = True
-
-        head_predictions = Predictions(self.rank_true_heads.cpu(), self.filtered_rank_true_heads.cpu())
-        tail_predictions = Predictions(self.rank_true_tails.cpu(), self.filtered_rank_true_tails.cpu())
-
-        return head_predictions, tail_predictions
+            # Predictions
+            head_predictions = Predictions( true_predictions_rank = self.rank_true_heads.cpu(),
+                                            filtered_true_predictions_rank = self.filtered_rank_true_heads.cpu())
+            tail_predictions = Predictions( true_predictions_rank = self.rank_true_tails.cpu(),
+                                            filtered_true_predictions_rank = self.filtered_rank_true_tails.cpu())
+            
+            return head_predictions, tail_predictions
 
 
 
@@ -549,5 +629,7 @@ class TripletClassificationEvaluator:
         scores = (scores > self.thresholds[edge_indices])
         negative_scores = (negative_scores < self.thresholds[edge_indices])
 
-        return (scores.sum().item() +
-                negative_scores.sum().item()) / (2 * self.kg_test.triplet_count)
+        accuracy = (scores.sum().item() +
+                    negative_scores.sum().item()) / (2 * self.kg_test.triplet_count)
+        
+        return accuracy
