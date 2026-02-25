@@ -712,9 +712,10 @@ class Architect(Module):
                     # if no feature attribute given, random initialization
                     embeddings = initialize_embedding(node_count, self.embedding_dimensions, self.device)
                     self.node_embeddings.append(embeddings.weight)
-                    
-            # The input features are not supposed to change if we use an encoder
-            self.node_embeddings = self.node_embeddings.requires_grad_(False)
+
+            if isinstance(self.encoder, GNN):     
+                # The input features are not supposed to change if we use an encoder
+                self.node_embeddings.requires_grad_(False)
 
         self.edge_embeddings = initialize_embedding(self.kg_train.edge_count, self.encoder_edge_embedding_dimensions, self.device)
 
