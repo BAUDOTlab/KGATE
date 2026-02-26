@@ -399,7 +399,7 @@ def count_triplets( kg1: "KnowledgeGraph",
     return duplicate_count, reverse_duplicate_count
 
 
-def find_best_model(dir: Path) -> Path:
+def find_best_model(directory: Path) -> Path | None:
     """
     Find all files having a model and compare their `validation_metrics` score
     to return the path to the file with the best result.
@@ -419,14 +419,18 @@ def find_best_model(dir: Path) -> Path:
     best_model = max(
                     (filename
                     for filename
-                    in os.listdir(dir)
-                    if filename.startswith("best_model_checkpoint_validation_metrics=")
+                    in os.listdir(directory)
+                    if filename.startswith("best_model_checkpoint_validation_metric_value=")
                     and filename.endswith(".pt")),
 
-                    key = lambda filename: float(filename.split("validation_metrics=")[1].rstrip(".pt")),
+                    key = lambda filename: float(filename.split("validation_metric_value=")[1].rstrip(".pt")),
 
                     default = None
                     )
+    if best_model is None:
+        logging.error(f"No best model found in directory {directory}. Make sure to run the training before calling this method.")
+        return None
+
     best_model_path = Path(best_model)
     
     return best_model_path

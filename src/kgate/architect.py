@@ -418,18 +418,18 @@ class Architect(Module):
                 decoder = TransE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
             case "TransH":
-                decoder = TransH(embedding_dimensions = self.embedding_dimensions,
+                decoder = TransH(embedding_dimensions = self.node_embedding_dimensions,
                                  node_count = self.kg_train.node_count,
                                  edge_count = self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransR":
-                decoder = TransR(node_embedding_dimensions = self.embedding_dimensions,
+                decoder = TransR(node_embedding_dimensions = self.node_embedding_dimensions,
                                  edge_embedding_dimensions = self.edge_embedding_dimensions, 
                                  node_count = self.kg_train.node_count, 
                                  edge_count = self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransD":
-                decoder = TransD(node_embedding_dimensions = self.embedding_dimensions,
+                decoder = TransD(node_embedding_dimensions = self.node_embedding_dimensions,
                                  edge_embedding_dimensions = self.edge_embedding_dimensions, 
                                  node_count = self.kg_train.node_count, 
                                  edge_count = self.kg_train.edge_count)
@@ -438,20 +438,20 @@ class Architect(Module):
                 decoder = TorusE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
             case "RESCAL":
-                decoder = RESCAL(embedding_dimensions = self.embedding_dimensions,
+                decoder = RESCAL(embedding_dimensions = self.node_embedding_dimensions,
                                  node_count = self.kg_train.node_count,
                                  edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "DistMult":
-                decoder = DistMult(embedding_dimensions = self.embedding_dimensions,
+                decoder = DistMult(embedding_dimensions = self.node_embedding_dimensions,
                                  node_count = self.kg_train.node_count,
                                  edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "ComplEx":
-                decoder = ComplEx(embedding_dimensions = self.embedding_dimensions)
+                decoder = ComplEx(embedding_dimensions = self.node_embedding_dimensions)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "ConvKB":
-                decoder = ConvKB(embedding_dimensions = self.embedding_dimensions, 
+                decoder = ConvKB(embedding_dimensions = self.node_embedding_dimensions, 
                                  filter_count = filter_count, 
                                  node_count = self.kg_train.node_count, 
                                  edge_count = self.kg_train.edge_count)
@@ -633,7 +633,7 @@ class Architect(Module):
                     self.kg_test.graphindices,
                     self.kg_test.removed_triplets
                 ], dim=1)
-                evaluator = LinkPredictionEvaluator(full_graphindices = full_graphindices, embedding_dimensions = self.embedding_dimensions)
+                evaluator = LinkPredictionEvaluator(full_graphindices = full_graphindices, embedding_dimensions = self.node_embedding_dimensions)
                 self.validation_metric = "MRR"
             case "Triplet Classification":
                 evaluator = TripletClassificationEvaluator(architect = self,
@@ -710,7 +710,7 @@ class Architect(Module):
                     
                 else:
                     # if no feature attribute given, random initialization
-                    embeddings = initialize_embedding(node_count, self.embedding_dimensions, self.device)
+                    embeddings = initialize_embedding(node_count, self.node_embedding_dimensions, self.device)
                     self.node_embeddings.append(embeddings.weight)
 
             if isinstance(self.encoder, GNN):     
@@ -835,7 +835,7 @@ class Architect(Module):
             "trainer": trainer,
         }
 
-        if self.encoder.deep:
+        if isinstance(self.encoder, GNN):
             to_save.update({"encoder": self.encoder})
         if self.scheduler is not None:
             to_save.update({"scheduler": self.scheduler})
@@ -860,7 +860,7 @@ class Architect(Module):
 
             """
             # Move models to CPU before saving
-            if self.encoder.deep:
+            if isinstance(self.encoder, GNN):
                 self.encoder.to("cpu")
             self.decoder.to("cpu")
             self.edge_embeddings.to("cpu")
@@ -870,7 +870,7 @@ class Architect(Module):
             checkpoint_handler(engine)
 
             # Move models back to GPU
-            if self.encoder.deep:
+            if isinstance(self.encoder, GNN):
                 self.encoder.to(self.device)
             self.decoder.to(self.device)
             self.edge_embeddings.to(self.device)
@@ -1118,12 +1118,12 @@ class Architect(Module):
         checkpoint = torch.load(path, map_location = self.device, weights_only = False)
 
         # Check node and edge dictionnary size
-        assert len(checkpoint["edges"]["weight"]) == self.kg_train.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint['edges']['weight'])}) and the current configuration ({self.kg_train.edge_count})!"
+        assert len(checkpoint["edges"]["weight"]) == self.kg_train.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint["edges"]["weight"])}) and the current configuration ({self.kg_train.edge_count})!"
 
         if isinstance(self.encoder, GNN):
-            assert len(checkpoint["nodes"]) == len(self.kg_train.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint['nodes'])}) and the current configuration ({len(self.kg_train.node_type_to_index)})!"
+            assert len(checkpoint["nodes"]) == len(self.kg_train.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint["nodes"])}) and the current configuration ({len(self.kg_train.node_type_to_index)})!"
         else:
-            assert len(checkpoint["nodes"]["weight"]) != self.kg_train.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint['nodes'])}) and the current configuration ({self.kg_train.node_count})!"
+            assert len(checkpoint["nodes"]["0"]) == self.kg_train.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint["nodes"]["0"])}) and the current configuration ({self.kg_train.node_count})!"
 
         if "encoder" in checkpoint:
             assert checkpoint["encoder"].keys() == self.encoder.state_dict().keys(), "Mismatch between the checkpoint convolution layers and the current configuration's."
@@ -1678,7 +1678,7 @@ class Architect(Module):
         head_predictions, tail_predictions = self.evaluator.evaluate(batch_size = self.evaluation_batch_size,
                                 encoder = self.encoder,
                                 decoder = self.decoder,
-                                kg = kg,
+                                knowledge_graph = kg,
                                 node_embeddings = self.node_embeddings, 
                                 edge_embeddings = self.edge_embeddings,
                                 verbose = True)
