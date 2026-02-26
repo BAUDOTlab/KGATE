@@ -117,7 +117,8 @@ class EdgeInference:
                 encoder: DefaultEncoder | GNN,
                 decoder: TranslationalDecoder | BilinearDecoder | ConvolutionalDecoder,
                 node_embeddings: nn.ParameterList, 
-                edge_embeddings: nn.Embedding, 
+                edge_embeddings: nn.Embedding,
+                sphere_embeddings: bool = False,
                 verbose: bool = True,
                 **_):
         """
@@ -218,20 +219,20 @@ class EdgeInference:
                                                                                                         node_inference = False)
                 scores = decoder.inference_score(head_embeddings, tail_embeddings, candidates)
 
-                head_embeddings, tail_embeddings, _, candidates = decoder.inference_prepare_candidates( head_indices = head_indices,
-                                                                                                        tail_indices = tail_indices, 
-                                                                                                        edge_indices = tensor([]).long(),
-                                                                                                        node_embeddings = node_embeddings, 
-                                                                                                        edge_embeddings = edge_embeddings, 
-                                                                                                        node_inference = False)
-                scores = decoder.inference_score(head_embeddings, tail_embeddings, candidates)
+                if not sphere_embeddings:
+                    scores = filter_scores(scores, self.kg.graphindices, "edge", head_indices, tail_indices, None)
 
-                scores = filter_scores(scores, self.kg.graphindices, "edge", head_indices, tail_indices, None)
-
-                scores, indices = scores.sort(descending = True)
+                    scores, indices = scores.sort(descending = True)
 
                 predictions[i * batch_size: (i + 1) * batch_size] = indices[:, :top_k]
                 scores[i * batch_size, (i + 1) * batch_size] = scores[:, :top_k]
+                
+                if sphere_embeddings:
+                    # TODO: check if 'i' is the correct index to put here
+                    if scores[i] >= 0:
+                        predictions[i] = True
+                    else:
+                        predictions[i] = False
 
             return predictions.cpu(), scores.cpu()
 
@@ -275,6 +276,7 @@ class NodeInference:
                 decoder: TranslationalDecoder | BilinearDecoder | ConvolutionalDecoder,
                 node_embeddings: nn.ParameterList, 
                 edge_embeddings: nn.Embedding,
+                sphere_embeddings: bool = False,
                 verbose: bool = True,
                 **_):
         """
@@ -394,17 +396,25 @@ class NodeInference:
                                                                                                             node_inference = True)
                     batch_scores = decoder.inference_score(head_embeddings, candidates, edge_embeddings)
 
-                batch_scores = filter_scores(batch_scores,
-                                            self.kg.graphindices,
-                                            missing_triplet_part,
-                                            known_nodes,
-                                            known_edges,
-                                            None)
+                if not sphere_embeddings:
+                    batch_scores = filter_scores(batch_scores,
+                                                self.kg.graphindices,
+                                                missing_triplet_part,
+                                                known_nodes,
+                                                known_edges,
+                                                None)
 
-                batch_scores, indices = batch_scores.sort(descending = True)
-                batch_size = min(batch_size, len(batch_scores))
-                
+                    batch_scores, indices = batch_scores.sort(descending = True)
+                    batch_size = min(batch_size, len(batch_scores))
+            
                 predictions[i * batch_size: (i+1) * batch_size] = indices[:, :top_k]
                 scores[i * batch_size: (i+1) * batch_size] = batch_scores[:, :top_k]
+
+                if sphere_embeddings:
+                    # TODO: check if 'i' is the correct index to put here
+                    if scores[i] >= 0:
+                        predictions[i] = True
+                    else:
+                        predictions[i] = False
 
             return predictions.cpu(), scores.cpu()

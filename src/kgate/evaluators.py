@@ -493,9 +493,9 @@ class TripletClassificationEvaluator:
 
 
     def get_scores( self,
-                    heads: Tensor,
-                    tails: Tensor,
-                    edges: Tensor,
+                    head_indices: Tensor,
+                    tail_indices: Tensor,
+                    edge_indices: Tensor,
                     batch_size: int
                     ) -> Tensor:
         """
@@ -522,7 +522,7 @@ class TripletClassificationEvaluator:
         
         scores = []
 
-        small_kg = SmallKG(heads, tails, edges)
+        small_kg = SmallKG(head_indices, tail_indices, edge_indices)
         if self.is_cuda:
             dataloader = DataLoader(small_kg,
                                     batch_size = batch_size)
@@ -534,7 +534,9 @@ class TripletClassificationEvaluator:
             head_index, tail_index, edge_index = batch[0].to(self.architect.device), batch[1].to(self.architect.device), batch[2].to(self.architect.device)
             scores.append(self.architect.scoring_function(head_index, tail_index, edge_index, train = False))
 
-        return cat(scores, dim = 0)
+        scores = cat(scores, dim = 0)
+
+        return scores
 
 
     def evaluate(self,
@@ -586,7 +588,7 @@ class TripletClassificationEvaluator:
                 ) -> float:
         
         """
-        TODO.what_that_function_does
+        Calculate the proportion of correctly classified triplets.
         
         Arguments
         ---------

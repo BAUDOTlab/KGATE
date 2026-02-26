@@ -890,6 +890,7 @@ class Architect(Module):
 
         Notes
         -----
+        This function is user-facing.
         If there already is a configuration file in the output folder identical to the current configuration, KGATE will
         automatically attempt to restart the training from the most recent checkpoint in the `checkpoints/` folder. Otherwise,
         the output folder will be cleaned and the current configuration will be written as `kgate_config.toml`
@@ -1068,6 +1069,10 @@ class Architect(Module):
         results: Dict[str, float | Dict[str, float]]
             TODO.What_that_variable_is_or_does
         
+        Notes
+        -----
+        This function is user-facing.
+        
         """
         torch.cuda.empty_cache()
         gc.collect()
@@ -1171,6 +1176,10 @@ class Architect(Module):
         predictions: pd.DataFrame
             A DataFrame containing the prediction alongside their score.
         
+        Notes
+        -----
+        This function is user-facing.
+        
         """
         if not sum([len(arr) > 0 for arr in [heads, edges, tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, tails or edges.")
@@ -1208,7 +1217,8 @@ class Architect(Module):
             missing_triplet_part = missing_triplet_part,
             batch_size = self.evaluation_batch_size,
             node_embeddings = self.node_embeddings,   
-            edge_embeddings = self.edge_embeddings
+            edge_embeddings = self.edge_embeddings,
+            sphere_embeddings = self.config["model"]["sphere_embeddings"]
         )
 
         index_to_node = {value: key for key, value in self.kg_train.node_to_index.items()}
@@ -1457,6 +1467,10 @@ class Architect(Module):
         -------
         embedding_dictionnary: Dict[str, Tensor]
             Embeddings of nodes and edges, as well as decoder-specific embeddings.
+
+        Notes
+        -----
+        This function is user-facing.
 
         """
         self.normalize_parameters()
@@ -1882,6 +1896,10 @@ class Architect(Module):
         ------
         ValueError
             An edge was not found in the knowledge graph.
+
+        Notes
+        -----
+        This function is user-facing.
         
         """
         logging.info("Preparing KG for data leakage evaluation procedure...")
