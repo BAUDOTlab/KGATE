@@ -975,12 +975,28 @@ class ComplEx(BilinearDecoder):
         real_edge_embeddings, imaginary_edge_embeddings = edge_embeddings
         
         batch_size = real_head_embeddings.shape[0]
+        
+        real_head_embeddings_shape = len(real_head_embeddings.shape)
+        real_tail_embeddings_shape = len(real_tail_embeddings.shape)
+        real_edge_embeddings_shape = len(real_edge_embeddings.shape)
+        # Simplifying cases of inference
+        if real_head_embeddings_shape == 3 and \
+            real_tail_embeddings_shape == 2 and \
+            real_edge_embeddings_shape == 2:
+                inference_target = "heads"
+        elif real_head_embeddings_shape == 2 and \
+            real_tail_embeddings_shape == 3 and \
+            real_edge_embeddings_shape == 2:
+                inference_target = "tails"
+        elif real_head_embeddings_shape == 2 and \
+            real_tail_embeddings_shape == 2 and \
+            real_edge_embeddings_shape == 3:
+                inference_target = "edges"
+        else:
+            raise ValueError("Mismatch in the shapes of the embeddings. To properly infer tails, heads or edges, the corresponding tensor must be of length 3 and the other two of length 2.")
 
-        if len(real_head_embeddings.shape) == 3:
-            assert (len(real_tail_embeddings.shape) == 2) and (len(real_edge_embeddings.shape) == 2), \
-                "When inferring heads, the tensors `tail_embeddings` and `edge_embeddings` must have 2 dimensions."
-            
-            return (real_head_embeddings * 
+        if inference_target == "heads":
+            score = (real_head_embeddings * 
                         (real_edge_embeddings * real_tail_embeddings 
                          + imaginary_edge_embeddings * imaginary_tail_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
@@ -989,12 +1005,10 @@ class ComplEx(BilinearDecoder):
                         - imaginary_edge_embeddings * real_tail_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
                     ).sum(dim = 2)
-
-        elif len(real_tail_embeddings.shape) == 3:
-            assert (len(real_head_embeddings.shape) == 2) and (len(real_edge_embeddings.shape) == 2), \
-                "When inferring tails, the tensors `head_embeddings` and `edge_embeddings` must have 2 dimensions."
-            
-            return ((real_head_embeddings * real_edge_embeddings
+            return score
+        
+        elif inference_target == "tails":
+            score = ((real_head_embeddings * real_edge_embeddings
                         - imaginary_head_embeddings * imaginary_edge_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * real_tail_embeddings
@@ -1003,12 +1017,10 @@ class ComplEx(BilinearDecoder):
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * imaginary_tail_embeddings
                     ).sum(dim = 2)
-
-        elif len(real_edge_embeddings.shape) == 3:
-            assert (len(real_head_embeddings.shape) == 2) and (len(real_tail_embeddings.shape) == 2), \
-                "When inferring edges, the tensors `head_embeddings` and `tail_embeddings` must have 2 dimensions."
-            
-            return ((real_head_embeddings * real_tail_embeddings
+            return score
+        
+        elif inference_target == "edges":
+            score = ((real_head_embeddings * real_tail_embeddings
                         + imaginary_head_embeddings * imaginary_tail_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * real_edge_embeddings
@@ -1017,6 +1029,4 @@ class ComplEx(BilinearDecoder):
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * imaginary_edge_embeddings
                     ).sum(dim = 2)
-        
-        else:
-            raise ValueError("None of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.")
+            return score

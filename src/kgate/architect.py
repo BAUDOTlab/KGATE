@@ -430,7 +430,7 @@ class Architect(Module):
                                                     "TransR",
                                                     "TransD",
                                                     "TorusE",
-                                                    "SpherE",
+                                                    "RotatE",
                                                     "RESCAL",
                                                     "DisMult",
                                                     "ComplEx",
@@ -551,6 +551,15 @@ class Architect(Module):
             case "TorusE":
                 decoder = TorusE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
+            case "RotatE":
+                decoder = TransR(node_embedding_dimensions = self.embedding_dimensions,
+                                edge_embedding_dimensions = self.edge_embedding_dimensions, 
+                                node_count = self.kg_train.node_count, 
+                                edge_count = self.kg_train.edge_count,
+                                sphere_embeddings = sphere_embeddings,
+                                alpha = alpha,
+                                beta = beta)
+                decoder_loss = MarginLoss(margin)
             case "RESCAL":
                 decoder = RESCAL(embedding_dimensions = self.node_embedding_dimensions,
                                 node_count = self.kg_train.node_count,
@@ -571,7 +580,7 @@ class Architect(Module):
                                 edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case _:
-                raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented. Supported decoders are: TransE, TransH, TransR, TransD, TorusE, SpherE, RESCAL, DisMult, ComplEx, ConvKB.")
+                raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented. Supported decoders are: TransE, TransH, TransR, TransD, TorusE, RotatE, RESCAL, DisMult, ComplEx, ConvKB.")
 
         return decoder, decoder_loss
 
@@ -978,6 +987,7 @@ class Architect(Module):
                     n_saved = 2,   # Only keep last 2 checkpoints
                     global_step_transform = lambda *_: trainer.state.epoch   # Include epoch number
         )
+
 
         def save_checkpoint_to_cpu(engine: Engine):
             """
