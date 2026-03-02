@@ -995,7 +995,7 @@ class ComplEx(BilinearDecoder):
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * real_tail_embeddings
                     + (real_head_embeddings * imaginary_edge_embeddings
-                        + imaginary_head_embeddings * real_tail_embeddings
+                        + imaginary_head_embeddings * real_edge_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * imaginary_tail_embeddings
                     )
