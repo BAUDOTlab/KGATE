@@ -1726,7 +1726,9 @@ class Architect(Module):
 
     def run_data_leakage(self, attributes: Dict[str, pd.DataFrame] = {}):
         """
-        Data leakage evaluation, specific to KGATE.
+        Data leakage evaluation.
+        
+        TODO: detail the data leakage procedure
         
         Arguments
         ---------

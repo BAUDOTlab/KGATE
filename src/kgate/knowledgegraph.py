@@ -35,7 +35,7 @@ logging.basicConfig(
 
 class EncoderInput:
     """
-    TODO.What_the_class_is_about_globally
+    Object simulating the needed part of HeteroData to be fed to a Pytorch Geometric encoder from a subsampling according to a given batch.
 
     Arguments
     ---------
@@ -43,10 +43,11 @@ class EncoderInput:
         Key (str): node type
         Value (Tensor): [node_count for the node_type, embedding_dimension]
         PyTorch Geometric equivalent to node_embeddings.
-    edge_list: Dict[str, Tensor]
-        TODO.What_that_argument_is_or_does
+    edge_list: Dict[Tuple[str,str,str], Tensor]
+        Pytorch Geometric equivalent to `graphindices`.
+        Each key is the tuple representing the triplet type, and the tensors are of shape [2,n] where n is the number of triplets of this type.
     mapping: Dict[str, Tensor]
-        TODO.What_that_argument_is_or_does
+        Dictionary allowing the mapping of nodes within the `x_dict` to their global index in the knowledge graph.
 
     Attributes
     ----------
@@ -54,15 +55,16 @@ class EncoderInput:
         Key (str): node type
         Value (Tensor): [node_count for the node_type, embedding_dimension]
         PyTorch Geometric equivalent to node_embeddings.
-    edge_list: Dict[str, Tensor]
-        TODO.What_that_variable_is_or_does
+    edge_list: Dict[Tuple[str,str,str], Tensor]
+        Pytorch Geometric equivalent to `graphindices`.
+        Each key is the tuple representing the triplet type, and the tensors are of shape [2,n] where n is the number of triplets of this type.
     mapping: Dict[str, Tensor]
-        TODO.What_that_variable_is_or_does
+        Dictionary allowing the mapping of nodes within the `x_dict` to their global index in the knowledge graph.
     
     """
     def __init__(self,
                 x_dict: Dict[str, Tensor],
-                edge_list: Dict[str, Tensor],
+                edge_list: Dict[Tuple[str,str,str], Tensor],
                 mapping: Dict[str, Tensor]):
         
         self.x_dict = x_dict
@@ -99,51 +101,70 @@ class EncoderInput:
 
         return message
 
+
+
 class KnowledgeGraph(Dataset):
     """
-    The main object of KGATE: the knowledge graph.
+    KGATE representation of a Knowledge Graph.
 
     Arguments
     ---------
     dataframe: pd.DataFrame , default to None
-        TODO.What_that_argument_is_or_does
+        Dataframe representing the KG as a set of triplets, with at least three columns: head, tail and edge.
+        The values are the identifiers of the nodes and edges
     graphindices: torch.Tensor, shape: [4, triplet_count], default to None
         Tensor of containing every true triplet in the knowledge graph.
+        The four rows correspond to:
+            0. `head_indices`: the index of the head node of the triplet
+            1. `tail_indices`: the index of the tail node of the triplet
+            2. `edge_indices`: the index of the edge type of the triplet
+            3. `triplet_types`: the index of the triplet type
     metadata: pd.DataFrame, default to None
         The metadata dataframe to associate to the knowledge graph.
+        It must have at least two columns: "id" mapping to the node identifiers of the dataframe, and "type" representing the node type.
+        Additional metadata can be added.
     triplet_types: List[Tuple[str, str, str]], default to None
-        TODO.What_that_argument_is_or_does
+        List of all the triplet types in the graph represented as tuples (head_node_type, edge_type, tail_node_type).
     node_to_index: Dict[str, int], default to None
-        TODO.What_that_argument_is_or_does
+        Dictionary mapping the node identifier to their index in the knowledge graph.
     edge_to_index: Dict[str, int], default to None
-        TODO.What_that_argument_is_or_does
+        Dictionary mapping the edge identifier to their index in the knowledge graph.
     node_type_to_index: Dict[str, int], default to None
-        TODO.What_that_argument_is_or_does
-    removed_triplets: torch.Tensor, default to None
-        TODO.What_that_argument_is_or_does
+        Dictionary mapping the node type to their index in the knowledge graph.
+    removed_triplets: torch.Tensor, shape: [4, removed_triplet_count], default to None
+        `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
+        They are kept in memory as they still represent ground truth.
 
     Attributes
     ----------
-    graphindices: torch.Tensor, shape: [4, triplet_count], default to None
+    graphindices: torch.Tensor, shape: [4, triplet_count]
         Tensor of containing every true triplet in the knowledge graph.
-    metadata: pd.DataFrame, default to None
+        The four rows correspond to:
+            0. `head_indices`: the index of the head node of the triplet
+            1. `tail_indices`: the index of the tail node of the triplet
+            2. `edge_indices`: the index of the edge type of the triplet
+            3. `triplet_types`: the index of the triplet type
+    metadata: pd.DataFrame
         The metadata dataframe to associate to the knowledge graph.
+        It must have at least two columns: "id" mapping to the node identifiers of the dataframe, and "type" representing the node type.
+        Additional metadata can be added.
     triplet_types: List[Tuple[str, str, str]]
-        TODO.What_that_variable_is_or_does
-    node_to_index: Dict[str, int]
-        TODO.What_that_variable_is_or_does
-    edge_to_index: Dict[str, int]
-        TODO.What_that_variable_is_or_does
-    node_type_to_index: Dict[str, int]
-        TODO.What_that_variable_is_or_does
-    removed_triplets: torch.Tensorm [4, triplet_count]
-        TODO.What_that_variable_is_or_does
+        List of all the triplet types in the graph represented as tuples (head_node_type, edge_type, tail_node_type).
+    node_to_index: Dict[str, int], default to None
+        Dictionary mapping the node identifier to their index in the knowledge graph.
+    edge_to_index: Dict[str, int], default to None
+        Dictionary mapping the edge identifier to their index in the knowledge graph.
+    node_type_to_index: Dict[str, int], default to None
+        Dictionary mapping the node type to their index in the knowledge graph.
+    removed_triplets: torch.Tensor, shape: [4, removed_triplet_count], default to None
+        `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
+        They are kept in memory as they still represent ground truth.
     triplet_count: int
-        TODO.What_that_variable_is_or_does
+        Total number of triplets in the knowledge graph.
     node_count: int
-        TODO.What_that_variable_is_or_does
+        Total number of nodes in the knowledge graph.
     edge_count: int
-        TODO.What_that_variable_is_or_does
+        Total number of edges in the knowledge graph.
     node_types: torch.Tensor
         TODO.What_that_variable_is_or_does
     node_type_to_global: Dict[str, int]
@@ -317,13 +338,8 @@ class KnowledgeGraph(Dataset):
     @property
     def head_indices(self) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
-
-        Returns
-        -------
-        TODO.result_name: torch.Tensor
-            TODO.What_that_variable_is_or_does
-            
+        Tensor of the head indices for all triplets contained in this knowledge graph.
+        
         """
         return self.graphindices[0]
     
@@ -331,13 +347,8 @@ class KnowledgeGraph(Dataset):
     @property
     def tail_indices(self) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
-
-        Returns
-        -------
-        TODO.result_name: torch.Tensor
-            TODO.What_that_variable_is_or_does
-            
+        Tensor of the tail indices for all triplets contained in this knowledge graph.
+        
         """
         return self.graphindices[1]
     
@@ -345,13 +356,8 @@ class KnowledgeGraph(Dataset):
     @property
     def edge_indices(self) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
+        Tensor of the edge indices for all triplets contained in this knowledge graph.
 
-        Returns
-        -------
-        TODO.result_name: torch.Tensor
-            TODO.What_that_variable_is_or_does
-            
         """
         return self.graphindices[2]
 
@@ -359,13 +365,8 @@ class KnowledgeGraph(Dataset):
     @property
     def triplets(self) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
-
-        Returns
-        -------
-        TODO.result_name: torch.Tensor
-            TODO.What_that_variable_is_or_does
-            
+        Tensor of the triplet types indices for all triplets contained in this knowledge graph.
+        
         """
         return self.graphindices[3]
 
@@ -373,13 +374,9 @@ class KnowledgeGraph(Dataset):
     @property
     def edge_list(self) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
-
-        Returns
-        -------
-        TODO.result_name: torch.Tensor
-            TODO.What_that_variable_is_or_does
-            
+        Tensor of shape [2, triplet_count] where the first row is equivalent to `head_indices` and the second to `tail_indices`.
+        Represents the knowledge graph as an edge list, without using the semantic meaning of the edges.
+        
         """
         return self.graphindices[:2]
     
@@ -387,13 +384,7 @@ class KnowledgeGraph(Dataset):
     @property
     def n_facts(self) -> int:
         """
-        TODO.What_the_function_does_about_globally
-        torchkge compatibility
-
-        Returns
-        -------
-        triplet_count: int
-            TODO.What_that_variable_is_or_does
+        TorchKGE alias for `triplet_count`. Property for compatibility.
             
         """
         return self.triplet_count
@@ -405,11 +396,6 @@ class KnowledgeGraph(Dataset):
         Get the DataFrame containing all the identity of the knowledge graph nodes.
         
         The default identity is the node ID, but different values can be set using the `set_identity` method.
-
-        Returns
-        -------
-        TODO.result_name: pd.DataFrame
-            TODO.What_that_variable_is_or_does
         
         """
         if self.metadata is not None:
@@ -580,13 +566,14 @@ class KnowledgeGraph(Dataset):
                 node_type_to_index = self.node_type_to_index
             )
         )
-            
-            
+
+
     def get_mask(self,
                 split_proportions: Tuple[float, float, float]
                 ) -> Tuple[Tensor, Tensor, Tensor]:
         """
-        TODO.What_the_function_does_about_globally
+        Return the proper train, validation and test masks with proportion of each triplet type corresponding to the given values.
+        This method is called by the `split_kg` method.
 
         Arguments
         ---------
@@ -606,11 +593,11 @@ class KnowledgeGraph(Dataset):
         Returns
         -------
         train_mask: torch.Tensor
-            TODO.What_that_variable_is_or_does
+            Boolean mask representing the train set.
         validation_mask: torch.Tensor
-            TODO.What_that_variable_is_or_does
+            Boolean mask representing the validation set.
         test_mask: torch.Tensor
-            TODO.What_that_variable_is_or_does
+            Boolean mask representing the test set.
             
         """
         unique_edges, edge_counts = self.edge_indices.unique(return_counts = True)
@@ -1112,12 +1099,12 @@ class KnowledgeGraph(Dataset):
                             node_embedding: nn.ParameterList
                             ) -> EncoderInput:
         """
-        TODO.What_the_function_does_about_globally
+        From a `graphindices`-like tensor and node embeddings, build the `EncoderInput` object that will be fed to the GNN encoder.
 
         Arguments
         ---------
-        data: torch.Tensor
-            TODO.What_that_argument_is_or_does
+        data: torch.Tensor, shape: [4, batch_size]
+            `graphindices`-like tensor
         node_embedding: nn.ParameterList
             A list containing all embeddings for each node type.
             keys: node type index
@@ -1130,8 +1117,9 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        TODO.result_name: EncoderInput
-            TODO.What_that_variable_is_or_does
+        encoder_input: EncoderInput
+            Object simulating the needed part of HeteroData to be fed to a Pytorch Geometric encoder
+            from a subsampling according to a given batch.
         
         """
         assert data.device == node_embedding[0].device
@@ -1179,7 +1167,9 @@ class KnowledgeGraph(Dataset):
             edge_index_self = torch.stack([self_loops, self_loops], dim = 0)
             pyg_edge_index[triplet_type] = edge_index_self
 
-        return EncoderInput(x_dict, pyg_edge_index, node_indices)
+        encoder_input = EncoderInput(x_dict, pyg_edge_index, node_indices)
+        
+        return encoder_input
 
 
     def flatten_embeddings( self,

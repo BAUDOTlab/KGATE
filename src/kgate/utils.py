@@ -36,7 +36,7 @@ def parse_config(config_path: str,
                 config_dictionnary: dict
                 ) -> dict:
     """
-    Parse the configuration file and cross it with default and inline configurations to determine what
+    Parse the configuration file and compares it to default and inline configurations to determine what
     each parameter must be. For each parameter, the final parsed configuration will include in
     priority order: inline configuration, configuration file, default configuration.
     
@@ -111,16 +111,16 @@ def set_config_key( key: str,
 
     Returns
     -------
-    inline_value: str or int or float or List or dict or None
-        Value of the key given by the user in command line.
-        Can only be of types dict and List within the recursive call.
-    config_value: str or int or float or List or dict or None
-        Value of the key from the configuration file.
-        Can only be of types dict and List within the recursive call.
-    default[key]: str or int or float or List or dict or None
-        Value of the key from the default configuration file.
-        Can only be of types dict and List within the recursive call.
-        
+    Return one of the following values:
+        inline_value: str or int or float or List or dict or None
+            Value of the key given by the user in command line.
+            Can only be of types dict and List within the recursive call.
+        config_value: str or int or float or List or dict or None
+            Value of the key from the configuration file.
+            Can only be of types dict and List within the recursive call.
+        default[key]: str or int or float or List or dict or None
+            Value of the key from the default configuration file.
+            Can only be of types dict and List within the recursive call.
     
     """
     if inline is not None and key in inline:
@@ -226,24 +226,6 @@ def set_random_seeds(seed: int) -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-
-
-def extract_node_type(node_name: str):
-    """
-    Extracts the node type from the node name, based on the string before the first underscore.
-    
-    Arguments
-    ---------
-    node_name: str
-        The name of the node to extract the type from.
-
-    Returns
-    -------
-    node_type: str
-        The node type extracted.
-    
-    """
-    return node_name.split("_")[0]
 
 
 def compute_triplet_proportions(kg_train: "KnowledgeGraph",

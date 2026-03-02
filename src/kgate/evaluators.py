@@ -40,6 +40,8 @@ class Predictions:
     
     Predictions are available as a dataframe, but can also be accessed through
     builtin methods to get specific metrics.
+    
+    TODO: the object could be better structured altogether
 
     Arguments
     ---------
@@ -79,6 +81,7 @@ class Predictions:
         
         return message
 
+
     @property
     def mean_rank(self) -> Tuple[float, float]:
         """
@@ -86,6 +89,10 @@ class Predictions:
         
         TODO.What_the_function_does_about_globally
 
+        References
+        ----------
+        TODO.reference
+        
         Returns
         -------
         mean_rank_score: float
@@ -103,11 +110,16 @@ class Predictions:
 
         return mean_rank_score, filtered_mean_rank_score
     
+    
     def hit_at_k(self,
                 k: int = 10
                 ) -> Tuple[float, float]:
         """
         Return the frequence at which the true triplet is within the k first predictions.
+
+        References
+        ----------
+        TODO.reference
         
         Arguments
         ---------
@@ -128,12 +140,17 @@ class Predictions:
         
         return true_prediction_hit, filtered_true_prediction_hit
     
+    
     @property
     def mrr(self) -> Tuple[float, float]:
         """
         Mean reciprocal rank
         
         TODO.What_the_function_does_about_globally
+
+        References
+        ----------
+        TODO.reference
 
         Returns
         -------
@@ -333,6 +350,7 @@ class LinkPredictionEvaluator:
         tail_predictions = Predictions(self.rank_true_tails.cpu(), self.filtered_rank_true_tails.cpu())
 
         return head_predictions, tail_predictions
+
 
 
 class TripletClassificationEvaluator:

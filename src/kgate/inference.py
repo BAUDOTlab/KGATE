@@ -17,7 +17,7 @@ from .utils import filter_scores
 
 class Inference_KG(Dataset):
     """
-    TODO.What_the_class_is_about_globally
+    Subset of a KG used for inference.
     
     This class inherits from the PyTorch `utils.data.Dataset` class:
     https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html
@@ -28,7 +28,6 @@ class Inference_KG(Dataset):
         The first tensor with indices of the edges or nodes (from the knowledge graph).
     second_index_tensor: torch.Tensor
         The second tensor with indices of the edges or nodes (from the knowledge graph).
-        
 
     Attributes
     ----------
@@ -45,8 +44,8 @@ class Inference_KG(Dataset):
     Notes
     -----
     Either both tensors are nodes, or they are node and edge.
-    The `__getitem__` method makes the `Inference_KG` object behave like a Python list when you try to
-    get items from it using square brackets, allowing calls like `inference_kg = Inference_KG(head_indices, tail_indices)`
+    The `__getitem__` method allows to call an `Inference_KG` object with an index,
+    giving back a tuple containing the corresponding values of both tensors.
     
     """
     def __init__(self,
@@ -57,7 +56,6 @@ class Inference_KG(Dataset):
         assert first_index_tensor.size() == second_index_tensor.size(), "Both index tensors must be of the same size for inference."
         self.first_tensor_index = first_index_tensor
         self.second_tensor_index = second_index_tensor
-
 
 
     def __len__(self):
@@ -219,7 +217,7 @@ class NodeInference:
                 verbose: bool = True,
                 **_):
         """
-        TODO.What_the_function_does_about_globally
+        Predict the missing node of a triplet where either head and edge or edge and tail are known.
 
         Arguments
         ---------

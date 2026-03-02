@@ -337,7 +337,7 @@ def ensure_node_coverage(kg_train: KnowledgeGraph,
     # Get the indices of all nodes in kg_train 
     train_nodes = set(kg_train.node_to_index.values())
 
-    # Get he indices of all nodes in kg_train as heads or tails
+    # Get the indices of all nodes in kg_train as heads or tails
     present_heads = set(kg_train.head_indices.tolist())
     present_tails = set(kg_train.tail_indices.tolist())
     present_nodes = present_heads.union(present_tails)
