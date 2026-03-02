@@ -44,7 +44,7 @@ theta_second_edge_type = 0.8
 # The dimension of the embedding vectors for nodes and edges.
 # Some models need to have the same dimensions for node and edge vectors.
 # The default value for edge_embedding_dimensions, -1, will set it to be equal to embedding_dimensions
-embedding_dimensions = 256
+node_embedding_dimensions = 256
 edge_embedding_dimensions = -1
 
 [model.encoder]
