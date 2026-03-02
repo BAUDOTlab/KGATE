@@ -710,7 +710,8 @@ class Architect(Module):
                     
                 else:
                     # if no feature attribute given, random initialization
-                    embeddings = initialize_embedding(node_count, self.node_embedding_dimensions, self.device)
+                    node_embedding_dimensions = self.node_embedding_dimensions if isinstance(self.encoder, GNN) else self.encoder_node_embedding_dimensions
+                    embeddings = initialize_embedding(node_count, node_embedding_dimensions, self.device)
                     self.node_embeddings.append(embeddings.weight)
 
             if isinstance(self.encoder, GNN):     
