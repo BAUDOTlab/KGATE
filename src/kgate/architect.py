@@ -251,7 +251,7 @@ class Architect(Module):
 
 
     @property
-    def encoder_node_embedding_dimensions(self):
+    def encoder_node_embedding_dimensions(self) -> int:
         """
         TODO.What_the_function_does_about_globally
 
@@ -268,7 +268,7 @@ class Architect(Module):
 
 
     @property
-    def encoder_edge_embedding_dimensions(self):
+    def encoder_edge_embedding_dimensions(self) -> int:
         """
         TODO.What_the_function_does_about_globally
 
