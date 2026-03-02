@@ -1722,8 +1722,7 @@ class RotatE(TranslationalDecoder):
     def __init__(self,
                 node_count: int,
                 edge_count: int,
-                node_embedding_dimensions: int,
-                edge_embedding_dimensions: int,
+                embedding_dimensions: int,
                 sphere_embeddings: bool,
                 alpha: float,
                 beta: float):
@@ -1731,8 +1730,7 @@ class RotatE(TranslationalDecoder):
 
         self.node_count = node_count
         self.edge_count = edge_count
-        self.node_embedding_dimensions = node_embedding_dimensions
-        self.edge_embedding_dimensions = edge_embedding_dimensions
+        self.embedding_dimensions = embedding_dimensions
         
         self.embedding_spaces = 2
         self.embedding_range = None # TODO
@@ -1949,7 +1947,7 @@ class RotatE(TranslationalDecoder):
                     + imaginary_head_embeddings * 
                         (real_edge_embeddings * imaginary_tail_embeddings
                         - imaginary_edge_embeddings * real_tail_embeddings
-                        ).view(batch_size, 1, self.embedding_spaces)
+                        ).view(batch_size, 1, self.embedding_dimensions)
                     ).sum(dim = 2)
             return score
         
@@ -1959,7 +1957,7 @@ class RotatE(TranslationalDecoder):
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * real_tail_embeddings
                     + (real_head_embeddings * imaginary_edge_embeddings
-                        + imaginary_head_embeddings * real_tail_embeddings
+                        + imaginary_head_embeddings * real_edge_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * imaginary_tail_embeddings
                     ).sum(dim = 2)
