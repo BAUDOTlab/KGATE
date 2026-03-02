@@ -813,6 +813,8 @@ class TransR(TranslationalDecoder):
     sphere_embeddings: bool, optional, default to False
         If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
         Adaptation of SpherE.
+    node_radii: TODO
+        TODO
     alpha: float, optional, default to -1
         Hyperparameter used for spheric scoring.
     beta: float, optional, default to -1
