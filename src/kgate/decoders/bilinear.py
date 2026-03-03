@@ -983,7 +983,7 @@ class ComplEx(BilinearDecoder):
                     + imaginary_head_embeddings * 
                         (real_edge_embeddings * imaginary_tail_embeddings
                         - imaginary_edge_embeddings * real_tail_embeddings
-                        ).view(batch_size, 1, self.embedding_spaces)
+                        ).view(batch_size, 1, self.embedding_dimensions)
                     ).sum(dim = 2)
 
         elif len(real_tail_embeddings.shape) == 3:
@@ -998,7 +998,7 @@ class ComplEx(BilinearDecoder):
                         + imaginary_head_embeddings * real_edge_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * imaginary_tail_embeddings
-                    )
+                    ).sum(dim = 2)
 
         elif len(real_edge_embeddings.shape) == 3:
             assert (len(real_head_embeddings.shape) == 2) and (len(real_tail_embeddings.shape) == 2), \
