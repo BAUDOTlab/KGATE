@@ -64,12 +64,14 @@ class Architect(Module):
     ---------
     config_path: str, optional
         Path to the configuration file
-    kg: Tuple of KnowledgeGraph or torchkge.KnowledgeGraph, optional
+    kg: Tuple of KnowledgeGraph or KnowledgeGraph, optional
         Either a knowledge graph that has already been preprocessed by KGATE and split accordingly, or an unprocessed KnowledgeGraph object.
         In the first case, the knowledge graph won't be preprocessed even if `config.run_kg_preprocessing` is set to True.
         In the second case, an error is thrown if the `config.run_kg_preprocessing` is set to False.
+        The KnowledgeGraph object can also be a torchKGE KnowledgeGraph if it has been transformed by the kgate.KnowledgeGraph.from_torchkge() method beforehand.
     dataframe: pd.DataFrame, optional
-        The knowledge graph as a pandas dataframe containing at least the columns head, tail and edge
+        The knowledge graph as a pandas dataframe containing at least the columns head, tail and edge,
+        and where each row corresponds to a triplet.
     metadata: pd.DataFrame, optional
         The metadata as a pandas dataframe, with at least the columns id and type, where id is the name of the node as it is in the
         knowledge graph. If this argument is not provided, the metadata will be read from config.metadata if it exists. If both are absent,
@@ -84,46 +86,58 @@ class Architect(Module):
     
     Attributes
     ----------
-    checkpoints_directory: Path
-        Path to the directory containing checkpoint files.
     config: dict
         The parsed configuration as a python dictionnary.
-    decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
-        Decoder model to evaluate.
-    decoder_loss: MarginLoss or BinaryCrossEntropyLoss
-        The loss object.
-    device: torch.device
-        Indicate if data should be sent to GPU or CPU.
-        GPU is referenced to as Cuda.
-    edge_embedding_dimensions: int
-        Dimensions of edge embeddings.
-    node_embedding_dimensions: int
-        Dimensions of node embeddings, or both node and edge embeddings if they are confounded.
-    encoder: DefaultEncoder or GNN
-        Encoder model to embed the nodes.
-    evaluation_batch_size: int
-        Size of an evaluation and inference batch.
-    evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
-        The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
-    kg_test: KnowledgeGraph
-        Test split from the knowledge graph.
     kg_train: KnowledgeGraph
         Train split from the knowledge graph.
     kg_validation: KnowledgeGraph
         Validation split from the knowledge graph.
+    kg_test: KnowledgeGraph
+        Test split from the knowledge graph.
     metadata: pd.DataFrame
         The metadata dataframe to associate to the knowledge graph.
+    node_embedding_dimensions: int
+        Dimensions of node embeddings, or both node and edge embeddings if they are confounded.
+    edge_embedding_dimensions: int
+        Dimensions of edge embeddings.
+        For most decoders, node and edge embeddings must be identical.
+        If not explicitly different than `node_embedding_dimensions`, it is the same. Most models only support the same value for both hyperparameters.
     node_embeddings: nn.ParameterList
         A list containing all embeddings for each node type.
         keys: node type index
-        values: tensors of shape (node_count, node_embedding_dimensions)
-    optimizer: optim.Optimizer
-        Initialized optimizer.
+        values: tensors of shape [node_count, node_embedding_dimensions]
+    edge_embeddings: nn.Embedding, shape: [edge_type_count, edge_embedding_dimensions]
+        Embeddings for each edge type.
+    encoder: DefaultEncoder or GNN
+        Encoder model of the autoencoder.
+        For more details, refer to the `initialize_encoder` function.
+    decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
+        Decoder model of the autoencoder.
+        For more details, refer to the `initialize_decoder` function.
+    decoder_loss: MarginLoss or BinaryCrossEntropyLoss
+        The loss object associated with the proper decoder, but may be overwritten.
+        Either `MarginLoss(margin)` or `BinaryCrossEntropyLoss()`.
     sampler: NegativeSampler
         Negative sampler.
+        For more details, refer to the `initialize_sampler` function.
+    optimizer: optim.Optimizer
+        Optimizer.
+        For more details, refer to the `initialize_optimizer` function.
     scheduler: learning_rate_scheduler.LRScheduler or None
         Learning rate scheduler of KGATE.
         Modules that alter the learning rate throughout the training.
+        For more details, refer to the `initialize_scheduler` function.
+    evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
+        The evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
+        For more details, refer to the `initialize_evaluator` function.
+        GPU is referenced to as Cuda.
+    device: torch.device
+        Indicate if data should be sent to GPU ("cuda") or CPU ("cpu").
+    checkpoints_directory: Path
+        Path to the directory containing checkpoint files.
+    evaluation_batch_size: int
+        Size of an evaluation and inference batch.
+    TODO: add_missing_attributes_not_declared_in_init
     
     Raises
     ------
@@ -192,7 +206,6 @@ class Architect(Module):
         output_directory.mkdir(parents = True, exist_ok = True)
         self.checkpoints_directory: Path = output_directory.joinpath("checkpoints")
 
-
         self.device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logging.info(f"Detected device: {self.device}")
 
@@ -248,18 +261,26 @@ class Architect(Module):
         self.scheduler: learning_rate_scheduler.LRScheduler | None = None
         self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
         self.node_embeddings: nn.ParameterList
+        self.edge_embeddings: nn.Embedding
 
 
     @property
     def encoder_node_embedding_dimensions(self) -> int:
         """
-        TODO.What_the_function_does_about_globally
+        The embedding dimensions in the output of the encoder (or initialized if there is no encoder).
+
+        For most decoders, it is the same as `self.node_embedding_dimensions`. But for decoders which use multiple
+        embedding spaces, the latent space has `[embedding_spaces_count] * node_embedding_dimensions` embedding dimensions.
+
+        For example, ComplEx uses two embedding spaces: a real one and an imaginary one. Thus, its methods take as input
+        embedding vectors that have `2 * node_embedding_dimensions` embedding dimensions. They are then split and
+        handled correctly from within the encoder.
 
         Returns
         -------
         node_embedding_dimensions: int
-        Dimensions of node embeddings.
-            
+            Dimensions of node embeddings in the output of the encoder.
+        
         """
         if self.decoder is not None and hasattr(self.decoder, "embedding_spaces"):
             return self.node_embedding_dimensions * self.decoder.embedding_spaces
@@ -270,13 +291,20 @@ class Architect(Module):
     @property
     def encoder_edge_embedding_dimensions(self) -> int:
         """
-        TODO.What_the_function_does_about_globally
+        The embedding dimensions in the output of the encoder (or initialized if there is no encoder).
+
+        For most decoders, it is the same as `self.edge_embedding_dimensions`. But for decoders which use multiple
+        embedding spaces, the latent space has `[embedding_spaces_count] * edge_embedding_dimensions` embedding dimensions.
+
+        For example, ComplEx uses two embedding spaces: a real one and an imaginary one. Thus, its methods take as input
+        embedding vectors that have `2 * edge_embedding_dimensions` embedding dimensions. They are then split and
+        handled correctly from within the encoder.
 
         Returns
         -------
         edge_embedding_dimensions: int
-        Dimensions of node embeddings.
-            
+            Dimensions of edge embeddings in the output of the encoder.
+        
         """
         if self.decoder is not None and hasattr(self.decoder, "embedding_spaces"):
             return self.edge_embedding_dimensions * self.decoder.embedding_spaces
@@ -292,15 +320,17 @@ class Architect(Module):
         Create and initialize the encoder object according to the configuration or arguments.
 
         The encoder is created from PyG encoding layers. Currently, the implemented encoders 
-        are a random initialization, **GCN** [1]_ and **GAT** [2]_. See the encoder class for a detailed
+        are a random initialization, **GCN** [1]_, **GAT** [2]_ and **Node2Vec** [3]_. See the encoder class for a detailed
         explanation of the encoders.
 
         If both configuration and arguments are given, the arguments take priority.
 
         References
         ----------
+        TODO: proper links to the references
         .. [1] Kipf, Thomas and Max Welling. “Semi-Supervised Classification with Graph Convolutional Networks.” ArXiv abs/1609.02907 (2016): n. pag.
         .. [2] Brody, Shaked et al. “How Attentive are Graph Attention Networks?” ArXiv abs/2105.14491 (2021): n. pag.
+        .. [3] TODO: add reference to Node2Vec
 
         Arguments
         ---------
@@ -354,12 +384,12 @@ class Architect(Module):
                                         MarginLoss | BinaryCrossEntropyLoss
                                         ]:
         """
-        Create and initialize the decider object according to the configuration or arguments.
+        Create and initialize the decoder object according to the configuration or arguments.
 
         The decoders are adapted and inherit from torchKGE decoders to be able to handle heterogeneous data.
         Not all torchKGE decoders are already implemented, but all of them and more will eventually be. Currently, 
-        the available decoders are **TransE** [1]_, **TransH** [2]_, **TransR** [3]_, **TransD** [4]_,
-        **RESCAL** [5]_, **DistMult** [6]_ and **ConvKB** [7]_. See the description of decoder classes for details about 
+        the available decoders are **TransE** [1]_, **TransH** [2]_, **TransR** [3]_, **TransD** [4]_, **TorusE** [5]_,
+        **RESCAL** [6]_, **DistMult** [7]_, **ComplEx** [8]_ and **ConvKB** [9]_. See the description of decoder classes for details about 
         their implementation, or read their original papers.
 
         Translational models are used with a `torchkge.MarginLoss` while bilinear models are used with a 
@@ -369,24 +399,27 @@ class Architect(Module):
 
         References
         ----------
+        TODO: proper links to the references
         .. [1] Bordes, Antoine et al. “Translating Embeddings for Modeling Multi-relational Data.” Neural Information Processing Systems (2013).
         .. [2] Wang, Zhen et al. “Knowledge Graph Embedding by Translating on Hyperplanes.” AAAI Conference on Artificial Intelligence (2014).
         .. [3] Lin, Yankai et al. “Learning Entity and Relation Embeddings for Knowledge Graph Completion.” AAAI Conference on Artificial Intelligence (2015).
         .. [4] Ji, Guoliang et al. “Knowledge Graph Embedding via Dynamic Mapping Matrix.” Annual Meeting of the Association for Computational Linguistics (2015).
-        .. [5] Nickel, Maximilian et al. “A Three-Way Model for Collective Learning on Multi-Relational Data.” International Conference on Machine Learning (2011).
-        .. [6] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2014).
-        .. [7] Nguyen, Dai Quoc et al. “A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network.” North American Chapter of the Association for Computational Linguistics (2017).
+        .. [5] TODO: add reference to TorusE
+        .. [6] Nickel, Maximilian et al. “A Three-Way Model for Collective Learning on Multi-Relational Data.” International Conference on Machine Learning (2011).
+        .. [7] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2014).
+        .. [8] TODO: add reference to ComplEx
+        .. [9] Nguyen, Dai Quoc et al. “A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network.” North American Chapter of the Association for Computational Linguistics (2017).
 
         Arguments
         ----------
         decoder_name: str, optional
             Name of the decoder.
-        dissimlarity: {"L1", "L2"}, optional
+        dissimilarity: {"L1", "L2"}, optional
             Type of the dissimilarity metric.
         margin: int, optional, default to 0
             Margin to be used with MarginLoss. Unused with bilinear models.
         filter_count: int, optional, default to 0
-            Number of filters used for convolution.
+            Number of convolution filters.
 
         Raises
         ------
@@ -419,42 +452,42 @@ class Architect(Module):
                 decoder_loss = MarginLoss(margin)
             case "TransH":
                 decoder = TransH(embedding_dimensions = self.node_embedding_dimensions,
-                                 node_count = self.kg_train.node_count,
-                                 edge_count = self.kg_train.edge_count)
+                                node_count = self.kg_train.node_count,
+                                edge_count = self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransR":
                 decoder = TransR(node_embedding_dimensions = self.node_embedding_dimensions,
-                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
-                                 node_count = self.kg_train.node_count, 
-                                 edge_count = self.kg_train.edge_count)
+                                edge_embedding_dimensions = self.edge_embedding_dimensions, 
+                                node_count = self.kg_train.node_count, 
+                                edge_count = self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransD":
                 decoder = TransD(node_embedding_dimensions = self.node_embedding_dimensions,
-                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
-                                 node_count = self.kg_train.node_count, 
-                                 edge_count = self.kg_train.edge_count)
+                                edge_embedding_dimensions = self.edge_embedding_dimensions, 
+                                node_count = self.kg_train.node_count, 
+                                edge_count = self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TorusE":
                 decoder = TorusE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
             case "RESCAL":
                 decoder = RESCAL(embedding_dimensions = self.node_embedding_dimensions,
-                                 node_count = self.kg_train.node_count,
-                                 edge_count = self.kg_train.edge_count)
+                                node_count = self.kg_train.node_count,
+                                edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "DistMult":
                 decoder = DistMult(embedding_dimensions = self.node_embedding_dimensions,
-                                 node_count = self.kg_train.node_count,
-                                 edge_count = self.kg_train.edge_count)
+                                node_count = self.kg_train.node_count,
+                                edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "ComplEx":
                 decoder = ComplEx(embedding_dimensions = self.node_embedding_dimensions)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "ConvKB":
                 decoder = ConvKB(embedding_dimensions = self.node_embedding_dimensions, 
-                                 filter_count = filter_count, 
-                                 node_count = self.kg_train.node_count, 
-                                 edge_count = self.kg_train.edge_count)
+                                filter_count = filter_count, 
+                                node_count = self.kg_train.node_count, 
+                                edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
@@ -652,19 +685,33 @@ class Architect(Module):
                         attributes: Dict[str, pd.DataFrame] = {},
                         pretrained: Path | None = None):
         """
-        Initializes every component of the model. This is done automatically by running the `train_model` method.
+        Initialize every component of the model.
+        
+        This is done automatically by running the `train_model` method.
+        
+        The initialization is done in this order:
+        - Decoder
+        - Encoder
+        - Node Embeddings (either at random, or using given node features)
+        - Edge Embeddings (either at random, or using given edge features)
+        - Optimizer
+        - Negative Sampler
+        - Scheduler
+        - Evaluator
+        For each of these elements, if something is already set (i.e. the attribute is not None), it is not re-initialized.
         
         Arguments
         ---------
         attributes: dict[str, pd.DataFrame]
             dict(node_type, embedding) containing the embedding for each type of node.
         pretrained: Path, optional
-            Path to the pretrained embeddings.
+            Path to the pretrained node embeddings.
+            TODO: add support for pretrained edge embeddings
 
         Raises
         ------
         AssertionError #1
-            When using a GNN as encoder, the node_type shouldn't be supplied.
+            When not using a GNN as encoder, the `node_type` should not be supplied.
         AssertionError #2
             The length of the given attribute must match the number of nodes of this type.
         AssertionError #3
@@ -686,7 +733,7 @@ class Architect(Module):
         if pretrained is not None and pretrained.exists():
             self.node_embeddings = torch.load(pretrained)
         else:
-            assert isinstance(self.encoder, GNN) or len(self.kg_train.node_type_to_index) == 1, "When using a GNN as encoder, the node_type shouldn't be supplied."
+            assert isinstance(self.encoder, GNN) or len(self.kg_train.node_type_to_index) == 1, "When not using a GNN as encoder, the node_type shouldn't be supplied."
 
             # create initial embeddings
             self.node_embeddings = nn.ParameterList()
@@ -771,7 +818,7 @@ class Architect(Module):
         self.max_epochs: int = train_config["max_epochs"]
         self.train_batch_size: int = train_config["train_batch_size"]
         self.patience: int = train_config["patience"]
-        self.eval_interval: int = train_config["evaluation_interval"]
+        self.evaluation_interval: int = train_config["evaluation_interval"]
         self.save_interval: int = train_config["save_interval"]
 
         match train_config["pretrained_embeddings"]:
@@ -807,7 +854,7 @@ class Architect(Module):
 
         early_stopping: EarlyStopping = EarlyStopping(
             patience = self.patience,
-            score_function = self.score_function,
+            score_function = self.get_validation_metric,
             trainer = trainer
         )
 
@@ -884,17 +931,17 @@ class Architect(Module):
             dirname = self.checkpoints_directory,
             filename_prefix = "best_model",
             n_saved = 1,
-            score_function = self.score_function,
+            score_function = self.get_validation_metric,
             score_name = "validation_metric_value",
             require_empty = False,
             create_dir = True,
             atomic = True
         )
 
-        trainer.add_event_handler(Events.EPOCH_COMPLETED(every = self.eval_interval), self.evaluate)
-        trainer.add_event_handler(Events.EPOCH_COMPLETED(every = self.eval_interval), early_stopping)
+        trainer.add_event_handler(Events.EPOCH_COMPLETED(every = self.evaluation_interval), self.evaluate)
+        trainer.add_event_handler(Events.EPOCH_COMPLETED(every = self.evaluation_interval), early_stopping)
         trainer.add_event_handler(
-            Events.EPOCH_COMPLETED(every = self.eval_interval),
+            Events.EPOCH_COMPLETED(every = self.evaluation_interval),
             checkpoint_best_handler,
             to_save
         )
@@ -931,7 +978,9 @@ class Architect(Module):
 
     def test(self) -> Dict[str, float | Dict[str, float]]:
         """
-        TODO.What_the_function_does_about_globally
+        Run the test procedure, evaluate the metrics on the test set and return the dictionary of the results.
+        
+        TODO: will be changed with https://github.com/BAUDOTlab/KGATE/pull/22
 
         Returns
         -------
@@ -956,11 +1005,11 @@ class Architect(Module):
         remaining_edges = all_edges - set(list_rel_1) - set(list_rel_2)
         remaining_edges = list(remaining_edges)
 
-        total_metrics_sum_list_1, triplet_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_relations(
+        total_metrics_sum_list_1, triplet_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_edges(
             self.kg_test, list_rel_1)
-        total_metrics_sum_list_2, triplet_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_relations(
+        total_metrics_sum_list_2, triplet_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_edges(
             self.kg_test, list_rel_2)
-        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
+        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(
             self.kg_test, remaining_edges)
 
         global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (triplet_count_list_1 + triplet_count_list_2 + triplet_count_remaining)
@@ -1181,21 +1230,19 @@ class Architect(Module):
 
         Arguments
         ---------
-        positive_triplets_batch: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+        positive_triplets_batch: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
             Tensor containing the integer key of true sampled triplets of
             the edges in the current batch.
-        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
+        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
             Tensor containing the integer key of negatively sampled triplets of
             the edges in the current batch.
 
         Returns
         -------
-        positive_triplet: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
-            Tensor containing the integer key of true sampled triplets of
-            the edges in the current batch.
-        negative_triplet: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
-            Tensor containing the integer key of negatively sampled triplets of
-            the edges in the current batch.
+        positive_triplet: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
+            Tensor containing the score of each true triplet within the batch.
+        negative_triplet: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the score of each negative triplet within the batch.
         
         """
         positive_triplet: Tensor = self.scoring_function(positive_triplets_batch, self.kg_train)
@@ -1214,7 +1261,9 @@ class Architect(Module):
                     batch: Tensor
                     ) -> torch.types.Number:
         """
-        TODO.What_the_function_does_about_globally
+        Function called by the trainer to run the training loop on a mini-batch.
+
+        TODO: may be merged with the forward function
 
         Arguments
         ---------
@@ -1227,7 +1276,7 @@ class Architect(Module):
         -------
         loss_value: torch.types.Number
             Training loss value of the model for this epoch.
-            
+        
         """
         batch = batch.T.to(self.device)
 
@@ -1274,7 +1323,7 @@ class Architect(Module):
         -------
         score: torch.Tensor
             The score given by the decoder for the batch.
-            
+        
         """
         head_indices, tail_indices, edge_indices = batch[0], batch[1], batch[2]
         
@@ -1321,7 +1370,7 @@ class Architect(Module):
 
     def get_embeddings(self) -> Dict[str, Tensor]:
         """
-        Returns the embeddings of nodes and edges, as well as decoder-specific embeddings.
+        Returns the embeddings of nodes and edges, as well as decoder-specific embeddings if they exist.
 
         Returns
         -------
@@ -1358,20 +1407,22 @@ class Architect(Module):
 
     def normalize_parameters(self):
         """
-        TODO.What_the_function_does_about_globally
+        Normalize all parameters of the model.
+        
+        Each decoder has a specific normalization routine, so this function doesn't do anything by itself,
+        except calling the `decoder.normalize_parameters` function if it exists.
 
         Raises
         ------
         AssertionError
             The `decoder.normalize_params` method should return exactly two elements: the node embedding and the edge embedding.
-            
+        
         """
         # Some decoders should not normalize parameters or do so in a different way.
         # In this case, they should implement the function themselves and we return it.
         normalize_function: Callable[..., Tuple[nn.ParameterList, nn.Embedding]] | None = getattr(self.decoder, "normalize_params", None)
-        # If the function only accepts one parameter, it is the base torchKGE one,
-        # we don't want that.
-        if callable(normalize_function) and len(signature(normalize_function).parameters) > 1:
+
+        if callable(normalize_function):
             normalized_embeddings = normalize_function(node_embeddings = self.node_embeddings, edge_embeddings = self.edge_embeddings)
             assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the node embedding and the edge embedding."
             self.node_embeddings, self.edge_embeddings = normalized_embeddings
@@ -1423,7 +1474,7 @@ class Architect(Module):
         ---------
         engine: Engine
             Runner managing the training.
-            
+        
         """
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
         self.eval()  # Set the model to evaluation mode
@@ -1452,9 +1503,9 @@ class Architect(Module):
             self.scheduler.step()
 
     
-    def score_function(self, engine: Engine) -> float:
+    def get_validation_metric(self, engine: Engine) -> float:
         """
-        Early stopping score function  &  Checkpoint best metric.
+        Early stopping score function & checkpoint best metric.
 
         Arguments
         ---------
@@ -1465,14 +1516,15 @@ class Architect(Module):
         -------
         validation_metric_value: float
             TODO.What_that_variable_is_or_does
-            
+        
         """
         return engine.state.metrics.get("validation_metric_value", 0)
     
     
     def on_training_completed(self, engine: Engine):
         """
-        Late stopping.
+        Run at the end of the training, even with early stopping.
+        
         Plot the training loss and validation MRR curves once the training is over.
 
         Arguments
@@ -1551,12 +1603,14 @@ class Architect(Module):
         return frequent_indices, infrequent_indices
     
     
-    def calculate_metrics_for_relations(self,
+    def calculate_metrics_for_edges(self,
                                         kg: KnowledgeGraph,
                                         edge_indices: List[str]
                                         ) -> Tuple[float, int, Dict[str, float], float]:
         """
-        TODO.What_the_function_does_about_globally
+        TODO: must be rewritten
+        
+        Compute the metrics for each individual edge.
 
         Arguments
         ---------
@@ -1653,7 +1707,7 @@ class Architect(Module):
 
     def link_prediction(self, kg: KnowledgeGraph) -> float:
         """
-        Link prediction evaluation on test set.
+        Link prediction evaluation on test set, validation set or inference set.
 
         Arguments
         ---------
@@ -1664,12 +1718,15 @@ class Architect(Module):
         -----
         ValueError
             Wrong evaluator called.
-            TODO.detail
+            The evaluator is initialized beforehand and may be incompatible with link prediction.
+            This error is raised when an evaluator incompatible with link prediction is initialized.
+            TODO: this may be improved by resetting the evaluator or creating it on the fly, though that may be problematic on some level?
 
         Returns
         -------
         test_mrr: float
-            TODO.What_that_variable_is_or_does
+            The filtered MRR resulting from the evaluation on given knowledge graph.
+            TODO: might be better to return the Prediction object altogether, and let the calling function deal with it
         
         """
         # Test MRR measure
