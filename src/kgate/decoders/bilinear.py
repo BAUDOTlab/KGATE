@@ -27,8 +27,6 @@ class BilinearDecoder(Module):
 
     This interface is largely inspired by TorchKGE's BilinearModel, and exposes
     the methods that all bilinear decoders must use to be compatible with KGATE.
-    The interface doesn't have an __init__ method as inheriting decoders are supposed
-    to take care of their initialization, and only requires one attribute to be set.
 
     Furthermore, this interface doesn't implement anything but is a type helper.
     However, functions from this class returning None can be used directly from inheriting classes.
@@ -103,7 +101,7 @@ class BilinearDecoder(Module):
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The edge embedding as a ParameterList containing one Parameter by edge type,
+            The edge embedding as a nn.Embedding containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
@@ -111,7 +109,7 @@ class BilinearDecoder(Module):
         node_embeddings: torch.nn.ParameterList or None, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
         edge_embeddings: torch.nn.Embedding or None, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The normalized edges embedding object.
+            The normalized edge embedding object.
         
         Notes
         -----
@@ -214,7 +212,7 @@ class BilinearDecoder(Module):
         """
         Link prediction evaluation helper function. Compute the scores
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
-        The arguments should match the ones of `inference_prepare_candidates`.
+        The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Refer to the specific decoder for details on this function's implementation.
         While all arguments are given when called from the Architect class, most 
@@ -239,11 +237,11 @@ class BilinearDecoder(Module):
         -------
         score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
             Tensor of score values.
-            First dimension: incomplete triplets tested
-            Second dimension: candidate indices
-            For example, if the function is called to infer the score of tails:
-            First dimension: (head_indices, edge_indices)
-            Second dimension: tail_indices
+                First dimension: incomplete triplets tested
+                Second dimension: candidate indices
+            For example, if the function is called to infer the score of tails, so (head, candidate, edge):
+                First dimension: (head_indices, edge_indices)
+                Second dimension: tail_indices
         
         """
         raise NotImplementedError("Bilinear decoders must implement the `inference_score` function themselves.")
@@ -254,8 +252,9 @@ class RESCAL(BilinearDecoder):
     """
     Implementation of RESCAL model detailed in the paper referenced below. In the original paper, optimization
     is done using Alternating Least Squares (ALS). Here we use iterative gradient descent optimization.
+    TODO: not sure this is entirely valid in this implementation, will have to look up the difference and where it's operated
     
-    This class inherits from the BilinearDecoder interface. It inherites its attributes as well.
+    This class inherits from the BilinearDecoder interface. It inherits its attributes as well.
 
     References
     ----------
@@ -268,25 +267,22 @@ class RESCAL(BilinearDecoder):
     ---------
     embedding_dimensions: int
         Dimensions of embeddings.
+        This argument is only used for the matrix.
     node_count: int
-        Number of nodes in the batch.
+        Number of nodes in the knowledge graph.
     edge_count: int
-        Number of edges in the batch.
+        Number of edges in the knowledge graph.
         
     Attributes
     ----------
     node_count: int
-        Number of nodes in the batch.
+        Number of nodes in the knowledge graph.
     edge_count: int
-        Number of edges in the batch.
+        Number of edges in the knowledge graph.
     embedding_dimensions: int
         Dimensions of embeddings.
     edge_embeddings_matrix: Dict[str, Tensor]
         TODO.What_that_variable_is_or_does
-    
-    Notes
-    -----
-    The batch can be the whole graph if it fits in memory.
     
     """
     def __init__(self, 
@@ -358,7 +354,7 @@ class RESCAL(BilinearDecoder):
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The edge embedding as a ParameterList containing one Parameter by edge type,
+            The edge embedding as a nn.Embedding containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
@@ -366,7 +362,7 @@ class RESCAL(BilinearDecoder):
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The normalized node embedding object.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The unchanged edges embedding object.
+            The unchanged edge embedding object.
         
         """
         for embedding in node_embeddings:
@@ -452,7 +448,7 @@ class RESCAL(BilinearDecoder):
         """
         Link prediction evaluation helper function. Compute the scores
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
-        The arguments should match the ones of `inference_prepare_candidates`.
+        The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Arguments
         ---------
@@ -466,13 +462,13 @@ class RESCAL(BilinearDecoder):
         Raises
         ------
         AssertionError #1
-            When inferring heads, the tensors tail_embeddings must have 2 dimensions
+            When inferring heads, the tensor `tail_embeddings` must have 2 dimensions
             and edge_embeddings must have 3 dimensions.
         AssertionError #2
-            When inferring tails, the tensors head_embeddings must have 2 dimensions
+            When inferring tails, the tensor `head_embeddings` must have 2 dimensions
             and edge_embeddings must have 3 dimensions.
         AssertionError #3
-            When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
+            When inferring edges, the tensors `head_embeddings` and `tail_embeddings` must have 2 dimensions.
         ValueError
             Raised if none of the embeddings have a shape adapted to be inferred.
 
@@ -528,7 +524,7 @@ class DistMult(BilinearDecoder):
     """
     Implementation of DisMult model detailed in the paper referenced below.
     
-    This class inherits from the BilinearDecoder interface. It inherites its attributes as well.
+    This class inherits from the BilinearDecoder interface. It inherits its attributes as well.
 
     References
     ----------
@@ -631,7 +627,7 @@ class DistMult(BilinearDecoder):
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The edge embedding as a ParameterList containing one Parameter by edge type,
+            The edge embedding as a nn.Embedding containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
@@ -639,7 +635,7 @@ class DistMult(BilinearDecoder):
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The normalized node embedding object.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The unchanged edges embedding object.
+            The unchanged edge embedding object.
         
         """
         for embedding in node_embeddings:
@@ -717,7 +713,7 @@ class DistMult(BilinearDecoder):
         """
         Link prediction evaluation helper function. Compute the scores
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
-        The arguments should match the ones of `inference_prepare_candidates`.
+        The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Arguments
         ---------
@@ -783,16 +779,17 @@ class DistMult(BilinearDecoder):
 
 class ComplEx(BilinearDecoder):
     """
-    Implementation of DisMult model detailed in the paper referenced below.
+    Implementation of ComplEx model detailed in the paper referenced below.
     
-    This class inherits from the BilinearDecoder interface. It inherites its attributes as well.
+    This class inherits from the BilinearDecoder interface. It inherits its attributes as well.
 
     References
     ----------
-    Bishan Yang, Wen-tau Yih, Xiaodong He, Jianfeng Gao, and Li Deng.
-    `Embedding Entities and Relations for Learning and Inference in Knowledge Bases.`
-    https://arxiv.org/abs/1412.6575
-    arXiv :1412.6575 [cs], December 2014.
+    TODO
+    Author
+    `Title`
+    link
+    journal.
 
     Arguments
     ---------
@@ -826,7 +823,7 @@ class ComplEx(BilinearDecoder):
         Compute the score function for the triplets given as argument.
         
         See referenced paper for more details on the score:
-        https://arxiv.org/abs/1412.6575
+        TODO.link
 
         Arguments
         ---------
@@ -930,7 +927,7 @@ class ComplEx(BilinearDecoder):
         """
         Link prediction evaluation helper function. Compute the scores
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
-        The arguments should match the ones of `inference_prepare_candidates`.
+        The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Arguments
         ---------

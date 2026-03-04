@@ -24,14 +24,13 @@ class ConvolutionalDecoder(Module):
 
     This interface is largely inspired by TorchKGE's ConvKBModel, and exposes
     the methods that all convolutional decoders must use to be compatible with KGATE.
-    The interface doesn't have an __init__ method as inheriting decoders are supposed
-    to take care of their initialization, and only requires one attribute to be set.
 
     Furthermore, this interface doesn't implement anything but is a type helper.
     
     """
     def __init__(self):
         super().__init__()
+    
     
     def score(  self,
                 *,
@@ -98,7 +97,7 @@ class ConvolutionalDecoder(Module):
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The edge embedding as a ParameterList containing one Parameter by edge type,
+            The edge embedding as a nn.Embedding containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
@@ -106,7 +105,7 @@ class ConvolutionalDecoder(Module):
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The normalized edges embedding object.
+            The normalized edge embedding object.
         
         Notes
         -----
@@ -204,7 +203,7 @@ class ConvolutionalDecoder(Module):
         """
         Link prediction evaluation helper function. Compute the scores
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
-        The arguments should match the ones of `inference_prepare_candidates`.
+        The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Refer to the specific decoder for details on this function's implementation.
         While all arguments are given when called from the Architect class, most 
@@ -213,11 +212,11 @@ class ConvolutionalDecoder(Module):
         Arguments
         ---------
         head_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
+            Embeddings of the head nodes in the batch.
         tail_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
+            Embeddings of the tail nodes in the batch.
         edge_embeddings: torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
-            Embeddings of the edges in the knowledge graph.
+            Embeddings of the edges in the batch.
         
         Raises
         ------
@@ -244,7 +243,7 @@ class ConvKB(ConvolutionalDecoder):
     """
     Implementation of ConvKB model detailed in the paper referenced below.
     
-    This class inherits from the ConvolutionalDecoder interface. It inherites its attributes as well.
+    This class inherits from the ConvolutionalDecoder interface. It inherits its attributes as well.
 
     References
     ----------
@@ -259,7 +258,7 @@ class ConvKB(ConvolutionalDecoder):
     embedding_dimensions: int
         Dimensions of embeddings.
     filter_count: int
-        Number of filters used for convolution.
+        Number of convolution filters to apply.
     node_count: int
         Number of nodes in the knowledge graph.
     edge_count: int
@@ -274,9 +273,9 @@ class ConvKB(ConvolutionalDecoder):
     embedding_dimensions: int
         Dimensions of embeddings.
     convolution_layer: torch.nn.Sequential
-        TODO
+        The convolution layer of the model.
     output: torch.nn.Sequential
-        TODO
+        The reconstruction layer of the model.
     
     """
     def __init__(self,
@@ -413,7 +412,7 @@ class ConvKB(ConvolutionalDecoder):
         """
         Link prediction evaluation helper function. Compute the scores
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
-        The arguments should match the ones of `inference_prepare_candidates`.
+        The arguments should match the ones of the output of `inference_prepare_candidates`.
         
         Arguments
         ---------

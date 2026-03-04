@@ -45,6 +45,9 @@ class GNN(nn.Module):
     This interface inherits from the PyTorch `nn.module` class:
     https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html
 
+    It defines the generic forward method that can be used by any GNN encoder,
+    though it can also be overwritten to fit more specific needs.
+
     Arguments
     ---------
     edge_types: List[Tuple[str, str, str]]
@@ -95,7 +98,9 @@ class GNN(nn.Module):
                 edge_index_dict: Dict[Tuple[str, str, str,], Tensor]
                 ) -> Dict[str, Tensor]:
         """
-        TODO.What_the_function_does_about_globally
+        Forward pass of the GNN encoder.
+        
+        For each convolution layer of the encoder, it will be applied to the batch and followed by a LeakyReLU.
 
         Arguments
         ---------
@@ -128,7 +133,7 @@ class GATEncoder(GNN):
     """
     Implementation of GraphSAGE model detailed in the paper referenced below.
     
-    This class inherits from the GNN class. It inherites its attributes as well.
+    This class inherits from the GNN class. It inherits its attributes as well.
 
     References
     ----------
@@ -201,7 +206,7 @@ class GCNEncoder(GNN):
     """
     Implementation of GraphSAGE model detailed in the paper referenced below.
     
-    This class inherits from the GNN class. It inherites its attributes as well.
+    This class inherits from the GNN class. It inherits its attributes as well.
 
     References
     ----------

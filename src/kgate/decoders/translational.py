@@ -36,11 +36,12 @@ class TranslationalDecoder(Module):
 
     This interface is largely inspired by TorchKGE's TranslationModel, and exposes
     the methods that all translational decoders must use to be compatible with KGATE.
+    
     The interface inherits from the Module PyTorch class.
 
     Furthermore, this interface doesn't implement anything but is a type helper.
     However, functions from this class returning None can be used directly from inheriting classes.
-    Exception for the inference_score function, fully implemented in this class.
+    Exception for the `inference_score` function, fully implemented in this class.
 
     Attributes
     ----------
@@ -119,7 +120,7 @@ class TranslationalDecoder(Module):
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The edge embedding as a ParameterList containing one Parameter by edge type,
+            The edge embedding as a nn.Embedding containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
@@ -127,7 +128,7 @@ class TranslationalDecoder(Module):
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The normalized edges embedding object.
+            The normalized edge embedding object.
         
         Notes
         -----
@@ -225,7 +226,7 @@ class TranslationalDecoder(Module):
         """
         Link prediction evaluation helper function. Compute the scores
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
-        The arguments should match the ones of `inference_prepare_candidates`.
+        The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Refer to the specific decoder for details on this function's implementation.
         While all arguments are given when called from the Architect class, most 
@@ -294,7 +295,7 @@ class TransE(TranslationalDecoder):
     """
     Implementation of TransE model detailed in the paper referenced below.
     
-    This class inherits from the TranslationDecoder interface. It inherites its attributes as well.
+    This class inherits from the TranslationDecoder interface. It inherits its attributes as well.
 
     References
     ----------
@@ -465,7 +466,7 @@ class TransH(TranslationalDecoder):
     """
     Implementation of TransH model detailed in the paper referenced below.
     
-    This class inherits from the TranslationDecoder interface. It inherites its attributes as well.
+    This class inherits from the TranslationDecoder interface. It inherits its attributes as well.
 
     References
     ----------
@@ -525,7 +526,7 @@ class TransH(TranslationalDecoder):
         Arguments
         ---------
         nodes: torch.Tensor
-            TODO.what_that_variable_is_or_does
+            The not projected node embeddings.
         normal_vector: torch.Tensor: [edge_count, embedding_dimensions]
             Normal vectors associated to each edge and used to compute the edge-specific hyperplanes nodes are projected on.
             See paper for more details: https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531
@@ -598,7 +599,7 @@ class TransH(TranslationalDecoder):
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The edge embedding as a ParameterList containing one Parameter by edge type,
+            The edge embedding as a nn.Embedding containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
@@ -606,7 +607,7 @@ class TransH(TranslationalDecoder):
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             The normalized node embedding object.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The normalized edges embedding object.
+            The normalized edge embedding object.
     
         """
         for embedding in node_embeddings:
@@ -668,7 +669,7 @@ class TransH(TranslationalDecoder):
             Tail node embeddings.
         edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             Edge embeddings.
-        candidates: torch.Tensor, dtype: TODO, shape: [batch_size, edge_count, embedding_dimensions]
+        candidates: torch.Tensor, dtype: float, shape: [batch_size, edge_count, embedding_dimensions]
             Candidate embeddings for nodes or edges.
 
         """
@@ -739,7 +740,7 @@ class TransR(TranslationalDecoder):
     """
     Implementation of TransR model detailed in the paper referenced below.
     
-    This class inherits from the TranslationDecoder interface. It inherites its attributes as well.
+    This class inherits from the TranslationDecoder interface. It inherits its attributes as well.
 
     References
     ----------
@@ -880,7 +881,7 @@ class TransR(TranslationalDecoder):
                             edge_embeddings: nn.Embedding
                             ) -> Tuple[nn.ParameterList, nn.Embedding]:
         """
-        Normalize parameters for the RESCAL model.
+        Normalize parameters for the TransR model.
         
         According to the original paper, the node embeddings and edge embeddings
         should be normalized.
@@ -899,7 +900,7 @@ class TransR(TranslationalDecoder):
         node_embeddings: torch.nn.ParameterList, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
         edge_embeddings: torch.nn.Embedding, shape: [batch_size, edge_embedding_dimensions]
-            The normalized edges embedding object.
+            The normalized edge embedding object.
         
         """
         for embedding in node_embeddings:
@@ -1035,7 +1036,7 @@ class TransD(TranslationalDecoder):
     """
     Implementation of TransD model detailed in the paper referenced below.
     
-    This class inherits from the TranslationDecoder interface. It inherites its attributes as well.
+    This class inherits from the TranslationDecoder interface. It inherits its attributes as well.
 
     References
     ----------
@@ -1217,7 +1218,7 @@ class TransD(TranslationalDecoder):
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The normalized edges embedding object.
+            The normalized edge embedding object.
         
         """
         for embedding in node_embeddings:
@@ -1351,9 +1352,9 @@ class TransD(TranslationalDecoder):
 
 class TorusE(TranslationalDecoder):
     """
-    Implementation of TransD model detailed in the paper referenced below.
+    Implementation of TorusE model detailed in the paper referenced below.
     
-    This class inherits from the TranslationDecoder interface. It inherites its attributes as well.
+    This class inherits from the TranslationDecoder interface. It inherits its attributes as well.
 
     References
     ----------
@@ -1385,7 +1386,7 @@ class TorusE(TranslationalDecoder):
     
     """
     def __init__(self,
-                 dissimilarity_type: Literal["L1", "torus_L1", "torus_L2", "torus_eL2"]):
+                dissimilarity_type: Literal["L1", "torus_L1", "torus_L2", "torus_eL2"]):
         super().__init__()
 
         match dissimilarity_type:
@@ -1466,7 +1467,7 @@ class TorusE(TranslationalDecoder):
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
         edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The normalized edges embedding object.
+            The normalized edge embedding object.
         
         """
         for embedding in node_embeddings:
