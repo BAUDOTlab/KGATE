@@ -1666,7 +1666,7 @@ class RotatE(TranslationalDecoder):
     ----------
     Zhiqing Sun, Zhihong Deng, Jian-Yun Nie and Jian Tang.
     `RotatE: Knowledge Graph Embedding by Relational Rotation in Complex Space.`
-    https://arxiv.org/abs/1902.10197
+    https://arxiv.org/pdf/1902.10197
     In ArXiv, volume abs/1902.10197, 2018.
 
     Arguments

@@ -67,6 +67,7 @@ gnn_layer_number = 1
 # - TransH: Translational model proposed by Wang et al. 2014
 # - TransR: Translational model proposed by Lin et al. 2015
 # - TransD: Translational model proposed by Ji et al. 2015
+# - RotatE: Translational model proposed by Sun et al. 2018
 # - TorusE: Translational model proposed by TODO
 # - ConvKB: Convolutional model proposed by Nguyen et al. 2018
 # - RESCAL: Bilinear model proposed by Nickel et al. 2011
