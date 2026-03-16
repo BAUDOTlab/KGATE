@@ -8,363 +8,694 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 - 
 
 The modifications are licensed under the BSD license according to the source license.
+
 """
 
-from typing import Dict, Set
+from typing import Dict, Set, Tuple, List
+from collections import defaultdict
 
 import torch
 from torch import tensor, bernoulli, randint, ones, rand, cat
 from torch.types import Number, Tensor
 
-import torchkge
-import torchkge.sampling
-
 from .knowledgegraph import KnowledgeGraph
+from .utils import get_bernoulli_probabilities
 
-class PositionalNegativeSampler(torchkge.sampling.PositionalNegativeSampler):
-    """Adaptation of torchKGE's PositionalNegativeSampler to KGATE's edgelist format.
 
-    Either the head or the tail of a triplet is replaced by another entity
-    chosen among entities that have already appeared at the same place in a
-    triplet (involving the same relation), using bernouilli sampling.
 
-    If the corrupted triplet is of a type that doesn't exist in the original KG,
-    it is createad.
+class NegativeSampler:
+    """
+    Interface for negative samplers of KGATE.
 
-    Parameters
+    The interface doesn't have an __init__ method as inheriting samplers are supposed
+    to take care of their initialization.
+
+    Furthermore, this interface doesn't implement anything but is a type helper.
+    
+    """
+    
+    def corrupt_batch(  self,
+                        batch: torch.Tensor,
+                        negative_triplet_count = None
+                        ) -> Tensor:
+        """
+        For each true triplet, produce a corrupted one not different from
+        any other true triplet. If `heads` and `tails` are cuda objects,
+        then the returned tensors are on the GPU.
+
+        Arguments
+        ---------
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the integer key of heads, tails, edges and triplets
+            of the edges in the current batch.
+            Here, batch_size is batch.shape[1].
+        negative_triplet_count: int, optional, default to None
+            Number of negative samples to create from each triplet. If None, self.negative_triplet_count is used.
+
+        Raises
+        ------
+        NotImplementedError
+            The `corrupt_batch` method must be implemented by a negative sampler
+            inheriting from this interface.
+        
+        """
+        raise NotImplementedError("The `corrupt_batch` method must be implemented by the negative sampler.")
+
+
+
+class UniformNegativeSampler(NegativeSampler):
+    """
+    This class inherits from the NegativeSampler interface.
+    
+    TODO.What_the_class_is_about_globally
+    
+    For each edge, choose simultenously head and tail from Bernoulli random distribution.
+    
+    Check that no true triplet is created by accident.
+
+    If the corrupted triplet is of a type that doesn't exist in the original knowledge graph,
+    it is created.
+
+    References
     ----------
-    kg: kgate.data_structure.KnowledgeGraph
-        Knowledge Graph from which the corrupted triples will be created.
-            
+    TODO
+
+    Arguments
+    ---------
+    kg: KnowledgeGraph
+        Knowledge graph on which the sampling will be done.
+    negative_triplet_count: int, optional, default to 1
+        Number of negative samples to create from each triplet.
+
     Attributes
     ----------
-    possible_heads: Dict[int, List[int]]
-        keys : relations
-        values : list of possible heads for each relation.
-    possible_tails: Dict[int, List[int]]
-        keys : relations
-        values : list of possible tails for each relation.
-    n_poss_heads: List[int]
-        List of number of possible heads for each relation.
-    n_poss_tails: List[int]
-        List of number of possible tails for each relation.
-    ix2nt : Dict[int,str]
-        keys : node index
-        values : node types
-    rel_types : Dict[int,str]
-        keys : relation index
-        values : relation name
+    index_to_node_type: Dict[int, str]
+        keys: node index
+    edge_types: Dict[int, str]
+        keys: edge index
+        values: edge name
+    kg: KnowledgeGraph
+        Knowledge graph on which the sampling will be done.
+    negative_triplet_count: int
+        Number of negative samples to create from each triplet.
+    node_count: int
+        Number of nodes.
+    
+    """
+    def __init__(self,
+                knowledge_graph: KnowledgeGraph,
+                negative_triplet_count = 1):
+        
+        self.knowledge_graph = knowledge_graph
+        self.index_to_node_type: Dict[int, str] = {value: key for key, value in self.knowledge_graph.node_type_to_index.items()}
+        self.edge_types: Dict[int, str] = {value: key for key, value in self.knowledge_graph.edge_to_index.items()}
+    
+        self.negative_triplet_count = negative_triplet_count
+    
+    
+    def corrupt_batch(  self,
+                        batch: torch.Tensor,
+                        negative_triplet_count = None
+                        ) -> Tensor:
+        """
+        For each true triplet, produce a corrupted one not different from
+        any other true triplet. If `heads` and `tails` are cuda objects,
+        then the returned tensors are on the GPU.
+
+        Arguments
+        ---------
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the integer key of heads, tails, edges and triplets
+            of the edges in the current batch.
+            Here, batch_size is batch.shape[1].
+        negative_triplet_count: int, optional, default to None
+            Number of negative samples to create from each triplet. If None, self.negative_triplet_count is used.
+
+        Returns
+        -------
+        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, negative_triplet_count * batch_size]
+            Tensor containing the integer key of negatively sampled triplets of
+            the edges in the current batch.
+            Here, batch_size is batch.shape[1].
+            
+        """
+        device = batch.device
+        batch_size = batch.shape[1]
+        negative_triplet_heads = batch[0].repeat(negative_triplet_count)
+        negative_triplet_tails = batch[1].repeat(negative_triplet_count)
+        negative_triplet_edges = batch[2].repeat(negative_triplet_count)
+        
+        mask = bernoulli(ones(  size = (batch_size * negative_triplet_count,),
+                                device = device) / 2).double()
+        corrupted_head_count = int(mask.sum().item())
+
+        negative_triplet_heads[mask == 1] = randint(1, self.node_count,
+                                                    (corrupted_head_count,),
+                                                    device = device)
+        negative_triplet_tails[mask == 0] = randint(1, self.node_count,
+                                                    (batch_size * negative_triplet_count - corrupted_head_count,),
+                                                    device = device)
+        
+        # If we don't use metadata, there is only 1 node type
+        if len(self.knowledge_graph.node_type_to_index) == 1:
+            return torch.stack([negative_triplet_heads,
+                                negative_triplet_tails,
+                                negative_triplet_edges,
+                                batch[3].repeat(negative_triplet_count)],
+                                dim = 0).long().to(device)
+        
+        corrupted_triplets = []
+        node_types = self.knowledge_graph.node_types
+        triplet_types = self.knowledge_graph.triplet_types
+        for i in range(batch_size):
+            head = negative_triplet_heads[i]
+            tail = negative_triplet_tails[i]
+            edge = negative_triplet_edges[i].item()
+            corrupted_triplet = (
+                        self.index_to_node_type[node_types[head].item()],
+                        self.edge_types[edge],
+                        self.index_to_node_type[node_types[tail].item()]
+                    )
+            if not corrupted_triplet in triplet_types:
+                triplet_types.append(corrupted_triplet)
+                triplet = len(triplet_types)
+            else:
+                triplet = triplet_types.index(corrupted_triplet)
+                
+            corrupted_triplets.append(tensor([
+                head,
+                tail,
+                edge,
+                triplet
+            ]))
+
+        return torch.stack(corrupted_triplets, dim = 1).long().to(device)
+
+
+
+class BernoulliNegativeSampler(NegativeSampler):
+    """
+    This class inherits from the NegativeSampler interface.
+    
+    TODO.What_the_class_is_about_globally
+    
+    For each edge, choose head from Bernoulli random distribution, then tail from Bernoulli random distribution.
+    
+    Check that no true triplet is created by accident.
+
+    If the corrupted triplet is of a type that doesn't exist in the original knowledge graph,
+    it is created.
+
+    References
+    ----------
+    TODO
+
+    Arguments
+    ---------
+    kg: KnowledgeGraph
+        Knowledge graph on which the sampling will be done.
+    negative_triplet_count: int, optional, default to 1
+        Number of negative samples to create from each triplet.
+
+    Attributes
+    ----------
+    index_to_node_type: Dict[int, str]
+        keys: node index
+    edge_types: Dict[int, str]
+        keys: edge index
+        values: edge name
+    kg: KnowledgeGraph
+        Knowledge graph on which the sampling will be done.
+    negative_triplet_count: int
+        Number of negative samples to create from each triplet.
+    node_count: int
+        Number of nodes.
+    bernoulli_probabilities: torch.Tensor, dtype: torch.float, shape: [edge_count]
+        Tensor containing the probabilities of sampling a head for each edge.
+    
+    """
+    def __init__(self,
+                knowledge_graph: KnowledgeGraph,
+                negative_triplet_count = 1):
+        
+        self.knowledge_graph = knowledge_graph
+        self.index_to_node_type: Dict[int, str] = {value: key for key,value in self.knowledge_graph.node_type_to_index.items()}
+        self.edge_types: Dict[int, str] = {value: key for key,value in self.knowledge_graph.edge_to_index.items()}
+    
+        self.negative_triplet_count = negative_triplet_count
+        self.bernoulli_probabilities = self.evaluate_bernoulli_probabilities()
+
+
+    def evaluate_bernoulli_probabilities(self) -> torch.Tensor:
+        """
+        Evaluate the Bernoulli probabilities as in the TransH original paper. 
+        
+        Code adapted from the TorchKGE function. The bernoullis probabilities are sampled
+        from the average number of heads per tail and tails per head, for each edge type. If 
+        the probability for an edge type has not been sampled, it will be set to 0.5.
+        
+        Returns
+        -------
+        bernoulli_probabilities: torch.Tensor, dtype: torch.float, shape: [edge_count]
+            Tensor containing the probabilities of sampling a head for each edge.
+        
+        """
+        bernoulli_probabilities = get_bernoulli_probabilities(self.knowledge_graph)
+
+        final_probabilities = []
+        for edge_index in range(self.knowledge_graph.edge_count):
+            if edge_index in bernoulli_probabilities.keys():
+                final_probabilities.append(bernoulli_probabilities[edge_index])
+            else:
+                final_probabilities.append(0.5)
+
+        return torch.tensor(final_probabilities).float()
+
+    
+    def corrupt_batch(  self,
+                        batch: torch.LongTensor,
+                        negative_triplet_count: int = 1):
+        """
+        For each true triplet, produce a corrupted one not different from
+        any other true triplet. If `heads` and `tails` are cuda objects,
+        then the returned tensors are on the GPU.
+
+        Arguments
+        ---------
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the integer key of heads, tails, edges and triplets
+            of the edges in the current batch.
+            Here, batch_size is batch.shape[1].
+        negative_triplet_count: int, optional, default to 1
+            Number of negative samples to create from each triplet.
+
+        Returns
+        -------
+        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, negative_triplet_count * batch_size]
+            Tensor containing the integer key of negatively sampled triplets of
+            the edges in the current batch.
+            Here, batch_size is batch.shape[1].
+            
+        """
+        device = batch.device
+        batch_size = batch.shape[1]
+        negative_triplet_heads = batch[0].repeat(negative_triplet_count)
+        negative_triplet_tails = batch[1].repeat(negative_triplet_count)
+        negative_triplet_edges = batch[2]
+
+        self.bernoulli_probabilities: Tensor = self.bernoulli_probabilities.to(device)
+        mask = bernoulli(self.bernoulli_probabilities[negative_triplet_edges].repeat(negative_triplet_count)).double()
+        corrupted_head_count = int(mask.sum().item())
+
+        negative_triplet_heads[mask == 1] = randint(1,
+                                                    self.knowledge_graph.node_count,
+                                                    (corrupted_head_count,),
+                                                    device = device)
+        negative_triplet_tails[mask == 0] = randint(1,
+                                                    self.knowledge_graph.node_count,
+                                                    (batch_size * negative_triplet_count - corrupted_head_count,),
+                                                    device = device)
+        
+        # If we don't use metadata, there is only 1 node type
+        if len(self.knowledge_graph.node_type_to_index) == 1:
+            return torch.stack(
+                                [negative_triplet_heads,
+                                negative_triplet_tails,
+                                negative_triplet_edges.repeat(negative_triplet_count),
+                                batch[3].repeat(negative_triplet_count)],
+                                dim = 0
+                                ).long().to(device)
+        
+        corrupted_triplets = []
+        node_types = self.knowledge_graph.node_types
+        triplet_types = self.knowledge_graph.triplet_types
+        
+        for i in range(batch_size):
+            head = negative_triplet_heads[i]
+            tail = negative_triplet_tails[i]
+            edge = negative_triplet_edges[i].item()
+            corrupted_triplet = (
+                                self.index_to_node_type[node_types[head].item()],
+                                self.edge_types[edge],
+                                self.index_to_node_type[node_types[tail].item()]
+                                )
+            if not corrupted_triplet in triplet_types:
+                triplet_types.append(corrupted_triplet)
+                triplet = len(triplet_types)
+            else:
+                triplet = triplet_types.index(corrupted_triplet)
+                
+            corrupted_triplets.append(tensor([
+                head,
+                tail,
+                edge,
+                triplet
+            ]))
+
+        return torch.stack(corrupted_triplets, dim = 1).long().to(device)
+
+
+
+class PositionalNegativeSampler(BernoulliNegativeSampler):
+    """
+    This class inherits from the BernoulliNegativeSampler class. It inherites its attributes as well.
+    
+    Adaptation of torchKGE's PositionalNegativeSampler to KGATE's graphindices format.
+
+    Either the head or the tail of a triplet is replaced by another node
+    chosen among nodes that have already appeared at the same place in a
+    triplet (involving the same edge), using bernoulli sampling.
+
+    If the corrupted triplet is of a type that doesn't exist in the original knowledge graph,
+    it is created.
+
+    Arguments
+    ---------
+    kg: kgate.data_structure.KnowledgeGraph
+        Knowledge graph from which the corrupted triplets will be created.
+
+    Attributes
+    ----------
+    possible_heads: Dict[int, torch.Tensor]
+        keys: edges
+        values: list of number of possible heads for each edge, equivalent to possible_head_count
+    possible_tails: Dict[int, torch.Tensor]
+        keys: edges
+        values: list of number of possible tails for each edge, equivalent to possible_tail_count
+    possible_head_count: torch.Tensor
+        List of number of possible heads for each edge.
+        Equivalent of List[int], but with Tensor possibilities.
+    possible_tail_count: torch.Tensor
+        List of number of possible tails for each edge.
+        Equivalent of List[int], but with Tensor possibilities.
+    index_to_node_type: Dict[int, str]
+        keys: node index
+        values: node types
+    edge_types: Dict[int, str]
+        keys: edge index
+        values: edge name
+    kg: KnowledgeGraph
+        Knowledge graph on which the sampling will be done.
+    node_count: int
+        Number of nodes.
+    bernoulli_probabilities: torch.Tensor, dtype: torch.float, shape: [edge_count]
+        Tensor containing the probabilities of sampling a head for each edge.
+    negative_triplet_count: int
+        Number of negative samples to create from each triplet.
     
     Notes
     -----
     Also fixes GPU/CPU incompatibility bug.
-    See original implementation here : https://github.com/torchkge-team/torchkge/blob/3adb9344dec974fc29d158025c014b0dcb48118c/torchkge/sampling.py#L330C52-L330C53
+    See original implementation here: https://github.com/torchkge-team/torchkge/blob/3adb9344dec974fc29d158025c014b0dcb48118c/torchkge/sampling.py#L330C52-L330C53
+    
+    Slower than UniformNegativeSampler, BernoulliNegativeSampler and MixedNegativeSampler, as it searches
+    in the entire knowledge graph instead of a batch.
+    
     """
-    def __init__(self, kg:KnowledgeGraph):
-        super().__init__(kg)
-        self.ix2nt = {v: k for k,v in self.kg.nt2ix.items()}
-        self.rel_types = {v: k for k,v in self.kg.rel2ix.items()}
+    def __init__(self, knowledge_graph: KnowledgeGraph):
+        super().__init__(knowledge_graph)
 
-    def corrupt_batch(self, batch: Tensor, n_neg: int = 1) -> Tensor:
-        """For each true triplet, produce a corrupted one not different from
-        any other golden triplet. If `heads` and `tails` are cuda objects,
+        self.possible_heads, self.possible_tails, \
+            self.possible_head_count, self.possible_tail_count = self.find_possibilities()
+
+
+    def find_possibilities(self) -> Tuple[
+                                Dict[int, List[int]],
+                                Dict[int, List[int]], 
+                                Tensor, 
+                                Tensor]:
+        """
+        For each edge of the knowledge graph (and possibly the
+        validation graph but not the test graph) find all the possible heads
+        and tails in the sense of Wang et al., e.g. all nodes that occupy
+        once this position in another triplet.
+
+        Returns
+        -------
+        possible_heads: Dict[int, List[int]]
+            keys : edge index, values : list of possible heads
+        possible tails: Dict[int, List[int]]
+            keys : edge index, values : list of possible tails
+        possible_heads_count: torch.Tensor, dtype: torch.long, shape: (edge_count)
+            Number of possible heads for each edge.
+        possible_tails_count: torch.Tensor, dtype: torch.long, shape: (edge_count)
+            Number of possible tails for each edge.
+        
+        """
+        possible_heads = defaultdict(set)
+        possible_tails = defaultdict(set)
+        for triplet_index in range(self.knowledge_graph.triplet_count):
+            possible_heads[self.knowledge_graph.edge_indices[triplet_index].item()].add(self.knowledge_graph.head_indices[triplet_index].item())
+            possible_tails[self.knowledge_graph.edge_indices[triplet_index].item()].add(self.knowledge_graph.tail_indices[triplet_index].item())
+
+        possible_heads_count = []
+        possible_tails_count = []
+
+        for edge_index in range(self.knowledge_graph.edge_count):
+            if edge_index in possible_heads.keys():
+                possible_heads_count.append(len(possible_heads[edge_index]))
+                possible_tails_count.append(len(possible_tails[edge_index]))
+                possible_heads[edge_index] = list(possible_heads[edge_index])
+                possible_tails[edge_index] = list(possible_tails[edge_index])
+            else:
+                possible_heads_count.append(0)
+                possible_tails_count.append(0)
+                possible_heads[edge_index] = list(possible_heads[edge_index])
+                possible_tails[edge_index] = list(possible_tails[edge_index])
+
+        return possible_heads, possible_tails, torch.tensor(possible_heads_count), torch.tensor(possible_tails_count)
+
+
+    def corrupt_batch(  self,
+                        batch: Tensor,
+                        _: int = 1
+                        ) -> Tensor:
+        """
+        For each true triplet, produce a corrupted one not different from
+        any other true triplet. If `heads` and `tails` are cuda objects,
         then the returned tensors are on the GPU.
 
-        Parameters
-        ----------
-        batch: torch.Tensor, dtype: torch.long, shape: (4, batch_size)
-            Tensor containing the integer key of heads, tails, relations and triples
-            of the relations in the current batch.
+        Arguments
+        ---------
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the integer key of heads, tails, edges and triplets
+            of the edges in the current batch.
+            Here, batch_size is batch.shape[1].
+
+        Raises
+        ------
+        AssertionError #1
+            The size/shape of possible_head_count must be corrupted_head_count.
+        AssertionError #2
+            The size/shape of possible_head_count must be (batch_size - corrupted_head_count).
 
         Returns
         -------
-        neg_heads: torch.Tensor, dtype: torch.long, shape: (batch_size)
-            Tensor containing the integer key of negatively sampled heads of
-            the relations in the current batch.
-        neg_tails: torch.Tensor, dtype: torch.long, shape: (batch_size)
-            Tensor containing the integer key of negatively sampled tails of
-            the relations in the current batch.
+        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the integer key of negatively sampled triplets of
+            the edges in the current batch.
+            Here, batch_size is batch.shape[1].
+        
         """
-        relations = batch[2]
+        edges = batch[2]
         device = batch.device
-        node_types = self.kg.node_types
-        triple_types = self.kg.triple_types
+        node_types = self.knowledge_graph.node_types
+        triplet_types = self.knowledge_graph.triplet_types
 
-        batch_size = batch.size(1)
-        neg_batch: Tensor = batch.clone().long()
+        batch_size = batch.shape[1]
+        negative_triplets_batch: Tensor = batch.clone().long()
 
-        self.bern_probs = self.bern_probs.to(device)
+        self.bernoulli_probabilities = self.bernoulli_probabilities.to(device)
         # Randomly choose which samples will have head/tail corrupted
-        mask = bernoulli(self.bern_probs[relations]).double()
-        n_heads_corrupted = int(mask.sum().item())
+        mask = bernoulli(self.bernoulli_probabilities[edges]).double()
+        corrupted_head_count = int(mask.sum().item())
 
-        self.n_poss_heads = self.n_poss_heads.to(device)
-        self.n_poss_tails = self.n_poss_tails.to(device)
-        # Get the number of possible entities for head and tail
-        n_poss_heads = self.n_poss_heads[relations[mask == 1]]
-        n_poss_tails = self.n_poss_tails[relations[mask == 0]]
+        self.possible_head_count = self.possible_head_count.to(device)
+        self.possible_tail_count = self.possible_tail_count.to(device)
+        # Get the number of possible nodes for head and tail
+        possible_head_count = self.possible_head_count[edges[mask == 1]]
+        possible_tail_count = self.possible_tail_count[edges[mask == 0]]
 
-        assert n_poss_heads.shape[0] == n_heads_corrupted
-        assert n_poss_tails.shape[0] == batch_size - n_heads_corrupted
+        assert possible_head_count.shape[0] == corrupted_head_count
+        assert possible_tail_count.shape[0] == batch_size - corrupted_head_count
 
-        # Choose a rank of an entity in the list of possible entities
-        choice_heads = (n_poss_heads.float() * rand((n_heads_corrupted,), device=device)).floor().long()
+        # Choose a rank of an node in the list of possible nodes
+        chosen_head = (possible_head_count.float() * rand((corrupted_head_count,), device = device)).floor().long()
 
-        choice_tails = (n_poss_tails.float() * rand((batch_size - n_heads_corrupted,), device=device)).floor().long()
+        chosen_tail = (possible_tail_count.float() * rand((batch_size - corrupted_head_count,), device = device)).floor().long()
 
-        corr_head_batch = batch[:,mask == 1]
-        corr_heads = []
-        triples = [0] * n_heads_corrupted if len(self.kg.nt2ix)==1 else []
-        for i in range(n_heads_corrupted):
-            r = corr_head_batch[2][i].item()
-            choices: Dict[Number,Set[Number]] = self.possible_heads[r]
+        corrupted_head_batch = batch[:,mask == 1]
+        corrupted_heads = []
+        triplets = [0] * corrupted_head_count if len(self.knowledge_graph.node_type_to_index) == 1 else []
+        for i in range(corrupted_head_count):
+            edge_index = corrupted_head_batch[2][i].item()
+            choices: Dict[Number, Set[Number]] = self.possible_heads[edge_index]
             if len(choices) == 0:
-                # in this case the relation r has never been used with any head
-                # choose one entity at random
-                corr_head = randint(low=0, high=self.n_ent, size=(1,)).item()
+                # In this case the edge i has never been used with any head
+                # Choose one node at random
+                corrupted_head_index = randint(low = 0, high = self.knowledge_graph.node_count, size = (1,)).item()
             else:
-                corr_head = choices[choice_heads[i].item()]
-            corr_heads.append(corr_head)
+                corrupted_head_index = choices[chosen_head[i].item()]
+            corrupted_heads.append(corrupted_head_index)
             # If we don't use metadata, there is only 1 node type
-            if len(self.kg.nt2ix) > 1:
-                t = corr_head_batch[1][i].item()
+            if len(self.knowledge_graph.node_type_to_index) > 1:
+                tail_index = corrupted_head_batch[1][i].item()
                 # Find the corrupted triplet index
-                corr_tri = (
-                            self.ix2nt[node_types[corr_head].item()],
-                            self.rel_types[r],
-                            self.ix2nt[node_types[t].item()]
+                corrupted_triplet_index = (
+                            self.index_to_node_type[node_types[corrupted_head_index].item()],
+                            self.edge_types[edge_index],
+                            self.index_to_node_type[node_types[tail_index].item()]
                         )
-                # Add it if it doesn't already exists
-                if not corr_tri in triple_types:
-                    triple_types.append(corr_tri)
-                    triple = len(triple_types)
+                # Add it if it doesn't already exist
+                if not corrupted_triplet_index in triplet_types:
+                    triplet_types.append(corrupted_triplet_index)
+                    triplet = len(triplet_types)
                 else:
-                    triple = triple_types.index(corr_tri)
+                    triplet = triplet_types.index(corrupted_triplet_index)
 
-                triples.append(triple)
+                triplets.append(triplet)
             
-        if len(corr_heads) > 0:
-            neg_batch[:, mask == 1] = torch.stack([tensor(corr_heads, device=device), corr_head_batch[1], corr_head_batch[2], tensor(triples, device=device)]).long().to(device)
+        if len(corrupted_heads) > 0:
+            negative_triplets_batch[:, mask == 1] = torch.stack([tensor(corrupted_heads, device = device),
+                                                                corrupted_head_batch[1],
+                                                                corrupted_head_batch[2],
+                                                                tensor(triplets, device = device)]
+                                                                ).long().to(device)
 
-        corr_tail_batch = batch[:,mask == 0]
-        corr_tails = []
-        triples = [0] * (batch_size - n_heads_corrupted) if len(self.kg.nt2ix)==1 else []
-        for i in range(batch_size - n_heads_corrupted):
-            r = corr_tail_batch[2][i].item()
-            choices: Dict[Number,Set[Number]] = self.possible_tails[r]
+        corrupted_tail_batch = batch[:,mask == 0]
+        corrupted_tails = []
+        triplets = [0] * (batch_size - corrupted_head_count) if len(self.knowledge_graph.node_type_to_index) == 1 else []
+        for i in range(batch_size - corrupted_head_count):
+            edge_index = corrupted_tail_batch[2][i].item()
+            choices: Dict[Number, Set[Number]] = self.possible_tails[edge_index]
             if len(choices) == 0:
-                # in this case the relation r has never been used with any tail
-                # choose one entity at random
-                corr_tail = randint(low=0, high=self.n_ent, size=(1,)).item()
+                # In this case the edge i has never been used with any tail
+                # Choose one node at random
+                corrupted_tail_index = randint(low = 0, high = self.knowledge_graph.node_count, size = (1,)).item()
             else:
-                corr_tail = choices[choice_tails[i].item()]
+                corrupted_tail_index = choices[chosen_tail[i].item()]
             # If we don't use metadata, there is only 1 node type
-            if len(self.kg.nt2ix) > 1:
-                h = corr_tail_batch[0][i].item()
-                corr_tri = (
-                            self.ix2nt[node_types[h].item()],
-                            self.rel_types[r],
-                            self.ix2nt[node_types[corr_tail].item()]
+            if len(self.knowledge_graph.node_type_to_index) > 1:
+                head_index = corrupted_tail_batch[0][i].item()
+                corrupted_triplet_index = (
+                            self.index_to_node_type[node_types[head_index].item()],
+                            self.edge_types[edge_index],
+                            self.index_to_node_type[node_types[corrupted_tail_index].item()]
                         )
-                if not corr_tri in triple_types:
-                    triple_types.append(corr_tri)
-                    triple = len(triple_types)
+                if not corrupted_triplet_index in triplet_types:
+                    triplet_types.append(corrupted_triplet_index)
+                    triplet = len(triplet_types)
                 else:
-                    triple = triple_types.index(corr_tri)
-                triples.append(triple)
+                    triplet = triplet_types.index(corrupted_triplet_index)
+                triplets.append(triplet)
         
-        if len(corr_tails) > 0:
-            neg_batch[:, mask == 0] = torch.stack([corr_tail_batch[1], tensor(corr_tails, device=device), corr_tail_batch[2], tensor(triples, device=device)]).long().to(device)
+        if len(corrupted_tails) > 0:
+            negative_triplets_batch[:, mask == 0] = torch.stack([corrupted_tail_batch[1],
+                                                                tensor(corrupted_tails, device = device),
+                                                                corrupted_tail_batch[2],
+                                                                tensor(triplets, device = device)]
+                                                                ).long().to(device)
 
-        return neg_batch
+        return negative_triplets_batch
 
-class UniformNegativeSampler(torchkge.sampling.UniformNegativeSampler):
-    def __init__(self, kg, n_neg=1):
-        super().__init__(kg, n_neg=n_neg)
-        self.ix2nt = {v: k for k,v in self.kg.nt2ix.items()}
-        self.rel_types = {v: k for k,v in self.kg.rel2ix.items()}
-    
-    def corrupt_batch(self, batch: torch.Tensor, n_neg=None) -> Tensor:
-        n_neg = n_neg or self.n_neg
 
-        device = batch.device
-        batch_size = batch.size(1)
-        neg_heads = batch[0].repeat(n_neg)
-        neg_tails = batch[1].repeat(n_neg)
-        rels = batch[2].repeat(n_neg)
-        
-        mask = bernoulli(ones(size=(batch_size * n_neg,),
-                              device = device) / 2).double()
-        n_h_cor = int(mask.sum().item())
 
-        neg_heads[mask == 1] = randint(1, self.n_ent,
-                                       (n_h_cor,),
-                                       device=device)
-        neg_tails[mask == 0] = randint(1, self.n_ent,
-                                       (batch_size * n_neg - n_h_cor,),
-                                       device=device)
-        
-        # If we don't use metadata, there is only 1 node type
-        if len(self.kg.nt2ix) == 1:
-            return torch.stack([neg_heads, neg_tails, rels, batch[3].repeat(n_neg)], dim=0).long().to(device)
-        
-        corrupted_triples = []
-        node_types = self.kg.node_types
-        triple_types = self.kg.triple_types
-        for i in range(batch_size):
-            h = neg_heads[i]
-            t = neg_tails[i]
-            r = rels[i].item()
-            corr_tri = (
-                        self.ix2nt[node_types[h].item()],
-                        self.rel_types[r],
-                        self.ix2nt[node_types[t].item()]
-                    )
-            if not corr_tri in triple_types:
-                triple_types.append(corr_tri)
-                triple = len(triple_types)
-            else:
-                triple = triple_types.index(corr_tri)
-                
-            corrupted_triples.append(tensor([
-                h,
-                t,
-                r,
-                triple
-            ]))
-
-        return torch.stack(corrupted_triples, dim=1).long().to(device)
-    
-
-    
-class BernoulliNegativeSampler(torchkge.sampling.BernoulliNegativeSampler):
-    def __init__(self, kg, n_neg=1):
-        super().__init__(kg, n_neg=n_neg)
-        self.ix2nt = {v: k for k,v in self.kg.nt2ix.items()}
-        self.rel_types = {v: k for k,v in self.kg.rel2ix.items()}
-
-    def corrupt_batch(self, batch: torch.LongTensor, n_neg=None):
-        n_neg = n_neg or self.n_neg
-
-        device = batch.device
-        batch_size = batch.size(1)
-        neg_heads = batch[0].repeat(n_neg)
-        neg_tails = batch[1].repeat(n_neg)
-        rels = batch[2]
-
-        self.bern_probs: Tensor = self.bern_probs.to(device)
-        mask = bernoulli(self.bern_probs[rels].repeat(n_neg)).double()
-        n_h_cor = int(mask.sum().item())
-
-        neg_heads[mask == 1] = randint(1, self.n_ent,
-                                       (n_h_cor,),
-                                       device=device)
-        neg_tails[mask == 0] = randint(1, self.n_ent,
-                                       (batch_size * n_neg - n_h_cor,),
-                                       device=device)
-        
-        # If we don't use metadata, there is only 1 node type
-        if len(self.kg.nt2ix) == 1:
-            return torch.stack([neg_heads, neg_tails, rels.repeat(n_neg), batch[3].repeat(n_neg)], dim=0).long().to(device)
-        
-        corrupted_triples = []
-        node_types = self.kg.node_types
-        triple_types = self.kg.triple_types
-        for i in range(batch_size):
-            h = neg_heads[i]
-            t = neg_tails[i]
-            r = rels[i].item()
-            corr_tri = (
-                        self.ix2nt[node_types[h].item()],
-                        self.rel_types[r],
-                        self.ix2nt[node_types[t].item()]
-                    )
-            if not corr_tri in triple_types:
-                triple_types.append(corr_tri)
-                triple = len(triple_types)
-            else:
-                triple = triple_types.index(corr_tri)
-                
-            corrupted_triples.append(tensor([
-                h,
-                t,
-                r,
-                triple
-            ]))
-
-        return torch.stack(corrupted_triples, dim=1).long().to(device)
-        
-class MixedNegativeSampler(torchkge.sampling.NegativeSampler):
+class MixedNegativeSampler(NegativeSampler):
     """
-    A custom negative sampler that combines the BernoulliNegativeSampler
-    and the PositionalNegativeSampler. For each triplet, it samples `n_neg` negative samples
-    using both samplers.
+    This class inherits from the NegativeSampler class.
     
-    Parameters
-    ----------
-    kg: torchkge.data_structures.KnowledgeGraph
+    A custom negative sampler that combines the BernoulliNegativeSampler, the UniformNegativeSampler
+    and the PositionalNegativeSampler. 
+    
+    For each triplet, it samples `negative_triplet_count` negative samples for each samplers except the Positional. Note
+    that the PositionalNegativeSampler always produces only one negative triplet per positive triplet.
+    
+    Arguments
+    ---------
+    kg: KnowledgeGraph
         Main knowledge graph (usually training one).
-    kg_val: torchkge.data_structures.KnowledgeGraph (optional)
-        Validation knowledge graph.
-    kg_test: torchkge.data_structures.KnowledgeGraph (optional)
-        Test knowledge graph.
-    n_neg: int
-        Number of negative sample to create from each fact.
-    """
+    negative_triplet_count: int, optional, default to 1
+        Third of the number of negative samples to create from each triplet. Since it uses 3 sampler
+        methods, it generates 3 times the amount of negative_triplet_count indicated.
+
+    Attributes
+    ----------
+    negative_triplet_count: int
+        Number of negative samples to create from each triplet.
+        Inherited attribute, equivalent to negative_triplet_count.
+    uniform_sampler: UniformNegativeSampler
+        Initialization of the UniformNegativeSampler class as an attribute.
+    bernoulli_sampler: BernoulliNegativeSampler
+        Initialization of the BernoulliNegativeSampler class as an attribute.
+    positional_sampler: PositionalNegativeSampler
+        Initialization of the PositionalNegativeSampler class as an attribute.
     
-    def __init__(self, kg, n_neg=1):
-        super().__init__(kg, n_neg=n_neg)
-        # Initialize both Bernoulli and Positional samplers
-        self.uniform_sampler = UniformNegativeSampler(kg, n_neg=n_neg)
-        self.bernoulli_sampler = BernoulliNegativeSampler(kg, n_neg=n_neg)
-        self.positional_sampler = PositionalNegativeSampler(kg)
+    Notes
+    -----
+    This is an example of a custom negative sampler using other existing samplers, and may produce
+    unexpected behaviour if used as is.
+    
+    """
+    def __init__(self,
+                knowledge_graph: KnowledgeGraph,
+                negative_triplet_count = 1):
         
-    def corrupt_batch(self, batch: torch.LongTensor, n_neg=None):
-        """For each true triplet, produce `n_neg` corrupted ones from the
-        Unniform sampler, the Bernoulli sampler and the Positional sampler. If `heads` and `tails` are
+        self.knowledge_graph = knowledge_graph
+        self.index_to_node_type: Dict[int, str] = {value: key for key,value in self.knowledge_graph.node_type_to_index.items()}
+        self.edge_types: Dict[int, str] = {value: key for key,value in self.knowledge_graph.edge_to_index.items()}
+    
+        self.negative_triplet_count = negative_triplet_count
+
+        # Initialize both Bernoulli, Uniform and Positional samplers
+        self.uniform_sampler = UniformNegativeSampler(self.knowledge_graph, negative_triplet_count = negative_triplet_count)
+        self.bernoulli_sampler = BernoulliNegativeSampler(self.knowledge_graph, negative_triplet_count = negative_triplet_count)
+        self.positional_sampler = PositionalNegativeSampler(self.knowledge_graph)
+        
+        
+    def corrupt_batch(  self,
+                        batch: torch.LongTensor,
+                        negative_triplet_count: int = 1):
+        """
+        For each true triplet, produce `negative_triplet_count` corrupted ones from the
+        Uniform sampler, the Bernoulli sampler and the Positional sampler. If `heads` and `tails` are
         cuda objects, then the returned tensors are on the GPU.
 
-        Parameters
-        ----------
-        heads: torch.Tensor, dtype: torch.long, shape: (batch_size)
-            Tensor containing the integer key of heads of the relations in the
-            current batch.
-        tails: torch.Tensor, dtype: torch.long, shape: (batch_size)
-            Tensor containing the integer key of tails of the relations in the
-            current batch.
-        relations: torch.Tensor, dtype: torch.long, shape: (batch_size)
-            Tensor containing the integer key of relations in the current
-            batch.
-        n_neg: int (optional)
-            Number of negative samples to create from each fact. If None, the class-level
-            `n_neg` value is used.
+        Arguments
+        ---------
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the integer key of heads, tails, edges and triplets
+            of the edges in the current batch.
+            Here, batch_size is batch.shape[1].
+        negative_triplet_count: int, optional, default to 1
+            Number of negative samples to create from each triplet.
 
         Returns
         -------
-        combined_neg_heads: torch.Tensor, dtype: torch.long
-            Tensor containing the integer key of negatively sampled heads from both samplers.
-        combined_neg_tails: torch.Tensor, dtype: torch.long
-            Tensor containing the integer key of negatively sampled tails from both samplers.
+        combined_negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, 2 * negative_triplet_count * batch_size + batch_size]
+            Tensor containing the integer key of negatively sampled heads and tails from both samplers.
+            Here, batch_size is batch.shape[1].
+        
         """
-
-        n_neg = n_neg or self.n_neg
-
         # Get negative samples from Uniform sampler
-        uniform_neg_batch = self.uniform_sampler.corrupt_batch(
-            batch, n_neg=n_neg
+        uniform_negative_triplets_batch = self.uniform_sampler.corrupt_batch(
+            batch, negative_triplet_count = negative_triplet_count
         )
         
         # Get negative samples from Bernoulli sampler
-        bernoulli_neg_batch = self.bernoulli_sampler.corrupt_batch(
-            batch, n_neg=n_neg
+        bernoulli_negative_triplets_batch = self.bernoulli_sampler.corrupt_batch(
+            batch, negative_triplet_count = negative_triplet_count
         )
         
         # Get negative samples from Positional sampler
-        positional_neg_batch = self.positional_sampler.corrupt_batch(
+        positional_negative_triplets_batch = self.positional_sampler.corrupt_batch(
             batch
         )
         
         # Combine results from all samplers
-        combined_neg_batch = cat([uniform_neg_batch, bernoulli_neg_batch, positional_neg_batch], dim=1)
+        combined_negative_triplets_batch = cat([
+                                                uniform_negative_triplets_batch,
+                                                bernoulli_negative_triplets_batch,
+                                                positional_negative_triplets_batch
+                                                ], dim = 1)
         
-        return combined_neg_batch
+        return combined_negative_triplets_batch

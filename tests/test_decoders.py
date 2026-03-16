@@ -4,7 +4,7 @@ from kgate.decoders import TransE
 
 @pytest.fixture
 def transe_model():
-    return TransE(emb_dim=50, n_entities=100, n_relations=10, dissimilarity_type='L2')
+    return TransE(embedding_dimensions=50, node_count=100, edge_count=10, dissimilarity_type='L2')
 
 def test_initialization(transe_model):
     assert transe_model.emb_dim == 50
