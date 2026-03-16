@@ -174,6 +174,13 @@ class EdgeInference:
                                                                                                         node_inference = False)
                 scores = decoder.inference_score(head_embeddings, tail_embeddings, candidates)
 
+                head_embeddings, tail_embeddings, _, candidates = decoder.inference_prepare_candidates( head_indices = head_indices,
+                                                                                                        tail_indices = tail_indices, 
+                                                                                                        edge_indices = tensor([]).long(),
+                                                                                                        node_embeddings = node_embeddings, 
+                                                                                                        edge_embeddings = edge_embeddings, 
+                                                                                                        node_inference = False)
+                scores = decoder.inference_score(head_embeddings, tail_embeddings, candidates)
 
                 scores = filter_scores(scores, self.kg.graphindices, "edge", head_indices, tail_indices, None)
 
