@@ -217,22 +217,11 @@ class Architect(Module):
             self.edge_embedding_dimensions = self.node_embedding_dimensions
         self.evaluation_batch_size: int = self.config["training"]["evaluation_batch_size"]
 
-        if metadata is not None and not set(["id", "type"]).issubset(metadata.keys()):
-            raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
+        self.metadata = None
+        if metadata is None:
+            metadata = self.config["metadata_csv"]
+        self.set_metadata(metadata = metadata)
         
-        self.metadata = metadata
-
-        if metadata is None and self.config["metadata_csv"] != "" and Path(self.config["metadata_csv"]).exists():
-            for separator in SUPPORTED_SEPARATORS:
-                try:
-                    self.metadata = pd.read_csv(self.config["metadata_csv"], sep = separator, usecols = ["type", "id"])
-                    break
-                except ValueError:
-                    continue
-        
-            if self.metadata is None:
-                raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
-
         run_kg_preprocessing: bool = self.config["run_kg_preprocessing"]
 
         if run_kg_preprocessing:
@@ -311,6 +300,66 @@ class Architect(Module):
         
         return self.edge_embedding_dimensions
 
+    def set_metadata(self, metadata: pd.DataFrame | os.PathLike):
+        """
+        Set the node metadata of the knowledge graph.
+
+        This function accepts either a pandas DataFrame or the path to a CSV file as input.
+        It must have at least columns:
+        - "id" which uses the same identifiers as the knowledge graph;
+        - "type" which records the type of the corresponding node.
+        
+        In addition, the metadata can have any number of supplementary columns that can be
+        used to set the identity of the nodes for the associated :class:`~kgate.knowledgegraph.KnowledgeGraph`.
+
+        If there is no knowledge graph associated with the Architect, the `architect.metadata` property will be used
+        to initialize them. If there is already a knowledge graph, it will update the knowledge graph with
+        the new metadata.
+
+        Alternatively, you can directly run the :func:`~kgate.knowledgegraph.KnowledgeGraph.add_metadata` method for a
+        more fine-grained metadata management.
+        
+        Arguments
+        ---------
+        metadata: pd.DataFrame or os.PathLike
+            The metadata object, either as a pandas DataFrame or a path to a CSV file.
+
+        Raises
+        ------
+        pd.errors.InvalidColumnName
+            If the columns 'id' and 'type' are not present.
+        ValueError
+            If the CSV file uses an unsupported separator.
+        TypeError
+            If the metadata object is not of the correct type.
+            
+        """
+        match type(metadata):
+            case pd.DataFrame:
+                if not set(["id", "type"]).issubset(metadata.keys()):
+                    raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
+        
+                self.metadata = metadata
+            case os.PathLike:
+                if metadata != "" and Path(metadata).exists():
+                    # Fuzzy identification of separator.
+                    # TODO: find a cleaner way to do it
+                    for separator in SUPPORTED_SEPARATORS:
+                        try:
+                            self.metadata = pd.read_csv(metadata, sep = separator, usecols = ["type", "id"])
+                            break
+                        except ValueError:
+                            continue
+                
+                    if self.metadata is None:
+                        raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
+            case _:
+                raise TypeError(f"Metadata can only be given as a pandas DataFrame or a path to a CSV file, but got {type(metadata)}")
+            
+        if self.metadata is not None and hasattr(self, "kg_train"):
+            for knowledge_graph in (self.kg_train, self.kg_val, self.kg_test):
+                knowledge_graph.add_metadata(self.metadata)
+            
 
     def initialize_encoder( self,
                             encoder_name: Literal["Default", "GCN", "GAT", "Node2Vec", ""] = "",
