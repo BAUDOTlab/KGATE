@@ -1008,32 +1008,32 @@ class Architect(Module):
 
         target_edges_result = {}
 
-        all_edges: Set[Any] = set(self.kg_test.rel2ix.keys())
+        all_edges: Set[Any] = set(self.kg_test.edge_to_index.keys())
         remaining_edges = all_edges - set(target_edges)
         remaining_edges = list(remaining_edges)
         
         if len(remaining_edges) != len(all_edges):
-            metrics_sum_target_edges, triple_count_target_edges, individual_metrics_target_edges, group_metrics_target_edges = self.calculate_metrics_for_relations(
+            metrics_sum_target_edges, triplet_count_target_edges, individual_metrics_target_edges, group_metrics_target_edges = self.calculate_metrics_for_edges(
                 self.kg_test, target_edges)
             
             target_edges_result = {
-                "target_relations": {
+                "target_edges": {
                     "Global_metrics": group_metrics_target_edges,
                     "Individual_metrics": individual_metrics_target_edges
                 },
             }
 
-        total_metrics_sum_remaining, fact_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
-            self.kg_test, remaining_relations)
+        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(
+            self.kg_test, remaining_edges)
 
-        global_metrics = (total_metrics_sum_list_2 + total_metrics_sum_remaining) / (triple_count_target_edges + fact_count_remaining)
+        global_metrics = (total_metrics_sum_list_2 + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
 
         logging.info(f"Final Test metrics with best model: {global_metrics}")
 
         results = {
             "Global_metrics": global_metrics,
             **target_edges_result, # if there is no target edges, don't add the block
-            "remaining_relations": {
+            "remaining_edges": {
                 "Global_metrics": group_metrics_remaining,
                 "Individual_metrics": individual_metrics_remaining
             },
@@ -1636,8 +1636,8 @@ class Architect(Module):
 
         for edge_name in edge_indices:
             # Get triplets associated with index
-            relation_index = kg.edge_to_index.get(edge_name)
-            indices_to_keep = torch.nonzero(kg.edge_indices == relation_index, as_tuple = False).squeeze()
+            edge_index = kg.edge_to_index.get(edge_name)
+            indices_to_keep = torch.nonzero(kg.edge_indices == edge_index, as_tuple = False).squeeze()
 
             if indices_to_keep.numel() == 0:
                 continue  # Skip to next edge if no triplet found
