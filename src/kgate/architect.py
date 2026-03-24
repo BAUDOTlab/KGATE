@@ -1026,7 +1026,7 @@ class Architect(Module):
         total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(
             self.kg_test, remaining_edges)
 
-        global_metrics = (total_metrics_sum_list_2 + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
+        global_metrics = (group_metrics_remaining + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
 
         logging.info(f"Final Test metrics with best model: {global_metrics}")
 
