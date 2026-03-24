@@ -1015,8 +1015,7 @@ class Architect(Module):
         triplet_count_target_edges = 0
 
         if len(remaining_edges) != len(all_edges):
-            metrics_sum_target_edges, triplet_count_target_edges, individual_metrics_target_edges, group_metrics_target_edges = self.calculate_metrics_for_edges(
-                self.kg_test, target_edges)
+            metrics_sum_target_edges, triplet_count_target_edges, individual_metrics_target_edges, group_metrics_target_edges = self.calculate_metrics_for_edges(self.kg_test, target_edges)
             
             target_edges_result = {
                 "target_edges": {
@@ -1025,8 +1024,7 @@ class Architect(Module):
                 },
             }
 
-        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(
-            self.kg_test, remaining_edges)
+        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(self.kg_test, remaining_edges)
 
         global_metrics = (group_metrics_remaining + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
 

@@ -492,7 +492,7 @@ class KnowledgeGraph(Dataset):
             assert "id" in metadata.columns and metadata["id"] == self.metadata["id"], "The metadata dataframe must have an `id` column identical to the existing metadata."
             self.metadata = pd.merge(self.metadata, metadata, on = "id")
 
- 
+
     def get_dataframe(self):
         """
         Returns a Pandas DataFrame with columns ['head', 'tail', 'edge'].

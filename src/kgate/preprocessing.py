@@ -6,7 +6,7 @@ Knowledge Graph preprocessing functions to run before any training procedure.
 import logging
 import pickle
 from pathlib import Path
-from typing import Tuple, List, Set
+from typing import Tuple, List, Set, Literal
 
 import pandas as pd
 
@@ -468,26 +468,31 @@ def clean_datasets( kg_train: KnowledgeGraph,
     
     return kg_train
 
-def clean_cartesians(kg_train: KnowledgeGraph, kg_test: KnowledgeGraph, known_cartesian: List[int], node_position: str="head") -> Tuple[KnowledgeGraph,KnowledgeGraph]:
+def clean_cartesians(
+        kg_train: KnowledgeGraph, 
+        kg_test: KnowledgeGraph, 
+        known_cartesian: List[int], 
+        node_position: Literal["head", "tail"] = "head"
+        ) -> Tuple[KnowledgeGraph,KnowledgeGraph]:
     """
     Transfer cartesian product triplets from train set to test set to prevent data leakage.
-    For each entity (head or tail) involved in a cartesian product relation in the test set,
+    For each node (head or tail) involved in a cartesian product edge in the test set,
     all corresponding triplets in the train set are moved to the test set.
     
-    Parameters
-    ----------
+    Arguments
+    ---------
     kg_train : KnowledgeGraph
-        Training set knowledge graph to be cleaned.
+        Train set knowledge graph to be cleaned.
         Will be modified by removing cartesian product triplets.
     kg_test : KnowledgeGraph
         Test set knowledge graph to be augmented.
         Will receive the transferred cartesian product triplets.
     known_cartesian : list
-        List of relation indices that represent cartesian product relationships.
-        These are relations where if (h,r,t1) exists, then (h,r,t2) likely exists
-        for many other tail entities t2 (or vice versa for tail-based cartesian products).
-    node_position : str, optional
-        Either "head" or "tail" to specify which entity type to consider for cartesian products.
+        List of edge indices that represent cartesian product relationships.
+        These are edges where if (head, edge, tail_1) exists, then (head, edge, tail_2) likely exists
+        for many other tail node tail_2 (or vice versa for tail-based cartesian products).
+    node_position : Literal["head", "tail"], optional
+        Either "head" or "tail" to specify which node type to consider for cartesian products.
         Default is "head".
     
     Returns
@@ -501,24 +506,24 @@ def clean_cartesians(kg_train: KnowledgeGraph, kg_test: KnowledgeGraph, known_ca
     assert node_position in ["head", "tail"], "node_position must be either 'head' or 'tail'"
     
     for edge_index in known_cartesian:
-        # Find all entities in test set that participate in the cartesian relation
-        mask = (kg_test.relations == edge_index)
+        # Find all nodes in test set that participate in the cartesian edge
+        mask = (kg_test.edge_indices == edge_index)
         if node_position == "head":
-            cartesian_nodes = kg_test.head_idx[mask].view(-1,1)
-            # Find matching triplets in training set with same head and relation
+            cartesian_nodes = kg_test.head_indices[mask].view(-1,1)
+            # Find matching triplets in train set with same head and edge
             all_triplet_indices_to_move = []
             for node in cartesian_nodes:
-                mask = (kg_train.head_idx == node) & (kg_train.relations == edge_index)
+                mask = (kg_train.head_indices == node) & (kg_train.edge_indices == edge_index)
                 triplet_indices = mask.nonzero().squeeze()
                 if triplet_indices.dim() == 0:
                     triplet_indices = triplet_indices.unsqueeze(0)
                 all_triplet_indices_to_move.extend(triplet_indices.tolist())
         else:  # tail
-            cartesian_nodes = kg_test.tail_idx[mask].view(-1,1)
-            # Find matching triplets in training set with same tail and relation
+            cartesian_nodes = kg_test.tail_indices[mask].view(-1,1)
+            # Find matching triplets in train set with same tail and edge
             all_triplet_indices_to_move = []
             for node in cartesian_nodes:
-                mask = (kg_train.tail_idx == node) & (kg_train.relations == edge_index)
+                mask = (kg_train.tail_indices == node) & (kg_train.edge_indices == edge_index)
                 triplet_indices = mask.nonzero().squeeze()
                 if triplet_indices.dim() == 0:
                     triplet_indices = triplet_indices.unsqueeze(0)
@@ -528,10 +533,10 @@ def clean_cartesians(kg_train: KnowledgeGraph, kg_test: KnowledgeGraph, known_ca
             # Extract the triplets to be transferred
             triplets_to_move = kg_train.graphindices[:,all_triplet_indices_to_move]
             
-            # Remove identified triplets from training set
-            kg_train = kg_train.remove_triples(torch.tensor(all_triplet_indices_to_move, dtype=torch.long))
+            # Remove identified triplets from train set
+            kg_train = kg_train.remove_triplets(torch.tensor(all_triplet_indices_to_move, dtype = torch.long))
             
             # Add transferred triplets to test set while preserving KG structure
-            kg_test.add_triples(triplets_to_move)
+            kg_test.add_triplets(triplets_to_move)
             
     return kg_train, kg_test
