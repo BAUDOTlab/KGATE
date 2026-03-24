@@ -304,10 +304,10 @@ class Architect(Module):
         """
         Set the node metadata of the knowledge graph.
 
-        This function accepts either a pandas dataframe or the path to a csv file as input.
+        This function accepts either a pandas DataFrame or the path to a CSV file as input.
         It must have at least columns:
-        - "id" which uses the same identifiers as the knowledge graph.
-        - "type" which records the type of the corresponding node
+        - "id" which uses the same identifiers as the knowledge graph;
+        - "type" which records the type of the corresponding node.
         
         In addition, the metadata can have any number of supplementary columns that can be
         used to set the identity of the nodes for the associated :class:`~kgate.knowledgegraph.KnowledgeGraph`.
@@ -319,21 +319,21 @@ class Architect(Module):
         Alternatively, you can directly run the :func:`~kgate.knowledgegraph.KnowledgeGraph.add_metadata` method for a
         more fine-grained metadata management.
         
-        Argument
-        --------
+        Arguments
+        ---------
         metadata: pd.DataFrame or os.PathLike
             The metadata object, either as a pandas DataFrame or a path to a CSV file.
 
-        Returns
-        -------
+        Raises
+        ------
         pd.errors.InvalidColumnName
-            If the columns id and type are not present.
+            If the columns 'id' and 'type' are not present.
         ValueError
             If the CSV file uses an unsupported separator.
         TypeError
             If the metadata object is not of the correct type.
+            
         """
-
         match type(metadata):
             case pd.DataFrame:
                 if not set(["id", "type"]).issubset(metadata.keys()):
