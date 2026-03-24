@@ -1004,7 +1004,7 @@ class Architect(Module):
         self.eval()
 
         target_edges: List[str] = self.config["evaluation"]["target_edges"]
-        metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.yaml")
+        metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.toml")
 
         target_edges_result = {}
 
@@ -1012,13 +1012,15 @@ class Architect(Module):
         remaining_edges = all_edges - set(target_edges)
         remaining_edges = list(remaining_edges)
         
+        triplet_count_target_edges = 0
+
         if len(remaining_edges) != len(all_edges):
             metrics_sum_target_edges, triplet_count_target_edges, individual_metrics_target_edges, group_metrics_target_edges = self.calculate_metrics_for_edges(
                 self.kg_test, target_edges)
             
             target_edges_result = {
                 "target_edges": {
-                    "Global_metrics": group_metrics_target_edges,
+                    "Global_metrics": metrics_sum_target_edges,
                     "Individual_metrics": individual_metrics_target_edges
                 },
             }
@@ -1042,7 +1044,7 @@ class Architect(Module):
                 
         self.test_results = results
         
-        with open(metrics_file, "w") as file:
+        with open(metrics_file, "wb") as file:
             tomli_w.dump(results, file)
 
         logging.info(f"Evaluation results stored in {metrics_file}")
