@@ -14,7 +14,6 @@ from glob import glob
 from inspect import signature
 from pathlib import Path
 from typing import Tuple, Dict, List, Any, Set, Literal
-from collections.abc import Callable
 
 import pandas as pd
 import numpy as np
@@ -212,27 +211,11 @@ class Architect(Module):
 
         set_random_seeds(self.config["seed"])
 
-<<<<<<< doc
-        # For most models, the embedding dimensions of the relation must be same as the node embedding dimension.
-        # Only a few model allow a difference between the two
-        self.emb_dim: int = self.config["model"]["emb_dim"]
-        self.rel_emb_dim: int = self.config["model"]["rel_emb_dim"]
-        if self.rel_emb_dim == -1:
-            self.rel_emb_dim = self.emb_dim
-
-        self.eval_batch_size: int = self.config["training"]["eval_batch_size"]
-
-        if metadata is not None and not set(["id","type"]).issubset(metadata.keys()):
-            raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
-        
-        self.metadata = metadata
-=======
         self.node_embedding_dimensions: int = self.config["model"]["node_embedding_dimensions"]
         self.edge_embedding_dimensions: int = self.config["model"]["edge_embedding_dimensions"]
         if self.edge_embedding_dimensions == -1:
             self.edge_embedding_dimensions = self.node_embedding_dimensions
         self.evaluation_batch_size: int = self.config["training"]["evaluation_batch_size"]
->>>>>>> main
 
         self.metadata = None
         if metadata is None:
@@ -241,26 +224,15 @@ class Architect(Module):
         
         run_kg_preprocessing: bool = self.config["run_kg_preprocessing"]
 
-<<<<<<< doc
-        if run_kg_prep:
-            # Mandatory step when using a fresh KG. The preparation step runs the data leakage detection procedure
-            # and applies a smart split on the KG.
-=======
         if run_kg_preprocessing:
->>>>>>> main
             logging.info(f"Preparing KG...")
             self.kg_train, self.kg_validation, self.kg_test = prepare_knowledge_graph(self.config, kg, dataframe, self.metadata)
             logging.info("KG preprocessed.")
         else:
             if kg is not None:
                 logging.info("Using given KG...")
-<<<<<<< doc
-                if isinstance(kg, tuple) and len(kg) == 3:
-                    self.kg_train, self.kg_val, self.kg_test = kg
-=======
                 if isinstance(kg, tuple):
                     self.kg_train, self.kg_validation, self.kg_test = kg
->>>>>>> main
                 else:
                     raise ValueError("The KG needs to be preprocessed and given as a tuple of training, validation and test KG. Otherwise, set `run_kg_preprocessing` to True in the config file.")
             else:
@@ -278,30 +250,6 @@ class Architect(Module):
         self.scheduler: learning_rate_scheduler.LRScheduler | None = None
         self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
         self.node_embeddings: nn.ParameterList
-<<<<<<< doc
-
-    @property
-    def enc_emb_dim(self):
-        """Returns the embedding dimensions of the encoder, equal to `self.emb_dim * self.decoder.embedding_spaces`.
-        
-        For most decoders, this will be the same as the `self.emb_dim`. However, a few decoders
-        use multiple embedding spaces, in which case the encoder output will have twice as many
-        embedding dimensions, which will then be split into as much embedding spaces as required."""
-        if self.decoder is not None and hasattr(self.decoder,"embedding_spaces"):
-            return self.emb_dim * self.decoder.embedding_spaces
-        return self.emb_dim
-
-    @property
-    def enc_rel_emb_dim(self):
-        """Returns the embedding dimensions of the encoder, equal to `self.emb_dim * self.decoder.embedding_spaces`.
-        
-        For most decoders, this will be the same as the `self.emb_dim`. However, a few decoders
-        use multiple embedding spaces, in which case the encoder output will have twice as many
-        embedding dimensions, which will then be split into as much embedding spaces as required."""
-        if self.decoder is not None and hasattr(self.decoder,"embedding_spaces"):
-            return self.rel_emb_dim * self.decoder.embedding_spaces
-        return self.rel_emb_dim
-=======
         self.edge_embeddings: nn.Embedding
 
 
@@ -333,7 +281,6 @@ class Architect(Module):
     def encoder_edge_embedding_dimensions(self) -> int:
         """
         The embedding dimensions in the output of the encoder (or initialized if there is no encoder).
->>>>>>> main
 
         For most decoders, it is the same as `self.edge_embedding_dimensions`. But for decoders which use multiple
         embedding spaces, the latent space has `[embedding_spaces_count] * edge_embedding_dimensions` embedding dimensions.
@@ -441,8 +388,8 @@ class Architect(Module):
         gnn_layers: int, optional, default to 0
             Number of hidden layers for the encoder. Only used for deep learning encoders.
 
-        Warnings
-        --------
+        Warns
+        -----
         If the provided encoder name is not supported, it will default to a random initialization and warn the user.
 
         Returns
@@ -458,13 +405,7 @@ class Architect(Module):
         if gnn_layers == 0:
             gnn_layers = encoder_config["gnn_layer_number"]
 
-<<<<<<< doc
-        # Make sure last_triple_type is really not useful
-        #last_triple_type = self.kg_train.triples[-1]
-        edge_types = self.kg_train.triple_types#[:last_triple_type + 1]
-=======
         edge_types = self.kg_train.triplet_types
->>>>>>> main
 
         match encoder_name:
             case "Default":
@@ -544,12 +485,6 @@ class Architect(Module):
         
         decoder_config: dict = self.config["model"]["decoder"]
 
-<<<<<<< doc
-        decoder_name = decoder_name or decoder_config["name"]
-        dissimilarity = dissimilarity or decoder_config["dissimilarity"]
-        margin = margin or decoder_config["margin"]
-        n_filters = n_filters or decoder_config["n_filters"]
-=======
         if decoder_name == "":
             decoder_name = decoder_config["name"]
         if dissimilarity == "":
@@ -558,10 +493,9 @@ class Architect(Module):
             margin = decoder_config["margin"]
         if filter_count == 0:
             filter_count = decoder_config["filter_count"]
->>>>>>> main
 
+        # Translational models
         match decoder_name:
-            # Translational models
             case "TransE":
                 decoder = TransE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
@@ -577,11 +511,6 @@ class Architect(Module):
                                 edge_count = self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransD":
-<<<<<<< doc
-                decoder = TransD(self.emb_dim, self.rel_emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
-                criterion = MarginLoss(margin)
-            # Bilinear models
-=======
                 decoder = TransD(node_embedding_dimensions = self.node_embedding_dimensions,
                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
                                 node_count = self.kg_train.node_count, 
@@ -590,7 +519,6 @@ class Architect(Module):
             case "TorusE":
                 decoder = TorusE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
->>>>>>> main
             case "RESCAL":
                 decoder = RESCAL(embedding_dimensions = self.node_embedding_dimensions,
                                 node_count = self.kg_train.node_count,
@@ -602,14 +530,8 @@ class Architect(Module):
                                 edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "ComplEx":
-<<<<<<< doc
-                decoder = ComplEx(self.emb_dim, self.kg_train.n_ent, self.kg_train.n_rel)
-                criterion = BinaryCrossEntropyLoss()
-            # Convolutional models
-=======
                 decoder = ComplEx(embedding_dimensions = self.node_embedding_dimensions)
                 decoder_loss = BinaryCrossEntropyLoss()
->>>>>>> main
             case "ConvKB":
                 decoder = ConvKB(embedding_dimensions = self.node_embedding_dimensions, 
                                 filter_count = filter_count, 
@@ -859,21 +781,10 @@ class Architect(Module):
         # If given a pretrained embedding file (such as the output of a Node2Vec), we use that in priority
         if pretrained is not None and pretrained.exists():
             self.node_embeddings = torch.load(pretrained)
-<<<<<<< doc
-            if not isinstance(self.encoder, GNN) and self.node_embeddings.size(1) != self.enc_emb_dim:
-                raise ValueError(f"The pretrained embedding has an embedding size of {self.node_embeddings.size(1)} which is not compatible with decoder {self.decoder}. Use a different decoder or an embedding size of {self.enc_emb_dim}.")
-                
-        # If we do have a deep encoder, we check for each node type if we have been supplied input features 
-        # if not, they too are initialized at random
-        else:
-            assert isinstance(self.encoder, GNN) or len(self.kg_train.nt2ix) == 1, "When using a GNN as encoder, the node_type shouldn't be supplied."
-
-=======
         else:
             assert isinstance(self.encoder, GNN) or len(self.kg_train.node_type_to_index) == 1, "When not using a GNN as encoder, the node_type shouldn't be supplied."
 
             # create initial embeddings
->>>>>>> main
             self.node_embeddings = nn.ParameterList()
             index_to_node_type = {value: key for key,value in self.kg_train.node_type_to_index.items()}
             for node_type in self.kg_train.node_type_to_global:
@@ -950,22 +861,6 @@ class Architect(Module):
         If there already is a configuration file in the output folder identical to the current configuration, KGATE will
         automatically attempt to restart the training from the most recent checkpoint in the `checkpoints/` folder. Otherwise,
         the output folder will be cleaned and the current configuration will be written as `kgate_config.toml`
-<<<<<<< doc
-
-        Arguments:
-            checkpoint_file: The path to the checkpoint file to load and resume a previous training. If None, the training will start from scratch.
-            attributes: dict(node_type, embedding) containing the embedding for each type of node.
-            dry_run: Initialize every variable and the trainer, but doesn't start the training.
-            """
-        training_config: dict = self.config["training"]
-        self.max_epochs: int = training_config["max_epochs"]
-        self.train_batch_size: int = training_config["train_batch_size"]
-        self.patience: int = training_config["patience"]
-        self.eval_interval: int = training_config["eval_interval"]
-        self.save_interval: int = training_config["save_interval"]
-
-        match training_config["pretrained_embeddings"]:
-=======
         
         """
         train_config: dict = self.config["training"]
@@ -976,7 +871,6 @@ class Architect(Module):
         self.save_interval: int = train_config["save_interval"]
 
         match train_config["pretrained_embeddings"]:
->>>>>>> main
             case "auto":
                 pretrained = Path(self.config["output_directory"]).joinpath("embeddings.pt")
             case "":
@@ -1131,18 +1025,6 @@ class Architect(Module):
                 trainer.run(data_loader, max_epochs = self.max_epochs)
     
 
-<<<<<<< doc
-    def test(self):
-        """Load the best model after training and evaluate it on the test set.
-        
-        The evaluation is ran both on the integral KG as well as each relation type. The results of the evaluation
-        are stored in a file at `self.config["output_directory"]/evaluation_metrics.yaml` in addition to being returned.
-        
-        Returns
-        -------
-        results: dict
-            A dictionnary containing the evaluation metrics."""
-=======
     def test(self) -> Dict[str, float | Dict[str, float]]:
         """
         Run the test procedure, evaluate the metrics on the test set and return the dictionary of the results.
@@ -1155,7 +1037,6 @@ class Architect(Module):
             TODO.What_that_variable_is_or_does
         
         """
->>>>>>> main
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -1173,20 +1054,6 @@ class Architect(Module):
         remaining_edges = all_edges - set(list_rel_1) - set(list_rel_2)
         remaining_edges = list(remaining_edges)
 
-<<<<<<< doc
-        # Get the metrics for the relations we created inverse for
-        total_metrics_sum_list_1, fact_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_relations(
-            self.kg_test, list_rel_1)
-        # Get the metrics for user-defined relations of interest
-        total_metrics_sum_list_2, fact_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_relations(
-            self.kg_test, list_rel_2)
-        # Get the metrics for all the remaining relations
-        total_metrics_sum_remaining, fact_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_relations(
-            self.kg_test, remaining_relations)
-
-        # Compute the global metrics, which is just the average of all previous metrics
-        global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (fact_count_list_1 + fact_count_list_2 + fact_count_remaining)
-=======
         total_metrics_sum_list_1, triplet_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_edges(
             self.kg_test, list_rel_1)
         total_metrics_sum_list_2, triplet_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_edges(
@@ -1195,7 +1062,6 @@ class Architect(Module):
             self.kg_test, remaining_edges)
 
         global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (triplet_count_list_1 + triplet_count_list_2 + triplet_count_remaining)
->>>>>>> main
 
         logging.info(f"Final Test metrics with best model: {global_metrics}")
 
@@ -1252,12 +1118,6 @@ class Architect(Module):
         for each couple `heads[n]` and `edges[n]`, `top_k` tails will be predicted. The values in those list must correspond to
         the `identity` of the metadata, by default the current identity. If there is no metadata, the node ID is used.
         
-<<<<<<< doc
-    def infer(self, heads:List[str]=[], rels:List[str]=[], tails:List[str]=[], top_k:int=100):
-        """Infer missing entities or relations to complete the given triplets."""
-        if not sum([len(arr) > 0 for arr in [heads,rels,tails]]) == 2:
-            raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, relations or tails.")
-=======
         Arguments
         ---------
         heads: List[str], optional
@@ -1282,7 +1142,6 @@ class Architect(Module):
         """
         if not sum([len(arr) > 0 for arr in [heads, edges, tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, tails or edges.")
->>>>>>> main
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -1396,19 +1255,11 @@ class Architect(Module):
         checkpoint = self.load_checkpoint(self.checkpoints_directory.joinpath(best_model))
 
         self.node_embeddings = nn.ParameterList()
-<<<<<<< doc
-        for nt in checkpoint["entities"]:
-            self.node_embeddings.append(checkpoint["entities"][nt].to(self.device))
-        
-        self.rel_emb.load_state_dict(checkpoint["relations"])
-        self.decoder.load_state_dict(checkpoint["decoder"])
-=======
         for node_type in checkpoint["nodes"]:
             self.node_embeddings.append(checkpoint["nodes"][node_type].to(self.device))
         
         self.edge_embeddings.load_state_dict(checkpoint["edges"])
         self.decoder.load_state_dict(checkpoint["decoder"], strict=False)
->>>>>>> main
         if "encoder" in checkpoint:
             self.encoder.load_state_dict(checkpoint["encoder"])
         
@@ -1607,17 +1458,6 @@ class Architect(Module):
 
 
     def normalize_parameters(self):
-<<<<<<< doc
-        # Some decoders should not normalize parameters or do so in a different way.
-        # In this case, they should implement the function themselves and we return it.
-        normalize_func: Callable[..., Tuple[nn.ParameterList, nn.Embedding]] | None = getattr(self.decoder, "normalize_params", None)
-        # If the function only accept one parameter, it is the base torchKGE one,
-        # we don't want that.
-        if callable(normalize_func) and len(signature(normalize_func).parameters) > 1:
-            normalized_embeddings = normalize_func(ent_emb = self.node_embeddings, rel_emb = self.rel_emb)
-            assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the entity embedding and the relation embedding."
-            self.node_embeddings, self.rel_emb = normalized_embeddings
-=======
         """
         Normalize all parameters of the model.
         
@@ -1638,7 +1478,6 @@ class Architect(Module):
             normalized_embeddings = normalize_function(node_embeddings = self.node_embeddings, edge_embeddings = self.edge_embeddings)
             assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the node embedding and the edge embedding."
             self.node_embeddings, self.edge_embeddings = normalized_embeddings
->>>>>>> main
             
         logging.debug(f"Normalized all embeddings.")
 
