@@ -15,13 +15,7 @@ from typing import Tuple, Dict, Literal
 
 from tqdm import tqdm
 
-<<<<<<< doc
-from torch.nn.functional import normalize
-from torch import nn, tensor, matmul, Tensor
-from torch.nn import ParameterList, Parameter
-=======
 from torch import nn, tensor, matmul, Tensor, empty
->>>>>>> main
 from torch.cuda import empty_cache
 from torch.nn.functional import normalize
 from torch.nn import Module, Parameter, ParameterList
@@ -57,40 +51,6 @@ class TranslationalDecoder(Module):
         TorusE has a specific set of dissimilarity functions.
         See details from torchkge here: https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities
     
-<<<<<<< doc
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
-        """Normalize parameters for the TransE model.
-        
-        According to the original paper, the entity embeddings should be normalized.
-        
-        Arguments
-        ---------
-            ent_emb: torch.nn.ParameterList
-                The entity embedding as a ParameterList containing one Parameter by node type,
-                or only one if there is no node type. All Parameters should be of the same size
-                (n_ent,emb_dim)
-            rel_emb: torch.nn.Embedding
-                The relation embeddings, of size (n_rel, rel_emb_dim)
-        
-        Returns
-        -------
-            ent_emb : torch.nn.ParameterList
-                The normalized entity embedding object.
-            rel_emb : torch.nn.Embedding
-                The normalized relations embedding object.
-        """
-        for emb in ent_emb:
-            emb.data = normalize(emb.data, p=2, dim=1)
-        return ent_emb, rel_emb
-
-    def inference_prepare_candidates(self, *, 
-                                    h_idx: Tensor, 
-                                    t_idx: Tensor, 
-                                    r_idx: Tensor, 
-                                    node_embeddings: Tensor, 
-                                    relation_embeddings: nn.Embedding,
-                                    entities: bool=True
-=======
     """
     def __init__(self):
         super().__init__()
@@ -211,7 +171,6 @@ class TranslationalDecoder(Module):
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
->>>>>>> main
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings
@@ -623,36 +582,6 @@ class TransH(TranslationalDecoder):
         
         return batch_score
     
-<<<<<<< doc
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
-        """Normalize parameters for the TransH model.
-        
-        According to the original paper, the entity embeddings, relation embeddings
-        and the normalization vector should be normalized.
-        
-        Arguments
-        ---------
-            ent_emb: torch.nn.ParameterList
-                The entity embedding as a ParameterList containing one Parameter by node type,
-                or only one if there is no node type. All Parameters should be of the same size
-                (n_ent,emb_dim)
-            rel_emb: torch.nn.Embedding
-                The relation embeddings, of size (n_rel, rel_emb_dim)
-        
-        Returns
-        -------
-            ent_emb : torch.nn.ParameterList
-                The normalized entity embedding object.
-            rel_emb : torch.nn.Embedding
-                The normalized relations embedding object.
-        """
-        for emb in ent_emb:
-            emb.data = normalize(emb.data, p=2, dim=1)
-        rel_emb.weight.data = normalize(rel_emb.weight.data, p=2, dim=1)
-        self.norm_vect.weight.data = normalize(self.norm_vect.weight.data,
-                                               p=2, dim=1)
-        return ent_emb, rel_emb
-=======
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
@@ -688,7 +617,6 @@ class TransH(TranslationalDecoder):
         
         return node_embeddings, edge_embeddings
 
->>>>>>> main
 
     def get_embeddings(self) -> Dict[str, Tensor]:
         """
@@ -982,36 +910,6 @@ class TransR(TranslationalDecoder):
         
         return node_embeddings, edge_embeddings
     
-<<<<<<< doc
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
-        """Normalize parameters for the RESCAL model.
-        
-        According to the original paper, the entity embeddings and relation embeddings
-        should be normalized.
-        
-        Arguments
-        ---------
-            ent_emb: torch.nn.ParameterList
-                The entity embedding as a ParameterList containing one Parameter by node type,
-                or only one if there is no node type. All Parameters should be of the same size
-                (n_ent,emb_dim)
-            rel_emb: torch.nn.Embedding
-                The relation embeddings, of size (n_rel, rel_emb_dim)
-        
-        Returns
-        -------
-            ent_emb : torch.nn.ParameterList
-                The normalized entity embedding object.
-            rel_emb : torch.nn.Embedding
-                The normalized relations embedding object.
-        """
-        for emb in ent_emb:
-            emb.data = normalize(emb.data, p=2, dim=1)
-
-        rel_emb.weight.data = normalize(rel_emb.weight.data, p=2, dim=1)
-        return ent_emb, rel_emb
-=======
->>>>>>> main
     
     def get_embeddings(self) -> Dict[str, Tensor]:
         """
@@ -1295,12 +1193,6 @@ class TransD(TranslationalDecoder):
 
         return projected_nodes_tensor + nodes[:, :self.edge_embedding_dimensions]
     
-<<<<<<< doc
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
-        """Normalize parameters for the TransD model.
-        
-        According to the original paper, the entity embeddings, the relation embeddings
-=======
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
@@ -1310,34 +1202,10 @@ class TransD(TranslationalDecoder):
         Normalize parameters for the TransD model.
         
         According to the original paper, the node embeddings, the edge embeddings
->>>>>>> main
         and both projection vectors should be normalized.
         
         Arguments
         ---------
-<<<<<<< doc
-            ent_emb: torch.nn.ParameterList
-                The entity embedding as a ParameterList containing one Parameter by node type,
-                or only one if there is no node type. All Parameters should be of the same size
-                (n_ent,emb_dim)
-            rel_emb: torch.nn.Embedding
-                The relation embeddings, of size (n_rel, rel_emb_dim)
-        
-        Returns
-        -------
-            ent_emb : torch.nn.ParameterList
-                The normalized entity embedding object.
-            rel_emb : torch.nn.Embedding
-                The normalized relations embedding object.
-        """
-        for emb in ent_emb:
-            emb.data = normalize(emb.data, p=2, dim=1)
-
-        rel_emb.weight.data = normalize(rel_emb.weight.data, p=2, dim=1)
-
-        self.ent_proj_vect.weight.data = normalize(self.ent_proj_vect.weight.data, p=2, dim=1)
-        self.rel_proj_vect.weight.data = normalize(self.rel_proj_vect.weight.data, p=2, dim=1)
-=======
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
@@ -1363,9 +1231,6 @@ class TransD(TranslationalDecoder):
 
         return node_embeddings, edge_embeddings
 
->>>>>>> main
-
-        return ent_emb, rel_emb
 
     def get_embeddings(self) -> Dict[str, Tensor]:
         """
@@ -1578,46 +1443,18 @@ class TorusE(TranslationalDecoder):
         return batch_score
 
 
-<<<<<<< doc
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
-        """Normalize parameters for the TorusE model.
-=======
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
                             edge_embeddings: nn.Embedding
                             ) -> Tuple[nn.ParameterList, nn.Embedding]:
         """
         Normalize parameters for the TorusE model.
->>>>>>> main
         
         According to the original paper, only the fraction of the embeddings 
         should be kept in the normalization step.
         
         Arguments
         ---------
-<<<<<<< doc
-            ent_emb: torch.nn.ParameterList
-                The entity embedding as a ParameterList containing one Parameter by node type,
-                or only one if there is no node type. All Parameters should be of the same size
-                (n_ent,emb_dim)
-            rel_emb: torch.nn.Embedding
-                The relation embeddings, of size (n_rel, rel_emb_dim)
-        
-        Returns
-        -------
-            ent_emb : torch.nn.ParameterList
-                The normalized entity embedding object.
-            rel_emb : torch.nn.Embedding
-                The normalized relations embedding object.
-        """
-        for emb in ent_emb:
-            emb.data.frac_()
-
-        rel_emb.weight.data = rel_emb.weight.data.frac()
-        self.normalized = True
-
-        return ent_emb, rel_emb
-=======
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
@@ -1640,7 +1477,6 @@ class TorusE(TranslationalDecoder):
         self.normalized = True
 
         return node_embeddings, edge_embeddings
->>>>>>> main
     
     
     def inference_prepare_candidates(self,
@@ -1672,12 +1508,6 @@ class TorusE(TranslationalDecoder):
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
-<<<<<<< doc
-        if not self.normalized:
-            # Very ugly transformation of the node embeddings into a ParameterList just for normalization
-            # TODO: smoothen the cast (or avoid it)
-            self.normalize_parameters(ParameterList([Parameter(node_embeddings)]), relation_embeddings)
-=======
         Returns
         -------
         head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
@@ -1691,7 +1521,6 @@ class TorusE(TranslationalDecoder):
 
         """
         batch_size = head_indices.shape[0]
->>>>>>> main
 
         if not self.normalized:
             # Very ugly transformation of the node embeddings into a ParameterList just for normalization
