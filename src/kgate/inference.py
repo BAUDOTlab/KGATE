@@ -1,235 +1,333 @@
-import torchkge.inference as infer
-from torchkge.models import Model
+from typing import Dict, Literal
+
 from tqdm.autonotebook import tqdm
+
 from torch import tensor, nn, Tensor
 import torch
-from typing import Dict, Literal
-from .utils import filter_scores
-from .encoders import DefaultEncoder, GNN
-from .knowledgegraph import KnowledgeGraph
 from torch.utils.data import DataLoader, Dataset
+
 from torch_geometric.utils import k_hop_subgraph
 
+from .encoders import DefaultEncoder, GNN
+from .decoders import TranslationalDecoder, BilinearDecoder, ConvolutionalDecoder
+from .knowledgegraph import KnowledgeGraph
+from .utils import filter_scores
+
+
+
 class Inference_KG(Dataset):
-    def __init__(self, idx_1:Tensor, idx_2:Tensor):
-        assert idx_1.size() == idx_2.size(), "Both index tensors must be of the same size for inference."
-        self.id1 = idx_1
-        self.id2 = idx_2
+    """
+    Subset of a KG used for inference.
+    
+    This class inherits from the PyTorch `utils.data.Dataset` class:
+    https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html
 
-    def __len__(self):
-        return self.id1.size(0)
-
-    def __getitem__(self, idx: int):
-        return (self.id1[idx], self.id2[idx])
-
-
-class RelationInference(infer.RelationInference):
-    """Use trained embedding model to infer missing relations in triples.
-
-    Parameters
-    ----------
-    model: torchkge.models.interfaces.Model
-        Embedding model inheriting from the right interface.
-    entities1: `torch.Tensor`, shape: (n_facts), dtype: `torch.long`
-        List of the indices of known entities 1.
-    entities2: `torch.Tensor`, shape: (n_facts), dtype: `torch.long`
-        List of the indices of known entities 2.
-    top_k: int
-        Indicates the number of top predictions to return.
-    dictionary: dict, optional (default=None)
-        Dictionary of possible relations. It is used to filter predictions
-        that are known to be True in the training set in order to return
-        only new facts.
+    Arguments
+    ---------
+    first_index_tensor: torch.Tensor
+        The first tensor with indices of the edges or nodes (from the knowledge graph).
+    second_index_tensor: torch.Tensor
+        The second tensor with indices of the edges or nodes (from the knowledge graph).
 
     Attributes
     ----------
-    model: torchkge.models.interfaces.Model
-        Embedding model inheriting from the right interface.
-    entities1: `torch.Tensor`, shape: (n_facts), dtype: `torch.long`
-        List of the indices of known entities 1.
-    entities2: `torch.Tensor`, shape: (n_facts), dtype: `torch.long`
-        List of the indices of known entities 2.
-    top_k: int
-        Indicates the number of top predictions to return.
-    dictionary: dict, optional (default=None)
-        Dictionary of possible relations. It is used to filter predictions
-        that are known to be True in the training set in order to return
-        only new facts.
-    predictions: `torch.Tensor`, shape: (n_facts, self.top_k), dtype: `torch.long`
-        List of the indices of predicted relations for each test fact.
-    scores: `torch.Tensor`, shape: (n_facts, self.top_k), dtype: `torch.float`
-        List of the scores of resulting triples for each test fact.
-    """
+    first_index_tensor: torch.Tensor
+        The first tensor with indices of the edges or nodes (from the knowledge graph).
+    second_index_tensor: torch.Tensor
+        The second tensor with indices of the edges or nodes (from the knowledge graph).
+    
+    Raises
+    ------
+    AssertionError
+        Both index tensors must be of the same size.
 
-    def __init__(self, knowledge_graph: KnowledgeGraph):
-        self.knowledge_graph = knowledge_graph
+    Notes
+    -----
+    Either both tensors are nodes, or they are node and edge.
+    The `__getitem__` method allows to call an `Inference_KG` object with an index,
+    giving back a tuple containing the corresponding values of both tensors.
+    
+    """
+    def __init__(self,
+                first_index_tensor: Tensor,
+                second_index_tensor: Tensor):
+        
+        # Either both tensors are nodes, or they are node and edge
+        assert first_index_tensor.size() == second_index_tensor.size(), "Both index tensors must be of the same size for inference."
+        self.first_tensor_index = first_index_tensor
+        self.second_tensor_index = second_index_tensor
+
+
+    def __len__(self):
+        return self.first_tensor_index.size(0)
+
+
+    def __getitem__(self, index: int):
+        return (self.first_tensor_index[index], self.second_tensor_index[index])
+
+
+
+class EdgeInference:
+    """
+    Use trained embedding model to infer missing edges in triplets.
+
+    Arguments
+    ---------
+    kg: KnowledgeGraph
+        Knowledge graph on which the inference will be done.
+
+    Attributes
+    ----------
+    kg: KnowledgeGraph
+        Knowledge graph on which the inference will be done.
+
+    """
+    def __init__(self, kg: KnowledgeGraph):
+        self.kg = kg
 
     def evaluate(self, 
-                 h_idx: Tensor,
-                 t_idx: Tensor,
-                 *,
-                 top_k: int,
-                 b_size: int,
-                 encoder: DefaultEncoder | GNN,
-                 decoder: Model,
-                 node_embeddings: nn.ParameterList | nn.Embedding, 
-                 relation_embeddings: nn.Embedding, 
-                 verbose:bool=True,
-                 **_):
-        
+                head_indices: Tensor,
+                tail_indices: Tensor,
+                *,
+                top_k: int,
+                batch_size: int,
+                encoder: DefaultEncoder | GNN,
+                decoder: TranslationalDecoder | BilinearDecoder | ConvolutionalDecoder,
+                node_embeddings: nn.ParameterList, 
+                edge_embeddings: nn.Embedding, 
+                verbose: bool = True,
+                **_):
+        """
+        TODO.What_the_function_does_about_globally
+
+        Arguments
+        ---------
+        head_indices: torch.Tensor
+            The indices of the head nodes (from the knowledge graph).
+        tail_indices: torch.Tensor
+            The indices of the tail nodes (from the knowledge graph).
+        top_k: int, keyword-only
+            Indicate the number of top predictions to return.
+        batch_size: int, keyword-only
+            Size of the current batch.
+        encoder: DefaultEncoder or GNN, keyword-only
+            Encoder model to embed the nodes. Deactivated with DefaultEncoder.
+        decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
+            Decoder model to evaluate.
+        node_embeddings: nn.ParameterList, keyword-only
+            A list containing all embeddings for each node type.
+            keys: node type index
+            values: tensors of shape (node_count, embedding_dimensions)
+        edge_embeddings: nn.Embedding, keyword-only
+            A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
+        verbose: bool, default to True, keyword-only
+            Indicate whether a progress bar should be displayed during evaluation.
+
+        Returns
+        -------
+        predictions: torch.Tensor
+            TODO.What_that_variable_is_or_does
+        scores: torch.Tensor, shape [batch_size, n]
+            Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
+            
+        """
         with torch.no_grad():
-            device = relation_embeddings.weight.device
+            device = edge_embeddings.weight.device
 
-            inference_kg = Inference_KG(h_idx, t_idx)
+            inference_kg = Inference_KG(head_indices, tail_indices)
 
-            dataloader = DataLoader(inference_kg, batch_size=b_size)
+            dataloader = DataLoader(inference_kg, batch_size = batch_size)
 
-            predictions = torch.empty(size=(len(h_idx), top_k), device=device).long()   
-            embeddings = node_embeddings.weight.data
+            predictions = torch.empty(size = (len(head_indices), top_k), device = device).long()   
+            node_embeddings = node_embeddings[0].data
 
-            for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
-                                unit="batch", disable=(not verbose),
-                                desc="Inference"):
-                h_idx, t_idx = batch[0], batch[1]
-                
+            for i, batch in tqdm(enumerate(dataloader),
+                                total = len(dataloader),
+                                unit = "batch",
+                                disable = (not verbose),
+                                desc = "Inference"):
+                head_indices, tail_indices = batch[0], batch[1]
+                embeddings = torch.zeros(len(head_indices), node_embeddings[0].shape[1], device=device, dtype=torch.float)
+
                 if isinstance(encoder, GNN):
                     seed_nodes = batch.unique()
-                    num_hops = encoder.n_layers
-                    edge_index = self.knowledge_graph.edge_index
+                    hop_count = encoder.n_layers
+                    edge_list = self.kg.edge_list
 
                     _,_,_, edge_mask = k_hop_subgraph(
                         node_idx = seed_nodes,
-                        num_hops = num_hops,
-                        edge_index = edge_index
+                        num_hops = hop_count,
+                        edge_index = edge_list
                         )
                     
-                    input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.edgelist[:, edge_mask], node_embeddings)
-                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
+                    input = self.kg.get_encoder_input(self.kg.graphindices[:, edge_mask].to(device), node_embeddings)
+                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
             
-                    for node_type, idx in input.mapping.items():
-                        embeddings[idx] = encoder_output[node_type]
+                    for node_type, index in input.mapping.items():
+                        node_embeddings[index] = encoder_output[node_type]
+
+                head_embeddings, tail_embeddings, _, candidates = decoder.inference_prepare_candidates( head_indices = head_indices,
+                                                                                                        tail_indices = tail_indices, 
+                                                                                                        edge_indices = tensor([]).long(),
+                                                                                                        node_embeddings = node_embeddings, 
+                                                                                                        edge_embeddings = edge_embeddings, 
+                                                                                                        node_inference = False)
+                scores = decoder.inference_score(head_embeddings, tail_embeddings, candidates)
 
 
+                scores = filter_scores(scores, self.kg.graphindices, "edge", head_indices, tail_indices, None)
 
-                h_emb, t_emb, _, candidates = decoder.inference_prepare_candidates(h_idx = h_idx,
-                                                                                        t_idx = t_idx, 
-                                                                                        r_idx = tensor([]).long(),
-                                                                                        node_embeddings = embeddings, 
-                                                                                        relation_embeddings = relation_embeddings, 
-                                                                                        entities=False)
-                scores = decoder.inference_scoring_function(h_emb, t_emb, candidates)
+                scores, indices = scores.sort(descending = True)
 
-                scores = filter_scores(scores, self.knowledge_graph.edgelist, "rel", h_idx, t_idx, None)
-
-                scores, indices = scores.sort(descending=True)
-
-                predictions[i * b_size: (i + 1) * b_size] = indices[:, :top_k]
-                scores[i * b_size, (i + 1) * b_size] = scores[:, :top_k]
+                predictions[i * batch_size: (i + 1) * batch_size] = indices[:, :top_k]
+                scores[i * batch_size, (i + 1) * batch_size] = scores[:, :top_k]
 
             return predictions.cpu(), scores.cpu()
 
-class EntityInference(infer.EntityInference):
-    """Use trained embedding model to infer missing entities in triples.
 
-        Attributes
-        ----------
-        model: torchkge.models.interfaces.Model
-            Embedding model inheriting from the right interface.
-        known_entities: `torch.Tensor`, shape: (n_facts), dtype: `torch.long`
-            List of the indices of known entities.
-        known_relations: `torch.Tensor`, shape: (n_facts), dtype: `torch.long`
-            List of the indices of known relations.
-        top_k: int
-            Indicates the number of top predictions to return.
-        missing: str
-            String indicating if the missing entities are the heads or the tails.
-        dictionary: dict, optional (default=None)
-            Dictionary of possible heads or tails (depending on the value of `missing`).
-            It is used to filter predictions that are known to be True in the training set
-            in order to return only new facts.
-        predictions: `torch.Tensor`, shape: (n_facts, self.top_k), dtype: `torch.long`
-            List of the indices of predicted entities for each test fact.
-        scores: `torch.Tensor`, shape: (n_facts, self.top_k), dtype: `torch.float`
-            List of the scores of resulting triples for each test fact.
+
+class NodeInference:
+    """
+    Use trained embedding model to infer missing entities in triples.
+
+    Arguments
+    ---------
+    kg: KnowledgeGraph
+        Knowledge graph on which the inference will be done.
+    
+    Attributes
+    ----------
+    kg: KnowledgeGraph
+        Knowledge graph on which the inference will be done.
 
     """
-    def __init__(self, knowledge_graph: KnowledgeGraph):
-        self.knowledge_graph = knowledge_graph
+    def __init__(self, kg: KnowledgeGraph):
+        self.kg = kg
+
 
     def evaluate(self,
-                 ent_idx: Tensor,
-                 rel_idx: Tensor,
-                 *,
-                 top_k: int,
-                 missing: Literal["head","tail"],
-                 b_size: int,
-                 encoder: DefaultEncoder | GNN,
-                 decoder: Model,
-                 node_embeddings: nn.ParameterList, 
-                 relation_embeddings: nn.Embedding,
-                 verbose:bool=True,
-                 **_):
+                node_indices: Tensor,
+                edge_indices: Tensor,
+                *,
+                top_k: int,
+                missing_triplet_part: Literal["head", "tail"],
+                batch_size: int,
+                encoder: DefaultEncoder | GNN,
+                decoder: TranslationalDecoder | BilinearDecoder | ConvolutionalDecoder,
+                node_embeddings: nn.ParameterList, 
+                edge_embeddings: nn.Embedding,
+                verbose: bool = True,
+                **_):
+        """
+        Predict the missing node of a triplet where either head and edge or edge and tail are known.
+
+        Arguments
+        ---------
+        node_indices: torch.Tensor
+            The indices of nodes (from the knowledge graph).
+        edge_indices: torch.Tensor
+            The indices of edges (from the knowledge graph).
+        top_k: int, keyword-only
+            Indicate the number of top predictions to return.
+        missing_triplet_part: Literal["head", "tail"], keyword-only
+            String indicating if the missing nodes are the heads or the tails.
+        batch_size: int, keyword-only
+            Size of the current batch.
+        encoder: DefaultEncoder or GNN, keyword-only
+            Encoder model to embed the nodes. Deactivated with DefaultEncoder.
+        decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder, keyword-only
+            Decoder model to evaluate.
+        node_embeddings: nn.ParameterList, keyword-only
+            A list containing all embeddings for each node type.
+            keys: node type index
+            values: tensors of shape (node_count, embedding_dimensions)
+        edge_embeddings: nn.Embedding, keyword-only
+            A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
+        verbose: bool, default to True, keyword-only
+            Indicate whether a progress bar should be displayed during
+            evaluation.
+
+        Returns
+        -------
+        predictions: torch.Tensor
+            TODO.What_that_variable_is_or_does
+        scores: torch.Tensor, shape [batch_size, n]
+            Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
+            
+        """
         with torch.no_grad():
-            device = relation_embeddings.weight.device
+            device = edge_embeddings.weight.device
 
-            inference_kg = Inference_KG(ent_idx, rel_idx)
+            inference_kg = Inference_KG(node_indices, edge_indices)
 
-            dataloader = DataLoader(inference_kg, batch_size=b_size)
+            dataloader = DataLoader(inference_kg, batch_size = batch_size)
 
-            predictions = torch.empty(size=(len(ent_idx), top_k), device=device).long()
-            scores = torch.empty(size=(len(ent_idx), top_k), device=device).long()
+            predictions = torch.empty(size = (len(node_indices), top_k),
+                                    device = device).long()
+            scores = torch.empty(size = (len(node_indices), top_k),
+                                device = device).long()
 
+            for i, batch in tqdm(enumerate(dataloader),
+                                total = len(dataloader),
+                                unit = "batch",
+                                disable = (not verbose),
+                                desc = "Inference"):
 
-            for i, batch in tqdm(enumerate(dataloader), total=len(dataloader),
-                                unit="batch", disable=(not verbose),
-                                desc="Inference"):
-
-                known_ents, known_rels = batch[0], batch[1]
+                known_nodes, known_edges = batch[0], batch[1]
                 
                 if isinstance(encoder, GNN):
-                    seed_nodes = known_ents.unique()
-                    num_hops = encoder.n_layers
-                    edge_index = self.knowledge_graph.edge_index
+                    seed_nodes = known_nodes.unique()
+                    hop_count = encoder.n_layers
+                    edge_indices = self.kg.edge_list
 
-                    _,_,_, edge_mask = k_hop_subgraph(
+                    _, _, _, edge_mask = k_hop_subgraph(
                         node_idx = seed_nodes,
-                        num_hops = num_hops,
-                        edge_index = edge_index
+                        num_hops = hop_count,
+                        edge_index = edge_indices
                         )
                     
-                    embeddings: torch.Tensor = torch.zeros(node_embeddings[0].size(), device=device, dtype=torch.float)
+                    node_embeddings: torch.Tensor = torch.zeros(node_embeddings[0].size(),
+                                                                device = device,
+                                                                dtype = torch.float)
 
-                    input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.edgelist[:, edge_mask], node_embeddings)
-                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
+                    input = self.kg.get_encoder_input(self.kg.graphindices[:, edge_mask], node_embeddings)
+                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
             
-                    for node_type, idx in input.mapping.items():
-                        embeddings[idx] = encoder_output[node_type]
-                else:
-                    embeddings = node_embeddings[0][known_ents]
-
-                if missing == "head":
-                    _, t_emb, rel_emb, candidates = decoder.inference_prepare_candidates(h_idx = tensor([], device=device).long(), 
-                                                                                         t_idx = known_ents.to(device),
-                                                                                         r_idx = known_rels.to(device),
-                                                                                         node_embeddings = embeddings,
-                                                                                         relation_embeddings = relation_embeddings,
-                                                                                         entities=True)
-                    batch_scores = decoder.inference_scoring_function(candidates, t_emb, rel_emb)
-                else:
-                    h_emb, _, rel_emb, candidates = decoder.inference_prepare_candidates(h_idx = known_ents.to(device), 
-                                                                                         t_idx = tensor([], device=device).long(),
-                                                                                         r_idx = known_rels.to(device),
-                                                                                         node_embeddings = embeddings,
-                                                                                         relation_embeddings = relation_embeddings,
-                                                                                         entities=True)
-                    batch_scores = decoder.inference_scoring_function(h_emb, candidates, rel_emb)
-
-                batch_scores = filter_scores(batch_scores, self.knowledge_graph.edgelist, missing, known_ents, known_rels, None)
-
-                batch_scores, indices = batch_scores.sort(descending=True)
-                b_size = min(b_size, len(batch_scores))
+                    for node_type, index in input.mapping.items():
+                        node_embeddings[index] = encoder_output[node_type]
                 
-            predictions[i * b_size: (i+1)*b_size] = indices[:, :top_k]
-            scores[i*b_size: (i+1)*b_size] = batch_scores[:, :top_k]
+                else:
+                    node_embeddings = node_embeddings[0][known_nodes]
+
+                if missing_triplet_part == "head":
+                    _, tail_embeddings, edge_embeddings, candidates = decoder.inference_prepare_candidates( head_indices = tensor([], device = device).long(), 
+                                                                                                            tail_indices = known_nodes.to(device),
+                                                                                                            edge_indices = known_edges.to(device),
+                                                                                                            node_embeddings = node_embeddings,
+                                                                                                            edge_embeddings = edge_embeddings,
+                                                                                                            node_inference = True)
+                    batch_scores = decoder.inference_score(candidates, tail_embeddings, edge_embeddings)
+                
+                else:
+                    head_embeddings, _, edge_embeddings, candidates = decoder.inference_prepare_candidates( head_indices = known_nodes.to(device), 
+                                                                                                            tail_indices = tensor([], device = device).long(),
+                                                                                                            edge_indices = known_edges.to(device),
+                                                                                                            node_embeddings = node_embeddings,
+                                                                                                            edge_embeddings = edge_embeddings,
+                                                                                                            node_inference = True)
+                    batch_scores = decoder.inference_score(head_embeddings, candidates, edge_embeddings)
+
+                batch_scores = filter_scores(batch_scores,
+                                            self.kg.graphindices,
+                                            missing_triplet_part,
+                                            known_nodes,
+                                            known_edges,
+                                            None)
+
+                batch_scores, indices = batch_scores.sort(descending = True)
+                batch_size = min(batch_size, len(batch_scores))
+                
+                predictions[i * batch_size: (i+1) * batch_size] = indices[:, :top_k]
+                scores[i * batch_size: (i+1) * batch_size] = batch_scores[:, :top_k]
 
             return predictions.cpu(), scores.cpu()
