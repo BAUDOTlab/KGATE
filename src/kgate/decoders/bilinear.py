@@ -436,151 +436,6 @@ class RESCAL(BilinearDecoder):
             # Prepare candidates for every edge
             candidates = self.edge_embeddings_matrix.weight.data.unsqueeze(0).expand(batch_size, -1, -1, -1)
 
-<<<<<<< doc
-from torchkge.models import DistMultModel, RESCALModel, AnalogyModel, ComplExModel
-
-from ..utils import init_embedding
-
-class RESCAL(RESCALModel):
-    def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
-        super().__init__(emb_dim, n_entities, n_relations)
-        del self.ent_emb
-        self.rel_mat = init_embedding(self.n_rel, self.emb_dim * self.emb_dim)
-
-    def score(self, *, h_emb: Tensor, t_emb: Tensor, r_idx: Tensor, **_) -> Tensor:
-        h_norm = normalize(h_emb, p=2, dim=1)
-        t_norm = normalize(t_emb, p=2, dim=1)
-        r = self.rel_mat(r_idx).view(-1, self.emb_dim, self.emb_dim)
-        hr = matmul(h_norm.view(-1, 1, self.emb_dim), r)
-        return (hr.view(-1, self.emb_dim) * t_norm).sum(dim=1)
-    
-    def get_embeddings(self) -> Dict[str,Tensor]:
-        return {"rel_mat" : self.rel_mat.weight.data.view(-1, self.emb_dim, self.emb_dim)}
-    
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
-        """Normalize parameters for the RESCAL model.
-        
-        According to the original paper, the entity embeddings should be normalized.
-        
-        Arguments
-        ---------
-            ent_emb: torch.nn.ParameterList
-                The entity embedding as a ParameterList containing one Parameter by node type,
-                or only one if there is no node type. All Parameters should be of the same size
-                (n_ent,emb_dim)
-            rel_emb: torch.nn.Embedding
-                The relation embeddings, of size (n_rel, rel_emb_dim)
-        
-        Returns
-        -------
-            ent_emb : torch.nn.ParameterList
-                The normalized entity embedding object.
-            rel_emb : torch.nn.Embedding
-                The normalized relations embedding object.
-        """
-
-        for emb in ent_emb:
-            emb.data = normalize(emb.data, p=2, dim=1)
-        return ent_emb, rel_emb
-
-    def inference_prepare_candidates(self, *, 
-                                    h_idx: Tensor, 
-                                    t_idx: Tensor, 
-                                    r_idx: Tensor, 
-                                    node_embeddings: Tensor, 
-                                    relation_embeddings: nn.Embedding,
-                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        """Link prediction evaluation helper function. Get entities embeddings
-        and relations embeddings. The output will be fed to the
-        `inference_scoring_function` method. See torchkge.models.interfaces.Models for
-        more details on the API.
-
-        """
-        b_size = h_idx.shape[0]
-
-        # Get head, tail and relation embeddings
-        h = node_embeddings[h_idx]
-        t = node_embeddings[t_idx]
-        r_mat = self.rel_mat(r_idx).view(-1, self.emb_dim, self.emb_dim)
-
-        if entities:
-            # Prepare candidates for every entities
-            candidates = node_embeddings.unsqueeze(0).expand(b_size, -1, -1)
-        else:
-            # Prepare candidates for every relations
-            candidates = self.rel_mat.weight.data.unsqueeze(0).expand(b_size, -1, -1, -1)
-
-        return h, t, r_mat, candidates
-
-    
-class DistMult(DistMultModel):
-    def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
-        super().__init__(emb_dim, n_entities, n_relations)
-        del self.ent_emb
-        del self.rel_emb
-    
-    def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, **_) -> Tensor:
-        h_norm = normalize(h_emb, p=2, dim=1)
-        t_norm = normalize(t_emb, p=2, dim=1)
-        return (h_norm * r_emb * t_norm).sum(dim=1)
-    
-    def normalize_parameters(self, ent_emb: nn.ParameterList, rel_emb: nn.Embedding) -> Tuple[nn.ParameterList, nn.Embedding]:
-        """Normalize parameters for the DistMult model.
-        
-        According to the original paper, the entity embeddings should be normalized.
-        
-        Arguments
-        ---------
-            ent_emb: torch.nn.ParameterList
-                The entity embedding as a ParameterList containing one Parameter by node type,
-                or only one if there is no node type. All Parameters should be of the same size
-                (n_ent,emb_dim)
-            rel_emb: torch.nn.Embedding
-                The relation embeddings, of size (n_rel, rel_emb_dim)
-        
-        Returns
-        -------
-            ent_emb : torch.nn.ParameterList
-                The normalized entity embedding object.
-            rel_emb : torch.nn.Embedding
-                The normalized relations embedding object.
-        """
-        for emb in ent_emb:
-            emb.data = normalize(emb.data, p=2, dim=1)
-        return ent_emb, rel_emb
-    
-    def inference_prepare_candidates(self, *, 
-                                    h_idx: Tensor, 
-                                    t_idx: Tensor, 
-                                    r_idx: Tensor, 
-                                    node_embeddings: Tensor, 
-                                    relation_embeddings: nn.Embedding,
-                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        """
-        Link prediction evaluation helper function. Get entities embeddings
-        and relations embeddings. The output will be fed to the
-        `inference_scoring_function` method.
-
-        Parameters
-        ----------
-        h_idx : torch.Tensor
-            The indices of the head entities (from KG).
-        t_idx : torch.Tensor
-            The indices of the tail entities (from KG).
-        r_idx : torch.Tensor
-            The indices of the relations (from KG).
-        entities : bool, optional
-            If True, prepare candidate entities; otherwise, prepare candidate relations.
-
-        Returns
-        -------
-        h: torch.Tensor
-            Head entity embeddings.
-        t: torch.Tensor
-            Tail entity embeddings.
-        r: torch.Tensor
-            Relation embeddings.
-=======
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
 
 
@@ -826,7 +681,6 @@ class DistMult(BilinearDecoder):
             Tail node embeddings.
         edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
             Edge embeddings.
->>>>>>> main
         candidates: torch.Tensor
             Candidate embeddings for nodes or edges.
             
@@ -998,11 +852,6 @@ class ComplEx(BilinearDecoder):
         return (real_head_embedddings * (real_edge_embedddings * real_tail_embedddings + imaginary_edge_embeddings * imaginary_tail_embeddings) + 
                 imaginary_head_embeddings * (real_edge_embedddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embedddings)).sum(dim = 1)
     
-<<<<<<< doc
-    def get_embeddings(self) -> None:
-        return None
-=======
->>>>>>> main
     
     def inference_prepare_candidates(self,
                                     *,
@@ -1058,11 +907,7 @@ class ComplEx(BilinearDecoder):
         if node_inference:
             real_candidates, imaginary_candidates = tensor_split(node_embeddings, 2, dim = 1)
         else:
-<<<<<<< doc
-            re_candidates, im_candidates = tensor_split(relation_embeddings.weight.data, 2, dim=1)
-=======
             real_candidates, imaginary_candidates = tensor_split(edge_embeddings.weight.data, 2, dim = 1)
->>>>>>> main
         
         real_candidates = real_candidates.unsqueeze(0).expand(batch_size, -1, -1)
         imaginary_candidates = imaginary_candidates.unsqueeze(0).expand(batch_size, -1, -1)
