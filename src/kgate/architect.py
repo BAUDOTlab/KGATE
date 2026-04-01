@@ -41,7 +41,8 @@ from .encoders import *
 from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
 from .inference import NodeInference, EdgeInference
 from .knowledgegraph import KnowledgeGraph
-from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
+from .preprocessing import prepare_knowledge_graph
+from .constants import SUPPORTED_SEPARATORS
 from .samplers import NegativeSampler, PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, initialize_embedding, plot_learning_curves, save_config
 

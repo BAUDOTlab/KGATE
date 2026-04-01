@@ -17,10 +17,7 @@ import torchkge
 
 from .knowledgegraph import KnowledgeGraph
 from .utils import set_random_seeds, compute_triplet_proportions
-
-
-SUPPORTED_SEPARATORS = [",","\t",";"]
-
+from .constants import SUPPORTED_SEPARATORS
 
 def prepare_knowledge_graph(config: dict, 
                             kg: KnowledgeGraph | None = None, 
