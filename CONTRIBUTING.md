@@ -52,6 +52,8 @@ If you have the motivation and experience with Python and knowledge graphs (or a
 All new development must be made from the `dev` branch. This will allow your modifications to be integrated after review by maintainers in the development branch and made available for other developers.
 
 The `main` branch is reserved for the stable version of KGATE, and will merge the changes from `dev` from time to time when the development has become stable enough. Only emergency fixes can be pushed directly to `main`.
+
+All changes must be thoroughly documented in the appropriate docstrings, and in the relevant documentation pages if applicable, see the [Documentation](#-documentation) section.
 <!--
 TODO, add: when we have a test folder and suite
 
