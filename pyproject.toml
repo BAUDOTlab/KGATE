@@ -1,11 +1,12 @@
 [project]
 name = "KGATE"
-version = "0.2.20"
+version = "0.3.0"
 
 description = "Knowledge Graph Autoencoder Training Environment, bridging PyG encoders and TorchKGE decoders."
 authors = [
     {name = "Benjamin Loire", email = "benjamin.loire@univ-amu.fr"},
-    {name = "Galadriel Brière", email = "marie-galadriel.briere@univ-amu.fr"}
+    {name = "Galadriel Brière", email = "marie-galadriel.briere@univ-amu.fr"},
+    {name = "Célia Brahimi", email = "celia.brahimi@utoulouse.fr"}
 ]
 readme = "README.md"
 license = "MIT"
@@ -15,7 +16,7 @@ classifiers = [
   #   3 - Alpha
   #   4 - Beta
   #   5 - Production/Stable
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
 
   # Indicate who your project is intended for
   "Intended Audience :: Science/Research",
@@ -39,7 +40,6 @@ torchkge = "^0.17.7"
 torch-geometric = "^2.6.1"
 matplotlib = "^3.10.0"
 pytorch-ignite = "^0.5.1"
-pyyaml = "^6.0.2"
 pytest = "^8.3.4"
 optuna = "^4.2.1"
 tomli-w = "^1.2.0"
