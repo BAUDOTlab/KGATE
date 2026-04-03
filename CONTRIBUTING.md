@@ -125,10 +125,11 @@ Try to keep the PR title to 72 characters or less (GitHub cuts off commit titles
 ### Examples
 
 ```
-[Feat] (decoder) SpherE complete implementation^    ^         ^
+[Feat] (decoder) SpherE complete implementation
+^      ^         ^
 |      |         |__ Subject
 |      |____________ Scope (optional)
-|_________________ Prefix
+|___________________ Prefix
 ```
 
 `[Refactor] (random) Improve generation of seeds for checkpoints`
