@@ -64,10 +64,10 @@ Tests show you both how things are supposed to work.
 
 Once you have your environment set up, check out the [Issues](https://github.com/BAUDOTlab/KGATE/issues) page to see how you can help us!
 Most issues are bugs and are labeled with their area, such as `Decoder`, `Encoder`, `Documentation`, etc. There are also priority labels:
-`Bug: Critical`: Completely breaking (very rare)
-`Bug: Major`: Crash
-`Bug: Minor`: Incorrect (but non-crashing) implementation
-`Bug: Smol`: No impact for the user, i.e. typo, minor graphical error, etc.
+- `Bug: Critical`: Completely breaking (very rare)
+- `Bug: Major`: Crash
+- `Bug: Minor`: Incorrect (but non-crashing) implementation
+- `Bug: Smol`: No impact for the user, i.e. typo, minor graphical error, etc.
 
 In addition, some issues are labelled `Good First Issue`. They are minor issues laying around for new contributors to make an easy contribution to KGATE and get familiar with the library.
 
@@ -97,11 +97,11 @@ You've just made a change - how can you check if it works? You have two areas to
 
 ### 1 - Manual Testing
 
-> This will likely be your first stop. After making a change, you'll want to use the tool and make sure everything is as you expect. To do this, you will need a way to manipulate the tool to produce the situation you're looking to test.
+This will likely be your first stop. After making a change, you'll want to use the tool and make sure everything is as you expect. To do this, you will need a way to manipulate the tool to produce the situation you're looking to test.
 
 ### 2 - Automatic Testing
 
-> KGATE uses pytest for automatic testing. Checking out the existing tests in the [tests](./tests/) folder is a great way to understand how this works, and to get familiar with the project as a whole.
+KGATE uses pytest for automatic testing. Checking out the existing tests in the [tests](./tests/) folder is a great way to understand how this works, and to get familiar with the project as a whole.
 
 To make sure your changes didn't break any existing test cases, run `pytest` in your terminal. You can also provide an argument to the command: to run only the decoder tests, you could write `pytest decoders`.
   - __Note that passing all test cases does *not* guarantee that everything is working properly__. The project does not have complete regression testing, or any real test suite at the moment. Contributions in that regard would be greatly appreciated. 
