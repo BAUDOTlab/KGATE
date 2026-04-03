@@ -67,11 +67,11 @@ gnn_layer_number = 1
 # - TransH: Translational model proposed by Wang et al. 2014
 # - TransR: Translational model proposed by Lin et al. 2015
 # - TransD: Translational model proposed by Ji et al. 2015
-# - TorusE: Translational model proposed by TODO
+# - TorusE: Translational model proposed by Ebisu and Ichise 2017
 # - ConvKB: Convolutional model proposed by Nguyen et al. 2018
 # - RESCAL: Bilinear model proposed by Nickel et al. 2011
 # - DistMult: Bilinear model proposed by Yang et al. 2014
-# - ComplEx: Bilinear model proposed by TODO
+# - ComplEx: Bilinear model proposed by Trouillon et al. 2016
 name = "TransE"
 
 # Translational decoders use a Margin Loss, which needs a margin parameter.
