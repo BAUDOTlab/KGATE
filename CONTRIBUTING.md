@@ -1,12 +1,10 @@
 <!--
-TODO, add: LICENSE
-
 This file was inspired by https://github.com/pagefaultgames/pokerogue/blob/beta/CONTRIBUTING.md
 -->
 
 # Contributing to KGATE
 
-Thank you for taking the time to contribute, every little bit helps. This project is entirely open-source and unmonetized - community contributions are what keep it alive!
+Thank you for taking the time to contribute, every little bit helps. This project is open source and open to contributions of all kind, from code to documentation. If you're unsure what to do, don't hesitate to post an issue.
 
 Please make sure you understand everything relevant to your changes from the [Table of Contents](#-table-of-contents), and absolutely *feel free to reach out to the devs [Benjamin Loire](<benjamin.loire@univ-amu.fr>) and [Célia Brahimi](<celia.brahimi@utoulouse.fr>)*.
 We are here to help and the better you understand what you're working on, the easier it will be for it to find its way into the project.
@@ -27,71 +25,33 @@ If you use any external code, please make sure to follow its licensing informati
 
 ## 🛠️ Development Basics
 
-KGATE is built with [Python](https://www.python.org/doc/) for [knowledge graphs](<https://en.wikipedia.org/wiki/Knowledge_graph>).
+KGATE is built with [Python](https://www.python.org/doc/) for [knowledge graphs](<https://en.wikipedia.org/wiki/Knowledge_graph>). It uses [PyTorch](https://pytorch.org/) as the underlying machine learning framework, and is heavily inspired from [TorchKGE](https://github.com/torchkge-team/torchkge).
 
-If you have the motivation and experience with Python and knowledge graphs (or are willing to learn), you can contribute by forking the `dev` repository and making pull requests with contributions.
+If you have the motivation and experience with Python and knowledge graphs (or are willing to learn), you can contribute by forking the repository and making pull requests with your changes.
 
 
 ## 💻 Environment Setup
-
-### Codespaces/Devcontainer Environment
-
-<!--
-TODO, add: prepared development environment
-
-
-Arguably the easiest way to get started is by using the prepared development environment.
-
-We have a `.devcontainer/devcontainer.json` file, meaning we are compatible with:
-
-- [![Open in GitHub Codespaces][codespaces-badge]][codespaces-link], or
-- the [Visual Studio Code Remote - Containers][devcontainer-ext] extension.
-
-This Linux environment comes with all required dependencies needed to start working on the project.
-
-[codespaces-badge]: <https://github.com/codespaces/badge.svg>
-[codespaces-link]: <https://github.com/codespaces/new?hide_repo_select=true&repo=620476224&ref=beta>
-[devcontainer-ext]: <https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers>
-
-> [!IMPORTANT]
-> Due to quirks of devcontainer port forwarding, you must use **`pnpm start:podman`** to start a local dev server from within a devcontainer.
-> All other instructions remain the same as local development.
--->
-
-### Podman
-
-<!--
-TODO, test: is this correct?
--->
-
-For those who prefer Docker containers, see [this instructions page](./docs/podman.md) for information on how to setup a development environment with Podman.
 
 ### Local Development
 
 #### Prerequisites
 
-<!--
-TODO, rework: add missing prerequisites, from dependencies
--->
-
 - Python: >=3.10.0 - [install 3.10.0](https://www.python.org/downloads/release/python-3100/) | [install latest version](<https://www.python.org/downloads/>)
-- PLACEHOLDER
+- [Poetry](https://python-poetry.org/)
 - The repository [forked](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) and [cloned](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) locally on your device
+- It is recommended to run the code on a GPU to perform tests, though it is not a hard constraint.
 
 #### Running Locally
 
-<!--
-TODO, add: how to run locally
-
-[Could look like this:]
-1. Run `pnpm install` from the repository root
-    - *if you run into any errors, reach out to us via mail*
-2. Run `pnpm start:dev` to locally run the project on your console`
--->
+1. Create a Poetry environment from the repository root: `poetry install`
+2. `poetry run python script.py` to run the file `script.py` within the poetry virtual environment.
 
 
 ## 🚀 Getting Started
 
+All new development must be made from the `dev` branch. This will allow your modifications to be integrated immediately in the development branch and made available for other developers.
+
+The `main` branch is reserved for the stable version of KGATE, and will merge the changes from `dev` from time to time when the development has become stable enough. Only emergency fixes can be pushed directly to `main`.
 <!--
 TODO, add: when we have a test folder and suite
 
@@ -99,22 +59,24 @@ A great way to develop an understanding of how the project works is to look at t
 Tests show you both how things are supposed to work.
 -->
 
-*This is a big project and you will be confused at times - never be afraid to reach out and ask questions!*
 
 ### Where to Look
 
-Once you have your feet under you, check out the [Issues](https://github.com/BAUDOTlab/KGATE/issues) page to see how you can help us!
+Once you have your environment set up, check out the [Issues](https://github.com/BAUDOTlab/KGATE/issues) page to see how you can help us!
 Most issues are bugs and are labeled with their area, such as `Decoder`, `Encoder`, `Documentation`, etc. There are also priority labels:
 - `P0`: Completely breaking (very rare)
 - `P1`: Major - Crash
 - `P2`: Minor - Incorrect (but non-crashing) implementation
 - `P3`: No impact for the user - typo, minor graphical error, etc.
 
+In addition, some issues are labelled `Good First Issue`. They are minor issues laying around for new contributors to make an easy contribution to KGATE and get familiar with the library.
+
 You are free to comment on any issue so that you may be assigned to it and we can avoid multiple people working on the same thing.
 
 
 ## 📚 Documentation
 
+To help with the documentation, work from the `doc` branch.
 <!--
 TODO, add: when we have a complete docs folder
 
@@ -122,9 +84,6 @@ You can find the auto-generated documentation [here](https://BAUDOTlab.github.io
 
 Additionally, the [docs folder](./docs) contains a variety of in-depth documents and guides useful for aspiring contributors. \
 Notable topics include:
-- [Commenting your code](./docs/comments.md)
-- [Linting & Formatting](./docs/linting.md)
-- [Running with Podman](./docs/podman.md)
 -->
 
 Again, if you have unanswered questions please feel free to ask!
@@ -138,42 +97,18 @@ You've just made a change - how can you check if it works? You have two areas to
 
 > This will likely be your first stop. After making a change, you'll want to use the tool and make sure everything is as you expect. To do this, you will need a way to manipulate the tool to produce the situation you're looking to test.
 
-<!--
-TODO, add: when we have a folder/file for overrides
-
-[src/overrides.py](./src/overrides.py) contains overrides for most values you'll need to change for testing, controlled through the `overrides` object.
-For example, here is how you could test a scenario where the player Pokemon has the ability Drought and the enemy Pokemon has the move Water Gun:
-
-```typescript
-const overrides = {
-  ABILITY_OVERRIDE: AbilityId.DROUGHT,
-  ENEMY_MOVESET_OVERRIDE: MoveId.WATER_GUN,
-} satisfies Partial<InstanceType<typeof DefaultOverrides>>;
-```
-
-Read through `src/overrides.py` file to find the override that fits your needs - there are a lot of them!
-If the situation you're trying to test can't be created using existing overrides (or with the [Dev Save](#-development-save-file)), reach out in **#dev-corner**.
-You can get help testing your specific changes, and you might have found a new override that needs to be created!
--->
-
 ### 2 - Automatic Testing
 
- <!--
- TODO, complete: everything here if needed
- -->
+> KGATE uses pytest for automatic testing. Checking out the existing tests in the [tests](./tests/) folder is a great way to understand how this works, and to get familiar with the project as a whole.
 
-> KGATE uses *[TODO: add what we use]* for automatic testing. Checking out the existing tests in the [tests](./tests/) folder is a great way to understand how this works, and to get familiar with the project as a whole.
-
-To make sure your changes didn't break any existing test cases, run `pytest tests/` in your terminal. You can also provide an argument to the command: to run only the [PLACEHOLDER something] tests, you could write `pytest tests/ something`. <!-- TODO, test: is it true? -->
-  - __Note that passing all test cases does *not* guarantee that everything is working properly__. The project does not have complete regression testing. <!-- TODO, test: is it true? -->
+To make sure your changes didn't break any existing test cases, run `pytest` in your terminal. You can also provide an argument to the command: to run only the decoder tests, you could write `pytest decoders`.
+  - __Note that passing all test cases does *not* guarantee that everything is working properly__. The project does not have complete regression testing, or any real test suite at the moment. Contributions in that regard would be greatly appreciated. 
 
 Most non-trivial changes (*especially bug fixes*) should come along with new test cases.
-  - To make a new test file, run  <!-- TODO, add: pytest command needed here to create --> and follow the prompts. If the encoder/decoder/etc. you're modifying already has tests, simply add new cases to the end of the file. As mentioned before, the easiest way to get familiar with the system and understand how to write your own tests is simply to read the existing tests, particularly ones similar to the tests you intend to write.
+  - To make a new test file, create a new file in the [tests](./tests/) folder or extend an existing one. As mentioned before, the easiest way to get familiar with the system and understand how to write your own tests is simply to read the existing tests, particularly ones similar to the tests you intend to write.
   - Ensure that new tests:
-    - Are deterministic. In other words, the test should never pass or fail when it shouldn't due to randomness. This involves primarily ensuring that values are never randomly selected.
+    - Are deterministic. In other words, the test should never pass or fail when it shouldn't due to randomness. This involves primarily ensuring that values are never randomly selected, either providing fixed input and/or setting deterministic seeds..
     - As much as possible, are unit tests. If you have made two distinct changes, they should be tested in two separate cases.
-    - Test edge cases. A good strategy is to think of edge cases beforehand and create tests for them using `it.todo`. Once the edge case has been handled, you can remove the `todo` marker.
-
 
 ## ✅ Submitting a Pull Request
 
@@ -215,12 +150,12 @@ feat(decoder): SpherE complete implementation
 
 ### List of valid scopes
 
-- "autoencoder"
+- "architect
 - "decoder"
 - "encoder"
-- "ml" - Relating to machine learning
-- "math" - Relating to formulas
-- "random" - Relating to randomness (e.g. seeds)
+- "preprocessor"
+- "evaluation"
+- "training"
 
 > [!IMPORTANT]
 > All scopes are valid when using the "docs", "feat", "fix", "refactor" and "test" prefixes. \
