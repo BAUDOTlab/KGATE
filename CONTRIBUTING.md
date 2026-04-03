@@ -4,9 +4,9 @@ This file was inspired by https://github.com/pagefaultgames/pokerogue/blob/beta/
 
 # Contributing to KGATE
 
-Thank you for taking the time to contribute, every little bit helps. This project is open source and open to contributions of all kind, from code to documentation. If you're unsure what to do, don't hesitate to post an issue.
+Thank you for taking the time to contribute, every little bit helps. This project is open source and open to contributions of all kind, from code to documentation. If you're unsure what to do, don't hesitate to [post an issue](https://github.com/BAUDOTlab/KGATE/issues).
 
-Please make sure you understand everything relevant to your changes from the [Table of Contents](#-table-of-contents), and absolutely *feel free to reach out to the devs [Benjamin Loire](<benjamin.loire@univ-amu.fr>) and [Célia Brahimi](<celia.brahimi@utoulouse.fr>)*.
+Please make sure you understand everything relevant to your changes from the [Table of Contents](#-table-of-contents), and absolutely **feel free to reach out to the devs [Benjamin Loire](<benjamin.loire@univ-amu.fr>) and [Célia Brahimi](<celia.brahimi@utoulouse.fr>)**.
 We are here to help and the better you understand what you're working on, the easier it will be for it to find its way into the project.
 
 Note that, as per GitHub's [terms of service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#6-contributions-under-repository-license), any contributions made to this repository will be licensed under this repository's terms.
@@ -27,7 +27,7 @@ If you use any external code, please make sure to follow its licensing informati
 
 KGATE is built with [Python](https://www.python.org/doc/) for [knowledge graphs](<https://en.wikipedia.org/wiki/Knowledge_graph>). It uses [PyTorch](https://pytorch.org/) as the underlying machine learning framework, and is heavily inspired from [TorchKGE](https://github.com/torchkge-team/torchkge).
 
-If you have the motivation and experience with Python and knowledge graphs (or are willing to learn), you can contribute by forking the repository and making pull requests with your changes.
+If you have the motivation and experience with Python and knowledge graphs (or are willing to learn), you can contribute by forking the repository and making pull requests with your changes by following the instructions in the [Getting Started](#-getting-started) section.
 
 
 ## 💻 Environment Setup
@@ -49,7 +49,7 @@ If you have the motivation and experience with Python and knowledge graphs (or a
 
 ## 🚀 Getting Started
 
-All new development must be made from the `dev` branch. This will allow your modifications to be integrated immediately in the development branch and made available for other developers.
+All new development must be made from the `dev` branch. This will allow your modifications to be integrated after review by maintainers in the development branch and made available for other developers.
 
 The `main` branch is reserved for the stable version of KGATE, and will merge the changes from `dev` from time to time when the development has become stable enough. Only emergency fixes can be pushed directly to `main`.
 <!--
@@ -64,12 +64,14 @@ Tests show you both how things are supposed to work.
 
 Once you have your environment set up, check out the [Issues](https://github.com/BAUDOTlab/KGATE/issues) page to see how you can help us!
 Most issues are bugs and are labeled with their area, such as `Decoder`, `Encoder`, `Documentation`, etc. There are also priority labels:
-- `P0`: Completely breaking (very rare)
-- `P1`: Major - Crash
-- `P2`: Minor - Incorrect (but non-crashing) implementation
-- `P3`: No impact for the user - typo, minor graphical error, etc.
+`Bug: Critical`: Completely breaking (very rare)
+`Bug: Major`: Crash
+`Bug: Minor`: Incorrect (but non-crashing) implementation
+`Bug: Smol`: No impact for the user, i.e. typo, minor graphical error, etc.
 
 In addition, some issues are labelled `Good First Issue`. They are minor issues laying around for new contributors to make an easy contribution to KGATE and get familiar with the library.
+
+Finally, you can filter by complexity: `High`, `Medium` or `Low` which should reflect the amount of effort and time the issue is expected to take.
 
 You are free to comment on any issue so that you may be assigned to it and we can avoid multiple people working on the same thing.
 
@@ -123,30 +125,29 @@ Try to keep the PR title to 72 characters or less (GitHub cuts off commit titles
 ### Examples
 
 ```
-feat(decoder): SpherE complete implementation
-^    ^         ^
-|    |         |__ Subject
-|    |____________ Scope (optional)
+[Feat] (decoder) SpherE complete implementation^    ^         ^
+|      |         |__ Subject
+|      |____________ Scope (optional)
 |_________________ Prefix
 ```
 
-`refactor(random): improve generation of seeds for checkpoints`
+`[Refactor] (random) Improve generation of seeds for checkpoints`
 
-`test: improve regression testing`
+`[Test] Improve regression testing`
 
 ### List of valid prefixes
 
-- "chore" - Misc project upkeep (e.g. updating submodules, updating dependencies, reverting a bad commit) not covered by other prefixes
-- "dev" - Improving the developer experience (such as by modifying lint rules or creating cli scripts)
-- "docs" - Primarily adding/updating documentation
+- "Chore" - Misc project upkeep (e.g. updating submodules, updating dependencies, reverting a bad commit) not covered by other prefixes
+- "Dev" - Improving the developer experience (such as by modifying lint rules or creating cli scripts)
+- "Docs" - Primarily adding/updating documentation
 - "feat" - Adding a new feature (e.g. adding a new implementation of a decoder) or redesigning an existing feature
-- "fix" - Fixing a bug
-- "github" - Updating the CI pipeline or otherwise modifying something in the `./github/**` directory
-- "misc" - A change that doesn't fit any other prefix
-- "perf" - A refactor aimed at improving performance
-- "refactor" - A change that doesn't impact functionality or fix any bugs (except incidentally)
-- "test" - Primarily adding/updating tests or modifying the test framework
-- "user" - Creating/improving the user experience (e.g. adding or updating an interface)
+- "Fix" - Fixing a bug
+- "Github" - Updating the CI pipeline or otherwise modifying something in the `./github/**` directory
+- "Misc" - A change that doesn't fit any other prefix
+- "Perf" - A refactor aimed at improving performance
+- "Refactor" - A change that doesn't impact functionality or fix any bugs (except incidentally)
+- "Test" - Primarily adding/updating tests or modifying the test framework
+- "User" - Creating/improving the user experience (e.g. adding or updating an interface)
 
 ### List of valid scopes
 
