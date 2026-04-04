@@ -22,14 +22,12 @@ from torch.utils.data import DataLoader
 from torch_geometric.utils import k_hop_subgraph
 
 from torchkge.utils import get_rank
-from torchkge.data_structures import SmallKG
-
 if TYPE_CHECKING:
     from .architect import Architect
 from .decoders import BilinearDecoder, ConvolutionalDecoder, TranslationalDecoder
 from .encoders import GNN, DefaultEncoder
 from .knowledgegraph import KnowledgeGraph
-from .samplers import NegativeSampler, PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
+from .samplers import PositionalNegativeSampler
 from .utils import filter_scores
 
 
@@ -371,65 +369,44 @@ class TripletClassificationEvaluator:
         Embedding model inheriting from the right interface.
     kg_validation: torchkge.data_structures.KnowledgeGraph
         Knowledge graph on which the validation thresholds will be computed.
-    kg_test: torchkge.data_structures.KnowledgeGraph
-        Knowledge graph on which the testing evaluation will be done.
-
     Attributes
     ----------
     architect: Architect
         Embedding model inheriting from the right interface.
     kg_validation: KnowledgeGraph
         Knowledge graph on which the validation thresholds will be computed.
-    kg_test: KnowledgeGraph
-        Knowledge graph on which the evaluation will be done.
-    device: str, "cuda" or "cpu", default to "cuda"
-        Indicate if data should be sent to GPU or CPU.
-        GPU is referenced to as Cuda.
     evaluated: bool, default to False
         Indicate whether the `evaluate` function has already been called.
     thresholds: float
         Value of the thresholds for the scoring function to consider a
         triplet as true. It is defined by calling the `evaluate` method.
-    sampler: torchkge.sampling.NegativeSampler
-        Negative sampler.
 
     """
     def __init__(self,
                 architect: "Architect",
-                kg_validation: KnowledgeGraph,
-                kg_test: KnowledgeGraph):
+                kg_validation: KnowledgeGraph):
         
         self.architect = architect
         self.kg_validation = kg_validation
-        self.kg_test = kg_test
-        self.device = self.architect.device.type == "cuda"
+        self.device = self.architect.device
 
         self.evaluated = False
         self.thresholds = None
 
-        # PositionalNegativeSampler specifically as done in TorchKGE
-        # following the original paper: https://nlp.stanford.edu/pubs/SocherChenManningNg_NIPS2013.pdf
-        self.sampler = PositionalNegativeSampler(self.kg_validation)
 
-
-    def get_scores( self,
-                    heads: Tensor,
-                    tails: Tensor,
-                    edges: Tensor,
-                    batch_size: int
-                    ) -> Tensor:
+    def get_scores(self,
+                    kg: KnowledgeGraph,
+                    batch: Tensor,
+                    batch_size: int) -> Tensor:
         """
-        With head, tail and edge indices, compute the value of the
-        scoring function of the model.
+        Compute triplet scores in batches from a [4, batch_size] tensor.
 
         Arguments
         ---------
-        heads: torch.Tensor, dtype: torch.long, shape: triplet_count
-            List of head indices.
-        tails: torch.Tensor, dtype: torch.long, shape: triplet_count
-            List of tail indices.
-        edges: torch.Tensor, dtype: torch.long, shape: triplet_count
-            List of edge indices.
+        kg: KnowledgeGraph
+            Knowledge graph matching the batch identifiers.
+        batch: torch.Tensor, dtype: torch.long, shape: [4, triplet_count]
+            Tensor containing head, tail, edge and triplet-type indices.
         batch_size: int
             Size of the current batch.
 
@@ -442,19 +419,11 @@ class TripletClassificationEvaluator:
         
         scores = []
 
-        small_kg = SmallKG(heads, tails, edges)
-        if self.is_cuda:
-            dataloader = DataLoader(small_kg,
-                                    batch_size = batch_size)
-        else:
-            dataloader = DataLoader(small_kg,
-                                    batch_size = batch_size)
+        for start in range(0, batch.size(1), batch_size):
+            batch_slice = batch[:, start:start + batch_size].to(self.device)
+            scores.append(self.architect.scoring_function(batch_slice, kg).detach())
 
-        for _, batch in enumerate(dataloader):
-            head_index, tail_index, edge_index = batch[0].to(self.architect.device), batch[1].to(self.architect.device), batch[2].to(self.architect.device)
-            scores.append(self.architect.scoring_function(head_index, tail_index, edge_index, train = False))
-
-        return cat(scores, dim = 0)
+        return cat(scores, dim=0)
 
 
     def evaluate(self,
@@ -476,24 +445,31 @@ class TripletClassificationEvaluator:
             
         """
         sampler = PositionalNegativeSampler(kg)
-        edge_indices = kg.edge_indices
 
-        negative_heads, negative_tails = sampler.corrupt_kg(batch_size,
-                                                            self.is_cuda,
-                                                            which = "main")
-        negative_scores = self.get_scores(negative_heads,
-                                        negative_tails,
-                                        edge_indices,
-                                        batch_size)
+        self.thresholds = torch.full(
+            (self.kg_validation.edge_count,),
+            float("-inf"),
+            device=self.device,
+        )
+        global_negative_max = torch.tensor(float("-inf"), device=self.device)
 
-        self.thresholds = zeros(self.kg_validation.n_rel)
+        dataloader = DataLoader(kg, batch_size=batch_size)
+        for _, batch in enumerate(dataloader):
+            positive_batch = batch.T.to(self.device)
+            negative_batch = sampler.corrupt_batch(positive_batch).to(self.device)
 
-        for i in range(self.kg_validation.n_rel):
-            mask = (edge_indices == i).bool()
-            if mask.sum() > 0:
-                self.thresholds[i] = negative_scores[mask].max()
-            else:
-                self.thresholds[i] = negative_scores.max()
+            negative_scores = self.get_scores(kg=kg, batch=negative_batch, batch_size=batch_size)
+            global_negative_max = torch.maximum(global_negative_max, negative_scores.max())
+
+            negative_edges = negative_batch[2]
+            for edge_id in negative_edges.unique():
+                edge_mask = (negative_edges == edge_id)
+                max_for_edge = negative_scores[edge_mask].max()
+                self.thresholds[edge_id] = torch.maximum(self.thresholds[edge_id], max_for_edge)
+
+        missing_mask = torch.isneginf(self.thresholds)
+        if missing_mask.any():
+            self.thresholds[missing_mask] = global_negative_max
 
         self.evaluated = True
         self.thresholds.detach_()
@@ -529,25 +505,24 @@ class TripletClassificationEvaluator:
             self.evaluate(batch_size = batch_size, kg = kg_to_evaluate)
 
         sampler = PositionalNegativeSampler(kg_test)
-        edge_indices = kg_test.edge_indices
+        if self.thresholds.device != self.device:
+            self.thresholds = self.thresholds.to(self.device)
 
-        negative_heads, negative_tails = sampler.corrupt_kg(batch_size,
-                                                            self.is_cuda,
-                                                            which = "main")
-        scores = self.get_scores(kg_test.head_indices,
-                                kg_test.tail_indices,
-                                edge_indices,
-                                batch_size)
-        negative_scores = self.get_scores(negative_heads,
-                                        negative_tails,
-                                        edge_indices,
-                                        batch_size)
+        total_correct = 0
+        dataloader = DataLoader(kg_test, batch_size=batch_size)
 
-        if self.is_cuda:
-            self.thresholds = self.thresholds.cuda()
-            
-        scores = (scores > self.thresholds[edge_indices])
-        negative_scores = (negative_scores < self.thresholds[edge_indices])
+        for _, batch in enumerate(dataloader):
+            positive_batch = batch.T.to(self.device)
+            negative_batch = sampler.corrupt_batch(positive_batch).to(self.device)
 
-        return (scores.sum().item() +
-                negative_scores.sum().item()) / (2 * self.kg_test.triplet_count)
+            positive_scores = self.get_scores(kg=kg_test, batch=positive_batch, batch_size=batch_size)
+            negative_scores = self.get_scores(kg=kg_test, batch=negative_batch, batch_size=batch_size)
+
+            positive_edges = positive_batch[2]
+            negative_edges = negative_batch[2]
+
+            positive_correct = (positive_scores > self.thresholds[positive_edges]).sum().item()
+            negative_correct = (negative_scores < self.thresholds[negative_edges]).sum().item()
+            total_correct += positive_correct + negative_correct
+
+        return total_correct / (2 * kg_test.triplet_count)
