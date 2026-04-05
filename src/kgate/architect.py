@@ -312,6 +312,8 @@ class Architect(Module):
         
         In addition, the metadata can have any number of supplementary columns that can be
         used to set the identity of the nodes for the associated :class:`~kgate.knowledgegraph.KnowledgeGraph`.
+        For triplet classification, an optional `node_class` column can be provided to define
+        node-to-class annotations.
 
         If there is no knowledge graph associated with the Architect, the `architect.metadata` property will be used
         to initialize them. If there is already a knowledge graph, it will update the knowledge graph with

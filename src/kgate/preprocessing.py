@@ -20,7 +20,45 @@ from .utils import set_random_seeds, compute_triplet_proportions
 
 
 SUPPORTED_SEPARATORS = [",","\t",";"]
+NODE_CLASS_COLUMN = "node_class"
+NODE_CLASS_EDGE_NAME = "node_class"
 
+
+def _inject_node_class_triplets(df: pd.DataFrame, meta: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Extracts node classes from the metadata, formats them as triples, 
+    injects them into the main graph dataframe, and ensures all new class nodes 
+    have a corresponding entry in the metadata table.
+    """
+    if NODE_CLASS_COLUMN not in meta.columns:
+        return df, meta
+
+    # 1. Isolate relevant rows and split strings into lists
+    nodes = set(df["head"]).union(df["tail"])
+    triplets = meta.loc[meta["id"].isin(nodes), ["id", NODE_CLASS_COLUMN]].dropna()
+    triplets[NODE_CLASS_COLUMN] = triplets[NODE_CLASS_COLUMN].astype(str).str.split(",")
+
+    # 2. Chain operations: explode -> rename -> strip -> filter -> assign edge
+    triplets = (
+        triplets.explode(NODE_CLASS_COLUMN)
+        .rename(columns={"id": "head", NODE_CLASS_COLUMN: "tail"})
+    )
+    triplets["tail"] = triplets["tail"].str.strip()
+    triplets = triplets[triplets["tail"] != ""].assign(edge=NODE_CLASS_EDGE_NAME)
+
+    if triplets.empty:
+        return df, meta
+
+    # 3. Append new triplets to the graph
+    df = pd.concat([df, triplets], ignore_index=True).drop_duplicates(ignore_index=True)
+
+    # 4. Append missing class nodes to metadata (using sets for fast diff)
+    new_ids = list(set(triplets["tail"]) - set(meta["id"]))
+    if new_ids:
+        new_meta = pd.DataFrame({"id": new_ids, "type": "Class"}).reindex(columns=meta.columns)
+        meta = pd.concat([meta, new_meta], ignore_index=True)
+
+    return df, meta
 
 def prepare_knowledge_graph(config: dict, 
                             kg: KnowledgeGraph | None = None, 
@@ -66,8 +104,15 @@ def prepare_knowledge_graph(config: dict,
     Notes
     -----
     The CSV file can have any number of columns but at least three named head, tail and edge.
+    If the evaluation objective is set to `Triplet Classification` and metadata contains a
+    `node_class` column, extra triplets are injected to represent node classes.
     
     """
+    inject_node_class_triplets = (
+        metadata is not None
+        and config["evaluation"]["objective"] == "Triplet Classification"
+    )
+
     # Load knowledge graph
     if kg is None and dataframe is None:
         input_file = config["kg_csv"]
@@ -85,18 +130,28 @@ def prepare_knowledge_graph(config: dict,
         if kg_dataframe is None:
             raise ValueError(f"The knowledge graph csv file was not found or uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
+        if inject_node_class_triplets:
+            kg_dataframe, metadata = _inject_node_class_triplets(kg_dataframe, metadata)
+
         kg = KnowledgeGraph(dataframe = kg_dataframe, metadata = metadata)
 
     else:
         if kg is not None:
             if isinstance(kg, torchkge.KnowledgeGraph):
                 kg_dataframe = kg.get_dataframe()
+
+                if inject_node_class_triplets:
+                    kg_dataframe, metadata = _inject_node_class_triplets(kg_dataframe, metadata)
+
                 kg = KnowledgeGraph(dataframe = kg_dataframe, metadata = metadata)
             elif isinstance(kg, KnowledgeGraph):
                 kg = kg
             else:
                 raise NotImplementedError(f"Knowledge graph type {type(kg)} is not supported. Supported knowledge graph types are KGATE's and TorchKGE's.")
         elif dataframe is not None:
+            if inject_node_class_triplets:
+                dataframe, metadata = _inject_node_class_triplets(dataframe, metadata)
+
             kg = KnowledgeGraph(dataframe = dataframe, metadata = metadata)
                 
     # Clean and process knowledge graph
