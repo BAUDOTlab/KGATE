@@ -720,8 +720,7 @@ class Architect(Module):
                 self.validation_metric = "MRR"
             case "Triplet Classification":
                 evaluator = TripletClassificationEvaluator(architect = self,
-                                                        kg_validation = self.kg_validation,
-                                                        kg_test = self.kg_test)
+                                                        kg_validation = self.kg_validation)
                 self.validation_metric = "Accuracy"
             case _:
                 raise NotImplementedError(f"The requested evaluator {self.config["evaluation"]["objective"]} is not implemented.")
@@ -887,10 +886,14 @@ class Architect(Module):
         if checkpoint_file is None:
             with open(self.train_metrics_file, mode = "w", newline = "") as file:
                 writer = csv.writer(file)
-                writer.writerow(["Epoch", "Training Loss", f"Validation {self.validation_metric}", "Learning Rate"])
+                if self.config["evaluation"]["objective"] == "Triplet Classification":
+                    writer.writerow(["Epoch", "Training Loss", f"Validation {self.validation_metric}", "Test Accuracy", "Learning Rate"])
+                else:
+                    writer.writerow(["Epoch", "Training Loss", f"Validation {self.validation_metric}", "Learning Rate"])
         
         self.train_losses: List[float] = []
         self.validation_metric_value: List[float] = []
+        self.test_metric_value: List[float] = []
         self.learning_rates: List[float] = []
 
         data_loader: DataLoader = DataLoader(self.kg_train, self.train_batch_size)
@@ -1496,17 +1499,26 @@ class Architect(Module):
         epoch = engine.state.epoch
         train_loss = engine.state.metrics["loss_running_average"]
         validation_metric_value = engine.state.metrics.get("validation_metric_value", 0)
+        test_metric_value = engine.state.metrics.get("test_metric_value")
         learning_rate = self.optimizer.param_groups[0]["lr"]
 
         self.train_losses.append(train_loss)
         self.validation_metric_value.append(validation_metric_value)
+        if test_metric_value is not None:
+            self.test_metric_value.append(test_metric_value)
         self.learning_rates.append(learning_rate)
 
         with open(self.train_metrics_file, mode = "a", newline = "") as file:
             writer = csv.writer(file)
-            writer.writerow([epoch, train_loss, validation_metric_value, learning_rate])
+            if test_metric_value is not None:
+                writer.writerow([epoch, train_loss, validation_metric_value, test_metric_value, learning_rate])
+            else:
+                writer.writerow([epoch, train_loss, validation_metric_value, learning_rate])
 
-        logging.info(f"Epoch {epoch} - Train Loss: {train_loss}, Validation {self.validation_metric}: {validation_metric_value}, Learning Rate: {learning_rate}")
+        if test_metric_value is not None:
+            logging.info(f"Epoch {epoch} - Train Loss: {train_loss}, Validation {self.validation_metric}: {validation_metric_value}, Test Accuracy: {test_metric_value}, Learning Rate: {learning_rate}")
+        else:
+            logging.info(f"Epoch {epoch} - Train Loss: {train_loss}, Validation {self.validation_metric}: {validation_metric_value}, Learning Rate: {learning_rate}")
 
 
     def clean_memory(self):
@@ -1537,9 +1549,18 @@ class Architect(Module):
                 engine.state.metrics["validation_metric_value"] = validation_score 
                 logging.info(f"Validation MRR: {validation_score}")
             elif isinstance(self.evaluator, TripletClassificationEvaluator):
-                validation_score = self.triplet_classification(self.kg_validation, self.kg_test)
+                validation_score = self.triplet_classification(
+                    kg_validation = self.kg_validation,
+                    kg_test = self.kg_validation,
+                )
+                test_score = self.triplet_classification(
+                    kg_validation = self.kg_validation,
+                    kg_test = self.kg_test,
+                )
                 engine.state.metrics["validation_metric_value"] = validation_score
+                engine.state.metrics["test_metric_value"] = test_score
                 logging.info(f"Validation Accuracy: {validation_score}")
+                logging.info(f"Test Accuracy: {test_score}")
         if self.scheduler and isinstance(self.scheduler, learning_rate_scheduler.ReduceLROnPlateau):
             self.scheduler.step(validation_score)
             logging.info("Stepping scheduler ReduceLROnPlateau.")
@@ -1707,7 +1728,10 @@ class Architect(Module):
             if isinstance(self.evaluator, LinkPredictionEvaluator):
                 test_metrics = self.link_prediction(new_kg)
             elif isinstance(self.evaluator, TripletClassificationEvaluator):
-                test_metrics = self.triplet_classification(kg_validation = self.kg_validation, kg_test = new_kg)
+                test_metrics = self.triplet_classification(
+                    kg_validation = self.kg_validation,
+                    kg_test = new_kg,
+                )
             
             # Save each edge's MRR
             individual_metrics[edge_name] = test_metrics
@@ -1752,8 +1776,14 @@ class Architect(Module):
             frequent_metrics = self.link_prediction(kg_frequent) if frequent_indices else 0
             infrequent_metrics = self.link_prediction(kg_infrequent) if infrequent_indices else 0
         elif isinstance(self.evaluator, TripletClassificationEvaluator):
-            frequent_metrics = self.triplet_classification(self.kg_validation, kg_frequent) if frequent_indices else 0
-            infrequent_metrics = self.triplet_classification(self.kg_validation, kg_infrequent) if infrequent_indices else 0
+            frequent_metrics = self.triplet_classification(
+                kg_validation = self.kg_validation,
+                kg_test = kg_frequent,
+            ) if frequent_indices else 0
+            infrequent_metrics = self.triplet_classification(
+                kg_validation = self.kg_validation,
+                kg_test = kg_infrequent,
+            ) if infrequent_indices else 0
             
         return frequent_metrics, infrequent_metrics
 
