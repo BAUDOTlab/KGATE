@@ -33,11 +33,27 @@ RELATIONS = (
 )
 
 
-def make_nodes() -> pd.DataFrame:
+def make_nodes(add_node_class: bool = False) -> pd.DataFrame:
     rows: list[dict[str, str]] = []
+    rng = np.random.default_rng(SEED)
+    class_pool = [f"Class{i}" for i in range(1, 7)]
     for node_type in NODE_TYPES:
         for idx in range(NODES_PER_TYPE):
-            rows.append({"id": f"{node_type}_{idx:02d}", "type": node_type})
+            node_id = f"{node_type}_{idx:02d}"
+            row = {"id": node_id, "type": node_type}
+            if add_node_class:
+                p = rng.random()
+                if p < 0.20:
+                    # Multiple classes (2-3)
+                    n_classes = rng.integers(2, 4)
+                    classes = rng.choice(class_pool, size=n_classes, replace=False)
+                    row["node_class"] = "|".join(classes)
+                elif p < 0.50:
+                    # Single class
+                    row["node_class"] = rng.choice(class_pool)
+                else:
+                    row["node_class"] = None
+            rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -69,10 +85,10 @@ def sample_edges(metadata: pd.DataFrame) -> pd.DataFrame:
     return graph_df
 
 
-def main() -> None:
+def main(add_node_class: bool = False) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    metadata_df = make_nodes()
+    metadata_df = make_nodes(add_node_class=add_node_class)
     graph_df = sample_edges(metadata_df)
 
     metadata_df.to_csv(METADATA_PATH, index=False)
@@ -89,4 +105,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--add-node-class",
+        action="store_true",
+        help="Add node_class column to metadata",
+    )
+    args = parser.parse_args()
+    main(add_node_class=args.add_node_class)

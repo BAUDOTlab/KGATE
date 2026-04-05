@@ -14,7 +14,7 @@ from kgate import Architect
 
 # Always (re)generate the synthetic dataset before running E2E tests
 def _generate_synthetic_dataset(repo_root: Path) -> None:
-    script = repo_root / "scripts" / "make_synthetic_test_graph.py"
+    script = repo_root / "tests" / "make_synthetic_test_graph.py"
     result = subprocess.run(
         ["python", str(script)], cwd=repo_root, capture_output=True, text=True
     )
@@ -23,12 +23,12 @@ def _generate_synthetic_dataset(repo_root: Path) -> None:
 
 
 E2E_CONFIGS = [
-    "configs/test_e2e/lp_default_transe.toml",
-    "configs/test_e2e/lp_gat_transe.toml",
-    "configs/test_e2e/lp_gcn_distmult.toml",
-    "configs/test_e2e/tc_default_transe.toml",
-    "configs/test_e2e/tc_gat_transe.toml",
-    "configs/test_e2e/tc_gcn_distmult.toml",
+    "configs/examples/lp_default_transe.toml",
+    "configs/examples/lp_gat_transe.toml",
+    "configs/examples/lp_gcn_distmult.toml",
+    "configs/examples/tc_default_transe.toml",
+    "configs/examples/tc_gat_transe.toml",
+    "configs/examples/tc_gcn_distmult.toml",
 ]
 
 
@@ -37,6 +37,7 @@ E2E_CONFIGS = [
 def test_end_to_end_pipeline_creates_artifacts(
     repo_root: Path, tmp_path: Path, base_config: str
 ) -> None:
+    """Test that the end-to-end pipeline runs and creates all expected artifacts for a given config."""
     # Always generate the synthetic dataset before running the E2E test
     _generate_synthetic_dataset(repo_root)
 

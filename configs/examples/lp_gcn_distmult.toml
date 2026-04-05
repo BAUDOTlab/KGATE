@@ -4,7 +4,7 @@ kg_csv = "data/synthetic_test_graph.csv"
 kg_pkl = ""
 metadata_csv = "data/synthetic_test_metadata.csv"
 
-output_directory = "output/test_e2e/tc_gat_transe"
+output_directory = "output/examples/lp_gcn_distmult"
 verbose = true
 run_kg_preprocessing = true
 
@@ -30,7 +30,7 @@ name = "GAT"
 gnn_layer_number = 1
 
 [model.decoder]
-name = "TransE"
+name = "DistMult"
 margin = 1
 dissimilarity = "L2"
 filter_count = 3
@@ -61,7 +61,7 @@ save_interval = 1
 pretrained_embeddings = ""
 
 [evaluation]
-objective = "Triplet Classification"
+objective = "Link Prediction"
 made_directed_edges = []
 target_edges = []
 thresholds = [10]

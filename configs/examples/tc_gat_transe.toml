@@ -4,7 +4,7 @@ kg_csv = "data/synthetic_test_graph.csv"
 kg_pkl = ""
 metadata_csv = "data/synthetic_test_metadata.csv"
 
-output_directory = "output/test_e2e/lp_gat_transe"
+output_directory = "output/examples/tc_gat_transe"
 verbose = true
 run_kg_preprocessing = true
 
@@ -61,7 +61,7 @@ save_interval = 1
 pretrained_embeddings = ""
 
 [evaluation]
-objective = "Link Prediction"
+objective = "Triplet Classification"
 made_directed_edges = []
 target_edges = []
 thresholds = [10]

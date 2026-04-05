@@ -4,7 +4,7 @@ kg_csv = "data/synthetic_test_graph.csv"
 kg_pkl = ""
 metadata_csv = "data/synthetic_test_metadata.csv"
 
-output_directory = "output/test_e2e/tc_default_transe"
+output_directory = "output/examples/tc_default_transe"
 verbose = true
 run_kg_preprocessing = true
 

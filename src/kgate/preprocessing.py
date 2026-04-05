@@ -24,7 +24,7 @@ NODE_CLASS_COLUMN = "node_class"
 NODE_CLASS_EDGE_NAME = "node_class"
 
 
-def _inject_node_class_triplets(df: pd.DataFrame, meta: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def inject_node_class_triplets(df: pd.DataFrame, meta: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Extracts node classes from the metadata, formats them as triples, 
     injects them into the main graph dataframe, and ensures all new class nodes 
@@ -36,7 +36,7 @@ def _inject_node_class_triplets(df: pd.DataFrame, meta: pd.DataFrame) -> Tuple[p
     # 1. Isolate relevant rows and split strings into lists
     nodes = set(df["head"]).union(df["tail"])
     triplets = meta.loc[meta["id"].isin(nodes), ["id", NODE_CLASS_COLUMN]].dropna()
-    triplets[NODE_CLASS_COLUMN] = triplets[NODE_CLASS_COLUMN].astype(str).str.split(",")
+    triplets[NODE_CLASS_COLUMN] = triplets[NODE_CLASS_COLUMN].astype(str).str.split("|")
 
     # 2. Chain operations: explode -> rename -> strip -> filter -> assign edge
     triplets = (
@@ -108,8 +108,8 @@ def prepare_knowledge_graph(config: dict,
     `node_class` column, extra triplets are injected to represent node classes.
     
     """
-    inject_node_class_triplets = (
-        metadata is not None
+    node_class_triplets = (
+        "node_class" in metadata.columns
         and config["evaluation"]["objective"] == "Triplet Classification"
     )
 
@@ -130,8 +130,8 @@ def prepare_knowledge_graph(config: dict,
         if kg_dataframe is None:
             raise ValueError(f"The knowledge graph csv file was not found or uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
-        if inject_node_class_triplets:
-            kg_dataframe, metadata = _inject_node_class_triplets(kg_dataframe, metadata)
+        if node_class_triplets:
+            kg_dataframe, metadata = inject_node_class_triplets(kg_dataframe, metadata)
 
         kg = KnowledgeGraph(dataframe = kg_dataframe, metadata = metadata)
 
@@ -140,8 +140,8 @@ def prepare_knowledge_graph(config: dict,
             if isinstance(kg, torchkge.KnowledgeGraph):
                 kg_dataframe = kg.get_dataframe()
 
-                if inject_node_class_triplets:
-                    kg_dataframe, metadata = _inject_node_class_triplets(kg_dataframe, metadata)
+                if node_class_triplets:
+                    kg_dataframe, metadata = inject_node_class_triplets(kg_dataframe, metadata)
 
                 kg = KnowledgeGraph(dataframe = kg_dataframe, metadata = metadata)
             elif isinstance(kg, KnowledgeGraph):
@@ -149,8 +149,8 @@ def prepare_knowledge_graph(config: dict,
             else:
                 raise NotImplementedError(f"Knowledge graph type {type(kg)} is not supported. Supported knowledge graph types are KGATE's and TorchKGE's.")
         elif dataframe is not None:
-            if inject_node_class_triplets:
-                dataframe, metadata = _inject_node_class_triplets(dataframe, metadata)
+            if node_class_triplets:
+                dataframe, metadata = inject_node_class_triplets(dataframe, metadata)
 
             kg = KnowledgeGraph(dataframe = dataframe, metadata = metadata)
                 

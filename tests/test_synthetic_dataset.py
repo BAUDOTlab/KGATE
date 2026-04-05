@@ -8,6 +8,7 @@ import pytest
 
 @pytest.mark.integration
 def test_synthetic_dataset_invariants(repo_root: Path) -> None:
+    """Test invariants and integrity of the synthetic dataset files."""
     graph_path = repo_root / "data" / "synthetic_test_graph.csv"
     metadata_path = repo_root / "data" / "synthetic_test_metadata.csv"
 
