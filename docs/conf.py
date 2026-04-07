@@ -14,7 +14,7 @@ release = '0.1.13'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["sphinx.ext.autodoc",
+extensions = ["sphinx.ext.autodoc2",
               "sphinx.ext.doctest",
               "sphinx.ext.napoleon",
               "sphinx.ext.apidoc",
@@ -34,8 +34,11 @@ myst_enable_extensions = [
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+autodoc2_packages = [{"auto_mode": False,},] # Enable manual mode, to manually specify which objects to document
+autodoc2_render_plugin = "myst" # Create all files with the “.md” extension, and thus docstrings will be interpreted as MyST by default
+
 autosummary_generate = True  # Enable autosummary to generate pages
-autodoc_default_flags = ['members']  # Automatically document class members
+#autodoc_default_flags = ['members']  # Automatically document class members
 epub_show_urls = "footnote"
 
 
