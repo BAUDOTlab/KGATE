@@ -3,14 +3,14 @@
 ## Placeholder text for tests
 
 ```{autoclass} kgate.inference.Inference_KG
-    
+    :no-index-entry:
 ```
 
 
 ## Lorem ipsum
 
 ```{autoclass} kgate.inference.EdgeInference
-    :members:
+    
 ```
 
 
@@ -18,5 +18,5 @@
 
 
 ```{autoclass} kgate.inference.NodeInference
-    :members:
+    
 ```

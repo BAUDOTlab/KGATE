@@ -64,15 +64,15 @@ class Inference_KG(Dataset):
 
 class EdgeInference:
     """
-    Placeholder
+    **Placeholder**
       ~ Use trained embedding model to infer missing edges in triplets.
 
-    Arguments
-      ~ Knowledge graph on which the inference will be done.
-      ~     KnowledgeGraph
+    __**Arguments**__
+      ~ kg: KnowledgeGraph
+      ~     Knowledge graph on which the inference will be done.
 
-    Attributes
-      ~ KnowledgeGraph
+    **__Attributes__**
+      ~ kg: KnowledgeGraph
       ~     Knowledge graph on which the inference will be done.
 
     """
@@ -92,43 +92,36 @@ class EdgeInference:
                 verbose: bool = True,
                 **_):
         """
-        :Placeholder: TODO.What_the_function_does_about_globally
+        TODO.What_the_function_does_about_globally
 
-        :Arguments:
-            :head_indices: torch.Tensor
-                The indices of the head nodes (from the knowledge graph).
+        *Arguments*
+          ~ head_indices: torch.Tensor
+          ~     The indices of the head nodes (from the knowledge graph).
 
-            :tail_indices: torch.Tensor
-                The indices of the tail nodes (from the knowledge graph).
+          ~ tail_indices: torch.Tensor
+          ~     The indices of the tail nodes (from the knowledge graph).
+          ~ top_k: int, keyword-only
+          ~     Indicate the number of top predictions to return.
+          ~ batch_size: int, keyword-only
+          ~     Size of the current batch.
+          ~ encoder: DefaultEncoder or GNN, keyword-only
+          ~     Encoder model to embed the nodes. Deactivated with DefaultEncoder.
+          ~ decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
+          ~     Decoder model to evaluate.
+          ~ node_embeddings: nn.ParameterList, keyword-only
+          ~     A list containing all embeddings for each node type.
+          ~         keys: node type index
+          ~         values: tensors of shape (node_count, embedding_dimensions)
+          ~ edge_embeddings: nn.Embedding, keyword-only
+          ~     A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
+          ~ verbose: bool, default to True, keyword-only
+          ~     Indicate whether a progress bar should be displayed during evaluation.
 
-            :top_k: int, keyword-only
-                Indicate the number of top predictions to return.
-
-            :batch_size: int, keyword-only
-                Size of the current batch.
-
-            :encoder: DefaultEncoder or GNN, keyword-only
-                Encoder model to embed the nodes. Deactivated with DefaultEncoder.
-
-            :decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
-                Decoder model to evaluate.
-
-            :node_embeddings: nn.ParameterList, keyword-only
-                node_embeddings: A list containing all embeddings for each node type.
-                    keys: node type index
-                    values: tensors of shape (node_count, embedding_dimensions)
-
-            :edge_embeddings: nn.Embedding, keyword-only
-                A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
-
-            :verbose: bool, default to True, keyword-only
-                Indicate whether a progress bar should be displayed during evaluation.
-
-        :Returns:
-            :predictions: torch.Tensor
-                TODO.What_that_variable_is_or_does
-            :scores: torch.Tensor, shape [batch_size, n]
-                Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
+        _Returns_
+          ~ predictions: torch.Tensor
+          ~     TODO.What_that_variable_is_or_does
+          ~ scores: torch.Tensor, shape [batch_size, n]
+          ~     Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
             
         """
         with torch.no_grad():
@@ -187,14 +180,16 @@ class EdgeInference:
 
 
 class NodeInference:
-    """{py:class} NodeInference
-    
+    """
     Use trained embedding model to infer missing entities in triples.
 
-    :param kg: Knowledge graph on which the inference will be done.
-    :type kg: KnowledgeGraph
-    :return: Knowledge graph on which the inference will be done. TODO.should_be_attribute_not_return
-    :rtype: KnowledgeGraph
+    ## Arguments
+      ~ kg: KnowledgeGraph
+      ~     Knowledge graph on which the inference will be done.
+
+    ## __Attributes__
+      ~ kg: KnowledgeGraph
+      ~     Knowledge graph on which the inference will be done.
 
     """
     def __init__(self, kg: KnowledgeGraph):
@@ -214,47 +209,39 @@ class NodeInference:
                 edge_embeddings: nn.Embedding,
                 verbose: bool = True,
                 **_):
-        """{py:function} evaluate(node_indices, priority, edge_indices, top_k, missing_triplet_part, batch_size, encoder, decoder, node_embeddings, edge_embeddings, verbose)}
-        
+        """
         Predict the missing node of a triplet where either head and edge or edge and tail are known.
 
-        :param node_indices: The indices of nodes (from the knowledge graph).
-        :type node_indices: torch.Tensor
-        
-        :param edge_indices: The indices of edges (from the knowledge graph).
-        :type edge_indices: torch.Tensor
-        
-        :param top_k: Indicate the number of top predictions to return.
-        :type top_k: int, keyword-only
-        
-        :param missing_triplet_part: String indicating if the missing nodes are the heads or the tails.
-        :type missing_triplet_part: Literal["head", "tail"], keyword-only
-        
-        :param batch_size: Size of the current batch.
-        :type batch_size: int, keyword-only
-        
-        :param encoder: Encoder model to embed the nodes. Deactivated with DefaultEncoder.
-        :type encoder: DefaultEncoder or GNN, keyword-only
-        :param decoder: Decoder model to evaluate.
-        :type decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder, keyword-only
-        
-        :param node_embeddings: A list containing all embeddings for each node type.
-                                keys: node type index
-                                values: tensors of shape (node_count, embedding_dimensions)
-        :type node_embeddings: nn.ParameterList, keyword-only
-        
-        :param edge_embeddings: A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
-        
-        :type edge_embeddings: nn.Embedding, keyword-only
-        
-        :param verbose: Indicate whether a progress bar should be displayed during
-                        evaluation.
-        
-        :type verbose: bool, default to True, keyword-only
+        # Arguments
+          ~ node_indices: torch.Tensor
+          ~     The indices of nodes (from the knowledge graph).
+          ~ edge_indices: torch.Tensor
+          ~     The indices of edges (from the knowledge graph).
+          ~ top_k: int, keyword-only
+          ~     Indicate the number of top predictions to return.
+          ~ missing_triplet_part: Literal["head", "tail"], keyword-only
+          ~     String indicating if the missing nodes are the heads or the tails.
+          ~ batch_size: int, keyword-only
+          ~     Size of the current batch.
+          ~ encoder: DefaultEncoder or GNN, keyword-only
+          ~     Encoder model to embed the nodes. Deactivated with DefaultEncoder.
+          ~ decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder, keyword-only
+          ~     Decoder model to evaluate.
+          ~ node_embeddings: nn.ParameterList, keyword-only
+          ~     A list containing all embeddings for each node type.
+          ~     keys: node type index
+          ~     values: tensors of shape (node_count, embedding_dimensions)
+          ~ edge_embeddings: nn.Embedding, keyword-only
+          ~     A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
+          ~ verbose: bool, default to True, keyword-only
+          ~     Indicate whether a progress bar should be displayed during evaluation.
 
-        :returns: * **predictions** (*torch.Tensor*) -- TODO.What_that_variable_is_or_does
-                  * **scores** (*torch.Tensor, shape [batch_size, n]*) -- Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
-
+        ### Returns
+          ~ predictions: torch.Tensor
+          ~     TODO.What_that_variable_is_or_does
+          ~ scores: torch.Tensor, shape [batch_size, n]
+          ~     Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
+        
         """
         with torch.no_grad():
             device = edge_embeddings.weight.device
