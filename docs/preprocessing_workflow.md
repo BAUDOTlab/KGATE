@@ -17,13 +17,13 @@ If a data structure is not supported yet, you can ask for it to be added or impl
 
 ## Filtering out duplicate triples
 
-*related parameter: preprocessing.remove_duplicate_triples*
+*related parameter: :func:`~kgate.preprocessing.remove_duplicate_triplets`*
 
 Sometimes, most commonly when a **knowledge graph** is built using an automated system, the exact same triple *(a,r,b)*. The presence of duplicates brings a lot of possible biases, so they are detected and entirely removed from the dataset.
 
 ## Filtering out reverse triples
 
-*related parameters: preprocessing.flag_near_duplicate_relations
+*related parameters: :func:`~kgate.preprocessing.flag_near_duplicate_relations`*
 
 For every relation, if a triple *(a,r,b)* also has its reverse *(b,r,a)* in the **knowledge graph**, the second instance is flagged and taken out of the dataset. Indeed, some models cannot handle symmetric relationships, and the reverse relation might have a slightly different semantic meaning.
 
