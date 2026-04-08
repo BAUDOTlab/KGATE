@@ -29,6 +29,7 @@ myst_enable_extensions = [
     "replacements",
     "deflist",
     "tasklist",
+    "fieldlist",
 ]
 
 templates_path = ['_templates']

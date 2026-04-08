@@ -1,17 +1,22 @@
 # Inference
 
-Placeholder text for tests
+## Placeholder text for tests
 
 ```{autoclass} kgate.inference.Inference_KG
-    :members:
+    
 ```
 
 
-Lorem ipsum
+## Lorem ipsum
 
 ```{autoclass} kgate.inference.EdgeInference
     :members:
 ```
 
 
-Hello world
+## Hello world
+
+
+```{autoclass} kgate.inference.NodeInference
+    :members:
+```
