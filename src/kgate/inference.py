@@ -17,35 +17,30 @@ from .utils import filter_scores
 
 class Inference_KG(Dataset):
     """
-    Subset of a KG used for inference.
-    
-    This class inherits from the PyTorch `utils.data.Dataset` class:
-    https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html
+    Placeholder
+      ~ Subset of a KG used for inference.
+      ~ This class inherits from the PyTorch `utils.data.Dataset` class:
+      ~ https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html
 
     Arguments
-    ---------
-    first_index_tensor: torch.Tensor
-        The first tensor with indices of the edges or nodes (from the knowledge graph).
-    second_index_tensor: torch.Tensor
-        The second tensor with indices of the edges or nodes (from the knowledge graph).
+      ~ first_index_tensor: torch.Tensor
+      ~     The first tensor with indices of the edges or nodes (from the knowledge graph).
+      ~ second_index_tensor: torch.Tensor
+      ~     The second tensor with indices of the edges or nodes (from the knowledge graph).
 
     Attributes
-    ----------
-    first_index_tensor: torch.Tensor
-        The first tensor with indices of the edges or nodes (from the knowledge graph).
-    second_index_tensor: torch.Tensor
-        The second tensor with indices of the edges or nodes (from the knowledge graph).
+      ~ first_index_tensor: torch.Tensor
+      ~     The first tensor with indices of the edges or nodes (from the knowledge graph).
+      ~ second_index_tensor: torch.Tensor
+      ~     The second tensor with indices of the edges or nodes (from the knowledge graph).
     
     Raises
-    ------
-    AssertionError
-        Both index tensors must be of the same size.
+      ~ AssertionError
+      ~     Both index tensors must be of the same size.
 
     Notes
-    -----
-    Either both tensors are nodes, or they are node and edge.
-    The `__getitem__` method allows to call an `Inference_KG` object with an index,
-    giving back a tuple containing the corresponding values of both tensors.
+      ~ Either both tensors are nodes, or they are node and edge.
+      ~ The `__getitem__` method allows to call an `Inference_KG` object with an index, giving back a tuple containing the corresponding values of both tensors.
     
     """
     def __init__(self,
@@ -69,15 +64,16 @@ class Inference_KG(Dataset):
 
 class EdgeInference:
     """
-    Use trained embedding model to infer missing edges in triplets.
+    Placeholder
+      ~ Use trained embedding model to infer missing edges in triplets.
 
-    :arg kg: Knowledge graph on which the inference will be done.
-    :type kg: KnowledgeGraph
+    Arguments
+      ~ Knowledge graph on which the inference will be done.
+      ~     KnowledgeGraph
 
     Attributes
-    ----------
-    kg: KnowledgeGraph
-        Knowledge graph on which the inference will be done.
+      ~ KnowledgeGraph
+      ~     Knowledge graph on which the inference will be done.
 
     """
     def __init__(self, kg: KnowledgeGraph):
@@ -96,43 +92,43 @@ class EdgeInference:
                 verbose: bool = True,
                 **_):
         """
-        TODO.What_the_function_does_about_globally
+        :Placeholder: TODO.What_the_function_does_about_globally
 
-        :type head_indices: torch.Tensor
-        :arg head_indices: The indices of the head nodes (from the knowledge graph).
-        
-        :type tail_indices: torch.Tensor
-        :arg tail_indices: The indices of the tail nodes (from the knowledge graph).
-        
-        :type top_k: int, keyword-only
-        :arg top_k: Indicate the number of top predictions to return.
-        
-        :type batch_size: int, keyword-only
-        :arg batch_size: Size of the current batch.
-        
-        :type encoder: DefaultEncoder or GNN, keyword-only
-        :arg encoder: Encoder model to embed the nodes. Deactivated with DefaultEncoder.
-        
-        :type decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
-        :arg decoder: Decoder model to evaluate.
-        
-        :type node_embeddings: nn.ParameterList, keyword-only
-        :arg node_embeddings: A list containing all embeddings for each node type.
-            keys: node type index
-            values: tensors of shape (node_count, embedding_dimensions)
-        
-        :type edge_embeddings: nn.Embedding, keyword-only
-        :arg A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
-        
-        :type verbose: bool, default to True, keyword-only
-        :arg verbose: Indicate whether a progress bar should be displayed during evaluation.
+        :Arguments:
+            :head_indices: torch.Tensor
+                The indices of the head nodes (from the knowledge graph).
 
-        Returns
-        -------
-        :rtype predictions: torch.Tensor
-        :returns predictions: TODO.What_that_variable_is_or_does
-        :rtype scores: torch.Tensor, shape [batch_size, n]
-        :returns scores: Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
+            :tail_indices: torch.Tensor
+                The indices of the tail nodes (from the knowledge graph).
+
+            :top_k: int, keyword-only
+                Indicate the number of top predictions to return.
+
+            :batch_size: int, keyword-only
+                Size of the current batch.
+
+            :encoder: DefaultEncoder or GNN, keyword-only
+                Encoder model to embed the nodes. Deactivated with DefaultEncoder.
+
+            :decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
+                Decoder model to evaluate.
+
+            :node_embeddings: nn.ParameterList, keyword-only
+                node_embeddings: A list containing all embeddings for each node type.
+                    keys: node type index
+                    values: tensors of shape (node_count, embedding_dimensions)
+
+            :edge_embeddings: nn.Embedding, keyword-only
+                A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
+
+            :verbose: bool, default to True, keyword-only
+                Indicate whether a progress bar should be displayed during evaluation.
+
+        :Returns:
+            :predictions: torch.Tensor
+                TODO.What_that_variable_is_or_does
+            :scores: torch.Tensor, shape [batch_size, n]
+                Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
             
         """
         with torch.no_grad():
@@ -191,18 +187,14 @@ class EdgeInference:
 
 
 class NodeInference:
-    """
+    """{py:class} NodeInference
+    
     Use trained embedding model to infer missing entities in triples.
 
-    Parameters
-    ----------
-    kg: KnowledgeGraph
-        Knowledge graph on which the inference will be done.
-    
-    Attributes
-    ----------
-    kg: KnowledgeGraph
-        Knowledge graph on which the inference will be done.
+    :param kg: Knowledge graph on which the inference will be done.
+    :type kg: KnowledgeGraph
+    :return: Knowledge graph on which the inference will be done. TODO.should_be_attribute_not_return
+    :rtype: KnowledgeGraph
 
     """
     def __init__(self, kg: KnowledgeGraph):
@@ -222,7 +214,8 @@ class NodeInference:
                 edge_embeddings: nn.Embedding,
                 verbose: bool = True,
                 **_):
-        """
+        """{py:function} evaluate(node_indices, priority, edge_indices, top_k, missing_triplet_part, batch_size, encoder, decoder, node_embeddings, edge_embeddings, verbose)}
+        
         Predict the missing node of a triplet where either head and edge or edge and tail are known.
 
         :param node_indices: The indices of nodes (from the knowledge graph).
