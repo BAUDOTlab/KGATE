@@ -3,13 +3,13 @@
 ## Placeholder text for tests
 
 ```{autoclass} kgate.inference.Inference_KG
-    :no-index-entry:
+    :no-index:
 ```
 
 
 ## Lorem ipsum
 
-```{autoclass} kgate.inference.EdgeInference
+```{autodoc2-docstring} kgate.inference.EdgeInference
     
 ```
 
@@ -17,6 +17,6 @@
 ## Hello world
 
 
-```{autoclass} kgate.inference.NodeInference
-    
+```{autodoc2-docstring} kgate.inference.NodeInference
+    :literal:
 ```
