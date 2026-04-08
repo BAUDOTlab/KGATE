@@ -62,17 +62,16 @@ def inject_node_class_triplets(
     if new_ids:
         # If metadata has been flattened to a single type (e.g. "entity"), keep that
         # single type for class nodes so non-GNN/default encoder workflows remain valid.
-        # Otherwise, use the class label itself as the node type.
+        # Otherwise, use 'class' as the node type for all injected class nodes.
         if metadata["type"].nunique(dropna=False) == 1:
             injected_types = [metadata["type"].iloc[0]] * len(new_ids)
         else:
-            injected_types = new_ids
+            injected_types = ["class"] * len(new_ids)
 
         new_metadata = pd.DataFrame({"id": new_ids, "type": injected_types}).reindex(
             columns=metadata.columns
         )
         metadata = pd.concat([metadata, new_metadata], ignore_index=True)
-
     return dataframe, metadata
 
 

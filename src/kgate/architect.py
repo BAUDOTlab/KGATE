@@ -312,7 +312,7 @@ class Architect(Module):
         
         In addition, the metadata can have any number of supplementary columns that can be
         used to set the identity of the nodes for the associated :class:`~kgate.knowledgegraph.KnowledgeGraph`.
-        For triplet classification, an optional `node_class` column can be provided to define
+        For triplet classification, an optional 'node_class' column can be provided to define
         node-to-class annotations.
 
         If there is no knowledge graph associated with the Architect, the `architect.metadata` property will be used
@@ -594,7 +594,7 @@ class Architect(Module):
 
     def initialize_negative_sampler(self) -> NegativeSampler:
         """
-        Initialize the sampler according to the configuration.  
+        Initialize the sampler according to the configuration.
         
         Supported samplers are Positional, Uniform, Bernoulli and Mixed.
         They are adapted from torchKGE's samplers to be compatible with the 

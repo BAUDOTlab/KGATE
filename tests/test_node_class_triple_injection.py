@@ -141,3 +141,7 @@ def test_triplet_classification_without_class_triple_injection(
 
     assert not (all_triples["edge"] == NODE_CLASS_EDGE_NAME).any()
     assert not any(node_id.startswith("Class") for node_id in kg_train.node_to_index)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])
