@@ -12,7 +12,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
+from pathlib import Path
+from kgate.preprocessing import NODE_CLASS_COLUMN
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
@@ -47,12 +48,12 @@ def make_nodes(add_node_class: bool = False) -> pd.DataFrame:
                     # Multiple classes (2-3)
                     n_classes = rng.integers(2, 4)
                     classes = rng.choice(class_pool, size=n_classes, replace=False)
-                    row["node_class"] = "|".join(classes)
+                    row[NODE_CLASS_COLUMN] = "|".join(classes)
                 elif p < 0.50:
                     # Single class
-                    row["node_class"] = rng.choice(class_pool)
+                    row[NODE_CLASS_COLUMN] = rng.choice(class_pool)
                 else:
-                    row["node_class"] = None
+                    row[NODE_CLASS_COLUMN] = None
             rows.append(row)
     return pd.DataFrame(rows)
 
@@ -85,7 +86,7 @@ def sample_edges(metadata: pd.DataFrame) -> pd.DataFrame:
     return graph_df
 
 
-def main(add_node_class: bool = False) -> None:
+def generate_synthetic_dataset(add_node_class: bool = False) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     metadata_df = make_nodes(add_node_class=add_node_class)
@@ -114,4 +115,4 @@ if __name__ == "__main__":
         help="Add node_class column to metadata",
     )
     args = parser.parse_args()
-    main(add_node_class=args.add_node_class)
+    generate_synthetic_dataset(add_node_class=args.add_node_class)

@@ -545,7 +545,7 @@ class TripletClassificationEvaluator:
         """
         if not self.evaluated:
             kg_to_evaluate = kg_validation if kg_validation is not None else kg_test
-            self.evaluate(batch_size=batch_size, kg=kg_to_evaluate)
+            self.evaluate(batch_size = batch_size, kg = kg_to_evaluate)
 
         sampler = PositionalNegativeSampler(kg_test)
         if self.thresholds.device != self.device:

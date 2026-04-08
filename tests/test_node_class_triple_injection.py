@@ -6,7 +6,11 @@ import tomllib
 import pandas as pd
 import pytest
 
-from kgate.preprocessing import prepare_knowledge_graph
+from kgate.preprocessing import (
+    NODE_CLASS_COLUMN,
+    NODE_CLASS_EDGE_NAME,
+    prepare_knowledge_graph,
+)
 from tests.make_synthetic_test_graph import make_nodes, sample_edges
 
 
@@ -51,13 +55,13 @@ def _expected_node_class_pairs(
 ) -> set[tuple[str, str]]:
     nodes_in_graph = set(graph_df["head"]).union(graph_df["tail"])
     rows = metadata.loc[
-        metadata["id"].isin(nodes_in_graph) & metadata["node_class"].notna(),
-        ["id", "node_class"],
+        metadata["id"].isin(nodes_in_graph) & metadata[NODE_CLASS_COLUMN].notna(),
+        ["id", NODE_CLASS_COLUMN],
     ]
 
     expected_pairs: set[tuple[str, str]] = set()
     for _, row in rows.iterrows():
-        for cls in str(row["node_class"]).split("|"):
+        for cls in str(row[NODE_CLASS_COLUMN]).split("|"):
             cls = cls.strip()
             if cls:
                 expected_pairs.add((row["id"], cls))
@@ -95,7 +99,7 @@ def test_node_class_triple_injection(
 
     expected_pairs = _expected_node_class_pairs(metadata, dataframe)
     node_class_triples = all_triples.loc[
-        all_triples["edge"] == "node_class", ["head", "tail"]
+        all_triples["edge"] == NODE_CLASS_EDGE_NAME, ["head", "tail"]
     ]
     actual_pairs = set(zip(node_class_triples["head"], node_class_triples["tail"]))
 
@@ -103,14 +107,14 @@ def test_node_class_triple_injection(
     assert expected_pairs == actual_pairs
 
     # For each node with multiple classes, check that all class triples exist
-    nodes_with_multiclass = metadata[metadata["node_class"].notna()]
+    nodes_with_multiclass = metadata[metadata[NODE_CLASS_COLUMN].notna()]
     nodes_with_multiclass = nodes_with_multiclass[
-        nodes_with_multiclass["node_class"].str.contains("\|")
+        nodes_with_multiclass[NODE_CLASS_COLUMN].str.contains("\|")
     ]
     for _, row in nodes_with_multiclass.iterrows():
         node_id = row["id"]
         classes = [
-            cls.strip() for cls in str(row["node_class"]).split("|") if cls.strip()
+            cls.strip() for cls in str(row[NODE_CLASS_COLUMN]).split("|") if cls.strip()
         ]
         for cls in classes:
             assert (
@@ -135,5 +139,5 @@ def test_triplet_classification_without_class_triple_injection(
         tmp_path=tmp_path,
     )
 
-    assert not (all_triples["edge"] == "node_class").any()
+    assert not (all_triples["edge"] == NODE_CLASS_EDGE_NAME).any()
     assert not any(node_id.startswith("Class") for node_id in kg_train.node_to_index)

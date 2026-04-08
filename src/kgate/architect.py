@@ -594,7 +594,7 @@ class Architect(Module):
 
     def initialize_negative_sampler(self) -> NegativeSampler:
         """
-        Initialize the sampler according to the configuration.
+        Initialize the sampler according to the configuration.  
         
         Supported samplers are Positional, Uniform, Bernoulli and Mixed.
         They are adapted from torchKGE's samplers to be compatible with the 

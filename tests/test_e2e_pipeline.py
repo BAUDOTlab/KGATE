@@ -7,20 +7,8 @@ import pandas as pd
 import pytest
 import tomli_w
 
-
-import subprocess
 from kgate import Architect
-
-
-# Always (re)generate the synthetic dataset before running E2E tests
-def _generate_synthetic_dataset(repo_root: Path) -> None:
-    script = repo_root / "tests" / "make_synthetic_test_graph.py"
-    result = subprocess.run(
-        ["python", str(script)], cwd=repo_root, capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Synthetic dataset generation failed: {result.stderr}")
-
+from tests.make_synthetic_test_graph import generate_synthetic_dataset
 
 E2E_CONFIGS = [
     "configs/examples/lp_default_transe.toml",
@@ -39,7 +27,7 @@ def test_end_to_end_pipeline_creates_artifacts(
 ) -> None:
     """Test that the end-to-end pipeline runs and creates all expected artifacts for a given config."""
     # Always generate the synthetic dataset before running the E2E test
-    _generate_synthetic_dataset(repo_root)
+    generate_synthetic_dataset(add_node_class=False)
 
     config_path = repo_root / base_config
     assert config_path.exists(), f"Missing e2e config: {config_path}"
