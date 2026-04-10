@@ -1,26 +1,26 @@
-# Inference
+# `inference.py`
 
-## Interface Class for Inference
+## Inference_KG
 ```{autodoc2-docstring} kgate.inference.Inference_KG
     
 ```
 
-## Edge Inference Class
+## EdgeInference
 ```{autodoc2-docstring} kgate.inference.EdgeInference
 
 ```
 
-### Edge Inference `evaluate` Function
+### evaluate
 ```{autodoc2-docstring} kgate.inference.EdgeInference.evaluate
 
 ```
 
-## Node Inference Class
+## NodeInference
 ```{autodoc2-docstring} kgate.inference.NodeInference
     
 ```
 
-### Node Inference `evaluate` Function
+### evaluate
 ```{autodoc2-docstring} kgate.inference.NodeInference.evaluate
     
 ```
