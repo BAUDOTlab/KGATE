@@ -248,6 +248,7 @@ class Config:
 
     @output_directory.setter
     def set_output_directory(self, path: os.PathLike):
+        Path(path).mkdir(parents = True, exist_ok = True)
         self._configuration["output_directory"] = path
 
     @property
@@ -679,3 +680,39 @@ class Decoder_Config:
     def set_margin(self, margin: int) -> int:
         self._configuration["margin"] = margin
 
+    @property
+    def dissimilarity(self) -> str:
+        """
+        Type of dissimilarity used in the loss function.
+
+        Almost all decoders use L1 or L2 dissimilarity. L1 dissimilarity 
+        computes the Manhattan distance between the prediction and the target,
+        while L2 dissimilarity computes the Euclidian distance.
+
+        TorusE has three additionnal dissimilarities that are used only for it.
+
+        Default is L2
+        """
+        return self._configuration["dissimilarity"]
+    
+    @dissimilarity.setter
+    def set_dissimilarity(self, dissimilarity: str):
+        if "torus" in dissimilarity.lower() and not self.name != "TorusE":
+            raise ValueError(f"Only the TorusE decoder can be used with torus-specific dissimilarities. The current decoder is {self.name}.")
+        self._configuration["dissimilarity"] = dissimilarity
+
+    @property
+    def filter_count(self) -> int:
+        """
+        Number of convolutional filters used by convolutional decoders.
+
+        This property is only used with convolutional decoders, and ignored otherwise.
+
+        Default is 3.
+        """
+        return self._configuration["filter_count"]
+
+    @filter_count.setter
+    def set_filter_count(self, filter_count: int):
+        assert filter_count >= 1, "Cannot use less than one filter."
+        self._configuration["filter_count"] = filter_count
