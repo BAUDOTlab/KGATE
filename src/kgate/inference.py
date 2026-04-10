@@ -17,15 +17,19 @@ from .utils import filter_scores
 
 class Inference_KG(Dataset):
     """
-    ## Interface Class for Inference
-      ~ Subset of a KG used for inference.
+    <span style="background-color:#06402B"> 
+    **Description**
+    </span>
+      ~ Subset of a KG used for ==inference==.
       ~ This class inherits from the PyTorch [`utils.data.Dataset`](https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html)
 
     **Arguments**
       ~ **first_index_tensor:** torch.Tensor
            The first tensor with indices of the edges or nodes (from the knowledge graph).
       ~ **second_index_tensor:** torch.Tensor
+           <span style="background-color:#06402B"> 
            The second tensor with indices of the edges or nodes (from the knowledge graph).
+           </span>
 
     **Attributes**
       ~ **first_index_tensor:** torch.Tensor
@@ -33,13 +37,17 @@ class Inference_KG(Dataset):
       ~ **second_index_tensor:** torch.Tensor
            The second tensor with indices of the edges or nodes (from the knowledge graph).
     
+    <span style="color:red">
     **Raises**
+    </span>
       ~ **AssertionError**
            Both index tensors must be of the same size.
 
     **Notes**
       ~ Either both tensors are nodes, or they are node and edge.
+      <span style="color:red">
       ~ The `__getitem__` method allows to call an `Inference_KG` object with an index, giving back a tuple containing the corresponding values of both tensors.
+      </span>
     
     """
     def __init__(self,
@@ -63,7 +71,7 @@ class Inference_KG(Dataset):
 
 class EdgeInference:
     """
-    ## Edge Inference Class
+    **Description**
     - Use trained embedding model to infer missing edges in triplets.
 
     **Arguments**
@@ -91,7 +99,7 @@ class EdgeInference:
                 verbose: bool = True,
                 **_):
         """
-        ### Edge Inference `evaluate` Function
+        **Description**
           : TODO.What_the_function_does_about_globally
 
         **Arguments**
@@ -122,6 +130,8 @@ class EdgeInference:
           : **scores:** torch.Tensor, shape [batch_size, n]
               Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
             
+        ---
+        
         """
         with torch.no_grad():
             device = edge_embeddings.weight.device
@@ -180,14 +190,15 @@ class EdgeInference:
 
 class NodeInference:
     """
-    ## Node Inference Class
-      ~ Use trained embedding model to infer missing nodes in triplets.
+    **Description**
+    
+    Use trained embedding model to infer missing nodes in triplets.
 
     **Arguments**
       ~ **kg:** KnowledgeGraph
       ~     Knowledge graph on which the inference will be done.
 
-    **Attributes**
+    ***Attributes***
       ~ **kg:** KnowledgeGraph
       ~     Knowledge graph on which the inference will be done.
 
@@ -210,7 +221,7 @@ class NodeInference:
                 verbose: bool = True,
                 **_):
         """
-        ### Node Inference `evaluate` Function
+        **Description**
           : Predict the missing node of a triplet where either head and edge or edge and tail are known.
 
         **Arguments**
@@ -231,6 +242,7 @@ class NodeInference:
           : **node_embeddings:** nn.ParameterList, keyword-only
           : >    A list containing all embeddings for each node type.
           : >    keys: node type index
+          : >
           : >    values: tensors of shape (node_count, embedding_dimensions)
           : **edge_embeddings:** nn.Embedding, keyword-only
           : >    A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).

@@ -1,26 +1,26 @@
 # Inference
 
-% Interface class for inference, has `__init__`, `__len__` and `__getitem__`
+## Interface Class for Inference
 ```{autodoc2-docstring} kgate.inference.Inference_KG
     
 ```
 
-% Edge inference class
+## Edge Inference Class
 ```{autodoc2-docstring} kgate.inference.EdgeInference
 
 ```
 
-% Edge inference evaluate function
+### Edge Inference `evaluate` Function
 ```{autodoc2-docstring} kgate.inference.EdgeInference.evaluate
 
 ```
 
-% Node inference class
+## Node Inference Class
 ```{autodoc2-docstring} kgate.inference.NodeInference
     
 ```
 
-% Node inference evaluate function
+### Node Inference `evaluate` Function
 ```{autodoc2-docstring} kgate.inference.NodeInference.evaluate
     
 ```
