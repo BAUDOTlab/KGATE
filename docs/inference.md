@@ -1,4 +1,4 @@
-# `inference.py`
+# Inference
 
 ## Inference_KG
 ```{autodoc2-docstring} kgate.inference.Inference_KG
