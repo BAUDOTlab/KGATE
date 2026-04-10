@@ -141,6 +141,8 @@ class UniformNegativeSampler(NegativeSampler):
         """
         device = batch.device
         batch_size = batch.shape[1]
+        negative_triplet_count = negative_triplet_count or self.negative_triplet_count
+
         negative_triplet_heads = batch[0].repeat(negative_triplet_count)
         negative_triplet_tails = batch[1].repeat(negative_triplet_count)
         negative_triplet_edges = batch[2].repeat(negative_triplet_count)
@@ -149,10 +151,10 @@ class UniformNegativeSampler(NegativeSampler):
                                 device = device) / 2).double()
         corrupted_head_count = int(mask.sum().item())
 
-        negative_triplet_heads[mask == 1] = randint(1, self.node_count,
+        negative_triplet_heads[mask == 1] = randint(1, self.knowledge_graph.node_count,
                                                     (corrupted_head_count,),
                                                     device = device)
-        negative_triplet_tails[mask == 0] = randint(1, self.node_count,
+        negative_triplet_tails[mask == 0] = randint(1, self.knowledge_graph.node_count,
                                                     (batch_size * negative_triplet_count - corrupted_head_count,),
                                                     device = device)
         
@@ -274,7 +276,7 @@ class BernoulliNegativeSampler(NegativeSampler):
     
     def corrupt_batch(  self,
                         batch: torch.LongTensor,
-                        negative_triplet_count: int = 1):
+                        negative_triplet_count: int | None = None):
         """
         For each true triplet, produce a corrupted one not different from
         any other true triplet. If `heads` and `tails` are cuda objects,
@@ -286,7 +288,7 @@ class BernoulliNegativeSampler(NegativeSampler):
             Tensor containing the integer key of heads, tails, edges and triplets
             of the edges in the current batch.
             Here, batch_size is batch.shape[1].
-        negative_triplet_count: int, optional, default to 1
+        negative_triplet_count: int, optional, default to None
             Number of negative samples to create from each triplet.
 
         Returns
@@ -299,6 +301,9 @@ class BernoulliNegativeSampler(NegativeSampler):
         """
         device = batch.device
         batch_size = batch.shape[1]
+
+        negative_triplet_count = negative_triplet_count or self.negative_triplet_count
+
         negative_triplet_heads = batch[0].repeat(negative_triplet_count)
         negative_triplet_tails = batch[1].repeat(negative_triplet_count)
         negative_triplet_edges = batch[2]

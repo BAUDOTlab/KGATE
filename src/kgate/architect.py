@@ -13,7 +13,7 @@ from collections.abc import Callable
 from glob import glob
 from inspect import signature
 from pathlib import Path
-from typing import Tuple, Dict, List, Any, Set, Literal
+from typing import Tuple, Dict, List, Any, Set, Literal, Optional
 
 import pandas as pd
 import numpy as np
@@ -219,7 +219,7 @@ class Architect(Module):
 
         self.metadata = None
         if metadata is None:
-            metadata = self.config["metadata_csv"]
+            metadata = self.config["metadata_csv"] if self.config["metadata_csv"] != "" else None
         self.set_metadata(metadata = metadata)
         
         run_kg_preprocessing: bool = self.config["run_kg_preprocessing"]
@@ -341,7 +341,7 @@ class Architect(Module):
         
                 self.metadata = metadata
             case os.PathLike:
-                if metadata != "" and Path(metadata).exists():
+                if Path(metadata).exists():
                     # Fuzzy identification of separator.
                     # TODO: find a cleaner way to do it
                     for separator in SUPPORTED_SEPARATORS:
@@ -354,7 +354,7 @@ class Architect(Module):
                     if self.metadata is None:
                         raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
             case _:
-                raise TypeError(f"Metadata can only be given as a pandas DataFrame or a path to a CSV file, but got {type(metadata)}")
+                return
             
         if self.metadata is not None and hasattr(self, "kg_train"):
             for knowledge_graph in (self.kg_train, self.kg_val, self.kg_test):
