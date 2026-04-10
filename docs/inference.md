@@ -1,22 +1,26 @@
 # Inference
 
-## Placeholder text for tests
-
-```{autoclass} kgate.inference.Inference_KG
-    :no-index:
-```
-
-
-## Lorem ipsum
-
-```{autodoc2-docstring} kgate.inference.EdgeInference
+% Interface class for inference, has `__init__`, `__len__` and `__getitem__`
+```{autodoc2-docstring} kgate.inference.Inference_KG
     
 ```
 
+% Edge inference class
+```{autodoc2-docstring} kgate.inference.EdgeInference
 
-## Hello world
+```
 
+% Edge inference evaluate function
+```{autodoc2-docstring} kgate.inference.EdgeInference.evaluate
 
+```
+
+% Node inference class
 ```{autodoc2-docstring} kgate.inference.NodeInference
-    :literal:
+    
+```
+
+% Node inference evaluate function
+```{autodoc2-docstring} kgate.inference.NodeInference.evaluate
+    
 ```
