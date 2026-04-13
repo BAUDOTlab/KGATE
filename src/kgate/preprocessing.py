@@ -473,7 +473,7 @@ def clean_cartesians(
         kg_test: KnowledgeGraph, 
         known_cartesian: List[int], 
         node_position: Literal["head", "tail"] = "head"
-        ) -> Tuple[KnowledgeGraph,KnowledgeGraph]:
+        ) -> Tuple[KnowledgeGraph, KnowledgeGraph]:
     """
     Transfer cartesian product triplets from train set to test set to prevent data leakage.
     For each node (head or tail) involved in a cartesian product edge in the test set,
@@ -481,17 +481,17 @@ def clean_cartesians(
     
     Arguments
     ---------
-    kg_train : KnowledgeGraph
+    kg_train: KnowledgeGraph
         Train set knowledge graph to be cleaned.
         Will be modified by removing cartesian product triplets.
-    kg_test : KnowledgeGraph
+    kg_test: KnowledgeGraph
         Test set knowledge graph to be augmented.
         Will receive the transferred cartesian product triplets.
-    known_cartesian : list
+    known_cartesian: list
         List of edge indices that represent cartesian product relationships.
         These are edges where if (head, edge, tail_1) exists, then (head, edge, tail_2) likely exists
         for many other tail node tail_2 (or vice versa for tail-based cartesian products).
-    node_position : Literal["head", "tail"], optional
+    node_position: Literal["head", "tail"], optional
         Either "head" or "tail" to specify which node type to consider for cartesian products.
         Default is "head".
     
