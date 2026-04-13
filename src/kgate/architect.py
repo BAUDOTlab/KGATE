@@ -13,7 +13,7 @@ from collections.abc import Callable
 from glob import glob
 from inspect import signature
 from pathlib import Path
-from typing import Tuple, Dict, List, Any, Set, Literal
+from typing import Tuple, Dict, List, Any, Set, Literal, Optional
 
 import pandas as pd
 import numpy as np
@@ -224,22 +224,11 @@ class Architect(Module):
             self.edge_embedding_dimensions = self.node_embedding_dimensions
         self.evaluation_batch_size: int = self.config["training"]["evaluation_batch_size"]
 
-        if metadata is not None and not set(["id", "type"]).issubset(metadata.keys()):
-            raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
+        self.metadata = None
+        if metadata is None:
+            metadata = self.config["metadata_csv"] if self.config["metadata_csv"] != "" else None
+        self.set_metadata(metadata = metadata)
         
-        self.metadata = metadata
-
-        if metadata is None and self.config["metadata_csv"] != "" and Path(self.config["metadata_csv"]).exists():
-            for separator in SUPPORTED_SEPARATORS:
-                try:
-                    self.metadata = pd.read_csv(self.config["metadata_csv"], sep = separator, usecols = ["type", "id"])
-                    break
-                except ValueError:
-                    continue
-        
-            if self.metadata is None:
-                raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
-
         run_kg_preprocessing: bool = self.config["run_kg_preprocessing"]
 
         if run_kg_preprocessing:
@@ -318,6 +307,66 @@ class Architect(Module):
         
         return self.edge_embedding_dimensions
 
+    def set_metadata(self, metadata: pd.DataFrame | os.PathLike):
+        """
+        Set the node metadata of the knowledge graph.
+
+        This function accepts either a pandas DataFrame or the path to a CSV file as input.
+        It must have at least columns:
+        - "id" which uses the same identifiers as the knowledge graph;
+        - "type" which records the type of the corresponding node.
+        
+        In addition, the metadata can have any number of supplementary columns that can be
+        used to set the identity of the nodes for the associated :class:`~kgate.knowledgegraph.KnowledgeGraph`.
+
+        If there is no knowledge graph associated with the Architect, the `architect.metadata` property will be used
+        to initialize them. If there is already a knowledge graph, it will update the knowledge graph with
+        the new metadata.
+
+        Alternatively, you can directly run the :func:`~kgate.knowledgegraph.KnowledgeGraph.add_metadata` method for a
+        more fine-grained metadata management.
+        
+        Arguments
+        ---------
+        metadata: pd.DataFrame or os.PathLike
+            The metadata object, either as a pandas DataFrame or a path to a CSV file.
+
+        Raises
+        ------
+        pd.errors.InvalidColumnName
+            If the columns 'id' and 'type' are not present.
+        ValueError
+            If the CSV file uses an unsupported separator.
+        TypeError
+            If the metadata object is not of the correct type.
+            
+        """
+        match type(metadata):
+            case pd.DataFrame:
+                if not set(["id", "type"]).issubset(metadata.keys()):
+                    raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
+        
+                self.metadata = metadata
+            case os.PathLike:
+                if Path(metadata).exists():
+                    # Fuzzy identification of separator.
+                    # TODO: find a cleaner way to do it
+                    for separator in SUPPORTED_SEPARATORS:
+                        try:
+                            self.metadata = pd.read_csv(metadata, sep = separator, usecols = ["type", "id"])
+                            break
+                        except ValueError:
+                            continue
+                
+                    if self.metadata is None:
+                        raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
+            case _:
+                return
+            
+        if self.metadata is not None and hasattr(self, "kg_train"):
+            for knowledge_graph in (self.kg_train, self.kg_val, self.kg_test):
+                knowledge_graph.add_metadata(self.metadata)
+            
 
     def initialize_encoder( self,
                             encoder_name: Literal["Default", "GCN", "GAT", "Node2Vec", ""] = "",
@@ -1124,12 +1173,12 @@ class Architect(Module):
         )
 
         index_to_node = {value: key for key, value in self.kg_train.node_to_index.items()}
-        prediction_index = predictions.reshape(-1).T
+        prediction_index = predictions.reshape(-1)
         prediction_names = np.vectorize(index_to_node.get)(prediction_index)
 
-        scores = scores.reshape(-1).T
+        scores = scores.reshape(-1)
         
-        return pd.DataFrame([prediction_names,scores], columns = ["Prediction", "Score"])
+        return pd.DataFrame({"Prediction":prediction_names,"Score":scores})
 
 
     def load_checkpoint(self, path: Path) -> dict:
@@ -1203,7 +1252,7 @@ class Architect(Module):
             self.node_embeddings.append(checkpoint["nodes"][node_type].to(self.device))
         
         self.edge_embeddings.load_state_dict(checkpoint["edges"])
-        self.decoder.load_state_dict(checkpoint["decoder"])
+        self.decoder.load_state_dict(checkpoint["decoder"], strict=False)
         if "encoder" in checkpoint:
             self.encoder.load_state_dict(checkpoint["encoder"])
         
@@ -1373,20 +1422,23 @@ class Architect(Module):
         """
         self.normalize_parameters()
         
-        if isinstance(self.node_embeddings, nn.ParameterList):
-            input = self.kg_train.get_encoder_input(self.kg_train.graphindices.to(self.device), self.node_embeddings)
+        if isinstance(self.encoder, GNN):
+            node_embeddings: torch.Tensor = torch.zeros((self.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
+            full_kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
 
-            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_list)
-            node_embeddings: torch.Tensor = torch.zeros((self.kg_train.node_count, self.encoder_node_embedding_dimensions),
-                                                        device = self.device,
-                                                        dtype = torch.float)
+            with torch.no_grad():
+                # TODO: use not the whole graphindices but the unique nodes instead
+                for i in range(full_kg.graphindices.shape[1] // batch_size + 1):
+                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * batch_size : (i + 1) * batch_size].to(self.device), self.node_embeddings)
 
-            for node_type, index in input.mapping.items():
-                node_embeddings[index] = encoder_output[node_type]
+                    encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
+
+                    for node_type, indices in input.mapping.items():
+                        node_embeddings[indices] = encoder_output[node_type].cpu()
         else:
-            node_embeddings = self.node_embeddings.weight.data
+            node_embeddings = self.node_embeddings.weight.data.cpu()
 
-        edge_embeddings = self.edge_embeddings.weight.data
+        edge_embeddings = self.edge_embeddings.weight.data.cpu()
 
         decoder_embeddings = self.decoder.get_embeddings()
 
