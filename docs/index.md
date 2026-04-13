@@ -9,6 +9,12 @@
 :maxdepth: 1
 Home <self>
 quickstart
+knowledge_graph
+preprocessing_workflow
+data_leakage
+preprocessors
+inference
+encoders
 decoders
 ```
 
