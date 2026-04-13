@@ -69,7 +69,7 @@ A decoder *must not* contain the entity or relation main embeddings, but may use
               self.embedding_spaces = 2
    ```
 
-If the embedding dimension is 128, this means that the encoder will output a tensor of size `(n_ent, 256)`, and the score method splits this encoder like so:
+If the embedding dimension is 128, this means that the encoder will output a tensor of size `(node_count, 256)`, and the score method splits this encoder like so:
 
    ```python
        def score(self,
