@@ -29,19 +29,20 @@ class Inference_KG(Dataset):
     <strong>Arguments</strong>
     </span>
     
-    **first_index_tensor:** torch.Tensor
+    **first_index_tensor** *(torch.Tensor)*
     : The first tensor with indices of the edges or nodes (from the knowledge graph).
-    **second_index_tensor:** torch.Tensor
+    
+    **second_index_tensor** *(torch.Tensor)*
     : The second tensor with indices of the edges or nodes (from the knowledge graph).
 
     <span style="color:#8B0000"> 
     <strong>Attributes</strong>
     </span>
     
-    **first_index_tensor:** torch.Tensor
+    **first_index_tensor** *(torch.Tensor)*
     : The first tensor with indices of the edges or nodes (from the knowledge graph).
     
-    **second_index_tensor:** torch.Tensor
+    **second_index_tensor** *(torch.Tensor)*
     : The second tensor with indices of the edges or nodes (from the knowledge graph).
     
     <span style="color:#8B0000"> 
@@ -93,15 +94,15 @@ class EdgeInference:
     <strong>Arguments</strong>
     </span>
     
-    **kg:** KnowledgeGraph
-    : →  Knowledge graph on which the inference will be done.
+    **kg** *(KnowledgeGraph)*
+    : Knowledge graph on which the inference will be done.
 
     <span style="color:#8B0000"> 
     <strong>Attributes</strong>
     </span>
     
-    **kg:** KnowledgeGraph
-    : →  Knowledge graph on which the inference will be done.
+    **kg** *(KnowledgeGraph)*
+    : Knowledge graph on which the inference will be done.
 
     """
     def __init__(self, kg: KnowledgeGraph):
@@ -131,33 +132,33 @@ class EdgeInference:
         <strong>Arguments</strong>
         </span>
 
-        **head_indices:** torch.Tensor
+        **head_indices** *(torch.Tensor
         : The indices of the head nodes (from the knowledge graph).
         
-        **tail_indices:** torch.Tensor
+        **tail_indices** *(torch.Tensor)*
         : The indices of the tail nodes (from the knowledge graph).
         
-        **top_k:** int, keyword-only
+        **top_k** *(int, keyword-only)*
         : Indicate the number of top predictions to return.
         
-        **batch_size:** int, keyword-only
+        **batch_size** *(int, keyword-only)*
         : Size of the current batch.
         
-        **encoder:** DefaultEncoder or GNN, keyword-only
+        **encoder** *(DefaultEncoder or GNN, keyword-only)*
         : Encoder model to embed the nodes. Deactivated with DefaultEncoder.
         
-        **decoder:** BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
+        **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
         : Decoder model to evaluate.
         
-        **node_embeddings:** nn.ParameterList, keyword-only
+        **node_embeddings** *(nn.ParameterList, keyword-only)*
         : A list containing all embeddings for each node type.
           : keys: node type index
           : values: tensors of shape (node_count, embedding_dimensions)
         
-        ** edge_embeddings:** nn.Embedding, keyword-only
+        **edge_embeddings** *(nn.Embedding, keyword-only)*
         : A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
         
-        **verbose:** bool, default to True, keyword-only
+        **verbose** *(bool, default to True, keyword-only)*
         : Indicate whether a progress bar should be displayed during evaluation.
 
         <span style="color:#8B0000"> 
@@ -165,8 +166,8 @@ class EdgeInference:
         </span>
 
         **predictions** *(torch.Tensor)*
-        % TODO.What_that_variable_is_or_does
         : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
         
         **scores** *(torch.Tensor, shape [batch_size, n])*
         : Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
@@ -241,14 +242,14 @@ class NodeInference:
     <strong>Arguments</strong>
     </span>
     
-    **kg:** KnowledgeGraph
+    **kg** *(KnowledgeGraph)*
     : Knowledge graph on which the inference will be done.
 
     <span style="color:#8B0000"> 
     <strong>Attributes</strong>
     </span>
     
-    **kg:** KnowledgeGraph
+    **kg** *(KnowledgeGraph)*
     : Knowledge graph on which the inference will be done.
 
     """
@@ -280,48 +281,47 @@ class NodeInference:
         <strong>Arguments</strong>
         </span>
         
-        **node_indices:** torch.Tensor
+        **node_indices** *(torch.Tensor)*
         : The indices of nodes (from the knowledge graph).
         
-        **edge_indices:** torch.Tensor
+        **edge_indices** *(torch.Tensor)*
         : The indices of edges (from the knowledge graph).
         
-        **top_k:** int, keyword-only
+        **top_k** *(int, keyword-only)*
         : Indicate the number of top predictions to return.
         
-        **missing_triplet_part:** Literal["head", "tail"], keyword-only
+        **missing_triplet_part** *(Literal["head", "tail"], keyword-only)*
         : String indicating if the missing nodes are the heads or the tails.
         
-        **batch_size:** int, keyword-only
+        **batch_size** *(int, keyword-only)*
         : Size of the current batch.
         
-        **encoder:** DefaultEncoder or GNN, keyword-only
+        **encoder** *(DefaultEncoder or GNN, keyword-only)*
         : Encoder model to embed the nodes. Deactivated with DefaultEncoder.
         
-        **decoder:** BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder, keyword-only
+        **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder, keyword-only)*
         : Decoder model to evaluate.
         
-        **node_embeddings:** nn.ParameterList, keyword-only
+        **node_embeddings** *(nn.ParameterList, keyword-only)*
         : A list containing all embeddings for each node type.
           : keys: node type index
-          : 
           : values: tensors of shape (node_count, embedding_dimensions)
         
-        **edge_embeddings:** nn.Embedding, keyword-only
+        **edge_embeddings** *(nn.Embedding, keyword-only)*
         : A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
         
-        **verbose:** bool, default to True, keyword-only
+        **verbose** *(bool, default to True, keyword-only)*
         : Indicate whether a progress bar should be displayed during evaluation.
 
         <span style="color:#8B0000"> 
         <strong>Returns</strong>
         </span>
         
-        **predictions:** torch.Tensor
+        **predictions** *(torch.Tensor)*
         % TODO.What_that_variable_is_or_does
         *Missing documentation*
         
-        **scores:** torch.Tensor, shape [batch_size, n]
+        **scores** *(torch.Tensor, shape [batch_size, n])*
         : Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
         
         """
