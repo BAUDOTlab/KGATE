@@ -26,23 +26,34 @@ from torch_geometric.nn import HeteroConv, GATConv
 
 # We want to test the original GATConv layer and not the GATv2Conv used by KGATE
 class MyCustomEncoder(GNN):
-   def __init__(self, edge_types: List[Tuple[str,str,str]], emb_dim: int, num_gnn_layers: int=2, aggr: str="sum", device: str="cuda", add_self_loops: bool = True):
-      super().__init__(edge_types, add_self_loops, aggr)
-      self.n_layers = num_gnn_layers
+   def __init__(self,
+               edge_types: List[Tuple[str, str, str]],
+               embedding_dimensions: int,
+               gnn_layer_count: int = 2,
+               aggregation: : Literal["sum", "mean", "min", "max", "cat", None] = "sum",
+               device: torch.device | Literal["cuda", "cpu"] = "cuda",
+               add_self_loops: bool = True):
+      super().__init__(edge_types, add_self_loops, aggregation)
+      self.layer_count = gnn_layer_count
 
-      for layer in range(num_gnn_layers):
+      for layer in range(gnn_layer_count):
          conv = HeteroConv(
-         {edge_type: GATConv(in_channels=-1, out_channels=emb_dim, add_self_loops=False) for edge_type in self.edge_types},
-               aggr=self.aggr
+         {edge_type: GATConv(   in_channels = -1,
+                                out_channels = embedding_dimensions,
+                                add_self_loops = False)
+                             for edge_type in self.edge_types},
+                             aggregation = self.aggregation
          ).to(device)
          self.convs.append(conv)
 
-architect = Architect(config_path="my/super/config.toml")
+architect = Architect(config_path = "my/super/config.toml")
 
-edge_types = architect.kg_train.triple_types
+edge_types = architect.kg_train.triplet_types
 gnn_layers = architect.config["model"]["encoder"]["gnn_layer_number"]
 
-architect.encoder = MyCustomEncoder(edge_types=edge_types, emb_dim=architect.enc_emb_dim, num_gnn_layers=gnn_layers)
+architect.encoder = MyCustomEncoder(edge_types = edge_types,
+                                    embedding_dimensions = architect.encoder_node_embedding_dimensions,
+                                    gnn_layer_count = gnn_layers)
 
 # The custom encoder is registered and will be used regardless of the model set in the configuration
 architect.train_model()
