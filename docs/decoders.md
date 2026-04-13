@@ -63,21 +63,31 @@ A decoder *must not* contain the entity or relation main embeddings, but may use
 
    ```python
       class ComplEx(ComplExModel):
-         def __init__(self, emb_dim: int, n_entities: int, n_relations: int):
-            super().__init__(emb_dim, n_entities, n_relations)
-            self.embedding_spaces = 2
+         def __init__(self, embedding_dimensions: int):
+              super().__init__()
+              self.embedding_dimensions = embedding_dimensions
+              self.embedding_spaces = 2
    ```
 
 If the embedding dimension is 128, this means that the encoder will output a tensor of size `(n_ent, 256)`, and the score method splits this encoder like so:
 
    ```python
-       def score(self, *, h_emb: Tensor, r_emb: Tensor, t_emb: Tensor, **_):
-        re_h, im_h = tensor_split(h_emb, 2, dim=1)
-        re_r, im_r = tensor_split(r_emb, 2, dim=1)
-        re_t, im_t = tensor_split(t_emb, 2, dim=1)
-        
-        return (re_h * (re_r * re_t + im_r * im_t) + 
-                im_h * (re_r * im_t - im_r * re_t)).sum(dim=1)
+       def score(self,
+                 *,
+                 head_embeddings: Tensor,
+                 tail_embeddings: Tensor,
+                 edge_embeddings: Tensor,
+                 **_
+                 ) -> Tensor:
+
+        real_head_embedddings, imaginary_head_embeddings = tensor_split(head_embeddings, 2, dim = 1)
+        real_tail_embedddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim = 1)
+        real_edge_embedddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim = 1)
+
+        score = (real_head_embedddings * (real_edge_embedddings * real_tail_embedddings + imaginary_edge_embeddings * imaginary_tail_embeddings) + 
+                imaginary_head_embeddings * (real_edge_embedddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embedddings)).sum(dim = 1)
+
+        return score
    ```
 
    ```{note}
