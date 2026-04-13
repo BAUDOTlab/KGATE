@@ -132,7 +132,7 @@ class EdgeInference:
         <strong>Arguments</strong>
         </span>
 
-        **head_indices** *(torch.Tensor
+        **head_indices** *(torch.Tensor)*
         : The indices of the head nodes (from the knowledge graph).
         
         **tail_indices** *(torch.Tensor)*
@@ -147,7 +147,7 @@ class EdgeInference:
         **encoder** *(DefaultEncoder or GNN, keyword-only)*
         : Encoder model to embed the nodes. Deactivated with DefaultEncoder.
         
-        **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
+        **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder)*
         : Decoder model to evaluate.
         
         **node_embeddings** *(nn.ParameterList, keyword-only)*
