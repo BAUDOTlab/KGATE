@@ -1,0 +1,70 @@
+seed = 42
+
+kg_csv = "data/synthetic_test_graph.csv"
+kg_pkl = ""
+metadata_csv = "data/synthetic_test_metadata.csv"
+
+output_directory = "output/examples/lp_gat_transe"
+verbose = true
+run_kg_preprocessing = true
+
+[preprocessing]
+remove_duplicate_triplets = true
+make_directed = true
+make_directed_edges = []
+flag_near_duplicate_edges = true
+clean_train_set = true
+split = [0.8, 0.1, 0.1]
+
+[preprocessing.params]
+theta = 0.8
+theta_first_edge_type = 0.8
+theta_second_edge_type = 0.8
+
+[model]
+node_embedding_dimensions = 32
+edge_embedding_dimensions = -1
+
+[model.encoder]
+name = "GAT"
+gnn_layer_number = 1
+
+[model.decoder]
+name = "TransE"
+margin = 1
+dissimilarity = "L2"
+filter_count = 3
+
+[sampler]
+name = "Positional"
+negative_triplet_count = 1
+
+[optimizer]
+name = "Adam"
+
+[optimizer.params]
+weight_decay = 0.001
+lr = 0.001
+
+[learning_rate_scheduler]
+type = ""
+
+[learning_rate_scheduler.params]
+
+[training]
+max_epochs = 1
+patience = 10
+train_batch_size = 256
+evaluation_interval = 1
+evaluation_batch_size = 64
+save_interval = 1
+pretrained_embeddings = ""
+
+[evaluation]
+objective = "Link Prediction"
+made_directed_edges = []
+target_edges = []
+thresholds = [10]
+
+[data_leakage]
+permuted_edges = []
