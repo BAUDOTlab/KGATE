@@ -116,10 +116,9 @@ Most non-trivial changes (*especially bug fixes*) should come along with new tes
 
 ## ✅ Submitting a Pull Request
 
-Most information related to submitting a pull request is contained in comments within the pull request template that is shown when you open a new pull request,
-however full documentation on the pull request title format is here to best utilize the space available.
+Most information related to submitting a pull request is contained in comments within the pull request template that is shown when you open a new pull request, however full documentation on the pull request title format is here to best utilize the space available.
 
-The pull request title must follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format with a valid prefix and optionally a valid scope. \
+The pull request title must follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format with a valid prefix and optionally a valid scope.
 
 Try to keep the PR title to 72 characters or less (GitHub cuts off commit titles longer than this).
 
