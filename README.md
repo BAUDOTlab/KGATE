@@ -17,14 +17,14 @@ pip install kgate
 ```
 
 <details>
-<summary>If you don't have pip, you must install it first:</summary>
-On [the official pip website](https://bootstrap.pypa.io/get-pip.py) download `get-pip.py`.
+<summary>Click here if you don't have pip.</summary>
+Download `get-pip.py`: https://bootstrap.pypa.io/get-pip.py
 
 Then run this on Linux or MacOS:
-<pre>$ python get-pip.py</pre>
+<pre>python get-pip.py</pre>
 
 Or this on Windows:
-<pre>$ py get-pip.py</pre>
+<pre>py get-pip.py</pre>
 </details>
 
 ### From source
@@ -38,12 +38,12 @@ source kge_env/bin/activate
 ```
 
 <details>
-<summary>For SSH:</summary>
+<summary>Click here for SSH:</summary>
 <pre>$ git clone git@github.com:BAUDOTlab/KGATE.git<br>python -m venv kge_env<br>source kge_env/bin/activate</pre>
 </details>
 
 <details>
-<summary>For Windows:</summary>
+<summary>Click here for Windows:</summary>
 <pre>$ git clone https://github.com/BAUDOTlab/KGATE.git<br>python -m venv kge_env<br>kge_env\Scripts\activate</pre>
 </details>
 
@@ -58,8 +58,8 @@ pip install poetry
 ```
 
 <details>
-<summary>If you don't have pip, you must install it first:</summary>
-On [the official pip website](https://bootstrap.pypa.io/get-pip.py) download `get-pip.py`.
+<summary>Click here if you don't have pip.</summary>
+Download `get-pip.py`: https://bootstrap.pypa.io/get-pip.py
 
 Then run this on Linux or MacOS:
 <pre>$ python get-pip.py</pre>
@@ -75,7 +75,7 @@ git clone git@github.com:BAUDOTlab/KGATE.git
 ```
 
 <details>
-<summary>For SSH:</summary>
+<summary>Click here for SSH:</summary>
 <pre>$ git clone git@github.com:BAUDOTlab/KGATE.git</pre>
 </details>
 
