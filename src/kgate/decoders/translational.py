@@ -1474,7 +1474,7 @@ class TorusE(TranslationalDecoder):
     `TorusE: Knowledge Graph Embedding on a Lie Group.`
     https://arxiv.org/abs/1711.05435
     In Proceedings of the 32nd AAAI Conference on Artificial Intelligence
-    (New Orleans, LA, USA, Feb. 2018),AAAI Press, pp. 1819–1826.
+    (New Orleans, LA, USA, Feb. 2018), AAAI Press, pp. 1819–1826.
 
     Arguments
     ---------
@@ -1983,7 +1983,7 @@ class RotatE(TranslationalDecoder):
         Zihao Li, Yuyi Ao, Jingrui He.
         `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval`
         https://arxiv.org/pdf/2404.19130
-        TODO.Journal_period_date
+        SIGIR ’24, July 14–18, 2024, Washington, DC, USA
 
         Arguments
         ---------
