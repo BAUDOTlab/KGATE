@@ -1759,19 +1759,15 @@ class RotatE(TranslationalDecoder):
 
         Arguments
         ---------
-        TODO: check as this is just a copy-paste from TransR
         head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of the head nodes in the knowledge graph.
         tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of the tail nodes in the knowledge graph.
         edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             The edge embeddings, of shape [edge_count, edge_embedding_dimensions]
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
 
         Returns
         -------
-        TODO: check as this is just a copy-paste from TransR
         score: torch.Tensor, dtype: torch.float, shape: [batch_size]
             The score of each triplet as a tensor.
         
@@ -1817,7 +1813,7 @@ class RotatE(TranslationalDecoder):
                                         Tuple[Tensor, Tensor],
                                         Tuple[Tensor, Tensor]]:
         """
-        TODO: check as this is just a copy-paste from TransR
+        TODO: check if it follows the original implementation
         Link prediction evaluation helper function. Get node embeddings
         and edge embeddings. The output will be fed to the
         `inference_score_function` method.
@@ -1836,16 +1832,17 @@ class RotatE(TranslationalDecoder):
             The indices of the edges (from KG).
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
         Returns
         -------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            Head node embeddings.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            Tail node embeddings.
-        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            Edge embeddings.
-        candidates: torch.Tensor
-            Candidate embeddings for nodes or edges.
+        (real_head_embeddings, imaginary_head_embeddings): Tuple[Tensor, Tensor]
+            Head node embeddings, both the real and the imaginary ones.
+        (real_tail_embeddings, imaginary_tail_embeddings): Tuple[Tensor, Tensor]
+            Tail node embeddings, both the real and the imaginary ones.
+        (real_edge_embeddings, imaginary_edge_embeddings): Tuple[Tensor, Tensor]
+            Edge embeddings, both the real and the imaginary ones.
+        (real_candidates, imaginary_candidates): Tuple[Tensor, Tensor]
+            Candidate embeddings for nodes or edges, both the real and the imaginary ones.
 
         """
         batch_size = head_indices.shape[0]
@@ -1875,7 +1872,7 @@ class RotatE(TranslationalDecoder):
                         edge_embeddings: Tuple[Tensor, Tensor]
                         ) -> Tensor:
         """
-        TODO: check as this is just a copy-paste from ComplEx
+        TODO: check if it follows the original implementation, as this is just a copy-paste from ComplEx
         Link prediction evaluation helper function. Compute the scores
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
         The arguments should match the ones of `inference_prepare_candidates`.
@@ -1894,12 +1891,6 @@ class RotatE(TranslationalDecoder):
 
         Raises
         ------
-        AssertionError #1
-            When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
-        AssertionError #2
-            When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
-        AssertionError #3
-            When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
         ValueError
             If none of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.
 
@@ -1992,7 +1983,7 @@ class RotatE(TranslationalDecoder):
         Zihao Li, Yuyi Ao, Jingrui He.
         `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval`
         https://arxiv.org/pdf/2404.19130
-        Journal_period_date
+        TODO.Journal_period_date
 
         Arguments
         ---------

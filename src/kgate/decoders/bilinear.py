@@ -950,12 +950,6 @@ class ComplEx(BilinearDecoder):
 
         Raises
         ------
-        AssertionError #1
-            When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
-        AssertionError #2
-            When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
-        AssertionError #3
-            When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
         ValueError
             If none of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.
 
