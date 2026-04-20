@@ -16,6 +16,7 @@ preprocessors
 inference
 encoders
 decoders
+utils
 ```
 
 ```{toctree}
