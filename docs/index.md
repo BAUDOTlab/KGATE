@@ -12,6 +12,7 @@ quickstart
 knowledge_graph
 preprocessing_workflow
 data_leakage
+preprocessing
 preprocessors
 inference
 encoders

@@ -19,7 +19,7 @@ from .knowledgegraph import KnowledgeGraph
 from .utils import set_random_seeds, compute_triplet_proportions
 
 
-SUPPORTED_SEPARATORS = [",","\t",";"]
+SUPPORTED_SEPARATORS = [",", "\t", ";"]
 
 
 def prepare_knowledge_graph(config: dict, 
@@ -28,43 +28,61 @@ def prepare_knowledge_graph(config: dict,
                             metadata: pd.DataFrame | None = None
                             ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """
+    <span style="color:#8B0000"> 
+    <strong>Description</strong>
+    </span>
+    
     Prepare and clean the knowledge graph.
     
-    This function takes an input knowledge graph either as a csv file (from the configuration), an object of type
-    `torchkge.KnowledgeGraph` or a pandas `DataFrame`. It is preprocessed by the `clean_knowledge_graph` function
+    This function takes an input knowledge graph either as a csv file (from the configuration), an object of type 
+    `torchkge.KnowledgeGraph` or a pandas `DataFrame`. It is preprocessed by the `clean_knowledge_graph` function 
     and saved as a pickle file with the `save_knowledge_graph` function.
 
-    Arguments
-    ---------
-    config: dict
-        The full configuration, usually parsed from the KGATE configuration file.
-    kg: KnowledgeGraph, optional
-        The knowledge graph as a single object of class KnowledgeGraph or inheriting the class (KnowledgeGraph inherits the class)
-    dataframe: pd.DataFrame, optional
-        The knowledge graph as a pandas DataFrame.
-    metadata: pd.DataFrame, optional
-        The metadata dataframe to associate to the knowledge graph.
-
-    Raises
-    ------
-    ValueError
-        Knowledge graph csv file not found or using a non supported separator.
-        Supported separators are "," (comma), "\t" (tabulation), ";" (semicolon).
-    NotImplementedError
-        Knowledge graph type not supported.
-        Supported knowledge graph types are KGATE's and TorchKGE's.
-        
-    Returns
-    -------
-    kg_train: KnowledgeGraph
-        Subpart of the preprocessed and split knowledge graph, for training.
-    kg_validation: KnowledgeGraph
-        Subpart of the preprocessed and split knowledge graph, for validation.
-    kg_test: KnowledgeGraph
-        Subpart of the preprocessed and split knowledge graph, for test.
+    <span style="color:#8B0000"> 
+    <strong>Arguments</strong>
+    </span>
     
-    Notes
-    -----
+    **config** *(dict)*
+    : The full configuration, usually parsed from the KGATE configuration file.
+    
+    **kg** *(KnowledgeGraph, optional)*
+    : The knowledge graph as a single object of class KnowledgeGraph or inheriting the class (KnowledgeGraph inherits the class)
+    
+    **dataframe** *(pd.DataFrame, optional)*
+    : The knowledge graph as a pandas DataFrame.
+    
+    **metadata** *(pd.DataFrame, optional)*
+    : The metadata dataframe to associate to the knowledge graph.
+
+    <span style="color:#8B0000"> 
+    <strong>Raises</strong>
+    </span>
+    
+    **ValueError**
+    : Knowledge graph csv file not found or using a non supported separator.
+    : Supported separators are "," (comma), "\t" (tabulation), ";" (semicolon).
+    
+    **NotImplementedError**
+    : Knowledge graph type not supported.
+    : Supported knowledge graph types are KGATE's and TorchKGE's.
+    
+    <span style="color:#8B0000"> 
+    <strong>Returns</strong>
+    </span>
+    
+    **kg_train** *(KnowledgeGraph)*
+    : Subpart of the preprocessed and split knowledge graph, for training.
+    
+    **kg_validation** *(KnowledgeGraph)*
+    : Subpart of the preprocessed and split knowledge graph, for validation.
+    
+    **kg_test** *(KnowledgeGraph)*
+    : Subpart of the preprocessed and split knowledge graph, for test.
+    
+    <span style="color:#8B0000"> 
+    <strong>Notes</strong>
+    </span>
+    
     The CSV file can have any number of columns but at least three named head, tail and edge.
     
     """
@@ -113,22 +131,31 @@ def save_knowledge_graph(config: dict,
                         kg_validation: KnowledgeGraph,
                         kg_test: KnowledgeGraph):
     """
+    <span style="color:#8B0000"> 
+    <strong>Description</strong>
+    </span>
+    
     Save the knowledge graph to a pickle file.
     
     If the name of a pickle file is specified in the configuration, it will be used. Otherwise, the 
     file will be created in `config["output_directory"]/kg.pkl`.
     
-    Arguments
-    ---------
-    config: dict
-        The full configuration, usually parsed from the KGATE configuration file.
-    kg_train: KnowledgeGraph
-        The training subpart of the knowledge graph.
-    kg_validation: KnowledgeGraph
-        The validation subpart of the knowledge graph.
-    kg_test: KnowledgeGraph
-        The testing subpart of the knowledge graph.
-        
+    <span style="color:#8B0000"> 
+    <strong>Arguments</strong>
+    </span>
+    
+    **config** *(dict)*
+    : The full configuration, usually parsed from the KGATE configuration file.
+    
+    **kg_train** *(KnowledgeGraph)*
+    : The training subpart of the knowledge graph.
+    
+    **kg_validation** *(KnowledgeGraph)*
+    : The validation subpart of the knowledge graph.
+    
+    **kg_test** *(KnowledgeGraph)*
+    : The testing subpart of the knowledge graph.
+    
     """
     if config["kg_pkl"] == "":
         pickle_filename = Path(config["output_directory"], "kg.pkl")
@@ -141,19 +168,27 @@ def save_knowledge_graph(config: dict,
         pickle.dump(kg_test, file)
 
 
-def load_knowledge_graph(pickle_filename: Path):
+def load_knowledge_graph(pickle_filename: Path) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """
+    <span style="color:#8B0000"> 
+    <strong>Description</strong>
+    </span>
+    
     Load the knowledge graph from a pickle file.
-        
-    Arguments
-    ---------
-    pickle_filename: Path
-        Path to the pickle file.
-        
-    Returns
-    -------
-    kg_train, kg_validation, kg_test: KnowledgeGraph
-        A tuple containing the preprocessed and split knowledge graph.
+    
+    <span style="color:#8B0000"> 
+    <strong>Arguments</strong>
+    </span>
+    
+    **pickle_filename: Path
+    : Path to the pickle file.
+    
+    <span style="color:#8B0000"> 
+    <strong>Returns</strong>
+    </span>
+    
+    **kg_train, kg_validation, kg_test** *(Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph])*
+    : A tuple containing the preprocessed and split knowledge graph.
     
     """
     with open(pickle_filename, "rb") as file:
@@ -168,28 +203,41 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
                             config: dict
                             ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """
-    Clean and prepare the knowledge graph according to the configuration.
-        
-    Arguments
-    ---------
-    kg: KnowledgeGraph
-        Knowledge graph on which the cleaning will be done.
-    config: dict
-        The full configuration, usually parsed from the KGATE configuration file.
+    <span style="color:#8B0000"> 
+    <strong>Description</strong>
+    </span>
     
-    Raises
-    ------
-    ValueError
-        One or more nodes are not covered in the training set after ensuring node coverage.
-        
-    Returns
-    -------
-    new_kg_train: KnowledgeGraph
-        Cleaned training knowledge graph.
-    new_kg_validation: KnowledgeGraph
-        Cleaned validation knowledge graph.
-    new_kg_test: KnowledgeGraph
-        Cleaned test knowledge graph.
+    Clean and prepare the knowledge graph according to the configuration.
+    
+    <span style="color:#8B0000"> 
+    <strong>Arguments</strong>
+    </span>
+    
+    **kg** *(KnowledgeGraph)*
+    : Knowledge graph on which the cleaning will be done.
+    
+    **config** *(dict)*
+    : The full configuration, usually parsed from the KGATE configuration file.
+    
+    <span style="color:#8B0000"> 
+    <strong>Raises</strong>
+    </span>
+    
+    **ValueError**
+    : One or more nodes are not covered in the training set after ensuring node coverage.
+    
+    <span style="color:#8B0000"> 
+    <strong>Returns</strong>
+    </span>
+    
+    **new_kg_train** *(KnowledgeGraph)*
+    : Cleaned training knowledge graph.
+    
+    **new_kg_validation** *(KnowledgeGraph)*
+    : Cleaned validation knowledge graph.
+    
+    **new_kg_test** *(KnowledgeGraph)*
+    : Cleaned test knowledge graph.
     
     """
     set_random_seeds(config["seed"])
@@ -272,20 +320,28 @@ def verify_node_coverage(kg_train: KnowledgeGraph,
                         kg_full: KnowledgeGraph
                         ) -> Tuple[bool, List[str]]:
     """
+    <span style="color:#8B0000"> 
+    <strong>Description</strong>
+    </span>
+    
     Verify that all nodes in the full knowledge graph are represented in the training set.
 
-    Arguments
-    ---------
-    kg_train: KnowledgeGraph
-        The training knowledge graph subset.
-    kg_full: KnowledgeGraph
-        The full knowledge graph.
+    <span style="color:#8B0000"> 
+    <strong>Arguments</strong>
+    </span>
+    
+    **kg_train** *(KnowledgeGraph)*
+    : The training knowledge graph subset.
+    
+    **kg_full** *(KnowledgeGraph)*
+    : The full knowledge graph.
 
-    Returns
-    -------
-    missing_nodes: Tuple[bool, List[str]]
-        A tuple where the first element is True if all nodes in the full knowledge graph are present in the training 
-        knowledge graph, and the second element is a list of missing nodes (names) if any are missing.
+    <span style="color:#8B0000"> 
+    <strong>Returns</strong>
+    </span>
+    
+    **missing_nodes** *(Tuple[bool, List[str]])*
+    : A tuple where the first element is True if all nodes in the full knowledge graph are present in the training knowledge graph, and the second element is a list of missing nodes (names) if any are missing.
     
     """
     # Get node identifiers for the train graph and full graph
@@ -312,26 +368,39 @@ def ensure_node_coverage(kg_train: KnowledgeGraph,
                         kg_test: KnowledgeGraph
                         ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """
+    <span style="color:#8B0000"> 
+    <strong>Description</strong>
+    </span>
+    
     Ensure that all nodes in kg_train.node_to_index are present in kg_train as head or tail.
+    
     If a node is missing, move a triplet involving that node from kg_validation or kg_test to kg_train.
 
-    Arguments
-    ---------
-    kg_train: KnowledgeGraph
-        The training knowledge graph subset to ensure node coverage of.
-    kg_validation: KnowledgeGraph
-        The validation knowledge graph subset from which to move triplets if needed.
-    kg_test: KnowledgeGraph
-        The test knowledge graph subset from which to move triplets if needed.
+    <span style="color:#8B0000"> 
+    <strong>Arguments</strong>
+    </span>
+    
+    **kg_train** *(KnowledgeGraph)*
+    : The training knowledge graph subset to ensure node coverage of.
+    
+    **kg_validation** *(KnowledgeGraph)*
+    : The validation knowledge graph subset from which to move triplets if needed.
+    
+    **kg_test** *(KnowledgeGraph)*
+    : The test knowledge graph subset from which to move triplets if needed.
 
-    Returns
-    -------
-    kg_train: KnowledgeGraph
-        The updated training knowledge graph with all nodes covered.
-    kg_validation: KnowledgeGraph
-        The updated validation knowledge graph.
-    kg_test: KnowledgeGraph
-        The updated test knowledge graph.
+    <span style="color:#8B0000"> 
+    <strong>Returns</strong>
+    </span>
+    
+    **kg_train** *(KnowledgeGraph)*
+    : The updated training knowledge graph with all nodes covered.
+    
+    **kg_validation** *(KnowledgeGraph)*
+    : The updated validation knowledge graph.
+    
+    **kg_test** *(KnowledgeGraph)*
+    : The updated test knowledge graph.
     
     """
     # Get the indices of all nodes in kg_train 
@@ -404,23 +473,33 @@ def clean_datasets( kg_train: KnowledgeGraph,
                     known_reverses: List[Tuple[int, int]]
                     ) -> KnowledgeGraph:
     """
-    Clean the train knowledge graph by removing reverse duplicate triplets contained
+    <span style="color:#8B0000"> 
+    <strong>Description</strong>
+    </span>
+    
+    Clean the train knowledge graph by removing reverse duplicate triplets contained 
     in the second knowledge graph (test or validation).
 
-    Arguments
-    ---------
-    kg_train: KnowledgeGraph
-        The training knowledge graph subset.
-    kg_second: KnowledgeGraph
-        The second knowledge graph subset, test or validation.
-    known_reverses: List[Tuple[int, int]]
-        Each tuple contains two edges (first_edge_type, second_edge_type) that are known reverse edges.
+    <span style="color:#8B0000"> 
+    <strong>Arguments</strong>
+    </span>
+    
+    **kg_train** *(KnowledgeGraph)*
+    : The training knowledge graph subset.
+    
+    **kg_second** *(KnowledgeGraph)*
+    : The second knowledge graph subset, test or validation.
+    
+    **known_reverses** *(List[Tuple[int, int]])*
+    : Each tuple contains two edges (first_edge_type, second_edge_type) that are known reverse edges.
 
-    Returns
-    -------
-    kg_train: KnowledgeGraph
-        The cleaned train knowledge graph subset.
-        
+    <span style="color:#8B0000"> 
+    <strong>Returns</strong>
+    </span>
+    
+    **kg_train** *(KnowledgeGraph)*
+    : The cleaned train knowledge graph subset.
+    
     """
     for first_edge_type, second_edge_type in known_reverses:
 
@@ -475,31 +554,40 @@ def clean_cartesians(kg_first: KnowledgeGraph,
                     node_type: str = "head"
                     ) -> Tuple[KnowledgeGraph, KnowledgeGraph]:
     """
+    <span style="color:#8B0000"> 
+    <strong>Description</strong>
+    </span>
+
     Transfer cartesian product triplets from training set to test set to prevent data leakage.
     For each node (head or tail) involved in a cartesian product edge in the test set,
     all corresponding triplets in the training set are moved to the test set.
     
-    Arguments
-    ---------
-    kg_first: KnowledgeGraph
-        Train set knowledge graph to be cleaned.
-        Will be modified by removing cartesian product triplets.
-    kg_second: KnowledgeGraph
-        Test set knowledge graph to be augmented.
-        Will receive the transferred cartesian product triplets.
-    known_cartesian: List[int]
-        List of edge indices that represent cartesian product relationships.
-        These are edges where if (head, tail 1, edge) exists, then (head, tail 2, edge) likely exists
-        for many other tail nodes 'tail 2' (or vice versa for tail-based cartesian products).
-    node_type: str, optional, default to "head"
-        Either "head" or "tail" to specify which node type to consider for cartesian products.
+    Arguments</strong>
+    </span>
     
-    Returns
-    -------
-    kg_first: KnowledgeGraph
-        Cleaned train set knowledge graph, with cartesian triplets removed.
-    kg_second: KnowledgeGraph
-        Augmented test set knowledge graph, with the transferred triplets added.
+    **kg_first** *(KnowledgeGraph)*
+    : Train set knowledge graph to be cleaned.
+    : Will be modified by removing cartesian product triplets.
+    
+    **kg_second** *(KnowledgeGraph)*
+    : Test set knowledge graph to be augmented.
+    : Will receive the transferred cartesian product triplets.
+    
+    **known_cartesian** *(List[int])*
+    : List of edge indices that represent cartesian product relationships.
+    : These are edges where if (head, tail 1, edge) exists, then (head, tail 2, edge) likely exists for many other tail nodes 'tail 2' (or vice versa for tail-based cartesian products).
+    
+    **node_type** *(str, optional, default to "head")*
+    : Either "head" or "tail" to specify which node type to consider for cartesian products.
+    
+    Returns</strong>
+    </span>
+    
+    **kg_first** *(KnowledgeGraph)*
+    : Cleaned train set knowledge graph, with cartesian triplets removed.
+    
+    **kg_second** *(KnowledgeGraph)*
+    : Augmented test set knowledge graph, with the transferred triplets added.
         
     """
     assert node_type in ["head", "tail"], "node_type must be either 'head' or 'tail'"
