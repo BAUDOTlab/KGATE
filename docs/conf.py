@@ -15,21 +15,22 @@ release = '0.1.13'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = ["autodoc2",
-              "sphinx.ext.doctest",
-              "sphinx.ext.napoleon",
               "sphinx.ext.apidoc",
-              "sphinx.ext.coverage",
-              "sphinx.ext.napoleon",
               "sphinx.ext.autosummary",
+              "sphinx.ext.coverage",
+              "sphinx.ext.doctest",
+              "sphinx.ext.mathjax",
+              "sphinx.ext.napoleon",
               "myst_parser"]
 
 myst_enable_extensions = [
-   "colon_fence",
-    "substitution",
-    "replacements",
+    "colon_fence",
     "deflist",
-    "tasklist",
+    "dollarmath",
     "fieldlist",
+    "replacements",
+    "substitution",
+    "tasklist",
 ]
 
 templates_path = ['_templates']
@@ -39,10 +40,15 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 autodoc2_packages = [
     {
         "path": "../src/kgate",
-        "auto_mode": False,  # Enable manual mode, to manually specify which objects to document
+        "auto_mode": True,  # Enable manual mode, to manually specify which objects to document
     },
 ]
 autodoc2_render_plugin = "myst" # Create all files with the “.md” extension, and thus docstrings will be interpreted as MyST by default
+
+autodoc2_docstring_parser_regexes = [
+    # this will render all docstrings as Markdown
+    (r".*", "docstrings_parser"),
+]
 
 autosummary_generate = True  # Enable autosummary to generate pages
 #autodoc_default_flags = ['members']  # Automatically document class members
