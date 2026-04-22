@@ -1428,8 +1428,8 @@ class Architect(Module):
 
             with torch.no_grad():
                 # TODO: use not the whole graphindices but the unique nodes instead
-                for i in range(full_kg.graphindices.shape[1] // batch_size + 1):
-                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * batch_size : (i + 1) * batch_size].to(self.device), self.node_embeddings)
+                for i in range(full_kg.graphindices.shape[1] // self.train_batch_size + 1):
+                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * self.train_batch_size : (i + 1) * self.train_batch_size].to(self.device), self.node_embeddings)
 
                     encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
