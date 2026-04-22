@@ -1436,7 +1436,7 @@ class Architect(Module):
                     for node_type, indices in input.mapping.items():
                         node_embeddings[indices] = encoder_output[node_type].cpu()
         else:
-            node_embeddings = self.node_embeddings.weight.data.cpu()
+            node_embeddings = self.node_embeddings[0].data.cpu()
 
         edge_embeddings = self.edge_embeddings.weight.data.cpu()
 
