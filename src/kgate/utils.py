@@ -36,41 +36,34 @@ def parse_config(config_path: str,
                 config_dictionnary: dict
                 ) -> dict:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Parse the configuration file and compares it to default and inline configurations to determine what 
     each parameter must be. For each parameter, the final parsed configuration will include in 
     priority order: inline configuration, configuration file, default configuration.
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
 
     **config_path** *(str)*
     : The complete path to the configuration file. If one already exists, it will be overwritten.
     
     **config_dictionnary** *(dict, optional)*
     : The parsed configuration as a python dictionnary.
-        
-    <span style="color:#8B0000"> 
-    <strong>Raises</strong>
-    </span>
+    
+    Raises
+    ------
 
     **FileNotFoundError**
     : The configuration file is not found at the indicated path.
     : Check that you gave the correct path, and that it is a str.
     : If you give a relative path, it must be relative to the run script path.
     
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
 
     **config** *(dict)*
     : The final parsed configuration as a python dictionnary.
     : Using priority orders: inline configuration, configuration file, default configuration
-        
+    
     """
     if config_path != "" and not Path(config_path).exists():
         raise FileNotFoundError(f"Configuration file {config_path} not found.")
@@ -103,16 +96,11 @@ def set_config_key( key: str,
                     inline: dict | None = None
                     ) -> str | int | list | dict:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     For a specific parameter, a 'key', compare default, inline and user-made configurations to give 
     the key value with priority order: inline configuration, configuration file, default configuration.
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **default** *(dict)*
     : The default parsed configuration as a python dictionnary.
@@ -123,17 +111,15 @@ def set_config_key( key: str,
     **inline** *(dict, optional)*
     : The inline parsed configuration as a python dictionnary.
 
-    <span style="color:#8B0000"> 
-    <strong>Raises</strong>
-    </span>
-        
+    Raises
+    ------
+    
     **ValueError**
     : A parameter without a default value is required but not set.
 
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
-        
+    Returns
+    -------
+    
     : Return one of the following values:
         : **inline_value** *(str or int or float or List or dict or None)*
             : Value of the key given by the user in command line.
@@ -186,24 +172,19 @@ def set_config_key( key: str,
 def save_config(config: dict,
                 filename: Path | None = None):
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Saves the Architect configuration as a TOML file.
     
     If no filename is given, it will be created as `config.output_directory/kgate_config.toml`.
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
 
     **config** *(dict)*
     : The parsed config as a python dictionnary.
     
     **filename** *(Path, optional)*
     : The complete path to the configuration file. If one already exists, it will be overwritten.
-        
+    
     """
     config_path = filename or Path(config["output_directory"]).joinpath("kgate_config.toml")
 
@@ -214,22 +195,16 @@ def save_config(config: dict,
 def load_knowledge_graph(pickle_filename: Path
                         ) -> Tuple["KnowledgeGraph", "KnowledgeGraph", "KnowledgeGraph"]:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Load the knowledge graph from pickle files.
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
 
     **pickle_filename** *(Path)*
     : The complete path to the pickle file (.pkl).
 
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
 
     **kg_train** *(KnowledgeGraph)*
     : Train split from the knowledge graph, directly loaded from the pickle file.
@@ -252,15 +227,10 @@ def load_knowledge_graph(pickle_filename: Path
 
 def set_random_seeds(seed: int) -> None:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Set random seeds for reproducibility.
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **seed** *(int)*
     : Value determining the random.
@@ -278,16 +248,11 @@ def compute_triplet_proportions(kg_train: "KnowledgeGraph",
                                 kg_validation: "KnowledgeGraph"
                                 ) -> dict:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-
     Computes the proportion of triplets for each edge in each of the KnowledgeGraphs 
     (train, test, validation) relative to the total number of triplets for that edge.
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **kg_train** *(KnowledgeGraph)*
     : Train split from the knowledge graph.
@@ -298,9 +263,8 @@ def compute_triplet_proportions(kg_train: "KnowledgeGraph",
     **kg_validation** *(KnowledgeGraph)*
     : Validation split from the knowledge graph.
 
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **proportions** *(dict)*
     : A dictionary where keys are edge identifiers and values are sub-dictionaries with the respective proportions of each edge in kg_train, kg_test, and kg_validation.
@@ -340,15 +304,10 @@ def concat_kgs( kg_train: "KnowledgeGraph",
                 kg_test: "KnowledgeGraph"
                 ) -> Tuple[Tensor, Tensor, Tensor]:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-
     Merge the 3 splits of a knowledge graph into the original knowledge graph.
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
 
     **kg_train** *(KnowledgeGraph)*
     : Train split from the knowledge graph.
@@ -359,9 +318,8 @@ def concat_kgs( kg_train: "KnowledgeGraph",
     **kg_validation** *(KnowledgeGraph)*
     : Validation split from the knowledge graph.
 
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
 
     **head** *(torch.Tensor, shape: [merged_kg.node_count])*
     : List of head indices.
@@ -372,9 +330,8 @@ def concat_kgs( kg_train: "KnowledgeGraph",
     **edge** *(torch.Tensor, shape: [merged_kg.node_count])*
     : List of edge indices.
     
-    <span style="color:#8B0000"> 
-    <strong>Notes</strong>
-    </span>
+    Notes
+    -----
     
     (merged_kg.node_count) is the number of nodes of the newly merged knowledge graph.
     
@@ -400,16 +357,11 @@ def count_triplets( kg1: "KnowledgeGraph",
                     reverse_duplicates: List[Tuple[int, int]]
                     ) -> Tuple[int, int]:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Give the number of triplets that have duplicates ([head,edge,tail] = [head,edge,tail]) 
     and the number of triplets that have reverse duplicates ([head,edge,tail] = [tail,edge,head]).
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **kg1** *(KnowledgeGraph)*
     : First knowledge graph.
@@ -423,9 +375,8 @@ def count_triplets( kg1: "KnowledgeGraph",
     **reverse_duplicates** *(List[Tuple[int, int]])*
     : List returned by torchkge.utils.data_redundancy.duplicates.
 
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **duplicate_count** *(int)*
     : Number of triplets in kg2 that have their duplicate triplet in kg1.
@@ -463,23 +414,17 @@ def count_triplets( kg1: "KnowledgeGraph",
 
 def find_best_model(directory: Path) -> Path | None:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Find all files having a model and compare their `validation_metrics` score 
     to return the path to the file with the best result.
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **dir** *(Path)*
     : Path to the directory containing the model files.
     
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **best_model_path** *(path)*
     : Path to the file with the best model
@@ -517,9 +462,8 @@ def initialize_embedding(embedding_count: int,
     
     See PyTorch documentation: https://docs.pytorch.org/docs/stable/nn.init.html#torch.nn.init.xavier_uniform_
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **embedding_count** *(int)*
     : Number of nodes/edges in the embedding.
@@ -531,9 +475,8 @@ def initialize_embedding(embedding_count: int,
     : Indicate if data should be sent to GPU or CPU.
     : GPU is referenced to as Cuda.
         
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **embedding** *(nn.Embedding)*
     : Embedding object with given parameters.
@@ -548,22 +491,16 @@ def initialize_embedding(embedding_count: int,
 def read_train_metrics(train_metrics_file: Path
                         ) -> pd.DataFrame:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Extract the data from a train metrics file into a dataframe.
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **train_metrics_file** *(Path)*
     : Path to the directory with the train metrics file.
 
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **dataframe** *(pd.DataFrame)*
     : Data extracted from the train metrics file.
@@ -585,15 +522,10 @@ def plot_learning_curves(train_metrics_file: Path,
                         output_directory: Path,
                         validation_metric_value: str):
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Generate plots of loss and validation metric.
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **train_metrics_file** *(Path)*
     : Path to the directory with the train metrics file.
@@ -602,8 +534,8 @@ def plot_learning_curves(train_metrics_file: Path,
     : Path to the directory where to save the plot files.
     
     **validation_metric_value** *(str)*
-    % TODO.What_that_argument_is_or_does
     : *Missing documentation*
+    % TODO.What_that_argument_is_or_does
     
     """
     output_directory = Path(output_directory)
@@ -640,15 +572,10 @@ def filter_scores(  scores: Tensor,
                     true_index: Tensor | None
                     ) -> Tensor:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Filter a score tensor to ignore the score attributed to true node or edge except the ones that are being predicted.
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **scores** *(torch.Tensor)*
     : Tensor of shape [batch_size, n] where n is the number of nodes or edges, depending on what is filtered.
@@ -671,9 +598,8 @@ def filter_scores(  scores: Tensor,
     : Tensor containing the index of the nodes or edges currently being predicted.
     : If omitted, every true index will be filtered out.
 
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **filtered_scores** *(torch.Tensor)*
     : Tensor of shape [batch_size, n] with -Inf values for all true node/edge index except the ones being predicted.
@@ -712,15 +638,10 @@ def merge_kg(kg_list: List["KnowledgeGraph"],
             complete_graphindices: bool = False
             ) -> "KnowledgeGraph":
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Merge multiple KnowledgeGraph objects into a unique one.
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **kg_list** *(List[KnowledgeGraph])*
     : The list of all knowledge graphs to be merged.
@@ -728,9 +649,8 @@ def merge_kg(kg_list: List["KnowledgeGraph"],
     **complete_graphindices** *(bool, default to False)*
     : Whether or not the removed_triplets tensor should be integrated into the final KG's graphindices.
 
-    <span style="color:#8B0000"> 
-    <strong>Raises</strong>
-    </span>
+    Raises
+    ------
     
     **AssertionError #1**
     : Knowledge graphs in `kg_list` must have the same `node_to_index`.
@@ -744,9 +664,8 @@ def merge_kg(kg_list: List["KnowledgeGraph"],
     **AssertionError #4**
     : Knowledge graphs in `kg_list` must have the same `triplet_types`.
     
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **merged_kg** *(KnowledgeGraph)*
     : The merged KnowledgeGraph object.
@@ -780,15 +699,10 @@ def get_dictionary_mapping( dataframe: pd.DataFrame,
                             nodes = True
                             ) -> Dict[str, int]:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Build the dictionary used to map either the node or edge identifiers to their index in the graph.
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **dataframe** *(pd.DataFrame)*
     : Pandas dataframe containing at least three columns : "head", "edge" and "tail".
@@ -797,16 +711,14 @@ def get_dictionary_mapping( dataframe: pd.DataFrame,
     **nodes** *(bool, optional, default to True)*
     : If True will build the dictionary for the nodes mapping, otherwise will build the dictionary for the edge mapping.
     
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **node_to_index or edge_to_index** *(Dict[str, int])*
     : Mapping dictionary for nodes or edges.
 
-    <span style="color:#8B0000"> 
-    <strong>Notes</strong>
-    </span>
+    Notes
+    -----
     
     This function is adapted from the `torchkge.utils.operations.get_dictionaries()` from the TorchKGE package.
     
@@ -823,22 +735,16 @@ def get_dictionary_mapping( dataframe: pd.DataFrame,
 def get_average_heads_per_tail( graphindices: Tensor
                                 ) -> Dict[float, float]:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Get the average number of heads per tail across each edge.
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **graphindices** *(torch.Tensor, dtype: torch.long, shape: [4, triplet_count])*
     : The knowledge graph representation as a tensor with four rows, respectively the head, tail, edge and triplet indices.
     
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **average_heads_per_tail** *(Dict[float,float])*
     : Keys: edge indices
@@ -855,22 +761,16 @@ def get_average_heads_per_tail( graphindices: Tensor
 def get_average_tails_per_head( graphindices: Tensor
                                 ) -> Dict[float, float]:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-
     Get the average number of tails per head across each edge.
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **graphindices** *(torch.Tensor, dtype: torch.long, shape: [4, triplet_count])*
     : The knowledge graph representation as a tensor with four rows, respectively the head, tail, edge and triplet indices.
     
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **average_tails_per_head** *(Dict[float,float])*
     : Keys: edge indices
@@ -887,30 +787,23 @@ def get_average_tails_per_head( graphindices: Tensor
 def get_bernoulli_probabilities(knowledge_graph: "KnowledgeGraph"
                                 ) -> Dict[float, float]:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Evaluate the Bernoulli probabilities for negative sampling as in the 
     TransH original paper by Wang et al. (2014).
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **knowledge_graph** *(kgate.KnowledgeGraph)*
     : The knowledge graph to sample bernoulli probabilities from.
 
-    <span style="color:#8B0000"> 
-    <strong>Raises</strong>
-    </span>
+    Raises
+    ------
     
     **AssertionError**
     : The edges between `heads_per_tail` and `tails_per_edge` must correspond.
     
-    <span style="color:#8B0000"> 
-    <strong>Returns</strong>
-    </span>
+    Returns
+    -------
     
     **bernoulli_probabilities** *(Dict[int, float])*
     : Sampled probabilities of tails for each head.

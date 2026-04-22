@@ -250,7 +250,8 @@ class BilinearDecoder(Module):
 
 class RESCAL(BilinearDecoder):
     """
-    Implementation of RESCAL model detailed in the paper referenced below. In the original paper, optimization
+    Implementation of RESCAL 
+    model detailed in the paper referenced below. In the original paper, optimization
     is done using Alternating Least Squares (ALS). Here we use iterative gradient descent optimization.
     TODO: not sure this is entirely valid in this implementation, will have to look up the difference and where it's operated
     
