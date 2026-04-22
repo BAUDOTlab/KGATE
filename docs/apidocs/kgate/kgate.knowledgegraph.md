@@ -22,10 +22,7 @@
     :summary:
     ```
 * - {py:obj}`KnowledgeGraph <kgate.knowledgegraph.KnowledgeGraph>`
-  - ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 ````
 
 ### API
@@ -55,17 +52,6 @@
 :canonical: kgate.knowledgegraph.KnowledgeGraph
 
 Bases: {py:obj}`torch.utils.data.Dataset`
-
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.__init__
-:parser: docstrings_parser
-```
 
 ````{py:method} __len__()
 :canonical: kgate.knowledgegraph.KnowledgeGraph.__len__

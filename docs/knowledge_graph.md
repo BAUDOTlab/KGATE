@@ -3,12 +3,12 @@
 KGATE uses its own `KnowledgeGraph` class, inspired by [TorchKGE](https://github.com/torchkge-team/torchkge)'s own [KnowledgeGraph](https://github.com/torchkge-team/torchkge/blob/master/torchkge/data_structures.py) class. However, our data structure is compatible with [Pytorch Geometric](https://github.com/pyg-team/pytorch_geometric)'s representation format.
 
 ## EncoderInput
-```{autodoc2-object} kgate.knowledgegraph.EncoderInput
+```{autodoc2-object} kgate.knowledgegraph.EncoderInput.__init__
 
 ```
 
 ## KnowledgeGraph
-```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.__init__
 
 ```
 

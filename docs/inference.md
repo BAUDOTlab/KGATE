@@ -2,26 +2,32 @@
 <!-- This file is missing documentation. -->
 
 ## Inference_KG
-```{autodoc2-docstring} kgate.inference.Inference_KG
+```{autodoc2-object} kgate.inference.Inference_KG
     
 ```
+
+---
 
 ## EdgeInference
-```{autodoc2-docstring} kgate.inference.EdgeInference
+```{autodoc2-object} kgate.inference.EdgeInference
 
 ```
 
 ### evaluate
-```{autodoc2-docstring} kgate.inference.EdgeInference.evaluate
+```{autodoc2-object} kgate.inference.EdgeInference.evaluate
 
 ```
+
+---
 
 ## NodeInference
-```{autodoc2-docstring} kgate.inference.NodeInference
+```{autodoc2-object} kgate.inference.NodeInference
     
 ```
 
 ### evaluate
-```{autodoc2-docstring} kgate.inference.NodeInference.evaluate
+```{autodoc2-object} kgate.inference.NodeInference.evaluate
     
 ```
+
+---

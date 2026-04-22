@@ -34,44 +34,44 @@ logging.basicConfig(
 
 
 class EncoderInput:
-    """
-    Object simulating the needed part of HeteroData to be fed to a Pytorch Geometric encoder from a subsampling according to a given batch.
-
-    Arguments
-    ---------
-    
-    **x_dict** *(Dict[str, Tensor])*
-    : Key (str): node type
-    : Value (Tensor): [node_count for the node_type, embedding_dimension]
-    : PyTorch Geometric equivalent to node_embeddings.
-    
-    **edge_list** *(Dict[Tuple[str, str, str], Tensor])*
-    : Pytorch Geometric equivalent to `graphindices`.
-    : Each key is the tuple representing the triplet type, and the tensors are of shape [2,n] where n is the number of triplets of this type.
-    
-    **mapping** *(Dict[str, Tensor])*
-    : Dictionary allowing the mapping of nodes within the `x_dict` to their global index in the knowledge graph.
-
-    Attributes
-    ----------
-    
-    **x_dict** *(Dict[str, Tensor])*
-    : Key (str): node type
-    : Value (Tensor): [node_count for the node_type, embedding_dimension]
-    : PyTorch Geometric equivalent to node_embeddings.
-    
-    **edge_list** *(Dict[Tuple[str, str, str], Tensor])*
-    : Pytorch Geometric equivalent to `graphindices`.
-    : Each key is the tuple representing the triplet type, and the tensors are of shape [2,n] where n is the number of triplets of this type.
-    
-    **mapping** *(Dict[str, Tensor])*
-    : Dictionary allowing the mapping of nodes within the `x_dict` to their global index in the knowledge graph.
-    
-    """
     def __init__(self,
                 x_dict: Dict[str, Tensor],
                 edge_list: Dict[Tuple[str, str, str], Tensor],
                 mapping: Dict[str, Tensor]):
+        """
+        Object simulating the needed part of HeteroData to be fed to a Pytorch Geometric encoder from a subsampling according to a given batch.
+    
+        Arguments
+        ---------
+        
+        **x_dict** *(Dict[str, Tensor])*
+        : Key (str): node type
+        : Value (Tensor): [node_count for the node_type, embedding_dimension]
+        : PyTorch Geometric equivalent to node_embeddings.
+        
+        **edge_list** *(Dict[Tuple[str, str, str], Tensor])*
+        : Pytorch Geometric equivalent to `graphindices`.
+        : Each key is the tuple representing the triplet type, and the tensors are of shape [2,n] where n is the number of triplets of this type.
+        
+        **mapping** *(Dict[str, Tensor])*
+        : Dictionary allowing the mapping of nodes within the `x_dict` to their global index in the knowledge graph.
+    
+        Attributes
+        ----------
+        
+        **x_dict** *(Dict[str, Tensor])*
+        : Key (str): node type
+        : Value (Tensor): [node_count for the node_type, embedding_dimension]
+        : PyTorch Geometric equivalent to node_embeddings.
+        
+        **edge_list** *(Dict[Tuple[str, str, str], Tensor])*
+        : Pytorch Geometric equivalent to `graphindices`.
+        : Each key is the tuple representing the triplet type, and the tensors are of shape [2,n] where n is the number of triplets of this type.
+        
+        **mapping** *(Dict[str, Tensor])*
+        : Dictionary allowing the mapping of nodes within the `x_dict` to their global index in the knowledge graph.
+        
+        """
         
         self.x_dict = x_dict
         self.edge_list = edge_list
@@ -110,111 +110,6 @@ class EncoderInput:
 
 
 class KnowledgeGraph(Dataset):
-    """
-    KGATE representation of a Knowledge Graph.
-
-    Arguments
-    ---------
-    
-    **dataframe** *(pd.DataFrame, default to None)*
-    : Dataframe representing the KG as a set of triplets, with at least three columns: head, tail and edge.
-    : The values are the identifiers of the nodes and edges
-    
-    **graphindices** *(torch.Tensor, shape: [4, triplet_count], default to None)*
-    : Tensor of containing every true triplet in the knowledge graph.
-    : The four rows correspond to:
-        : 0. `head_indices`: the index of the head node of the triplet
-        : 1. `tail_indices`: the index of the tail node of the triplet
-        : 2. `edge_indices`: the index of the edge type of the triplet
-        : 3. `triplet_types`: the index of the triplet type
-    
-    **metadata** *(pd.DataFrame, default to None)*
-    : The metadata dataframe to associate to the knowledge graph.
-    : It must have at least two columns: "id" mapping to the node identifiers of the dataframe, and "type" representing the node type.
-    : Additional metadata can be added.
-    
-    **triplet_types** *(List[Tuple[str, str, str]], default to None)*
-    : List of all the triplet types in the graph represented as tuples (head_node_type, edge_type, tail_node_type).
-    
-    **node_to_index** *(Dict[str, int], default to None)*
-    : Dictionary mapping the node identifier to their index in the knowledge graph.
-    
-    **edge_to_index** *(Dict[str, int], default to None)*
-    : Dictionary mapping the edge identifier to their index in the knowledge graph.
-    
-    **node_type_to_index** *(Dict[str, int], default to None)*
-    : Dictionary mapping the node type to their index in the knowledge graph.
-    
-    **removed_triplets** *(torch.Tensor, shape: [4, removed_triplet_count], default to None)*
-    : `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
-    : They are kept in memory as they still represent ground truth.
-
-    Attributes
-    ----------
-    
-    **graphindicesvtorch.Tensor, shape: [4, triplet_count])*
-    : Tensor of containing every true triplet in the knowledge graph.
-    : The four rows correspond to:
-        : 0. `head_indices`: the index of the head node of the triplet
-        : 1. `tail_indices`: the index of the tail node of the triplet
-        : 2. `edge_indices`: the index of the edge type of the triplet
-        : 3. `triplet_types`: the index of the triplet type
-    
-    **metadata** *(pd.DataFrame)*
-    : The metadata dataframe to associate to the knowledge graph.
-    : It must have at least two columns: "id" mapping to the node identifiers of the dataframe, and "type" representing the node type.
-    : Additional metadata can be added.
-    
-    **triplet_types** *(List[Tuple[str, str, str]])*
-    : List of all the triplet types in the graph represented as tuples (head_node_type, edge_type, tail_node_type).
-    
-    **node_to_index** *(Dict[str, int], default to None)*
-    : Dictionary mapping the node identifier to their index in the knowledge graph.
-    
-    **edge_to_index** *(Dict[str, int], default to None)*
-    : Dictionary mapping the edge identifier to their index in the knowledge graph.
-    
-    **node_type_to_index** *(Dict[str, int], default to None)*
-    : Dictionary mapping the node type to their index in the knowledge graph.
-    
-    **removed_triplets** *(torch.Tensor, shape: [4, removed_triplet_count], default to None)*
-    : `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
-    : They are kept in memory as they still represent ground truth.
-    
-    **triplet_count** *(int)*
-    : Total number of triplets in the knowledge graph.
-    
-    **node_count** *(int)*
-    : Total number of nodes in the knowledge graph.
-    
-    **edge_count** *(int)*
-    : Total number of edges in the knowledge graph.
-    
-    **node_types** *(torch.Tensor)*
-    : *Missing documentation*
-    % TODO.What_that_variable_is_or_does
-    
-    **node_type_to_global** *(Dict[str, int])*
-    : *Missing documentation*
-    % TODO.What_that_variable_is_or_does
-    
-    **global_to_local_indices** *(Dict[str, int])*
-    : *Missing documentation*
-    % TODO.What_that_variable_is_or_does
-    
-    Raises
-    ------
-    
-    **ValueError**
-    : If `dataframe` is not given, `graphindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided.
-    
-    **ValueError**
-    : The `graphindices` parameter must be a 2D tensor of shape [4, triplet_count].
-    
-    **ValueError**
-    : The `removed_triplets` parameter must be a 2D tensor of shape [4, triplet_count].
-    
-    """
     def __init__(self,
                 dataframe: pd.DataFrame
                         | None = None,
@@ -232,6 +127,111 @@ class KnowledgeGraph(Dataset):
                         | None = None,
                 removed_triplets: Tensor
                         | None = None):
+        """
+        KGATE representation of a Knowledge Graph.
+
+        Arguments
+        ---------
+
+        **dataframe** *(pd.DataFrame, default to None)*
+        : Dataframe representing the KG as a set of triplets, with at least three columns: head, tail and edge.
+        : The values are the identifiers of the nodes and edges
+
+        **graphindices** *(torch.Tensor, shape: [4, triplet_count], default to None)*
+        : Tensor of containing every true triplet in the knowledge graph.
+        : The four rows correspond to:
+            : 0. `head_indices`: the index of the head node of the triplet
+            : 1. `tail_indices`: the index of the tail node of the triplet
+            : 2. `edge_indices`: the index of the edge type of the triplet
+            : 3. `triplet_types`: the index of the triplet type
+
+        **metadata** *(pd.DataFrame, default to None)*
+        : The metadata dataframe to associate to the knowledge graph.
+        : It must have at least two columns: "id" mapping to the node identifiers of the dataframe, and "type" representing the node type.
+        : Additional metadata can be added.
+
+        **triplet_types** *(List[Tuple[str, str, str]], default to None)*
+        : List of all the triplet types in the graph represented as tuples (head_node_type, edge_type, tail_node_type).
+
+        **node_to_index** *(Dict[str, int], default to None)*
+        : Dictionary mapping the node identifier to their index in the knowledge graph.
+
+        **edge_to_index** *(Dict[str, int], default to None)*
+        : Dictionary mapping the edge identifier to their index in the knowledge graph.
+
+        **node_type_to_index** *(Dict[str, int], default to None)*
+        : Dictionary mapping the node type to their index in the knowledge graph.
+
+        **removed_triplets** *(torch.Tensor, shape: [4, removed_triplet_count], default to None)*
+        : `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
+        : They are kept in memory as they still represent ground truth.
+
+        Attributes
+        ----------
+
+        **graphindices** *(torch.Tensor, shape: [4, triplet_count])*
+        : Tensor of containing every true triplet in the knowledge graph.
+        : The four rows correspond to:
+            : 0. `head_indices`: the index of the head node of the triplet
+            : 1. `tail_indices`: the index of the tail node of the triplet
+            : 2. `edge_indices`: the index of the edge type of the triplet
+            : 3. `triplet_types`: the index of the triplet type
+
+        **metadata** *(pd.DataFrame)*
+        : The metadata dataframe to associate to the knowledge graph.
+        : It must have at least two columns: "id" mapping to the node identifiers of the dataframe, and "type" representing the node type.
+        : Additional metadata can be added.
+
+        **triplet_types** *(List[Tuple[str, str, str]])*
+        : List of all the triplet types in the graph represented as tuples (head_node_type, edge_type, tail_node_type).
+
+        **node_to_index** *(Dict[str, int], default to None)*
+        : Dictionary mapping the node identifier to their index in the knowledge graph.
+
+        **edge_to_index** *(Dict[str, int], default to None)*
+        : Dictionary mapping the edge identifier to their index in the knowledge graph.
+
+        **node_type_to_index** *(Dict[str, int], default to None)*
+        : Dictionary mapping the node type to their index in the knowledge graph.
+
+        **removed_triplets** *(torch.Tensor, shape: [4, removed_triplet_count], default to None)*
+        : `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
+        : They are kept in memory as they still represent ground truth.
+
+        **triplet_count** *(int)*
+        : Total number of triplets in the knowledge graph.
+
+        **node_count** *(int)*
+        : Total number of nodes in the knowledge graph.
+
+        **edge_count** *(int)*
+        : Total number of edges in the knowledge graph.
+
+        **node_types** *(torch.Tensor)*
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
+
+        **node_type_to_global** *(Dict[str, int])*
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
+
+        **global_to_local_indices** *(Dict[str, int])*
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
+
+        Raises
+        ------
+
+        **ValueError**
+        : If `dataframe` is not given, `graphindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided.
+
+        **ValueError**
+        : The `graphindices` parameter must be a 2D tensor of shape [4, triplet_count].
+
+        **ValueError**
+        : The `removed_triplets` parameter must be a 2D tensor of shape [4, triplet_count].
+
+        """
         
         if dataframe is None:
             assert  graphindices is not None and \
