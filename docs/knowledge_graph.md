@@ -3,81 +3,151 @@
 KGATE uses its own `KnowledgeGraph` class, inspired by [TorchKGE](https://github.com/torchkge-team/torchkge)'s own [KnowledgeGraph](https://github.com/torchkge-team/torchkge/blob/master/torchkge/data_structures.py) class. However, our data structure is compatible with [Pytorch Geometric](https://github.com/pyg-team/pytorch_geometric)'s representation format.
 
 ## EncoderInput
-```{autodoc2-docstring} kgate.knowledgegraph.EncoderInput
+```{autodoc2-object} kgate.knowledgegraph.EncoderInput
 
 ```
 
 ## KnowledgeGraph
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### head_idx
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.head_idx
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### tail_idx
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.tail_idx
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### relations
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.relations
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### head_indices
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.head_indices
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### tail_indices
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.tail_indices
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### edge_indices
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.edge_indices
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### triplets
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.triplets
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### edge_list
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.edge_list
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### n_facts
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.n_facts
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### identity
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.identity
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### set_identity
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.set_identity
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### add_metadata
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.add_metadata
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### get_dataframe
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.get_dataframe
 
 ```
 
-### PLACEHOLDER
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.PLACEHOLDER
+### split_kg
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.split_kg
+
+```
+
+### get_mask
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.get_mask
+
+```
+
+### keep_triplets
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.keep_triplets
+
+```
+
+### remove_triplets
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.remove_triplets
+
+```
+
+### add_triplets
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.add_triplets
+
+```
+
+### add_reverse_edges
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.add_reverse_edges
+
+```
+
+### remove_duplicate_triplets
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.remove_duplicate_triplets
+
+```
+
+### get_pairs
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.get_pairs
+
+```
+
+### duplicates
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.duplicates
+
+```
+
+### cartesian_product_edges
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.cartesian_product_edges
+
+```
+
+### get_encoder_input
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.get_encoder_input
+
+```
+
+### flatten_embeddings
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.flatten_embeddings
+
+```
+
+### clean
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.clean
+
+```
+
+### from_hetero_data
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.from_hetero_data
+
+```
+
+### from_torchkge
+```{autodoc2-object} kgate.knowledgegraph.KnowledgeGraph.from_torchkge
 
 ```

@@ -35,15 +35,10 @@ logging.basicConfig(
 
 class EncoderInput:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Object simulating the needed part of HeteroData to be fed to a Pytorch Geometric encoder from a subsampling according to a given batch.
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **x_dict** *(Dict[str, Tensor])*
     : Key (str): node type
@@ -116,15 +111,10 @@ class EncoderInput:
 
 class KnowledgeGraph(Dataset):
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     KGATE representation of a Knowledge Graph.
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **dataframe** *(pd.DataFrame, default to None)*
     : Dataframe representing the KG as a set of triplets, with at least three columns: head, tail and edge.
@@ -159,9 +149,8 @@ class KnowledgeGraph(Dataset):
     : `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
     : They are kept in memory as they still represent ground truth.
 
-    <span style="color:#8B0000"> 
-    <strong>Attributes</strong>
-    </span>
+    Attributes
+    ----------
     
     **graphindicesvtorch.Tensor, shape: [4, triplet_count])*
     : Tensor of containing every true triplet in the knowledge graph.
@@ -213,9 +202,8 @@ class KnowledgeGraph(Dataset):
     : *Missing documentation*
     % TODO.What_that_variable_is_or_does
     
-    <span style="color:#8B0000"> 
-    <strong>Raises</strong>
-    </span>
+    Raises
+    ------
     
     **ValueError**
     : If `dataframe` is not given, `graphindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided.
@@ -382,13 +370,9 @@ class KnowledgeGraph(Dataset):
     @property
     def head_idx(self) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
+        TorchKGE alias for head_indices
         
         This function is a property.
-
-        TorchKGE alias for head_indices
         """
         return self.head_indices
 
@@ -396,13 +380,9 @@ class KnowledgeGraph(Dataset):
     @property
     def tail_idx(self) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
+        TorchKGE alias for tail_indices
         
         This function is a property.
-
-        TorchKGE alias for tail_indices
         """
         return self.tail_indices
     
@@ -410,13 +390,9 @@ class KnowledgeGraph(Dataset):
     @property
     def relations(self) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
+        TorchKGE alias for edge_indices
         
         This function is a property.
-
-        TorchKGE alias for edge_indices
         """
         return self.edge_indices
 
@@ -424,13 +400,9 @@ class KnowledgeGraph(Dataset):
     @property
     def head_indices(self) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
+        Tensor of the head indices for all triplets contained in this knowledge graph.
         
         This function is a property.
-
-        Tensor of the head indices for all triplets contained in this knowledge graph.
         
         """
         return self.graphindices[0]
@@ -439,13 +411,9 @@ class KnowledgeGraph(Dataset):
     @property
     def tail_indices(self) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
+        Tensor of the tail indices for all triplets contained in this knowledge graph.
         
         This function is a property.
-
-        Tensor of the tail indices for all triplets contained in this knowledge graph.
         
         """
         return self.graphindices[1]
@@ -454,13 +422,9 @@ class KnowledgeGraph(Dataset):
     @property
     def edge_indices(self) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
+        Tensor of the edge indices for all triplets contained in this knowledge graph.
         
         This function is a property.
-
-        Tensor of the edge indices for all triplets contained in this knowledge graph.
 
         """
         return self.graphindices[2]
@@ -469,13 +433,9 @@ class KnowledgeGraph(Dataset):
     @property
     def triplets(self) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
+        Tensor of the triplet types indices for all triplets contained in this knowledge graph.
         
         This function is a property.
-
-        Tensor of the triplet types indices for all triplets contained in this knowledge graph.
         
         """
         return self.graphindices[3]
@@ -484,15 +444,11 @@ class KnowledgeGraph(Dataset):
     @property
     def edge_list(self) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-        
-        This function is a property.
-
         Tensor of shape [2, triplet_count] where the first row is equivalent to `head_indices` and the second to `tail_indices`.
         
         Represents the knowledge graph as an edge list, without using the semantic meaning of the edges.
+        
+        This function is a property.
         
         """
         return self.graphindices[:2]
@@ -501,13 +457,9 @@ class KnowledgeGraph(Dataset):
     @property
     def n_facts(self) -> int:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
+        TorchKGE alias for `triplet_count`. Property for compatibility.
         
         This function is a property.
-
-        TorchKGE alias for `triplet_count`. Property for compatibility.
             
         """
         return self.triplet_count
@@ -516,15 +468,11 @@ class KnowledgeGraph(Dataset):
     @property
     def identity(self) -> pd.DataFrame:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-        
-        This function is a property.
-
         Get the DataFrame containing all the identity of the knowledge graph nodes.
         
         The default identity is the node ID, but different values can be set using the `set_identity` method.
+        
+        This function is a property.
         
         """
         if self.metadata is not None:
@@ -537,30 +485,34 @@ class KnowledgeGraph(Dataset):
         """
         Set the identity of the knowledge graph nodes.
         
-        To set an identity, there must be a metadata dataframe given to the knowledge graph, and the identity must correspond to a
-        column name of this metadata dataframe. Identities are useful to explore the knowledge graph without relying solely on meaningless
+        To set an identity, there must be a metadata dataframe given to the knowledge graph, and the identity must correspond to a 
+        column name of this metadata dataframe. Identities are useful to explore the knowledge graph without relying solely on meaningless 
         identifiers but on node names instead, for example.
         
-        It is best if all values of an identity are unique in order to identify an individual node, though that is not strictly enforced.
-        If that is not the case, functions using identities might have unexpected behavior. To get the dataframe corresponding to the current
+        It is best if all values of an identity are unique in order to identify an individual node, though that is not strictly enforced. 
+        If that is not the case, functions using identities might have unexpected behavior. To get the dataframe corresponding to the current 
         identity, call the `identity` property.
         
         Arguments
         ---------
-        new_identity: str
-            The name of the new identity, which must exist in the metadata.
+        
+        **new_identity** *(str)*
+        : The name of the new identity, which must exist in the metadata.
         
         Raises
         ------
-        AssertionError #1
-            Metadata is required to set an identity.
-        AssertionError #2
-            The given identity is not a valid data name.
+        
+        AssertionError #1**
+        : Metadata is required to set an identity.
+        
+        AssertionError #2**
+        : The given identity is not a valid data name.
         
         Warns
         -----
+        
         If all values are not unique in the new identity, a warning will be issued.
-            
+        
         """
         assert self.metadata is not None, "You need to add metadata in order to set an identity."
         assert new_identity in self.metadata, f"The given identity is not a valid metadata name. Valid names are: {self.metadata.columns}."
@@ -575,22 +527,26 @@ class KnowledgeGraph(Dataset):
         """
         Add a new metadata dataframe to the existing one or create it.
         
-        If there is already a metadata dataframe associated with the knowledge graph, the new one must have an identical "id" column to be valid.
+        If there is already a metadata dataframe associated with the knowledge graph, the new one must have an identical "id" column to be valid. 
         If there is no metadata, then the given dataframe must contain at least the columns "id" and "type".
 
         Arguments
         ---------
-        metadata: pd.DataFrame
-            The metadata dataframe to associate to the knowledge graph.
+        
+        **metadata** *(pd.DataFrame)*
+        : The metadata dataframe to associate to the knowledge graph.
         
         Raises
         ------
-        AssertionError #1
-            The metadata dataframe must have at least the columns `type` and `id`.
-        AssertionError #2
-            The number of rows in the metadata dataframe must match the number of nodes in the graph.
-        AssertionError #3
-            The metadata dataframe must have an `id` column identical to the existing metadata.
+        
+        **AssertionError #1**
+        : The metadata dataframe must have at least the columns `type` and `id`.
+        
+        **AssertionError #2**
+        : The number of rows in the metadata dataframe must match the number of nodes in the graph.
+        
+        **AssertionError #3**
+        : The metadata dataframe must have an `id` column identical to the existing metadata.
         
         """
         if self.metadata is None:
@@ -608,8 +564,9 @@ class KnowledgeGraph(Dataset):
 
         Returns
         -------
-        dataframe: pd.DataFrame
-            Dataframe with columns ['head', 'tail', 'edge'].
+        
+        **dataframe** *(pd.DataFrame)*
+        : Dataframe with columns ['head', 'tail', 'edge'].
         
         """
         index_to_node = {value: key for key, value in self.node_to_index.items()}
@@ -636,23 +593,28 @@ class KnowledgeGraph(Dataset):
 
         Arguments
         ---------
-        split_proportions: Tuple[float, float, float], optional, default to (0.8, 0.1, 0.1)
-            Proportions of the given knowledge graph data that must be attributed
-            respectively to the subsets train, validation and test.
-        sizes: Tuple[int, int, int], optional, default to None
-            Sizes of respectively to the subsets train, validation and test.
+        
+        **split_proportions** *(Tuple[float, float, float], optional, default to (0.8, 0.1, 0.1))*
+        : Proportions of the given knowledge graph data that must be attributed 
+        respectively to the subsets train, validation and test.
+        
+        **sizes** *(Tuple[int, int, int], optional, default to None)*
+        : Sizes of respectively to the subsets train, validation and test.
 
         Raises
         ------
-        AssertionError #1
-            The sum of provided sizes must match the number of triplets.
-        AssertionError #2
-            The sum of provided shares (`split_proportions`) must be equal to 1.
+        
+        **AssertionError #1**
+        : The sum of provided sizes must match the number of triplets.
+        
+        **AssertionError #2**
+        : The sum of provided shares (`split_proportions`) must be equal to 1.
 
         Returns
         -------
-        kgs: Tuple[Self, Self, Self]
-            3 new instances of KnowledgeGraph: train, validation, test.
+        
+        **kgs** *(Tuple[Self, Self, Self])*
+        : 3 new instances of KnowledgeGraph: train, validation, test.
             
         """
         if sizes is not None:
@@ -736,31 +698,39 @@ class KnowledgeGraph(Dataset):
                 ) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Return the proper train, validation and test masks with proportion of each triplet type corresponding to the given values.
+        
         This method is called by the `split_kg` method.
 
         Arguments
         ---------
-        split_proportions: Tuple[float, float, float]
-            Proportions of the given knowledge graph data that must be attributed
-            respectively to the subsets train, validation and test.
+        
+        **split_proportions: Tuple[float, float, float]
+        : Proportions of the given knowledge graph data that must be attributed 
+        respectively to the subsets train, validation and test.
 
         Raises
         ------
-        AssertionError #1
-            The size of the mask subset must correspond to the number of unique edges.
-        AssertionError #2
-            The sum of train, validation and test sets sizes mus correspond to the mask subset size.
-        AssertionError #3
-            The train mask subset and the validation mask subset must not have any common item.
+        
+        **AssertionError #1**
+        : The size of the mask subset must correspond to the number of unique edges.
+        
+        **AssertionError #2**
+        : The sum of train, validation and test sets sizes mus correspond to the mask subset size.
+        
+        **AssertionError #3**
+        : The train mask subset and the validation mask subset must not have any common item.
 
         Returns
         -------
-        train_mask: torch.Tensor
-            Boolean mask representing the train set.
-        validation_mask: torch.Tensor
-            Boolean mask representing the validation set.
-        test_mask: torch.Tensor
-            Boolean mask representing the test set.
+        
+        **train_mask** *(torch.Tensor)*
+        : Boolean mask representing the train set.
+        
+        **validation_mask** *(torch.Tensor)*
+        : Boolean mask representing the validation set.
+        
+        **test_mask** *(torch.Tensor)*
+        : Boolean mask representing the test set.
             
         """
         unique_edges, edge_counts = self.edge_indices.unique(return_counts = True)
@@ -792,19 +762,21 @@ class KnowledgeGraph(Dataset):
                     indices_to_keep: List[int] | torch.Tensor
                     ) -> Self:
         """
-        Keeps only the specified triplets in the knowledge graph and returns a new
+        Keeps only the specified triplets in the knowledge graph and returns a new 
         KnowledgeGraph instance with these triplets.
 
         Arguments
         ---------
-        indices_to_keep : List[int] or torch.Tensor
-            Indices of triplets to keep in the knowledge graph.
+        
+        **indices_to_keep** *(List[int] or torch.Tensor)*
+        : Indices of triplets to keep in the knowledge graph.
 
         Returns
         -------
-        KnowledgeGraph
-            A new instance of KnowledgeGraph with only the specified triplets.
-            
+        
+        **new_kg** *(KnowledgeGraph)*
+        : A new instance of KnowledgeGraph with only the specified triplets.
+        
         """
         # Create masks for indices to keep
         mask = torch.zeros(self.triplet_count, dtype = torch.bool)
@@ -812,7 +784,7 @@ class KnowledgeGraph(Dataset):
         removed_triplets = cat([self.removed_triplets, self.graphindices[:, ~mask]], dim = 1)
 
         # Create a new KnowledgeGraph instance
-        return self.__class__(
+        new_kg = self.__class__(
             graphindices = self.graphindices[:, mask],
             triplet_types = self.triplet_types,
             node_to_index = self.node_to_index,
@@ -820,32 +792,36 @@ class KnowledgeGraph(Dataset):
             node_type_to_index = self.node_type_to_index,
             removed_triplets = removed_triplets
         )
+        
+        return new_kg
 
 
     def remove_triplets(self,
                         indices_to_remove: List[int] | torch.Tensor
                         ) -> Self:
         """
-        Removes specified triplets from the knowledge graph and returns a new
+        Removes specified triplets from the knowledge graph and returns a new 
         KnowledgeGraph instance without these triplets.
 
         Arguments
         ---------
-        indices_to_remove : List[int] or torch.Tensor
-            Indices of triplets to remove from the knowledge graph.
+        
+        **indices_to_remove** *(List[int] or torch.Tensor)*
+        : Indices of triplets to remove from the knowledge graph.
 
         Returns
         -------
-        KnowledgeGraph
-            A new instance of KnowledgeGraph without the specified triplets.
-            
+        
+        **new_kg** *(KnowledgeGraph)*
+        : A new instance of KnowledgeGraph without the specified triplets.
+        
         """
         # Create masks for indices not to remove
         mask = torch.ones(self.triplet_count, dtype = torch.bool)
         mask[indices_to_remove] = False
         removed_triplets = cat([self.removed_triplets, self.graphindices[:, ~mask]], dim = 1)
 
-        return self.__class__(
+        new_kg = self.__class__(
             graphindices = self.graphindices[:, mask],
             triplet_types = self.triplet_types,
             node_to_index = self.node_to_index,
@@ -853,6 +829,8 @@ class KnowledgeGraph(Dataset):
             node_type_to_index = self.node_type_to_index,
             removed_triplets = removed_triplets
         )
+        
+        return new_kg
     
     
     def add_triplets(self,
@@ -863,23 +841,28 @@ class KnowledgeGraph(Dataset):
 
         Arguments
         ---------
-        new_triplets : torch.Tensor
-            Tensor of shape [4, n] where each column represents a triplet (head_index, tail_index, edge_index, triplet_type).
+        
+        **new_triplets** *(torch.Tensor)*
+        : Tensor of shape [4, n] where each column represents a triplet (head_index, tail_index, edge_index, triplet_type).
 
         Raises
         ------
-        AssertionError
-            The tensor new_triplets must have shape [4, n].
-        ValueError #1
-            The maximum node index must not be superior to the number of nodes.
-        ValueError #2
-            The maximum triplet index must not be superior to the number of edges.
+        
+        **AssertionError**
+        : The tensor new_triplets must have shape [4, n].
+        
+        **ValueError #1**
+        : The maximum node index must not be superior to the number of nodes.
+        
+        **ValueError #2**
+        : The maximum triplet index must not be superior to the number of edges.
 
         Returns
         -------
-        KnowledgeGraph
-            A new instance of KnowledgeGraph with the updated triplets.
-            
+        
+        **new_kg** *(KnowledgeGraph)*
+        : A new instance of KnowledgeGraph with the updated triplets.
+        
         """
         assert new_triplets.dim() == 2 and new_triplets.size(0) == 4, "new_triplets must have shape [4, n]"
 
@@ -895,7 +878,7 @@ class KnowledgeGraph(Dataset):
         updated_graphindices = cat([self.graphindices, new_triplets], dim = 1)
 
         # Create a new instance of the class with updated triplets
-        return self.__class__(
+        new_kg = self.__class__(
             graphindices = updated_graphindices,
             triplet_types = self.triplet_types,
             node_to_index = self.node_to_index,
@@ -903,6 +886,8 @@ class KnowledgeGraph(Dataset):
             node_type_to_index = self.node_type_to_index,
             removed_triplets = self.removed_triplets
         )
+        
+        return new_kg
     
 
     def add_reverse_edges(self,
@@ -910,22 +895,26 @@ class KnowledgeGraph(Dataset):
                         ) -> Tuple[Self, List[int]]:
         """
         Adds reverse triplets for the specified undirected edges in the knowledge graph.
-        Updates head_index, tail_index, edges with the reverse triplets, and updates the dictionaries to include
+        
+        Updates `head_index`, `tail_index`, `edges` with the reverse triplets, and updates the dictionaries to include 
         both original and reverse triplets in all directions.
 
         Arguments
         ----------
-        undirected_edges: List[int]
-            List of undirected edges for which reverse triplets should be added.
+        
+        **undirected_edges: List[int])*
+        : List of undirected edges for which reverse triplets should be added.
 
         Returns
         -------
-        kg: Self 
-            The updated KnowledgeGraph with the dictionaries and tensors modified,
-            and a list of pairs (old edge ID, new reverse edge ID).
-        reverse_list: List[int]
-            List of all original and reverse triplets, in all directions.
-            
+        
+        **kg** *(Self)*
+        : The updated KnowledgeGraph with the dictionaries and tensors modified, 
+        and a list of pairs (old edge ID, new reverse edge ID).
+        
+        **reverse_list** *(List[int])*
+        : List of all original and reverse triplets, in all directions.
+        
         """
         index_to_edge = {value: key for key, value in self.edge_to_index.items()}
 
@@ -990,19 +979,20 @@ class KnowledgeGraph(Dataset):
         """
         Remove duplicate triplets from a knowledge graph for each edge and keep only unique triplets.
 
-        This function processes each edge separately, identifies unique triplets based on head and tail indices,
+        This function processes each edge separately, identifies unique triplets based on head and tail indices, 
         and retains only the unique triplets by filtering out duplicates.
         
-        The function also updates a dictionary `pair_dictionnary` which holds pairs of head and tail indices for each edge
+        The function also updates a dictionary `pair_dictionary` which holds pairs of head and tail indices for each edge 
         along with their original indices in the dataset.
 
         Returns
         -------
-        kg: KnowledgeGraph
-            A new instance of the KnowledgeGraph containing only unique triplets.
+        
+        **kg: KnowledgeGraph
+        : A new instance of the KnowledgeGraph containing only unique triplets.
 
         """
-        pair_dictionnary = {}  # Dictionary to store pairs for each edge
+        pair_dictionary = {}  # Dictionary to store pairs for each edge
         indices_to_keep = torch.tensor([], dtype = torch.long)  # Tensor to store indices of triplets to keep
 
         head_indices, tail_indices, edge_indices = self.head_indices, self.tail_indices, self.edge_indices
@@ -1024,7 +1014,7 @@ class KnowledgeGraph(Dataset):
                                 dim = 1)
 
             # Create a dictionary entry for the edge with pairs
-            pair_dictionnary[edge_type_index] = pairs
+            pair_dictionary[edge_type_index] = pairs
 
             # Identify unique triplets and their original indices
             unique_triplets, indices, counts = torch.unique(pairs[:, :2],
@@ -1060,25 +1050,30 @@ class KnowledgeGraph(Dataset):
 
         References
         ----------
-        Copied from TorchKGE.
+        
+        Function copied from TorchKGE.
 
         Arguments
         ---------
-        edge_type_index: int
-            Index of the edge type to get the node pair of.
-        type: Literal["head_tail", "tail_head"], default to "head_tail"
-            Format the node is given back as, either head then tail or tail then head.
+        
+        **edge_type_index** *(int)*
+        : Index of the edge type to get the node pair of.
+        
+        **type** *(Literal["head_tail", "tail_head"], default to "head_tail")*
+        : Format the node is given back as, either head then tail or tail then head.
 
         Raises
         ------
-        AssertionError #1
-            If the type is not "head_tail" then it must be "tail_head".
+        
+        **AssertionError #1**
+        : If the type is not "head_tail" then it must be "tail_head".
 
         Returns
         -------
-        node_pair: Set[Tuple[Number, Number]
-            The head/tail or tail/head pair associated to the given edge.
-            
+        
+        **node_pair** *(Set[Tuple[Number, Number])*
+        : The head/tail or tail/head pair associated to the given edge.
+        
         """
         mask = (self.edge_indices == edge_type_index)
 
@@ -1102,11 +1097,12 @@ class KnowledgeGraph(Dataset):
                         | None = None
                     ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
         """
-        Return the duplicate and reverse duplicate edges as explained
+        Return the duplicate and reverse duplicate edges as explained 
         in paper by Akrami et al.
 
         References
         ----------
+        
         * Farahnaz Akrami, Mohammed Samiul Saeef, Quingheng Zhang.
         `Realistic Re-evaluation of Knowledge Graph Completion Methods:
         An Experimental Study.`
@@ -1115,19 +1111,24 @@ class KnowledgeGraph(Dataset):
 
         Arguments
         ---------
-        theta_first_edge_type: float, default to 0.8
-            First threshold (see paper).
-        theta_second_edge_type: float, default to 0.8
-            Second threshold (see paper).
-        reverse_edges_list: List[int], optional, default to None
-            List of known reverse edges.
+        
+        **theta_first_edge_type** *(float, default to 0.8)*
+        : First threshold (see paper).
+        
+        **theta_second_edge_type** *(float, default to 0.8)*
+        : Second threshold (see paper).
+        
+        **reverse_edges_list** *(List[int], optional, default to None)*
+        : List of known reverse edges.
 
         Returns
         -------
-        duplicates: List[Tuple[int, int]]
-            List of pairs giving duplicate edges.
-        reverse_duplicates: List[Tuple[int, int]]
-            List of pairs giving reverse duplicate edges.
+        
+        **duplicates** *(List[Tuple[int, int]])*
+        : List of pairs giving duplicate edges.
+        
+        **reverse_duplicates** *(List[Tuple[int, int]])*
+        : List of pairs giving reverse duplicate edges.
         
         """
         if reverse_edges_list is None:
@@ -1188,11 +1189,12 @@ class KnowledgeGraph(Dataset):
                                 theta: float = 0.8
                                 ) -> List[int]:
         """
-        Return the cartesian product edges as explained in paper by
+        Return the cartesian product edges as explained in paper by 
         Akrami et al.
 
         References
         ----------
+        
         * Farahnaz Akrami, Mohammed Samiul Saeef, Quingheng Zhang.
         `Realistic Re-evaluation of Knowledge Graph Completion Methods: An
         Experimental Study.`
@@ -1201,14 +1203,16 @@ class KnowledgeGraph(Dataset):
 
         Arguments
         ---------
-        theta: float, default to 0.8
-            Threshold used to compute the cartesian product edges.
+        
+        **theta** *(float, default to 0.8)*
+        : Threshold used to compute the cartesian product edges.
 
         Returns
         -------
-        selected_edges: List[int]
-            List of edge indices that are cartesian product edges
-            (see paper for details).
+        
+        **selected_edges** *(List[int])*
+        : List of edge indices that are cartesian product edges 
+        (see paper for details).
 
         """
         selected_edges = []
@@ -1245,23 +1249,28 @@ class KnowledgeGraph(Dataset):
 
         Arguments
         ---------
-        data: torch.Tensor, shape: [4, batch_size]
-            `graphindices`-like tensor
-        node_embedding: nn.ParameterList
-            A list containing all embeddings for each node type.
-            keys: node type index
-            values: tensors of shape (node_count, embedding_dimensions)
+        
+        **data** *(torch.Tensor, shape: [4, batch_size])*
+        : `graphindices`-like tensor
+        
+        **node_embedding** *(nn.ParameterList)*
+        : A list containing all embeddings for each node type.
+        : keys: node type index
+        : values: tensors of shape (node_count, embedding_dimensions)
 
         Raises
         ------
-        AssertionError
-            TODO.What_that_means_comma_causes_comma_and_fixes_if_easy
+        
+        **AssertionError**
+        : *Missing documentation*
+        % TODO: what that means, causes, and fixes if easy
 
         Returns
         -------
-        encoder_input: EncoderInput
-            Object simulating the needed part of HeteroData to be fed to a Pytorch Geometric encoder
-            from a subsampling according to a given batch.
+        
+        **encoder_input** *(EncoderInput)*
+        : Object simulating the needed part of HeteroData to be fed to a Pytorch Geometric encoder 
+        from a subsampling according to a given batch.
         
         """
         assert data.device == node_embedding[0].device
@@ -1318,24 +1327,25 @@ class KnowledgeGraph(Dataset):
                             node_embeddings: nn.ParameterList
                             ) -> Tensor:
         """
-        TODO.What_the_function_does_about_globally
-
-        References
-        ----------
-        TODO
+        *Missing documentation*
+        
+        % TODO.What_the_function_does_about_globally
 
         Arguments
         ---------
-        node_embeddings: nn.ParameterList, keyword-only
-            A list containing all embeddings for each node type.
-            keys: node type index
-            values: tensors of shape (node_count, embedding_dimensions)
+        
+        **node_embeddings** *(nn.ParameterList, keyword-only)*
+        : A list containing all embeddings for each node type.
+        : keys: node type index
+        : values: tensors of shape (node_count, embedding_dimensions)
 
         Returns
         -------
+        
         embeddings: torch.Tensor
-            TODO.What_that_variable_is_or_does
-            
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
+        
         """
         embeddings: torch.Tensor = torch.zeros((self.node_count, node_embeddings[0].size(1)),
                                                 device = node_embeddings[0].device,
@@ -1355,13 +1365,6 @@ class KnowledgeGraph(Dataset):
         """
         self.triplet_types = [triplet for triplet in self.triplet_types if triplet[1] != "self"]
 
-    def clean(self):
-        """
-        Clean the KnowledgeGraph object by removing all self loops with "self" as their edge type.
-        
-        """
-        self.triplet_types = [triplet for triplet in self.triplet_types if triplet[1] != "self"]
-
 
     @staticmethod
     def from_hetero_data(hetero_data: HeteroData):
@@ -1370,33 +1373,15 @@ class KnowledgeGraph(Dataset):
         
         Arguments
         ---------
-        hetero_data : HeteroData
-            The knowledge graph as a PyTorch Geometric HeteroData object.
-
-        Returns
-        -------
-        KnowledgeGraph
-            The knowledge graph as a KGATE KnowledgeGraph object.
-            
-        """
-        # TODO for PyTorch Geometric compatibility
-        pass
-
-
-    @staticmethod
-    def from_hetero_data(hetero_data: HeteroData):
-        """
-        Create a new KGATE KnowledgeGraph instance from the PyTorch Geometric HeteroData object.
         
-        Arguments
-        ---------
-        hetero_data : HeteroData
-            The knowledge graph as a PyTorch Geometric HeteroData object.
+        **hetero_data** *(HeteroData)*
+        : The knowledge graph as a PyTorch Geometric HeteroData object.
 
         Returns
         -------
-        KnowledgeGraph
-            The knowledge graph as a KGATE KnowledgeGraph object.
+        
+        *(KnowledgeGraph)*
+        : The knowledge graph as a KGATE KnowledgeGraph object.
             
         """
         # TODO for PyTorch Geometric compatibility
@@ -1412,16 +1397,19 @@ class KnowledgeGraph(Dataset):
         
         Arguments
         ---------
-        torchkge_kg : torchKGE.KnowledgeGraph
-            The knowledge graph as a torchKGE KnowledgeGraph object.
-        metadata : pd.DataFrame, optional
-            The metadata of the knowledge graph, with at least the columns "id" and "type".
+        
+        **torchkge_kg** *(torchKGE.KnowledgeGraph)*
+        : The knowledge graph as a torchKGE KnowledgeGraph object.
+        
+        **metadata** *(pd.DataFrame, optional)*
+        : The metadata of the knowledge graph, with at least the columns "id" and "type".
 
         Returns
         -------
-        KnowledgeGraph
-            The knowledge graph as a KGATE KnowledgeGraph object.
-            
+        
+        **KnowledgeGraph)*
+        : The knowledge graph as a KGATE KnowledgeGraph object.
+        
         """
         if metadata is None:
             graphindices = torch.stack([torchkge_kg.head_idx,
@@ -1433,14 +1421,18 @@ class KnowledgeGraph(Dataset):
             triplet_types = [("Node", edge, "Node")
                             for edge
                             in torchkge_kg.rel2ix]
-
-            return KnowledgeGraph(  graphindices = graphindices,
+            
+            new_kg = KnowledgeGraph(graphindices = graphindices,
                                     triplet_types = triplet_types,
                                     node_to_index = torchkge_kg.ent2ix,
                                     edge_to_index = torchkge_kg.rel2ix,
                                     node_type_to_index = node_type_to_index)
+            return new_kg
+        
         else:
-            return KnowledgeGraph(  dataframe = torchkge_kg.get_df(),
+            new_kg = KnowledgeGraph(dataframe = torchkge_kg.get_df(),
                                     metadata = metadata,
                                     node_to_index = torchkge_kg.ent2ix,
                                     edge_to_index = torchkge_kg.rel2ix)
+            return new_kg
+        
