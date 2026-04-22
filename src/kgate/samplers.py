@@ -25,10 +25,6 @@ from .utils import get_bernoulli_probabilities
 
 class NegativeSampler:
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     Interface for negative samplers of KGATE.
 
     The interface doesn't have an __init__ method as inheriting samplers are supposed 
@@ -43,17 +39,12 @@ class NegativeSampler:
                         negative_triplet_count = None
                         ) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-        
         For each true triplet, produce a corrupted one not different from 
         any other true triplet. If `heads` and `tails` are cuda objects, 
         then the returned tensors are on the GPU.
 
-        <span style="color:#8B0000"> 
-        <strong>Arguments</strong>
-        </span>
+        Arguments
+        ---------
         
         **batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
         : Tensor containing the integer key of heads, tails, edges and triplets of the edges in the current batch.
@@ -62,9 +53,8 @@ class NegativeSampler:
         **negative_triplet_count** *(int, optional, default to None)*
         : Number of negative samples to create from each triplet. If None, `self.negative_triplet_count` is used.
 
-        <span style="color:#8B0000"> 
-        <strong>Raises</strong>
-        </span>
+        Raises
+        ------
         
         **NotImplementedError**
         : The `corrupt_batch` method must be implemented by a negative sampler inheriting from this interface.
@@ -76,10 +66,6 @@ class NegativeSampler:
 
 class UniformNegativeSampler(NegativeSampler):
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     This class inherits from the NegativeSampler interface.
     
     For each edge, choose simultenously head and tail from Bernoulli random distribution.
@@ -91,9 +77,8 @@ class UniformNegativeSampler(NegativeSampler):
 
     % TODO: missing references
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **kg** *(KnowledgeGraph)*
     : Knowledge graph on which the sampling will be done.
@@ -101,9 +86,8 @@ class UniformNegativeSampler(NegativeSampler):
     **negative_triplet_count** *(int, optional, default to 1)*
     : Number of negative samples to create from each triplet.
 
-    <span style="color:#8B0000"> 
-    <strong>Attributes</strong>
-    </span>
+    Attributes
+    ----------
     
     **index_to_node_type** *(Dict[int, str])*
     : keys: node index
@@ -138,17 +122,12 @@ class UniformNegativeSampler(NegativeSampler):
                         negative_triplet_count = None
                         ) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-    
         For each true triplet, produce a corrupted one not different from 
         any other true triplet. If `heads` and `tails` are cuda objects, 
         then the returned tensors are on the GPU.
 
-        <span style="color:#8B0000"> 
-        <strong>Arguments</strong>
-        </span>
+        Arguments
+        ---------
         
         **batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
         : Tensor containing the integer key of heads, tails, edges and triplets of the edges in the current batch.
@@ -157,9 +136,8 @@ class UniformNegativeSampler(NegativeSampler):
         **negative_triplet_count** *(int, optional, default to None)*
         : Number of negative samples to create from each triplet. If None, self.negative_triplet_count is used.
 
-        <span style="color:#8B0000"> 
-        <strong>Returns</strong>
-        </span>
+        Returns
+        -------
         
         **negative_triplets_batch** *(torch.Tensor, dtype: torch.long, shape: [4, negative_triplet_count * batch_size])*
         : Tensor containing the integer key of negatively sampled triplets of the edges in the current batch.
@@ -224,10 +202,6 @@ class UniformNegativeSampler(NegativeSampler):
 
 class BernoulliNegativeSampler(NegativeSampler):
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-
     This class inherits from the NegativeSampler interface.
     
     For each edge, choose head from Bernoulli random distribution, then tail from Bernoulli random distribution.
@@ -239,9 +213,8 @@ class BernoulliNegativeSampler(NegativeSampler):
 
     % TODO: references
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **kg** *(KnowledgeGraph)*
     : Knowledge graph on which the sampling will be done.
@@ -249,9 +222,8 @@ class BernoulliNegativeSampler(NegativeSampler):
     **negative_triplet_count** *(int, optional, default to 1)*
     : Number of negative samples to create from each triplet.
 
-    <span style="color:#8B0000"> 
-    <strong>Attributes</strong>
-    </span>
+    Attributes
+    ----------
     
     **index_to_node_type** *(Dict[int, str])*
     : keys: node index
@@ -287,19 +259,14 @@ class BernoulliNegativeSampler(NegativeSampler):
 
     def evaluate_bernoulli_probabilities(self) -> torch.Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-
         Evaluate the Bernoulli probabilities as in the TransH original paper.
         
         Code adapted from the TorchKGE function. The bernoullis probabilities are sampled 
         from the average number of heads per tail and tails per head, for each edge type. If 
         the probability for an edge type has not been sampled, it will be set to 0.5.
         
-        <span style="color:#8B0000"> 
-        <strong>Returns</strong>
-        </span>
+        Returns
+        -------
         
         **bernoulli_probabilities** *(torch.Tensor, dtype: torch.float, shape: [edge_count])*
         : Tensor containing the probabilities of sampling a head for each edge.
@@ -406,10 +373,6 @@ class BernoulliNegativeSampler(NegativeSampler):
 
 class PositionalNegativeSampler(BernoulliNegativeSampler):
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-
     This class inherits from the BernoulliNegativeSampler class. It inherites its attributes as well.
     
     Adaptation of torchKGE's PositionalNegativeSampler to KGATE's graphindices format.
@@ -421,16 +384,14 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
     If the corrupted triplet is of a type that doesn't exist in the original knowledge graph, 
     it is created.
 
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **kg** *(kgate.data_structure.KnowledgeGraph)*
     : Knowledge graph from which the corrupted triplets will be created.
 
-    <span style="color:#8B0000"> 
-    <strong>Attributes</strong>
-    </span>
+    Attributes
+    ----------
     
     **possible_heads** *(Dict[int, torch.Tensor])*
     : keys: edges
@@ -468,9 +429,8 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
     **negative_triplet_count** *(int)*
     : Number of negative samples to create from each triplet.
     
-    <span style="color:#8B0000"> 
-    <strong>Notes</strong>
-    </span>
+    Notes
+    -----
     
     Also fixes GPU/CPU incompatibility bug.
     
@@ -493,18 +453,13 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
                                 Tensor, 
                                 Tensor]:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-        
         For each edge of the knowledge graph (and possibly the 
         validation graph but not the test graph) find all the possible heads 
         and tails in the sense of Wang et al., e.g. all nodes that occupy 
         once this position in another triplet.
 
-        <span style="color:#8B0000"> 
-        <strong>Returns</strong>
-        </span>
+        Returns
+        -------
         
         **possible_heads** *(Dict[int, List[int]])*
         : keys : edge index
@@ -550,25 +505,19 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
                         _: int = 1
                         ) -> Tensor:
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-        
         For each true triplet, produce a corrupted one not different from 
         any other true triplet. If `heads` and `tails` are cuda objects, 
         then the returned tensors are on the GPU.
 
-        <span style="color:#8B0000"> 
-        <strong>Arguments</strong>
-        </span>
+        Arguments
+        ---------
         
         **batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
         : Tensor containing the integer key of heads, tails, edges and triplets of the edges in the current batch.
         : Here, batch_size is batch.shape[1].
 
-        <span style="color:#8B0000"> 
-        <strong>Raises</strong>
-        </span>
+        Raises
+        ------
         
         **AssertionError #1**
         : The size/shape of possible_head_count must be corrupted_head_count.
@@ -576,9 +525,8 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         **AssertionError #2**
         : The size/shape of possible_head_count must be (batch_size - corrupted_head_count).
 
-        <span style="color:#8B0000"> 
-        <strong>Returns</strong>
-        </span>
+        Returns
+        -------
         
         **negative_triplets_batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
         : Tensor containing the integer key of negatively sampled triplets of the edges in the current batch.
@@ -690,10 +638,6 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
 
 class MixedNegativeSampler(NegativeSampler):
     """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
     This class inherits from the NegativeSampler class.
     
     A custom negative sampler that combines the BernoulliNegativeSampler, the UniformNegativeSampler 
@@ -702,9 +646,8 @@ class MixedNegativeSampler(NegativeSampler):
     For each triplet, it samples `negative_triplet_count` negative samples for each samplers except the Positional. Note 
     that the PositionalNegativeSampler always produces only one negative triplet per positive triplet.
     
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
+    Arguments
+    ---------
     
     **kg** *(KnowledgeGraph)*
         Main knowledge graph (usually training one).
@@ -713,9 +656,8 @@ class MixedNegativeSampler(NegativeSampler):
         Third of the number of negative samples to create from each triplet. Since it uses 3 sampler
         methods, it generates 3 times the amount of negative_triplet_count indicated.
 
-    <span style="color:#8B0000"> 
-    <strong>Attributes</strong>
-    </span>
+    Attributes
+    ----------
     
     **negative_triplet_count** *(int)*
         Number of negative samples to create from each triplet.
@@ -730,9 +672,8 @@ class MixedNegativeSampler(NegativeSampler):
     **positional_sampler** *(PositionalNegativeSampler)*
         Initialization of the PositionalNegativeSampler class as an attribute.
     
-    <span style="color:#8B0000"> 
-    <strong>Notes</strong>
-    </span>
+    Notes
+    -----
     
     This is an example of a custom negative sampler using other existing samplers, and may produce 
     unexpected behaviour if used as is.
@@ -758,17 +699,12 @@ class MixedNegativeSampler(NegativeSampler):
                         batch: torch.LongTensor,
                         negative_triplet_count: int = 1):
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-        
         For each true triplet, produce `negative_triplet_count` corrupted ones from the 
         Uniform sampler, the Bernoulli sampler and the Positional sampler. If `heads` and `tails` are 
         cuda objects, then the returned tensors are on the GPU.
 
-        <span style="color:#8B0000"> 
-        <strong>Arguments</strong>
-        </span>
+        Arguments
+        ---------
         
         batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
         : Tensor containing the integer key of heads, tails, edges and triplets of the edges in the current batch.
@@ -776,9 +712,8 @@ class MixedNegativeSampler(NegativeSampler):
         negative_triplet_count: int, optional, default to 1
         : Number of negative samples to create from each triplet.
 
-        <span style="color:#8B0000"> 
-        <strong>Returns</strong>
-        </span>
+        Returns
+        -------
         
         combined_negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, 2 * negative_triplet_count * batch_size + batch_size]
         : Tensor containing the integer key of negatively sampled heads and tails from both samplers.
