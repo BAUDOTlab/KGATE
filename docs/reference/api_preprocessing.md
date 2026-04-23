@@ -1,5 +1,3 @@
-<!-- This file is missing documentation. -->
-
 # Preprocessing
 
 ## prepare_knowledge_graph

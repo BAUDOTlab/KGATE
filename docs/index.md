@@ -12,15 +12,9 @@ quickstart
 knowledge_graph
 preprocessing_workflow
 data_leakage
-preprocessing
 preprocessors
-inference
 encoders
 decoders
-evaluators
-grid_search
-samplers
-utils
 ```
 
 ```{toctree}
@@ -28,3 +22,9 @@ utils
 :caption: References:
 
 reference/architect
+reference/evaluators
+reference/grid_search
+reference/inference
+reference/preprocessing
+reference/samplers
+reference/utils

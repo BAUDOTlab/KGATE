@@ -1,5 +1,4 @@
 # Evaluators
-<!-- This file is missing documentation. -->
 
 ## Predictions
 ```{autodoc2-object} kgate.evaluators.Predictions.__init__

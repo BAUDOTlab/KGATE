@@ -1,5 +1,4 @@
 # Samplers
-<!-- This file is missing documentation. -->
 
 ## NegativeSampler
 ```{autodoc2-object} kgate.samplers.NegativeSampler.__init__

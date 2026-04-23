@@ -15,8 +15,8 @@ release = '0.1.13'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = ["autodoc2",
-              "sphinx.ext.apidoc",
-              "sphinx.ext.autosummary",
+              "sphinx.ext.apidoc", # yeet
+              "sphinx.ext.autosummary", # yeet?
               "sphinx.ext.coverage",
               "sphinx.ext.doctest",
               "sphinx.ext.mathjax",
@@ -50,6 +50,7 @@ autodoc2_docstring_parser_regexes = [
     (r".*", "docstrings_parser"),
 ]
 
+ # yeet ??
 autosummary_generate = True  # Enable autosummary to generate pages
 #autodoc_default_flags = ['members']  # Automatically document class members
 epub_show_urls = "footnote"
