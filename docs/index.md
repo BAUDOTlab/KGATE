@@ -21,10 +21,12 @@ decoders
 :maxdepth: 1
 :caption: References:
 
-reference/architect
-reference/evaluators
-reference/grid_search
-reference/inference
-reference/preprocessing
-reference/samplers
-reference/utils
+reference/api_architect
+reference/api_encoders
+reference/api_evaluators
+reference/api_grid_search
+reference/api_inference
+reference/api_preprocessing
+reference/api_samplers
+reference/api_utils
+```
