@@ -17,6 +17,7 @@ preprocessors
 inference
 encoders
 decoders
+grid_search
 samplers
 utils
 ```
