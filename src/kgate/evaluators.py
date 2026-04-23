@@ -121,7 +121,7 @@ class Predictions:
         Arguments
         ---------
         
-        **k** *(int, default to 10
+        **k** *(int, default to 10)*
         : The true triplet must be within the k first predictions.
         
         Returns
@@ -180,9 +180,12 @@ class LinkPredictionEvaluator:
         
         * Antoine Bordes, Nicolas Usunier, Alberto Garcia-Duran, Jason Weston,
             and Oksana Yakhnenko.
-        `Translating Embeddings for Modeling Multi-relational Data.`
-        https://papers.nips.cc/paper/5071-translating-embeddings-for-modeling-multi-relational-data
-        In Advances in Neural Information Processing Systems 26, pages 2787–2795. 2013.
+        
+            `Translating Embeddings for Modeling Multi-relational Data.`
+        
+            <https://papers.nips.cc/paper/5071-translating-embeddings-for-modeling-multi-relational-data>
+        
+            In Advances in Neural Information Processing Systems 26, pages 2787–2795. 2013.
 
         Arguments
         ---------
@@ -190,34 +193,34 @@ class LinkPredictionEvaluator:
         **full_graphindices** *(torch.Tensor)*
         : Tensor of shape [4, triplet_count] containing every true triplet.
         
-        **embedding_dimensions** *int)*
+        **embedding_dimensions** *(int)*
         : Dimensions of embeddings.
 
         Attributes
         ----------
         
-        **full_graphindices** *torch.Tensor)*
+        **full_graphindices** *(torch.Tensor)*
         : Tensor of shape [4, triplet_count] containing every true triplet.
         
-        **evaluated** *bool)*
+        **evaluated** *(bool)*
         : Indicate whether the method LinkPredictionEvaluator.evaluate has already
         been called.
         
-        **rank_true_heads** *torch.Tensor, shape: [triplet_count], dtype: torch.int)*
+        **rank_true_heads** *(torch.Tensor, shape: [triplet_count], dtype: torch.int)*
         : For each fact, this is the rank of the true head when all nodes 
         are ranked as possible replacement of the head node. They are 
         ranked in decreasing order of scoring function :math:`f_r(h,t)`.
         
-        **rank_true_tails** *torch.Tensor, shape: [triplet_count], dtype: torch.int)*
+        **rank_true_tails** *(torch.Tensor, shape: [triplet_count], dtype: torch.int)*
         : For each fact, this is the rank of the true tail when all nodes 
         are ranked as possible replacement of the tail node. They are 
         ranked in decreasing order of scoring function :math:`f_r(h,t)`.
         
-        **filtered_rank_true_heads** *torch.Tensor, shape: [triplet_count], dtype: torch.int)*
+        **filtered_rank_true_heads** *(torch.Tensor, shape: [triplet_count], dtype: torch.int)*
         : This is the same as the `rank_of_true_heads` when in the filtered 
         case. See referenced paper by Bordes et al. for more information.
         
-        **filtered_rank_true_tails** *torch.Tensor, shape: [triplet_count], dtype: torch.int)*
+        **filtered_rank_true_tails** *(torch.Tensor, shape: [triplet_count], dtype: torch.int)*
         : This is the same as the `rank_of_true_tails` when in the filtered 
         case. See referenced paper by Bordes et al. for more information.
 
@@ -382,9 +385,12 @@ class TripletClassificationEvaluator:
         ----------
         
         * Richard Socher, Danqi Chen, Christopher D Manning, and Andrew Ng.
-        `Reasoning With Neural Tensor Networks for Knowledge Base Completion.`
-        https://nlp.stanford.edu/pubs/SocherChenManningNg_NIPS2013.pdf
-        In Advances in Neural Information Processing Systems 26, pages 926-934. 2013.
+            
+            `Reasoning With Neural Tensor Networks for Knowledge Base Completion.`
+            
+            <https://nlp.stanford.edu/pubs/SocherChenManningNg_NIPS2013.pdf>
+            
+            In Advances in Neural Information Processing Systems 26, pages 926-934. 2013.
 
         Arguments
         ---------

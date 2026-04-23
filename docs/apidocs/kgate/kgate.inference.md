@@ -17,10 +17,7 @@
 :align: left
 
 * - {py:obj}`Inference_KG <kgate.inference.Inference_KG>`
-  - ```{autodoc2-docstring} kgate.inference.Inference_KG
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 * - {py:obj}`EdgeInference <kgate.inference.EdgeInference>`
   - ```{autodoc2-docstring} kgate.inference.EdgeInference
     :parser: docstrings_parser
@@ -39,17 +36,6 @@
 :canonical: kgate.inference.Inference_KG
 
 Bases: {py:obj}`torch.utils.data.Dataset`
-
-```{autodoc2-docstring} kgate.inference.Inference_KG
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.inference.Inference_KG.__init__
-:parser: docstrings_parser
-```
 
 ````{py:method} __len__()
 :canonical: kgate.inference.Inference_KG.__len__

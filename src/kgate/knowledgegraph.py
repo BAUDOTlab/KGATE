@@ -1087,10 +1087,13 @@ class KnowledgeGraph(Dataset):
         ----------
         
         * Farahnaz Akrami, Mohammed Samiul Saeef, Quingheng Zhang.
-        `Realistic Re-evaluation of Knowledge Graph Completion Methods:
-        An Experimental Study.`
-        <https://arxiv.org/pdf/2003.08001.pdf>
-        SIGMOD’20, June 14–19, 2020, Portland, OR, USA
+        
+            `Realistic Re-evaluation of Knowledge Graph Completion Methods: 
+            An Experimental Study.`
+        
+            <https://arxiv.org/pdf/2003.08001.pdf>
+        
+            SIGMOD’20, June 14–19, 2020, Portland, OR, USA
 
         Arguments
         ---------
@@ -1179,10 +1182,13 @@ class KnowledgeGraph(Dataset):
         ----------
         
         * Farahnaz Akrami, Mohammed Samiul Saeef, Quingheng Zhang.
-        `Realistic Re-evaluation of Knowledge Graph Completion Methods: An
-        Experimental Study.`
-        <https://arxiv.org/pdf/2003.08001.pdf>
-        SIGMOD’20, June 14–19, 2020, Portland, OR, USA
+            
+            `Realistic Re-evaluation of Knowledge Graph Completion Methods: An 
+            Experimental Study.`
+            
+            <https://arxiv.org/pdf/2003.08001.pdf>
+        
+            SIGMOD’20, June 14–19, 2020, Portland, OR, USA
 
         Arguments
         ---------

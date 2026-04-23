@@ -45,10 +45,17 @@
 
 ### API
 
-`````{py:class} NegativeSampler
+`````{py:class} NegativeSampler()
 :canonical: kgate.samplers.NegativeSampler
 
 ```{autodoc2-docstring} kgate.samplers.NegativeSampler
+:parser: docstrings_parser
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} kgate.samplers.NegativeSampler.__init__
 :parser: docstrings_parser
 ```
 
