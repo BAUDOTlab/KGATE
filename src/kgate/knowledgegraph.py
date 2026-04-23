@@ -372,7 +372,6 @@ class KnowledgeGraph(Dataset):
         """
         TorchKGE alias for head_indices
         
-        This function is a property.
         """
         return self.head_indices
 
@@ -382,7 +381,6 @@ class KnowledgeGraph(Dataset):
         """
         TorchKGE alias for tail_indices
         
-        This function is a property.
         """
         return self.tail_indices
     
@@ -392,7 +390,6 @@ class KnowledgeGraph(Dataset):
         """
         TorchKGE alias for edge_indices
         
-        This function is a property.
         """
         return self.edge_indices
 
@@ -401,8 +398,6 @@ class KnowledgeGraph(Dataset):
     def head_indices(self) -> Tensor:
         """
         Tensor of the head indices for all triplets contained in this knowledge graph.
-        
-        This function is a property.
         
         """
         return self.graphindices[0]
@@ -413,8 +408,6 @@ class KnowledgeGraph(Dataset):
         """
         Tensor of the tail indices for all triplets contained in this knowledge graph.
         
-        This function is a property.
-        
         """
         return self.graphindices[1]
     
@@ -424,8 +417,6 @@ class KnowledgeGraph(Dataset):
         """
         Tensor of the edge indices for all triplets contained in this knowledge graph.
         
-        This function is a property.
-
         """
         return self.graphindices[2]
 
@@ -435,8 +426,6 @@ class KnowledgeGraph(Dataset):
         """
         Tensor of the triplet types indices for all triplets contained in this knowledge graph.
         
-        This function is a property.
-        
         """
         return self.graphindices[3]
 
@@ -444,11 +433,9 @@ class KnowledgeGraph(Dataset):
     @property
     def edge_list(self) -> Tensor:
         """
-        Tensor of shape [2, triplet_count] where the first row is equivalent to `head_indices` and the second to `tail_indices`.
-        
         Represents the knowledge graph as an edge list, without using the semantic meaning of the edges.
         
-        This function is a property.
+        Tensor of shape [2, triplet_count] where the first row is equivalent to `head_indices` and the second to `tail_indices`.
         
         """
         return self.graphindices[:2]
@@ -459,8 +446,6 @@ class KnowledgeGraph(Dataset):
         """
         TorchKGE alias for `triplet_count`. Property for compatibility.
         
-        This function is a property.
-            
         """
         return self.triplet_count
 
@@ -471,8 +456,6 @@ class KnowledgeGraph(Dataset):
         Get the DataFrame containing all the identity of the knowledge graph nodes.
         
         The default identity is the node ID, but different values can be set using the `set_identity` method.
-        
-        This function is a property.
         
         """
         if self.metadata is not None:

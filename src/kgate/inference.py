@@ -16,48 +16,46 @@ from .utils import filter_scores
 
 
 class Inference_KG(Dataset):
-    """
-    Subset of a KG used for inference.
-    
-    This class inherits from the PyTorch [`utils.data.Dataset`](https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html)
-    
-    Arguments
-    ---------
-    
-    **first_index_tensor** *(torch.Tensor)*
-    : The first tensor with indices of the edges or nodes (from the knowledge graph).
-    
-    **second_index_tensor** *(torch.Tensor)*
-    : The second tensor with indices of the edges or nodes (from the knowledge graph).
-
-    Attributes
-    ----------
-    
-    **first_index_tensor** *(torch.Tensor)*
-    : The first tensor with indices of the edges or nodes (from the knowledge graph).
-    
-    **second_index_tensor** *(torch.Tensor)*
-    : The second tensor with indices of the edges or nodes (from the knowledge graph).
-    
-    Raises
-    ------
-    
-    **AssertionError**
-    : Both index tensors must be of the same size.
-
-    Notes
-    -----
-    
-    Either both tensors are nodes, or they are node and edge.   
-    
-    The `__getitem__` method allows to call an `Inference_KG` object with an index, giving back a tuple containing the corresponding values of both tensors.
-        
-    ---
-    
-    """
     def __init__(self,
                 first_index_tensor: Tensor,
                 second_index_tensor: Tensor):
+        """
+        Subset of a KG used for inference.
+
+        This class inherits from the PyTorch [`utils.data.Dataset`](https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html)
+
+        Arguments
+        ---------
+
+        **first_index_tensor** *(torch.Tensor)*
+        : The first tensor with indices of the edges or nodes (from the knowledge graph).
+
+        **second_index_tensor** *(torch.Tensor)*
+        : The second tensor with indices of the edges or nodes (from the knowledge graph).
+
+        Attributes
+        ----------
+
+        **first_index_tensor** *(torch.Tensor)*
+        : The first tensor with indices of the edges or nodes (from the knowledge graph).
+
+        **second_index_tensor** *(torch.Tensor)*
+        : The second tensor with indices of the edges or nodes (from the knowledge graph).
+
+        Raises
+        ------
+
+        **AssertionError**
+        : Both index tensors must be of the same size.
+
+        Notes
+        -----
+
+        Either both tensors are nodes, or they are node and edge.   
+
+        The `__getitem__` method allows to call an `Inference_KG` object with an index, giving back a tuple containing the corresponding values of both tensors.
+
+        """
         
         # Either both tensors are nodes, or they are node and edge
         assert first_index_tensor.size() == second_index_tensor.size(), "Both index tensors must be of the same size for inference."
@@ -75,24 +73,25 @@ class Inference_KG(Dataset):
 
 
 class EdgeInference:
-    """
-    Use trained embedding model to infer missing edges in triplets.
-
-    Arguments
-    ---------
-    
-    **kg** *(KnowledgeGraph)*
-    : Knowledge graph on which the inference will be done.
-
-    Attributes
-    ----------
-    
-    **kg** *(KnowledgeGraph)*
-    : Knowledge graph on which the inference will be done.
-
-    """
     def __init__(self, kg: KnowledgeGraph):
+        """
+        Use trained embedding model to infer missing edges in triplets.
+
+        Arguments
+        ---------
+
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the inference will be done.
+
+        Attributes
+        ----------
+
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the inference will be done.
+
+        """
         self.kg = kg
+
 
     def evaluate(self, 
                 head_indices: Tensor,
@@ -151,7 +150,7 @@ class EdgeInference:
         
         **scores** *(torch.Tensor, shape [batch_size, n])*
         : Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
-
+        
         """
         with torch.no_grad():
             device = edge_embeddings.weight.device
@@ -216,23 +215,23 @@ class EdgeInference:
 
 
 class NodeInference:
-    """
-    Use trained embedding model to infer missing nodes in triplets.
-
-    Arguments
-    ---------
-    
-    **kg** *(KnowledgeGraph)*
-    : Knowledge graph on which the inference will be done.
-
-    Attributes
-    ----------
-    
-    **kg** *(KnowledgeGraph)*
-    : Knowledge graph on which the inference will be done.
-
-    """
     def __init__(self, kg: KnowledgeGraph):
+        """
+        Use trained embedding model to infer missing nodes in triplets.
+
+        Arguments
+        ---------
+
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the inference will be done.
+
+        Attributes
+        ----------
+
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the inference will be done.
+
+        """
         self.kg = kg
 
 

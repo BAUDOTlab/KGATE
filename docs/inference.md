@@ -2,14 +2,14 @@
 <!-- This file is missing documentation. -->
 
 ## Inference_KG
-```{autodoc2-object} kgate.inference.Inference_KG
+```{autodoc2-object} kgate.inference.Inference_KG.__init__
     
 ```
 
 ---
 
 ## EdgeInference
-```{autodoc2-object} kgate.inference.EdgeInference
+```{autodoc2-object} kgate.inference.EdgeInference.__init__
 
 ```
 
@@ -21,7 +21,7 @@
 ---
 
 ## NodeInference
-```{autodoc2-object} kgate.inference.NodeInference
+```{autodoc2-object} kgate.inference.NodeInference.__init__
     
 ```
 
