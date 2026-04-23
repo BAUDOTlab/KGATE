@@ -26,6 +26,7 @@ reference/api_encoders
 reference/api_evaluators
 reference/api_grid_search
 reference/api_inference
+reference/api_knowledge_graph
 reference/api_preprocessing
 reference/api_samplers
 reference/api_utils

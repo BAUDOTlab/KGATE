@@ -1,4 +1,4 @@
-# Inference
+# `inference`
 
 ## Inference_KG
 ```{autodoc2-object} kgate.inference.Inference_KG.__init__

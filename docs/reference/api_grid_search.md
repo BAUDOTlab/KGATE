@@ -1,4 +1,4 @@
-# Grid search
+# `grid_search`
 
 ## run_grid_search
 ```{autodoc2-object} kgate.grid_search.run_grid_search

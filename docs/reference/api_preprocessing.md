@@ -1,4 +1,4 @@
-# Preprocessing
+# `preprocessing`
 
 ## prepare_knowledge_graph
 ```{autodoc2-object} kgate.preprocessing.prepare_knowledge_graph

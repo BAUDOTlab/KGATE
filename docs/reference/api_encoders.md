@@ -1,4 +1,4 @@
-# Encoders
+# `encoders`
 
 ## DefaultEncoder
 ```{autodoc2-object} kgate.encoders.DefaultEncoder.__init__

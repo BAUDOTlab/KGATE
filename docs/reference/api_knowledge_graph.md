@@ -1,4 +1,4 @@
-# Knowledge Graph
+# `knowledgegraph`
 
 ## EncoderInput
 ```{autodoc2-object} kgate.knowledgegraph.EncoderInput.__init__
