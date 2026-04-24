@@ -27,6 +27,7 @@ make_directed_edges = []
 
 flag_near_duplicate_edges = true
 
+flag_carthesian_edges = true
 # Remove all flagged edges from the train set
 clean_train_set = true
 
