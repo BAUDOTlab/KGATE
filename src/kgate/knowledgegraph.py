@@ -1245,14 +1245,6 @@ class KnowledgeGraph(Dataset):
         """
         self.triplet_types = [triplet for triplet in self.triplet_types if triplet[1] != "self"]
 
-    def clean(self):
-        """
-        Clean the KnowledgeGraph object by removing all self loops with "self" as their edge type.
-        
-        """
-        self.triplet_types = [triplet for triplet in self.triplet_types if triplet[1] != "self"]
-
-
     @staticmethod
     def from_hetero_data(hetero_data: HeteroData):
         """
