@@ -22,6 +22,7 @@ decoders
 :caption: References:
 
 reference/api_architect
+reference/api_data_leakage
 reference/api_encoders
 reference/api_evaluators
 reference/api_grid_search
