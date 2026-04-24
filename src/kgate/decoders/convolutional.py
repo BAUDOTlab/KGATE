@@ -74,14 +74,14 @@ class ConvolutionalDecoder(Module):
         ------
         
         **NotImplementedError**
-            The `score` method must be implemented by a convolutional decoder
-            inheriting from this interface.
+        : The `score` method must be implemented by a convolutional decoder 
+        inheriting from this interface.
 
         Returns
         -------
         
         **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
-            The score of each triplet as a tensor.
+        : The score of each triplet as a tensor.
         
         Notes
         -----
@@ -261,7 +261,7 @@ class ConvolutionalDecoder(Module):
 
         Returns
         -------
-        ** score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
         : Tensor of score values.
         : First dimension: incomplete triplets tested
         : Second dimension: candidate indices
@@ -301,34 +301,34 @@ class ConvKB(ConvolutionalDecoder):
         ---------
         
         **embedding_dimensions** *(int)*
-            Dimensions of embeddings.
+        : Dimensions of embeddings.
         
         **filter_count** *(int)*
-            Number of convolution filters to apply.
+        : Number of convolution filters to apply.
         
         **node_count** *(int)*
-            Number of nodes in the knowledge graph.
+        : Number of nodes in the knowledge graph.
         
         **edge_count** *(int)*
-            Number of edges in the knowledge graph.
+        : Number of edges in the knowledge graph.
 
         Attributes
         ----------
         
         **node_count** *(int)*
-            Number of nodes in the knowledge graph.
+        : Number of nodes in the knowledge graph.
         
         **edge_count** *(int)*
-            Number of edges in the knowledge graph.
+        : Number of edges in the knowledge graph.
         
         **embedding_dimensions** *(int)*
-            Dimensions of embeddings.
+        : Dimensions of embeddings.
         
         **convolution_layer** *(torch.nn.Sequential)*
-            The convolution layer of the model.
+        : The convolution layer of the model.
         
         **output** *(torch.nn.Sequential)*
-            The reconstruction layer of the model.
+        : The reconstruction layer of the model.
 
         """
         super().__init__()
@@ -362,13 +362,13 @@ class ConvKB(ConvolutionalDecoder):
         Arguments
         ---------
         
-        **head_embeddings** *(torch.Tensor, dtype** torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
         : The embeddings of the head nodes for the current batch of length `batch_size`.
         
-        **tail_embeddings** *(torch.Tensor, dtype** torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
         : The embeddings of the tail nodes for the current batch of length `batch_size`.
         
-        **edge_embeddings** *(torch.Tensor, dtype** torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
         : The embeddings of the edges for the current batch of length `batch_size`.
 
         Returns
@@ -504,11 +504,11 @@ class ConvKB(ConvolutionalDecoder):
         -------
         **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
         : Tensor of score values.
-        : First dimension: incomplete triplets tested
-        : Second dimension: candidate indices
+            : First dimension: incomplete triplets tested
+            : Second dimension: candidate indices
         : For example, if the function is called to infer the score of tails:
-        : First dimension: (head_indices, edge_indices)
-        : Second dimension: tail_indices
+            : First dimension: (head_indices, edge_indices)
+            : Second dimension: tail_indices
         
         """        
         batch_size = head_embeddings.shape[0]

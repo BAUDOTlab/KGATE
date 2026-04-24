@@ -17,35 +17,17 @@
 :align: left
 
 * - {py:obj}`TranslationalDecoder <kgate.decoders.translational.TranslationalDecoder>`
-  - ```{autodoc2-docstring} kgate.decoders.translational.TranslationalDecoder
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 * - {py:obj}`TransE <kgate.decoders.translational.TransE>`
-  - ```{autodoc2-docstring} kgate.decoders.translational.TransE
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 * - {py:obj}`TransH <kgate.decoders.translational.TransH>`
-  - ```{autodoc2-docstring} kgate.decoders.translational.TransH
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 * - {py:obj}`TransR <kgate.decoders.translational.TransR>`
-  - ```{autodoc2-docstring} kgate.decoders.translational.TransR
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 * - {py:obj}`TransD <kgate.decoders.translational.TransD>`
-  - ```{autodoc2-docstring} kgate.decoders.translational.TransD
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 * - {py:obj}`TorusE <kgate.decoders.translational.TorusE>`
-  - ```{autodoc2-docstring} kgate.decoders.translational.TorusE
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 ````
 
 ### API
@@ -54,17 +36,6 @@
 :canonical: kgate.decoders.translational.TranslationalDecoder
 
 Bases: {py:obj}`torch.nn.Module`
-
-```{autodoc2-docstring} kgate.decoders.translational.TranslationalDecoder
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.translational.TranslationalDecoder.__init__
-:parser: docstrings_parser
-```
 
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, head_indices: torch.Tensor, tail_indices: torch.Tensor, edge_indices: torch.Tensor) -> torch.Tensor
 :canonical: kgate.decoders.translational.TranslationalDecoder.score
@@ -120,17 +91,6 @@ Bases: {py:obj}`torch.nn.Module`
 
 Bases: {py:obj}`kgate.decoders.translational.TranslationalDecoder`
 
-```{autodoc2-docstring} kgate.decoders.translational.TransE
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.translational.TransE.__init__
-:parser: docstrings_parser
-```
-
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, **_) -> torch.Tensor
 :canonical: kgate.decoders.translational.TransE.score
 
@@ -165,31 +125,20 @@ Bases: {py:obj}`kgate.decoders.translational.TranslationalDecoder`
 
 Bases: {py:obj}`kgate.decoders.translational.TranslationalDecoder`
 
-```{autodoc2-docstring} kgate.decoders.translational.TransH
+````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, edge_indices: torch.Tensor, **_) -> torch.Tensor
+:canonical: kgate.decoders.translational.TransH.score
+
+```{autodoc2-docstring} kgate.decoders.translational.TransH.score
 :parser: docstrings_parser
 ```
 
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.translational.TransH.__init__
-:parser: docstrings_parser
-```
+````
 
 ````{py:method} project(nodes: torch.Tensor, normal_vector: torch.Tensor) -> torch.Tensor
 :canonical: kgate.decoders.translational.TransH.project
 :staticmethod:
 
 ```{autodoc2-docstring} kgate.decoders.translational.TransH.project
-:parser: docstrings_parser
-```
-
-````
-
-````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, edge_indices: torch.Tensor, **_) -> torch.Tensor
-:canonical: kgate.decoders.translational.TransH.score
-
-```{autodoc2-docstring} kgate.decoders.translational.TransH.score
 :parser: docstrings_parser
 ```
 
@@ -237,17 +186,6 @@ Bases: {py:obj}`kgate.decoders.translational.TranslationalDecoder`
 :canonical: kgate.decoders.translational.TransR
 
 Bases: {py:obj}`kgate.decoders.translational.TranslationalDecoder`
-
-```{autodoc2-docstring} kgate.decoders.translational.TransR
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.translational.TransR.__init__
-:parser: docstrings_parser
-```
 
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, edge_indices: torch.Tensor, **_) -> torch.Tensor
 :canonical: kgate.decoders.translational.TransR.score
@@ -310,17 +248,6 @@ Bases: {py:obj}`kgate.decoders.translational.TranslationalDecoder`
 
 Bases: {py:obj}`kgate.decoders.translational.TranslationalDecoder`
 
-```{autodoc2-docstring} kgate.decoders.translational.TransD
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.translational.TransD.__init__
-:parser: docstrings_parser
-```
-
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, head_indices: torch.Tensor, tail_indices: torch.Tensor, edge_indices: torch.Tensor, **_) -> torch.Tensor
 :canonical: kgate.decoders.translational.TransD.score
 
@@ -381,17 +308,6 @@ Bases: {py:obj}`kgate.decoders.translational.TranslationalDecoder`
 :canonical: kgate.decoders.translational.TorusE
 
 Bases: {py:obj}`kgate.decoders.translational.TranslationalDecoder`
-
-```{autodoc2-docstring} kgate.decoders.translational.TorusE
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.translational.TorusE.__init__
-:parser: docstrings_parser
-```
 
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, **_) -> torch.Tensor
 :canonical: kgate.decoders.translational.TorusE.score

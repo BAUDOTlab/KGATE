@@ -59,13 +59,13 @@
 
 ```
 
-### project
-```{autodoc2-object} kgate.decoders.translational.TransH.project
+### score
+```{autodoc2-object} kgate.decoders.translational.TransH.score
 
 ```
 
-### score
-```{autodoc2-object} kgate.decoders.translational.TransH.score
+### project
+```{autodoc2-object} kgate.decoders.translational.TransH.project
 
 ```
 
@@ -121,8 +121,8 @@
 
 ```
 
-### inference_score
-```{autodoc2-object} kgate.decoders.translational.TransR.inference_score
+### evaluate_projections
+```{autodoc2-object} kgate.decoders.translational.TransR.evaluate_projections
 
 ```
 
@@ -135,6 +135,11 @@
 
 ### score
 ```{autodoc2-object} kgate.decoders.translational.TransD.score
+
+```
+
+### project
+```{autodoc2-object} kgate.decoders.translational.TransD.project
 
 ```
 
@@ -153,8 +158,8 @@
 
 ```
 
-### inference_score
-```{autodoc2-object} kgate.decoders.translational.TransD.inference_score
+### evaluate_projections
+```{autodoc2-object} kgate.decoders.translational.TransD.evaluate_projections
 
 ```
 
@@ -175,18 +180,8 @@
 
 ```
 
-### get_embeddings
-```{autodoc2-object} kgate.decoders.translational.TorusE.get_embeddings
-
-```
-
 ### inference_prepare_candidates
 ```{autodoc2-object} kgate.decoders.translational.TorusE.inference_prepare_candidates
-
-```
-
-### inference_score
-```{autodoc2-object} kgate.decoders.translational.TorusE.inference_score
 
 ```
 

@@ -46,7 +46,7 @@ class TranslationalDecoder(Module):
 
         Attributes
         ----------
-        **dissimilarity** *(function described in `torchkge.utils.dissimilarities`)*
+        **dissimilarity** *(Callable)*
         : The dissimilarity function used to compare translated head embeddings 
         to tail embeddings. Most translational vectors use either L1 or L2, but 
         TorusE has a specific set of dissimilarity functions.
@@ -54,6 +54,7 @@ class TranslationalDecoder(Module):
 
         """
         super().__init__()
+    
         
     def score(  self,
                 *,
@@ -290,11 +291,11 @@ class TranslationalDecoder(Module):
         
         **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
         : Tensor of score values.
-        : First dimension: incomplete triplets tested
-        : Second dimension: candidate indices
+            : First dimension: incomplete triplets tested
+            : Second dimension: candidate indices
         : For example, if the function is called to infer the score of tails:
-        : First dimension: (head_indices, edge_indices)
-        : Second dimension: tail_indices
+            : First dimension: (head_indices, edge_indices)
+            : Second dimension: tail_indices
         
         """
         batch_size = head_embeddings.shape[0]
@@ -330,38 +331,45 @@ class TranslationalDecoder(Module):
 
 
 class TransE(TranslationalDecoder):
-    """
-    Implementation of TransE model detailed in the paper referenced below.
-    
-    This class inherits from the TranslationDecoder interface. It inherits its attributes as well.
-
-    References
-    ----------
-    Antoine Bordes, Nicolas Usunier, Alberto Garcia-Duran, Jason Weston, and Oksana Yakhnenko.
-    `Translating Embeddings for Modeling Multi-relational Data.`
-    https://papers.nips.cc/paper/5071-translating-embeddings-for-modeling-multi-relational-data
-    In Advances in Neural Information Processing Systems 26, pages 2787–2795, 2013.
-
-    Arguments
-    ---------
-    dissimilarity_type: Literal["L1", "L2"], default to "L2"
-        The type of dissimilarity function that will be used,
-        either "L1" or "L2".
-    
-    Raises
-    ------
-    ValueError
-        The dissimilarity_type must be "L1" or "L2".
-
-    Attributes
-    ----------
-    dissimilarity: function described in `torchkge.utils.dissimilarities`
-        The dissimilarity function used to compare translated head embeddings 
-        to tail embeddings.
-        See details from torchkge here: https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities
-    
-    """
     def __init__(self, dissimilarity_type: Literal["L1", "L2"] = "L2"):
+        """
+        Implementation of TransE model detailed in the paper referenced below.
+
+        This class inherits from the TranslationDecoder interface. It inherits its attributes as well.
+
+        References
+        ----------
+
+        * Antoine Bordes, Nicolas Usunier, Alberto Garcia-Duran, Jason Weston, and Oksana Yakhnenko.
+
+            `Translating Embeddings for Modeling Multi-relational Data.`
+
+            <https://papers.nips.cc/paper/5071-translating-embeddings-for-modeling-multi-relational-data>
+
+            In Advances in Neural Information Processing Systems 26, pages 2787–2795, 2013.
+
+        Arguments
+        ---------
+
+        **dissimilarity_type** *(Literal["L1", "L2"], default to "L2")*
+        : The type of dissimilarity function that will be used, 
+        either "L1" or "L2".
+
+        Raises
+        ------
+
+        **ValueError**
+        : The dissimilarity_type must be "L1" or "L2".
+
+        Attributes
+        ----------
+
+        **dissimilarity** *(Callable)*
+        : The dissimilarity function used to compare translated head embeddings 
+        to tail embeddings.
+        : See details from torchkge here: <https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities>
+
+        """
         super().__init__()
         match dissimilarity_type:
             case "L1":
@@ -381,22 +389,26 @@ class TransE(TranslationalDecoder):
         """
         Compute the score function for the triplets given as argument.
         
-        See referenced paper for more details on the score:
+        See referenced paper for more details on the score: 
         https://papers.nips.cc/paper/5071-translating-embeddings-for-modeling-multi-relational-data
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            The edge embeddings.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : The edge embeddings.
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            The score of each triplet as a tensor.
+        
+        **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : The score of each triplet as a tensor.
             
         """
         head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
@@ -419,18 +431,22 @@ class TransE(TranslationalDecoder):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The node embedding as a ParameterList containing one Parameter by node type,
-            or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The edge embeddings, which are not normalized as per the paper's recommendation.
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The node embedding as a ParameterList containing one Parameter by node type, 
+        or only one if there is no node type.
+        
+        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The edge embeddings, which are not normalized as per the paper's recommendation.
         
         Returns
         -------
-        node_embeddings : torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The normalized node embedding object.
-        edge_embeddings : torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The untouched edge embedding object.
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The normalized node embedding object.
+        
+        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The untouched edge embedding object.
         
         """
         for embedding in node_embeddings:
@@ -449,35 +465,45 @@ class TransE(TranslationalDecoder):
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
-        Link prediction evaluation helper function. Get node embeddings
-        and edge embeddings. The output will be fed to the
+        Link prediction evaluation helper function. Get node embeddings 
+        and edge embeddings. The output will be fed to the 
         `inference_score_function` method.
 
         Arguments
         ---------
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of all nodes.
+        
+        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of all edges.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes (from KG).
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes (from KG).
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges (from KG).
+        
+        **node_inference** *(bool, optional, default to True, keyword-only)*
+        : If True, prepare candidate nodes; otherwise, prepare candidate edges.
         
         Returns
         -------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            Head node embeddings.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            Tail node embeddings.
-        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            Edge embeddings.
-        candidates: torch.Tensor
-            Candidate embeddings for nodes or edges.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : Head node embeddings.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : Tail node embeddings.
+        
+        **edge_embeddings_inferred** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : Edge embeddings.
+        
+        **candidates** *(torch.Tensor)*
+        : Candidate embeddings for nodes or edges.
 
         """
         batch_size = head_indices.shape[0]
@@ -501,48 +527,59 @@ class TransE(TranslationalDecoder):
     
     
 class TransH(TranslationalDecoder):
-    """
-    Implementation of TransH model detailed in the paper referenced below.
-    
-    This class inherits from the TranslationDecoder interface. It inherits its attributes as well.
-
-    References
-    ----------
-    Zhen Wang, Jianwen Zhang, Jianlin Feng, and Zheng Chen.
-    `Knowledge Graph Embedding by Translating on Hyperplanes.`
-    https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531
-    In Twenty-Eighth AAAI Conference on Artificial Intelligence, June 2014.
-
-    Arguments
-    ---------
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
-    embedding_dimensions: int
-        Dimensions of node and edge embeddings.
-
-    Attributes
-    ----------
-    normal_vector: torch.nn.Embedding, shape: [edge_count, embedding_dimensions]
-        Normal vectors associated to each edge and used to compute the edge-specific hyperplanes nodes are projected on.
-        See paper for more details: https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531
-        Initialized with Xavier uniform distribution and then normalized.
-    dissimilarity: function described in `torchkge.utils.dissimilarities`
-        The dissimilarity function used to compare translated head embeddings 
-        to tail embeddings.
-        See details from torchkge here: https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities
-    evaluated_projections: bool
-        Indicates whether `projected_nodes` has been computed.
-        This should be set to True every time a backward pass is done in train mode.
-    projected_nodes: torch.nn.Parameter, shape: [edge_count, node_count, embedding_dimensions]
-        Contains the projection of each node in each edge-specific sub-space.
-    
-    """
     def __init__(self,
                 embedding_dimensions: int,
                 node_count: int,
                 edge_count: int):
+        """
+        Implementation of TransH model detailed in the paper referenced below.
+
+        This class inherits from the TranslationDecoder interface. It inherits its attributes as well.
+
+        References
+        ----------
+        
+        * Zhen Wang, Jianwen Zhang, Jianlin Feng, and Zheng Chen.
+            
+            `Knowledge Graph Embedding by Translating on Hyperplanes.`
+            
+            <https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531>
+            
+            In Twenty-Eighth AAAI Conference on Artificial Intelligence, June 2014.
+
+        Arguments
+        ---------
+        
+        **node_count** *(int)*
+        : Number of nodes in the knowledge graph.
+        
+        **edge_count** *(int)*
+        : Number of edges in the knowledge graph.
+        
+        **embedding_dimensions** *(int)*
+        : Dimensions of node and edge embeddings.
+
+        Attributes
+        ----------
+        
+        **normal_vector** *(torch.nn.Embedding, shape: [edge_count, embedding_dimensions])*
+        : Normal vectors associated to each edge and used to compute the edge-specific hyperplanes nodes are projected on.
+        : See paper for more details: https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531
+        : Initialized with Xavier uniform distribution and then normalized.
+        
+        **dissimilarity** *(Callable)*
+        : The dissimilarity function used to compare translated head embeddings 
+        to tail embeddings.
+        : See details from torchkge here: <https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities>
+        
+        **evaluated_projections** *(bool)*
+        : Indicates whether `projected_nodes` has been computed.
+        : This should be set to True every time a backward pass is done in train mode.
+        
+        **projected_nodes** *(torch.nn.Parameter, shape: [edge_count, node_count, embedding_dimensions])*
+        : Contains the projection of each node in each edge-specific sub-space.
+
+        """
         super().__init__()
         self.normal_vector = initialize_embedding(edge_count, embedding_dimensions)
         self.dissimilarity = l2_dissimilarity
@@ -564,25 +601,30 @@ class TransH(TranslationalDecoder):
         """
         Compute the score function for the triplets given as argument.
         
-        See referenced paper for more details on the score:
-        https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531
+        See referenced paper for more details on the score: 
+        <https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531>
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape [batch_size, embedding_dimensions], keyword-only
-            Embeddings of edges.
-        edge_indices: torch.Tensor, dtype: torch.long, shape [batch_size], keyword-only
-            The indices of the edges (from KG).
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of edges.
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape [batch_size], keyword-only)*
+        : The indices of the edges (from KG).
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            The score of each triplet as a tensor.
-            
+        
+        **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : The score of each triplet as a tensor.
+        
         """
         head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
@@ -604,16 +646,18 @@ class TransH(TranslationalDecoder):
         
         Arguments
         ---------
-        nodes: torch.Tensor
-            The not projected node embeddings.
-        normal_vector: torch.Tensor: [edge_count, embedding_dimensions]
-            Normal vectors associated to each edge and used to compute the edge-specific hyperplanes nodes are projected on.
-            See paper for more details: https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531
+        
+        **nodes** *(torch.Tensor)*
+        : The not projected node embeddings.
+        
+        **normal_vector** *(torch.Tensor: [edge_count, embedding_dimensions])*
+        : Normal vectors associated to each edge and used to compute the edge-specific hyperplanes nodes are projected on.
+        : See paper for more details: <https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531>
         
         Returns
         -------
-        projected_nodes_tensor: torch.Tensor, shape: [edge_count, node_count, embedding_dimensions]
-            Give the value of the `self.projected_nodes` nn.Parameter object when called.
+        **projected_nodes_tensor** *(torch.Tensor, shape: [edge_count, node_count, embedding_dimensions])*
+        : Give the value of the `self.projected_nodes` nn.Parameter object when called.
         
         """
         projected_nodes_tensor = nodes - (nodes * normal_vector).sum(dim = 1).view(-1, 1) * normal_vector
@@ -628,24 +672,28 @@ class TransH(TranslationalDecoder):
         """
         Normalize parameters for the TransH model.
         
-        According to the original paper, the node embeddings, edge embeddings
+        According to the original paper, the node embeddings, edge embeddings 
         and the normal vector should be normalized.
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The node embedding as a ParameterList containing one Parameter by node type,
-            or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The edge embedding as a nn.Embedding containing one Parameter by edge type,
-            or only one if there is no node type.
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The node embedding as a ParameterList containing one Parameter by node type,
+        or only one if there is no node type.
+        
+        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The edge embedding as a nn.Embedding containing one Parameter by edge type,
+        or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The normalized edge embedding object.
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The normalized node embedding object.
+        
+        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The normalized edge embedding object.
     
         """
         for embedding in node_embeddings:
@@ -662,9 +710,10 @@ class TransH(TranslationalDecoder):
 
         Returns
         -------
-        embeddings: Dict[str, torch.Tensor]
-            Key: "normal_vector"
-            Value: tensors representing nodes and edges in current model
+        
+        **embeddings** *(Dict[str, torch.Tensor])*
+        : Key: "normal_vector"
+        : Value: tensors representing nodes and edges in current model
         
         """
         return {"normal_vector": self.normal_vector.weight.data}
@@ -680,35 +729,45 @@ class TransH(TranslationalDecoder):
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
-        Link prediction evaluation helper function. Get node embeddings
-        and edge embeddings. The output will be fed to the
+        Link prediction evaluation helper function. Get node embeddings 
+        and edge embeddings. The output will be fed to the 
         `inference_scoring_function` method.        
 
         Arguments
         ---------
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of all nodes.
+        
+        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of all edges.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes (from KG).
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes (from KG).
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges (from KG).
+        
+        **node_inference** *(bool, optional, default to True, keyword-only)*
+        : If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            Head node embeddings.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            Tail node embeddings.
-        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            Edge embeddings.
-        candidates: torch.Tensor, dtype: float, shape: [batch_size, edge_count, embedding_dimensions]
-            Candidate embeddings for nodes or edges.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : Head node embeddings.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : Tail node embeddings.
+        
+        **edge_embeddings_inferred** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : Edge embeddings.
+        
+        **candidates** *(torch.Tensor, dtype: float, shape: [batch_size, edge_count, embedding_dimensions])*
+        : Candidate embeddings for nodes or edges.
 
         """
         batch_size = head_indices.shape[0]
@@ -733,19 +792,21 @@ class TransH(TranslationalDecoder):
     def evaluate_projections(self,
                             node_embeddings: Tensor):
         """
-        Link prediction evaluation helper function. Project all nodes
-        according to each edge. Calling this method at the beginning of
-        link prediction makes the process faster by computing projections only
+        Link prediction evaluation helper function. Project all nodes 
+        according to each edge. Calling this method at the beginning of 
+        link prediction makes the process faster by computing projections only 
         once.
 
         Arguments
         ---------
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of all nodes.
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of all nodes.
         
         Notes
         -----
-        Assure that `self.evaluated_projections` is True.
+        
+        Assure that `self.evaluated_projections` is True. 
         First check if it already is to avoid unnecessary calculations.
 
         """
@@ -1221,28 +1282,37 @@ class TransD(TranslationalDecoder):
         """
         Compute the score function for the triplets given as argument.
         
-        See referenced paper for more details on the score:
+        See referenced paper for more details on the score: 
         https://aclweb.org/anthology/papers/P/P15/P15-1067/
+        
+        % TODO: check link
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            The edge embeddings, of shape [edge_count, edge_embedding_dimensions]
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        : The edge embeddings, of shape [edge_count, edge_embedding_dimensions]
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes (from KG).
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges (from KG).
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes (from KG).
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
-            The score of each triplet as a tensor.
+        
+        **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
+        : The score of each triplet as a tensor.
         
         """
         head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
@@ -1509,7 +1579,7 @@ class TorusE(TranslationalDecoder):
         Attributes
         ----------
         
-        **dissimilarity** *(function described in `torchkge.utils.dissimilarities`)*
+        **dissimilarity** *(Callable)*
         : The dissimilarity function used to compare translated head embeddings 
         to tail embeddings.
         : See details from torchkge here: https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities
@@ -1544,22 +1614,26 @@ class TorusE(TranslationalDecoder):
         """
         Compute the score function for the triplets given as argument.
         
-        See referenced paper for more details on the score:
-        https://arxiv.org/abs/1711.05435
+        See referenced paper for more details on the score: 
+        <https://arxiv.org/abs/1711.05435>
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            Embeddings of edges.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        : Embeddings of edges.
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
-            The score of each triplet as a tensor.
+        
+        **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
+        : The score of each triplet as a tensor.
         
         """
         self.normalized = False

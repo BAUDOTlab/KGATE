@@ -17,25 +17,13 @@
 :align: left
 
 * - {py:obj}`BilinearDecoder <kgate.decoders.bilinear.BilinearDecoder>`
-  - ```{autodoc2-docstring} kgate.decoders.bilinear.BilinearDecoder
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 * - {py:obj}`RESCAL <kgate.decoders.bilinear.RESCAL>`
-  - ```{autodoc2-docstring} kgate.decoders.bilinear.RESCAL
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 * - {py:obj}`DistMult <kgate.decoders.bilinear.DistMult>`
-  - ```{autodoc2-docstring} kgate.decoders.bilinear.DistMult
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 * - {py:obj}`ComplEx <kgate.decoders.bilinear.ComplEx>`
-  - ```{autodoc2-docstring} kgate.decoders.bilinear.ComplEx
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 ````
 
 ### API
@@ -44,17 +32,6 @@
 :canonical: kgate.decoders.bilinear.BilinearDecoder
 
 Bases: {py:obj}`torch.nn.Module`
-
-```{autodoc2-docstring} kgate.decoders.bilinear.BilinearDecoder
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.bilinear.BilinearDecoder.__init__
-:parser: docstrings_parser
-```
 
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, head_indices: torch.Tensor, tail_indices: torch.Tensor, edge_indices: torch.Tensor) -> torch.Tensor
 :canonical: kgate.decoders.bilinear.BilinearDecoder.score
@@ -111,17 +88,6 @@ Bases: {py:obj}`torch.nn.Module`
 
 Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 
-```{autodoc2-docstring} kgate.decoders.bilinear.RESCAL
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.bilinear.RESCAL.__init__
-:parser: docstrings_parser
-```
-
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_indices: torch.Tensor, **_) -> torch.Tensor
 :canonical: kgate.decoders.bilinear.RESCAL.score
 
@@ -174,17 +140,6 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 
 Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 
-```{autodoc2-docstring} kgate.decoders.bilinear.DistMult
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.bilinear.DistMult.__init__
-:parser: docstrings_parser
-```
-
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, **_) -> torch.Tensor
 :canonical: kgate.decoders.bilinear.DistMult.score
 
@@ -227,17 +182,6 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.ComplEx
 
 Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
-
-```{autodoc2-docstring} kgate.decoders.bilinear.ComplEx
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.bilinear.ComplEx.__init__
-:parser: docstrings_parser
-```
 
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, **_) -> torch.Tensor
 :canonical: kgate.decoders.bilinear.ComplEx.score

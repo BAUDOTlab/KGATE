@@ -148,7 +148,7 @@ class BilinearDecoder(Module):
         Returns
         -------
         
-        **edge_embeddings_matrix: Dict[str, torch.Tensor] or None)*
+        **edge_embeddings_matrix** *(Dict[str, torch.Tensor] or None)*
         : Decoder-specific embeddings, or None.
         
         Notes
@@ -439,7 +439,7 @@ class RESCAL(BilinearDecoder):
 
         Returns
         -------
-        edge_embeddings_matrix: Dict[str, Tensor]
+        edge_embeddings_matrix** *(Dict[str, Tensor])*
         : *Missing documentation*
         % TODO.What_that_variable_is_or_does
         
@@ -832,16 +832,16 @@ class DistMult(BilinearDecoder):
         ------
         
         **AssertionError #1**
-            When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
+        : When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
         
         **AssertionError #2**
-            When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
+        : When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
         
         **AssertionError #3**
-            When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
+        : When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
         
         **ValueError**
-            If none of the embeddings have a shape adapted to be inferred.
+        : If none of the embeddings have a shape adapted to be inferred.
 
         Returns
         -------
@@ -1093,11 +1093,11 @@ class ComplEx(BilinearDecoder):
         -------
         **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
         : Tensor of score values.
-        : First dimension: incomplete triplets tested
-        : Second dimension: candidate indices
+            : First dimension: incomplete triplets tested
+            : Second dimension: candidate indices
         : For example, if the function is called to infer the score of tails:
-        : First dimension: (head_indices, edge_indices)
-        : Second dimension: tail_indices
+            : First dimension: (head_indices, edge_indices)
+            : Second dimension: tail_indices
         
         """
         real_head_embeddings, imaginary_head_embeddings = head_embeddings

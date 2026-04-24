@@ -17,15 +17,9 @@
 :align: left
 
 * - {py:obj}`ConvolutionalDecoder <kgate.decoders.convolutional.ConvolutionalDecoder>`
-  - ```{autodoc2-docstring} kgate.decoders.convolutional.ConvolutionalDecoder
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 * - {py:obj}`ConvKB <kgate.decoders.convolutional.ConvKB>`
-  - ```{autodoc2-docstring} kgate.decoders.convolutional.ConvKB
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 ````
 
 ### API
@@ -34,17 +28,6 @@
 :canonical: kgate.decoders.convolutional.ConvolutionalDecoder
 
 Bases: {py:obj}`torch.nn.Module`
-
-```{autodoc2-docstring} kgate.decoders.convolutional.ConvolutionalDecoder
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.convolutional.ConvolutionalDecoder.__init__
-:parser: docstrings_parser
-```
 
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, head_indices: torch.Tensor, tail_indices: torch.Tensor, edge_indices: torch.Tensor) -> torch.Tensor
 :canonical: kgate.decoders.convolutional.ConvolutionalDecoder.score
@@ -100,17 +83,6 @@ Bases: {py:obj}`torch.nn.Module`
 :canonical: kgate.decoders.convolutional.ConvKB
 
 Bases: {py:obj}`kgate.decoders.convolutional.ConvolutionalDecoder`
-
-```{autodoc2-docstring} kgate.decoders.convolutional.ConvKB
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.decoders.convolutional.ConvKB.__init__
-:parser: docstrings_parser
-```
 
 ````{py:method} score(*, head_embeddings: torch.Tensor, tail_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, **_) -> torch.Tensor
 :canonical: kgate.decoders.convolutional.ConvKB.score
