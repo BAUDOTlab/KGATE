@@ -15,6 +15,7 @@ data_leakage
 preprocessors
 encoders
 decoders
+utils
 ```
 
 ```{toctree}
@@ -24,6 +25,9 @@ decoders
 reference/api_architect
 reference/api_data_leakage
 reference/api_encoders
+reference/decoders/api_bilinear
+reference/decoders/api_convolutional
+reference/decoders/api_translational
 reference/api_evaluators
 reference/api_grid_search
 reference/api_inference

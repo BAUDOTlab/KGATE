@@ -1,7 +1,5 @@
 # `utils`
 
-Utility functions for Knowledge Graph manipulation, data visualisation or file handling.
-
 ## parse_config
 ```{autodoc2-object} kgate.utils.parse_config
 
