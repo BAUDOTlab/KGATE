@@ -4,47 +4,30 @@ While it is possible to implement your own, KGATE includes several decoders impl
 
 ## Translational
 
-```{currentmodule} kgate.decoders.translational
-```
+Currently implemented translational decoders:
+* [TransE](./reference/decoders/api_translational.md#transe)
+* [TransH](./reference/decoders/api_translational.md#transh)
+* [TransR](./reference/decoders/api_translational.md#transr)
+* [TransD](./reference/decoders/api_translational.md#transd)
+* [TorusE](./reference/decoders/api_translational.md#toruse)
+<!--[NewDecoderName](./reference/decoders/api_translational.md#newdecodername)-->
 
-```{autosummary}
-   :nosignatures:
-   :toctree: ../generated
-
-   TransE
-   TransH
-   TransR
-   TransD
-   TorusE
-```
 
 ## Bilinear
 
-```{currentmodule} kgate.decoders.bilinear
-```
+Currently implemented bilinear decoders:
+* [RESCAL](./reference/decoders/api_bilinear.md#rescal)
+* [DistMult](./reference/decoders/api_bilinear.md#distmult)
+* [ComplEx](./reference/decoders/api_bilinear.md#complex)
+<!--[NewDecoderName](./reference/decoders/api_bilinear.md#newdecodername)-->
 
-```{autosummary}
-   :nosignatures:
-   :toctree: ../generated
-
-   RESCAL
-   DistMult
-   ComplEx
-```
 
 ## Convolutional
 
-```{currentmodule} kgate.decoders.convolutional
-```
+Currently implemented convolutional decoders:
+* [ConvKB](./reference/decoders/api_convolutional.md#convkb)
+<!--[NewDecoderName](./reference/decoders/api_convolutional.md#newdecodername)-->
 
-```{autosummary}
-   :nosignatures:
-   :toctree: ../generated
-
-   ConvKB
-```
-
-For a complete signature of the decoders, see []
 
 ## Build your own decoder
 
