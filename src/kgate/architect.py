@@ -1423,7 +1423,7 @@ class Architect(Module):
         self.normalize_parameters()
         
         if isinstance(self.encoder, GNN):
-            node_embeddings: torch.Tensor = torch.zeros((self.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
+            node_embeddings: torch.Tensor = torch.zeros((self.kg_train.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
             full_kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
 
             with torch.no_grad():
