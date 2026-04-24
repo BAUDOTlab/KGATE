@@ -182,18 +182,18 @@ class Architect(Module):
         Raises
         ------
         
-        **InvalidColumnName
+        **InvalidColumnName**
         : Pandas error.
         : The metadata dataframe must have columns named "id" and "type".
         
-        **ValueError #1
+        **ValueError #1**
         : If the file referenced as `metadata_csv` in the config file exists but cannot be parsed.
         
-        **ValueError #2
+        **ValueError #2**
         : The metadata csv file uses a non supported separator.
         : Supported separators are comma (,), tabulation (    ) and semi-colon (;).
         
-        **ValueError #3
+        **ValueError #3**
         : If the `run_kg_preprocessing` setting in the config file is set to False, 
         but the knowledge graph `kg` is given but not as a tuple.
         : The knowledge graph must either be preprocessed and given as a tuple (training, validation and test), 
@@ -1190,30 +1190,36 @@ class Architect(Module):
         """
         Infer missing nodes or edges, depending on the given parameters.
         
-        Only two of heads, tails and edges must be given, and the other one will be inferred. For example, when inferring tails,
-        for each couple `heads[n]` and `edges[n]`, `top_k` tails will be predicted. The values in those list must correspond to
+        Only two of heads, tails and edges must be given, and the other one will be inferred. For example, when inferring tails, 
+        for each couple `heads[n]` and `edges[n]`, `top_k` tails will be predicted. The values in those list must correspond to 
         the `identity` of the metadata, by default the current identity. If there is no metadata, the node ID is used.
         
         Arguments
         ---------
-        heads: List[str], optional
-            List of known head nodes.
-        tails: List[str], optional
-            List of known tail nodes.
-        edges: List[str], optional
-            List of known edges.
-        top_k: int, optional, Default to 100
-            Number of prediction to return for each couple in the list.
+        
+        **heads** *(List[str], optional)*
+        : List of known head nodes.
+        
+        **tails** *(List[str], optional)*
+        : List of known tail nodes.
+        
+        **edges** *(List[str], optional)*
+        : List of known edges.
+        
+        **top_k** *(int, optional, Default to 100)*
+        : Number of prediction to return for each couple in the list.
         
         Raises
         ------
-        ValueError
-            To infer missing elements, exactly 2 lists must be given between heads, tails or edges.
+        
+        **ValueError**
+        : To infer missing elements, exactly 2 lists must be given between heads, tails or edges.
         
         Returns
         -------
-        predictions: pd.DataFrame
-            A DataFrame containing the prediction alongside their score.
+        
+        **predictions** *(pd.DataFrame)*
+        : A DataFrame containing the prediction alongside their score.
         
         """
         if not sum([len(arr) > 0 for arr in [heads, edges, tails]]) == 2:
@@ -1270,24 +1276,30 @@ class Architect(Module):
         
         Arguments
         ---------
-        path: pathlib.Path
-            The path to the checkpoint that will be loaded.
+        
+        **path** *(pathlib.Path)*
+        : The path to the checkpoint that will be loaded.
         
         Raises
         ------
-        AssertionError #1
-            The number of edges must be the same in the checkpoint and in the current configuration.
-        AssertionError #2
-            The number of node types must be the same in the checkpoint and in the current configuration.
-        AssertionError #3
-            The number of nodes must be the same in the checkpoint and in the current configuration.
-        AssertionError #4
-            The convolution layers must be the same in the checkpoint and in the current configuration.
+        
+        **AssertionError #1**
+        : The number of edges must be the same in the checkpoint and in the current configuration.
+        
+        **AssertionError #2**
+        : The number of node types must be the same in the checkpoint and in the current configuration.
+        
+        **AssertionError #3**
+        : The number of nodes must be the same in the checkpoint and in the current configuration.
+        
+        **AssertionError #4**
+        : The convolution layers must be the same in the checkpoint and in the current configuration.
         
         Returns
         -------
-        checkpoint: dict
-            The loaded checkpoint as a dictionnary.
+        
+        **checkpoint** *(dict)*
+        : The loaded checkpoint as a dictionnary.
         
         """
         checkpoint = torch.load(path, map_location = self.device, weights_only = False)
@@ -1312,9 +1324,9 @@ class Architect(Module):
 
         Raises
         ------
-        ValueError
-            No best model was found in the checkpoint directory.
-            Make sure to run the training first and not rename checkpoint files before running evaluation.
+        **ValueError**
+        : No best model was found in the checkpoint directory.
+        : Make sure to run the training first and not rename checkpoint files before running evaluation.
         
         """
         self.decoder, _ = self.initialize_decoder()
@@ -1355,19 +1367,23 @@ class Architect(Module):
 
         Arguments
         ---------
-        positive_triplets_batch: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
-            Tensor containing the integer key of true sampled triplets of
-            the edges in the current batch.
-        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the integer key of negatively sampled triplets of
-            the edges in the current batch.
+        
+        **positive_triplets_batch** *(torch.Tensor, dtype: torch.float, shape: [4, batch_size])*
+        : Tensor containing the integer key of true sampled triplets of 
+        the edges in the current batch.
+        
+        **negative_triplets_batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
+        : Tensor containing the integer key of negatively sampled triplets of 
+        the edges in the current batch.
 
         Returns
         -------
-        positive_triplet: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
-            Tensor containing the score of each true triplet within the batch.
-        negative_triplet: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the score of each negative triplet within the batch.
+        
+        **positive_triplet** *(torch.Tensor, dtype: torch.float, shape: [4, batch_size])*
+        : Tensor containing the score of each true triplet within the batch.
+        
+        **negative_triplet** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
+        : Tensor containing the score of each negative triplet within the batch.
         
         """
         positive_triplet: Tensor = self.scoring_function(positive_triplets_batch, self.kg_train)
@@ -1388,19 +1404,21 @@ class Architect(Module):
         """
         Function called by the trainer to run the training loop on a mini-batch.
 
-        TODO: may be merged with the forward function
+        % TODO: may be merged with the forward function
 
         Arguments
         ---------
-        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the integer key of heads, tails, edges and triplets
-            of the edges in the current batch.
-            Here, batch_size is batch.shape[1].
+        
+        **batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
+        : Tensor containing the integer key of heads, tails, edges and triplets 
+        of the edges in the current batch.
+        : Here, batch_size is batch.shape[1].
 
         Returns
         -------
-        loss_value: torch.types.Number
-            Training loss value of the model for this epoch.
+        
+        **loss_value** *(torch.types.Number)*
+        : Training loss value of the model for this epoch.
         
         """
         batch = batch.T.to(self.device)
@@ -1429,25 +1447,28 @@ class Architect(Module):
         """
         Runs the encoder and decoder pass on a batch for a given KG.
         
-        If the encoder is not a GNN, directly runs and update the embeddings.
+        If the encoder is not a GNN, directly runs and update the embeddings. 
         Otherwise, samples a subgraph from the given batch nodes and runs the encoder before.
         
         Arguments
         ---------
-        batch: torch.Tensor, shape: [4, batch_size]
-            Batch of triplets. The rows correspond to:
-            - head_index
-            - tail_index
-            - edge_index
-            - triplet_index
-            Here, batch_size is batch.shape[1].
-        kg: KnowledgeGraph
-            The knowledge graph corresponding to the batch identifiers.
-            
+        
+        **batch** *(torch.Tensor, shape: [4, batch_size])*
+        : Batch of triplets. The rows correspond to: 
+            * head_index
+            * tail_index
+            * edge_index
+            * triplet_index
+        : Here, batch_size is batch.shape[1].
+        
+        **kg** *(KnowledgeGraph)*
+        : The knowledge graph corresponding to the batch identifiers.
+        
         Returns
         -------
-        score: torch.Tensor
-            The score given by the decoder for the batch.
+        
+        **score** *(torch.Tensor)*
+        : The score given by the decoder for the batch.
         
         """
         head_indices, tail_indices, edge_indices = batch[0], batch[1], batch[2]
@@ -1537,13 +1558,14 @@ class Architect(Module):
         """
         Normalize all parameters of the model.
         
-        Each decoder has a specific normalization routine, so this function doesn't do anything by itself,
+        Each decoder has a specific normalization routine, so this function doesn't do anything by itself, 
         except calling the `decoder.normalize_parameters` function if it exists.
 
         Raises
         ------
-        AssertionError
-            The `decoder.normalize_params` method should return exactly two elements: the node embedding and the edge embedding.
+        
+        **AssertionError**
+        : The `decoder.normalize_params` method should return exactly two elements: the node embedding and the edge embedding.
         
         """
         # Some decoders should not normalize parameters or do so in a different way.
@@ -1564,9 +1586,10 @@ class Architect(Module):
 
         Arguments
         ---------
-        engine: Engine
-            Runner managing the training.
-            
+        
+        **engine** *(Engine)*
+        : Runner managing the training.
+        
         """
         epoch = engine.state.epoch
         train_loss = engine.state.metrics["loss_running_average"]
@@ -1600,8 +1623,9 @@ class Architect(Module):
 
         Arguments
         ---------
-        engine: Engine
-            Runner managing the training.
+        
+        **engine** *(Engine)*
+        : Runner managing the training.
         
         """
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
@@ -1637,13 +1661,16 @@ class Architect(Module):
 
         Arguments
         ---------
-        engine: Engine
+        
+        **engine** *(Engine)*
             Runner managing the training.
 
         Returns
         -------
-        validation_metric_value: float
-            TODO.What_that_variable_is_or_does
+        
+        **validation_metric_value** *(float)*
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
         
         """
         return engine.state.metrics.get("validation_metric_value", 0)
@@ -1657,8 +1684,9 @@ class Architect(Module):
 
         Arguments
         ---------
-        engine: Engine
-            Runner managing the training.
+        
+        **engine** *(Engine)*
+        : Runner managing the training.
         
         """
         logging.info(f"Training completed after {engine.state.epoch} epochs.")
@@ -1673,29 +1701,34 @@ class Architect(Module):
                             ) -> Tuple[List[int], List[int]]:
         """
         Categorizes test triplets with the specified edge in the test set 
-        based on whether their nodes have been seen with that edge in the training set,
+        based on whether their nodes have been seen with that edge in the training set, 
         and separates them into two groups based on a threshold for occurrences.
 
         Arguments
         ---------
-        edge_name: str
-            The name of the edge to check (e.g., "indication").
-        threshold: int
-            The minimum number of occurrences of the edge for a node to be considered as "frequent".
+        
+        **edge_name** *(str)*
+        : The name of the edge to check (e.g., "indication").
+        
+        **threshold** *(int)*
+        : The minimum number of occurrences of the edge for a node to be considered as "frequent".
 
         Raises
         ------
-        ValueError
-            An edge from `edge_name` does not exist in the training knowledge graph.
+        
+        **ValueError**
+        : An edge from `edge_name` does not exist in the training knowledge graph.
 
         Returns
         -------
-        frequent_indices: List[int]
-            Indices of triplets in the test set with the specified edge where
-            nodes have been seen more than `threshold` times with that edge in the training set.
-        infrequent_indices: List[int]
-            Indices of triplets in the test set with the specified edge where
-            nodes have been seen fewer than or equal to `threshold` times with that edge in the training set.
+        
+        **frequent_indices** *(List[int])*
+        : Indices of triplets in the test set with the specified edge where 
+        nodes have been seen more than `threshold` times with that edge in the training set.
+        
+        **infrequent_indices** *(List[int])*
+        : Indices of triplets in the test set with the specified edge where 
+        nodes have been seen fewer than or equal to `threshold` times with that edge in the training set.
         
         """
         # Get the index of the specified edge in the training graph
@@ -1736,31 +1769,39 @@ class Architect(Module):
                                         edge_indices: List[str]
                                         ) -> Tuple[float, int, Dict[str, float], float]:
         """
-        TODO: must be rewritten
-        
         Compute the metrics for each individual edge.
 
+        % TODO: must be rewritten
+        
         Arguments
         ---------
-        kg: KnowledgeGraph
-            Knowledge graph on which the metrics will be calculated.
-        edge_indices: List[str]
-            Indices of edges.
+        
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the metrics will be calculated.
+        
+        **edge_indices** *(List[str])*
+        : Indices of edges.
 
         Returns
         -------
-        metrics_sum: float
-            Sum of all individual metrics.
-        triplet_count: int
-            Number of triplets considered.
-        individual_metrics: Dict[str, float]
-            Metrics computed for a single edge.
-        group_metrics: float
-            Global metrics computed for the edge group.
+        
+        **metrics_sum** *(float)*
+        : Sum of all individual metrics.
+        
+        **triplet_count** *(int)*
+        : Number of triplets considered.
+        
+        **individual_metrics** *(Dict[str, float])*
+        : Metrics computed for a single edge.
+        
+        **group_metrics** *(float)*
+        : Global metrics computed for the edge group.
         
         Notes
         -----
+        
         The metrics calculated here are only the Mean Reciprocal Rank (MRR).
+        
         More could be implemented in the future.
         
         """
@@ -1803,19 +1844,23 @@ class Architect(Module):
         """
         Calculate the MRR for frequent and infrequent categories based on given indices.
         
-        Parameters
-        ----------
-        frequent_indices: List[int]
-            Indices of test triplets considered as frequent.
-        infrequent_indices: List[int]
-            Indices of test triplets considered as infrequent.
+        Arguments
+        ---------
+        
+        **frequent_indices** *(List[int])*
+        : Indices of test triplets considered as frequent.
+        
+        **infrequent_indices** *(List[int])*
+        : Indices of test triplets considered as infrequent.
 
         Returns
         -------
-        frequent_metrics: float
-            MRR for the frequent category.
-        infrequent_metrics: float
-            MRR for the infrequent category.
+        
+        **frequent_metrics** *(float)*
+        : MRR for the frequent category.
+        
+        **infrequent_metrics** *(float)*
+        : MRR for the infrequent category.
         
         """
         # Create subgraph for frequent and infrequent categories
@@ -1839,22 +1884,24 @@ class Architect(Module):
 
         Arguments
         ---------
-        kg: KnowledgeGraph
-            Knowledge graph on which the link prediction evaluation will be done.
+        
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the link prediction evaluation will be done.
 
         Raises
         -----
-        ValueError
-            Wrong evaluator called.
-            The evaluator is initialized beforehand and may be incompatible with link prediction.
-            This error is raised when an evaluator incompatible with link prediction is initialized.
-            TODO: this may be improved by resetting the evaluator or creating it on the fly, though that may be problematic on some level?
+        
+        **ValueError**
+        : Wrong evaluator called.
+        : The evaluator is initialized beforehand and may be incompatible with link prediction.
+        : This error is raised when an evaluator incompatible with link prediction is initialized.
+        % TODO: this may be improved by resetting the evaluator or creating it on the fly, though that may be problematic on some level?
 
         Returns
         -------
-        test_mrr: float
-            The filtered MRR resulting from the evaluation on given knowledge graph.
-            TODO: might be better to return the Prediction object altogether, and let the calling function deal with it
+        **test_mrr** (*float)*
+        : The filtered MRR resulting from the evaluation on given knowledge graph.
+        % TODO: might be better to return the Prediction object altogether, and let the calling function deal with it
         
         """
         # Test MRR measure
@@ -1883,21 +1930,25 @@ class Architect(Module):
 
         Arguments
         ---------
-        kg_validation: KnowledgeGraph
-            Validation split from the knowledge graph.
-        kg_test: KnowledgeGraph
-            Test split from the knowledge graph.
+        
+        **kg_validation** *(KnowledgeGraph)*
+        : Validation split from the knowledge graph.
+        
+        **kg_test** *(KnowledgeGraph)*
+        : Test split from the knowledge graph.
 
         Raises
         ------
-        ValueError
-            Wrong evaluator called.
-            TODO.detail
+        
+        **ValueError**
+        : Wrong evaluator called.
+        % TODO.detail
 
         Returns
         -------
-        accuracy: float
-            Accuracy of the triplet classification.
+        
+        **accuracy** *(float)*
+        : Accuracy of the triplet classification.
         
         """
         if not isinstance(self.evaluator, TripletClassificationEvaluator):
@@ -1915,17 +1966,19 @@ class Architect(Module):
         """
         Data leakage evaluation.
         
-        TODO: detail the data leakage procedure
+        % TODO: detail the data leakage procedure
         
         Arguments
         ---------
-        attributes: Dict[str, pd.DataFrame], optional
-            dict(node_type, embedding) containing the embedding for each type of node.
-
+        
+        **attributes** *(Dict[str, pd.DataFrame], optional)*
+        : dict(node_type, embedding) containing the embedding for each type of node.
+        
         Raises
         ------
-        ValueError
-            An edge was not found in the knowledge graph.
+        
+        **ValueError**
+        : An edge was not found in the knowledge graph.
         
         """
         logging.info("Preparing KG for data leakage evaluation procedure...")

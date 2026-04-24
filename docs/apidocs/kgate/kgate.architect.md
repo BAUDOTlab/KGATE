@@ -17,10 +17,7 @@
 :align: left
 
 * - {py:obj}`Architect <kgate.architect.Architect>`
-  - ```{autodoc2-docstring} kgate.architect.Architect
-    :parser: docstrings_parser
-    :summary:
-    ```
+  -
 ````
 
 ### Data
@@ -53,17 +50,6 @@
 :canonical: kgate.architect.Architect
 
 Bases: {py:obj}`torch.nn.Module`
-
-```{autodoc2-docstring} kgate.architect.Architect
-:parser: docstrings_parser
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} kgate.architect.Architect.__init__
-:parser: docstrings_parser
-```
 
 ````{py:property} encoder_node_embedding_dimensions
 :canonical: kgate.architect.Architect.encoder_node_embedding_dimensions
