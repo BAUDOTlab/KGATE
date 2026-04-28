@@ -27,6 +27,7 @@ make_directed_edges = []
 
 flag_near_duplicate_edges = true
 
+flag_cartesian_edges = true
 # Remove all flagged edges from the train set
 clean_train_set = true
 
@@ -36,7 +37,7 @@ clean_train_set = true
 split = [0.8, 0.1, 0.1] 
 
 [preprocessing.params]
-theta = 0.8
+theta_cartesian = 0.8
 theta_first_edge_type = 0.8
 theta_second_edge_type = 0.8
 
@@ -165,9 +166,7 @@ pretrained_embeddings = "auto"
 # - Triplet Classification: Discriminates between true and false triplets
 objective = "Link Prediction"
 
-made_directed_edges = []
-target_edges = [] 
-thresholds = [10]
+target_edges = []
 
 [data_leakage]
 # Set of options to run data leakage examination
