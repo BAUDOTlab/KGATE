@@ -11,7 +11,7 @@ The modifications are licensed under the BSD license according to the source lic
 
 """
 
-from typing import Dict, Set, Tuple, List
+from typing import Dict, Set, Tuple, List, Optional
 from collections import defaultdict
 
 import torch
@@ -36,7 +36,7 @@ class NegativeSampler:
     
     def corrupt_batch(  self,
                         batch: torch.Tensor,
-                        negative_triplet_count = None
+                        negative_triplet_count: Optional[int] = None
                         ) -> Tensor:
         """
         For each true triplet, produce a corrupted one not different from
@@ -104,7 +104,7 @@ class UniformNegativeSampler(NegativeSampler):
     """
     def __init__(self,
                 knowledge_graph: KnowledgeGraph,
-                negative_triplet_count = 1):
+                negative_triplet_count: int = 1):
         
         self.knowledge_graph = knowledge_graph
         self.index_to_node_type: Dict[int, str] = {value: key for key, value in self.knowledge_graph.node_type_to_index.items()}
@@ -115,7 +115,7 @@ class UniformNegativeSampler(NegativeSampler):
     
     def corrupt_batch(  self,
                         batch: torch.Tensor,
-                        negative_triplet_count = None
+                        negative_triplet_count: Optional[int] = None
                         ) -> Tensor:
         """
         For each true triplet, produce a corrupted one not different from
@@ -276,7 +276,7 @@ class BernoulliNegativeSampler(NegativeSampler):
     
     def corrupt_batch(  self,
                         batch: torch.LongTensor,
-                        negative_triplet_count: int | None = None):
+                        negative_triplet_count: Optional[int] = None):
         """
         For each true triplet, produce a corrupted one not different from
         any other true triplet. If `heads` and `tails` are cuda objects,
@@ -473,7 +473,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
 
     def corrupt_batch(  self,
                         batch: Tensor,
-                        _: int = 1
+                        negative_triplet_count: Optional[int] = None
                         ) -> Tensor:
         """
         For each true triplet, produce a corrupted one not different from

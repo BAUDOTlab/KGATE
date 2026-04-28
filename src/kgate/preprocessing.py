@@ -6,7 +6,7 @@ Knowledge Graph preprocessing functions to run before any training procedure.
 import logging
 import pickle
 from pathlib import Path
-from typing import Tuple, List, Set
+from typing import Tuple, List, Set, Literal
 
 import pandas as pd
 
@@ -475,31 +475,32 @@ def clean_datasets( kg_train: KnowledgeGraph,
     
     return kg_train
 
-
-def clean_cartesians(kg_first: KnowledgeGraph,
-                    kg_second: KnowledgeGraph,
-                    known_cartesian: List[int],
-                    node_type: str = "head"
-                    ) -> Tuple[KnowledgeGraph, KnowledgeGraph]:
+def clean_cartesians(
+        first_kg: KnowledgeGraph, 
+        second_kg: KnowledgeGraph, 
+        known_cartesian: List[int], 
+        node_position: Literal["head", "tail"] = "head"
+        ) -> Tuple[KnowledgeGraph, KnowledgeGraph]:
     """
-    Transfer cartesian product triplets from training set to test set to prevent data leakage.
+    Transfer cartesian product triplets from train set to test set to prevent data leakage.
     For each node (head or tail) involved in a cartesian product edge in the test set,
-    all corresponding triplets in the training set are moved to the test set.
+    all corresponding triplets in the train set are moved to the test set.
     
     Arguments
     ---------
-    kg_first: KnowledgeGraph
+    kg_train: KnowledgeGraph
         Train set knowledge graph to be cleaned.
         Will be modified by removing cartesian product triplets.
-    kg_second: KnowledgeGraph
+    kg_test: KnowledgeGraph
         Test set knowledge graph to be augmented.
         Will receive the transferred cartesian product triplets.
-    known_cartesian: List[int]
+    known_cartesian: list
         List of edge indices that represent cartesian product relationships.
-        These are edges where if (head, tail 1, edge) exists, then (head, tail 2, edge) likely exists
-        for many other tail nodes 'tail 2' (or vice versa for tail-based cartesian products).
-    node_type: str, optional, default to "head"
+        These are edges where if (head, edge, tail_1) exists, then (head, edge, tail_2) likely exists
+        for many other tail node tail_2 (or vice versa for tail-based cartesian products).
+    node_position: Literal["head", "tail"], optional
         Either "head" or "tail" to specify which node type to consider for cartesian products.
+        Default is "head".
     
     Returns
     -------
@@ -509,44 +510,39 @@ def clean_cartesians(kg_first: KnowledgeGraph,
         Augmented knowledge graph, with the transferred triplets added. 
     """
     #TODO: improve this method by adding split proportion
-    assert node_type in ["head", "tail"], "node_type must be either 'head' or 'tail'"
+    assert node_position in ["head", "tail"], "node_position must be either 'head' or 'tail'"
     
     for edge_index in known_cartesian:
-        # Find all nodes in test set that participate in the cartesian product
-        mask = (kg_second.edge_indices == edge_index)
-        if node_type == "head":
-            cartesian_node_indices = kg_second.head_indices[mask].view(-1,1)
+        # Find all nodes in test set that participate in the cartesian edge
+        mask = (second_kg.edge_indices == edge_index)
+        if node_position == "head":
+            cartesian_nodes = second_kg.head_indices[mask].view(-1,1)
             # Find matching triplets in train set with same head and edge
-            all_indices_to_move = []
-            for node_index in cartesian_node_indices:
-                mask = (kg_first.head_indices == node_index) & (kg_first.edge_indices == edge_index)
-                indices = mask.nonzero().squeeze()
-                if indices.dim() == 0:
-                    indices = indices.unsqueeze(0)
-                all_indices_to_move.extend(indices.tolist())
+            all_triplet_indices_to_move = []
+            for node in cartesian_nodes:
+                mask = (first_kg.head_indices == node) & (first_kg.edge_indices == edge_index)
+                triplet_indices = mask.nonzero().squeeze()
+                if triplet_indices.dim() == 0:
+                    triplet_indices = triplet_indices.unsqueeze(0)
+                all_triplet_indices_to_move.extend(triplet_indices.tolist())
         else:  # tail
-            cartesian_node_indices = kg_second.tail_indices[mask].view(-1,1)
+            cartesian_nodes = second_kg.tail_indices[mask].view(-1,1)
             # Find matching triplets in train set with same tail and edge
-            all_indices_to_move = []
-            for node_index in cartesian_node_indices:
-                mask = (kg_first.tail_indices == node_index) & (kg_first.edge_indices == edge_index)
-                indices = mask.nonzero().squeeze()
-                if indices.dim() == 0:
-                    indices = indices.unsqueeze(0)
-                all_indices_to_move.extend(indices.tolist())
+            all_triplet_indices_to_move = []
+            for node in cartesian_nodes:
+                mask = (first_kg.tail_indices == node) & (first_kg.edge_indices == edge_index)
+                triplet_indices = mask.nonzero().squeeze()
+                if triplet_indices.dim() == 0:
+                    triplet_indices = triplet_indices.unsqueeze(0)
+                all_triplet_indices_to_move.extend(triplet_indices.tolist())
             
-        if all_indices_to_move:
+        if all_triplet_indices_to_move:
             # Extract the triplets to be transferred
-            triplets_to_move = torch.stack([
-                kg_first.head_indices[all_indices_to_move],
-                kg_first.edge_indices[all_indices_to_move],
-                kg_first.tail_indices[all_indices_to_move],
-                kg_first.triplets[all_indices_to_move]
-            ], dim = 1)
+            triplets_to_move = first_kg.graphindices[:,all_triplet_indices_to_move]
             
             # Remove identified triplets from train set
-            kg_first = kg_first.remove_triplets(torch.tensor(all_indices_to_move, dtype = torch.long))
+            first_kg = first_kg.remove_triplets(torch.tensor(all_triplet_indices_to_move, dtype = torch.long))
             
-            kg_second = kg_second.add_triplets(triplets_to_move)
+            second_kg = second_kg.add_triplets(triplets_to_move)
             
-    return kg_first, kg_second
+    return first_kg, second_kg

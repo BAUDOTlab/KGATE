@@ -18,7 +18,14 @@ from collections.abc import Callable
 
 import pandas as pd
 import numpy as np
-import yaml
+import tomli_w
+
+from torchkge import KnowledgeGraph
+from torchkge.models import Model
+import torchkge.sampling as sampling
+from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
+
+from torch_geometric.utils import k_hop_subgraph
 
 import torch
 from torch import tensor, Tensor
@@ -1046,61 +1053,47 @@ class Architect(Module):
 
         self.eval()
 
-        list_rel_1: List[str] = self.config["evaluation"]["made_directed_edges"]
-        list_rel_2: List[str] = self.config["evaluation"]["target_edges"]
-        thresholds: List[int] = self.config["evaluation"]["thresholds"]
-        metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.yaml")
+        target_edges: List[str] = self.config["evaluation"]["target_edges"]
+        metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.toml")
+
+        target_edges_result = {}
 
         all_edges: Set[Any] = set(self.kg_test.edge_to_index.keys())
-        remaining_edges = all_edges - set(list_rel_1) - set(list_rel_2)
+        remaining_edges = all_edges - set(target_edges)
         remaining_edges = list(remaining_edges)
+        
+        triplet_count_target_edges = 0
 
-        total_metrics_sum_list_1, triplet_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_edges(
-            self.kg_test, list_rel_1)
-        total_metrics_sum_list_2, triplet_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_edges(
-            self.kg_test, list_rel_2)
-        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(
-            self.kg_test, remaining_edges)
+        if len(remaining_edges) != len(all_edges):
+            metrics_sum_target_edges, triplet_count_target_edges, individual_metrics_target_edges, group_metrics_target_edges = self.calculate_metrics_for_edges(self.kg_test, target_edges)
+            
+            target_edges_result = {
+                "target_edges": {
+                    "Global_metrics": metrics_sum_target_edges,
+                    "Individual_metrics": individual_metrics_target_edges
+                },
+            }
 
-        global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (triplet_count_list_1 + triplet_count_list_2 + triplet_count_remaining)
+        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(self.kg_test, remaining_edges)
+
+        global_metrics = (group_metrics_remaining + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
 
         logging.info(f"Final Test metrics with best model: {global_metrics}")
 
         results = {
             "Global_metrics": global_metrics,
-            "made_directed_edges": {
-                "Global_metrics": group_metrics_list_1,
-                "Individual_metrics": individual_metrics_list_1
-            },
-            "target_edges": {
-                "Global_metrics": group_metrics_list_2,
-                "Individual_metrics": individual_metrics_list_2
-            },
+            **target_edges_result, # if there is no target edges, don't add the block
             "remaining_edges": {
                 "Global_metrics": group_metrics_remaining,
                 "Individual_metrics": individual_metrics_remaining
             },
             "target_edges_by_frequency": {}  
         }
-
-        for i in range(len(list_rel_2)):
-            edge: str = list_rel_2[i]
-            threshold: int = thresholds[i]
-            frequent_indices, infrequent_indices = self.categorize_test_nodes(edge, threshold)
-            frequent_metrics, infrequent_metrics = self.calculate_metrics_for_categories(frequent_indices, infrequent_indices)
-            logging.info(f"Metrics for frequent nodes (threshold={threshold}) in edge {edge}: {frequent_metrics}")
-            logging.info(f"Metrics for infrequent nodes (threshold={threshold}) in edge {edge}: {infrequent_metrics}")
-
-            results["target_edges_by_frequency"][edge] = {
-                            "Frequent_metrics": frequent_metrics,
-                            "Infrequent_metrics": infrequent_metrics,
-                            "Threshold": threshold
-                            }
-        
+                
         self.test_results = results
         
-        with open(metrics_file, "w") as file:
-            yaml.dump(results, file, default_flow_style = False, sort_keys = False)
+        with open(metrics_file, "wb") as file:
+            tomli_w.dump(results, file)
 
         logging.info(f"Evaluation results stored in {metrics_file}")
 
@@ -1696,8 +1689,8 @@ class Architect(Module):
 
         for edge_name in edge_indices:
             # Get triplets associated with index
-            relation_index = kg.edge_to_index.get(edge_name)
-            indices_to_keep = torch.nonzero(kg.edge_indices == relation_index, as_tuple = False).squeeze()
+            edge_index = kg.edge_to_index.get(edge_name)
+            indices_to_keep = torch.nonzero(kg.edge_indices == edge_index, as_tuple = False).squeeze()
 
             if indices_to_keep.numel() == 0:
                 continue  # Skip to next edge if no triplet found
