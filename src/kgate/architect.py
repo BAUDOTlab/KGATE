@@ -362,7 +362,9 @@ class Architect(Module):
                     if self.metadata is None:
                         raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
             case _:
-                return
+                if metadata == "":
+                    return
+                raise TypeError(f"Metadata can only be given as a pandas DataFrame or a path to a CSV file, but got {type(metadata)}")
             
         if self.metadata is not None and hasattr(self, "kg_train"):
             for knowledge_graph in (self.kg_train, self.kg_val, self.kg_test):
