@@ -16,56 +16,46 @@ from .utils import filter_scores
 
 
 class Inference_KG(Dataset):
-    """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
-    Subset of a KG used for inference.
-    
-    This class inherits from the PyTorch [`utils.data.Dataset`](https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html)
-
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
-    
-    **first_index_tensor** *(torch.Tensor)*
-    : The first tensor with indices of the edges or nodes (from the knowledge graph).
-    
-    **second_index_tensor** *(torch.Tensor)*
-    : The second tensor with indices of the edges or nodes (from the knowledge graph).
-
-    <span style="color:#8B0000"> 
-    <strong>Attributes</strong>
-    </span>
-    
-    **first_index_tensor** *(torch.Tensor)*
-    : The first tensor with indices of the edges or nodes (from the knowledge graph).
-    
-    **second_index_tensor** *(torch.Tensor)*
-    : The second tensor with indices of the edges or nodes (from the knowledge graph).
-    
-    <span style="color:#8B0000"> 
-    <strong>Raises</strong>
-    </span>
-    
-    **AssertionError**
-    : Both index tensors must be of the same size.
-
-    <span style="color:#8B0000"> 
-    <strong>Notes</strong>
-    </span>
-    
-    Either both tensors are nodes, or they are node and edge.   
-    
-    The `__getitem__` method allows to call an `Inference_KG` object with an index, giving back a tuple containing the corresponding values of both tensors.
-        
-    ---
-    
-    """
     def __init__(self,
                 first_index_tensor: Tensor,
                 second_index_tensor: Tensor):
+        """
+        Subset of a KG used for inference.
+
+        This class inherits from the PyTorch [`utils.data.Dataset`](https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html)
+
+        Arguments
+        ---------
+
+        **first_index_tensor** *(torch.Tensor)*
+        : The first tensor with indices of the edges or nodes (from the knowledge graph).
+
+        **second_index_tensor** *(torch.Tensor)*
+        : The second tensor with indices of the edges or nodes (from the knowledge graph).
+
+        Attributes
+        ----------
+
+        **first_index_tensor** *(torch.Tensor)*
+        : The first tensor with indices of the edges or nodes (from the knowledge graph).
+
+        **second_index_tensor** *(torch.Tensor)*
+        : The second tensor with indices of the edges or nodes (from the knowledge graph).
+
+        Raises
+        ------
+
+        **AssertionError**
+        : Both index tensors must be of the same size.
+
+        Notes
+        -----
+
+        Either both tensors are nodes, or they are node and edge.   
+
+        The `__getitem__` method allows to call an `Inference_KG` object with an index, giving back a tuple containing the corresponding values of both tensors.
+
+        """
         
         # Either both tensors are nodes, or they are node and edge
         assert first_index_tensor.size() == second_index_tensor.size(), "Both index tensors must be of the same size for inference."
@@ -83,30 +73,25 @@ class Inference_KG(Dataset):
 
 
 class EdgeInference:
-    """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
-    Use trained embedding model to infer missing edges in triplets.
-
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
-    
-    **kg** *(KnowledgeGraph)*
-    : Knowledge graph on which the inference will be done.
-
-    <span style="color:#8B0000"> 
-    <strong>Attributes</strong>
-    </span>
-    
-    **kg** *(KnowledgeGraph)*
-    : Knowledge graph on which the inference will be done.
-
-    """
     def __init__(self, kg: KnowledgeGraph):
+        """
+        Use trained embedding model to infer missing edges in triplets.
+
+        Arguments
+        ---------
+
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the inference will be done.
+
+        Attributes
+        ----------
+
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the inference will be done.
+
+        """
         self.kg = kg
+
 
     def evaluate(self, 
                 head_indices: Tensor,
@@ -121,16 +106,11 @@ class EdgeInference:
                 verbose: bool = True,
                 **_):
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-
         *Missing documentation*
         % TODO.What_the_function_does_about_globally
 
-        <span style="color:#8B0000"> 
-        <strong>Arguments</strong>
-        </span>
+        Arguments
+        ---------
 
         **head_indices** *(torch.Tensor)*
         : The indices of the head nodes (from the knowledge graph).
@@ -152,8 +132,8 @@ class EdgeInference:
         
         **node_embeddings** *(nn.ParameterList, keyword-only)*
         : A list containing all embeddings for each node type.
-          : keys: node type index
-          : values: tensors of shape (node_count, embedding_dimensions)
+        : keys: node type index
+        : values: tensors of shape (node_count, embedding_dimensions)
         
         **edge_embeddings** *(nn.Embedding, keyword-only)*
         : A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
@@ -161,9 +141,8 @@ class EdgeInference:
         **verbose** *(bool, default to True, keyword-only)*
         : Indicate whether a progress bar should be displayed during evaluation.
 
-        <span style="color:#8B0000"> 
-        <strong>Returns</strong>
-        </span>
+        Returns
+        -------
 
         **predictions** *(torch.Tensor)*
         : *Missing documentation*
@@ -171,8 +150,6 @@ class EdgeInference:
         
         **scores** *(torch.Tensor, shape [batch_size, n])*
         : Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
-            
-        ---
         
         """
         with torch.no_grad():
@@ -238,29 +215,23 @@ class EdgeInference:
 
 
 class NodeInference:
-    """
-    <span style="color:#8B0000"> 
-    <strong>Description</strong>
-    </span>
-    
-    Use trained embedding model to infer missing nodes in triplets.
-
-    <span style="color:#8B0000"> 
-    <strong>Arguments</strong>
-    </span>
-    
-    **kg** *(KnowledgeGraph)*
-    : Knowledge graph on which the inference will be done.
-
-    <span style="color:#8B0000"> 
-    <strong>Attributes</strong>
-    </span>
-    
-    **kg** *(KnowledgeGraph)*
-    : Knowledge graph on which the inference will be done.
-
-    """
     def __init__(self, kg: KnowledgeGraph):
+        """
+        Use trained embedding model to infer missing nodes in triplets.
+
+        Arguments
+        ---------
+
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the inference will be done.
+
+        Attributes
+        ----------
+
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the inference will be done.
+
+        """
         self.kg = kg
 
 
@@ -278,15 +249,10 @@ class NodeInference:
                 verbose: bool = True,
                 **_):
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-    
         Predict the missing node of a triplet where either head and edge or edge and tail are known.
 
-        <span style="color:#8B0000"> 
-        <strong>Arguments</strong>
-        </span>
+        Arguments
+        ---------
         
         **node_indices** *(torch.Tensor)*
         : The indices of nodes (from the knowledge graph).
@@ -320,13 +286,12 @@ class NodeInference:
         **verbose** *(bool, default to True, keyword-only)*
         : Indicate whether a progress bar should be displayed during evaluation.
 
-        <span style="color:#8B0000"> 
-        <strong>Returns</strong>
-        </span>
+        Returns
+        -------
         
         **predictions** *(torch.Tensor)*
+        : *Missing documentation*
         % TODO.What_that_variable_is_or_does
-        *Missing documentation*
         
         **scores** *(torch.Tensor, shape [batch_size, n])*
         : Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.

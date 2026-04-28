@@ -19,16 +19,16 @@ from torch.nn import Module
 
 
 class ConvolutionalDecoder(Module):
-    """
-    Interface for convolutional decoders of KGATE.
-
-    This interface is largely inspired by TorchKGE's ConvKBModel, and exposes
-    the methods that all convolutional decoders must use to be compatible with KGATE.
-
-    Furthermore, this interface doesn't implement anything but is a type helper.
-    
-    """
     def __init__(self):
+        """
+        Interface for convolutional decoders of KGATE.
+
+        This interface is largely inspired by TorchKGE's ConvKBModel, and exposes 
+        the methods that all convolutional decoders must use to be compatible with KGATE.
+
+        Furthermore, this interface doesn't implement anything but is a type helper.
+
+        """
         super().__init__()
     
     
@@ -45,37 +45,47 @@ class ConvolutionalDecoder(Module):
         Interface method for the decoder's score function.
 
         Refer to the specific decoder for details on this function's implementation.
+        
         While all arguments are given when called from the Architect class, most 
         decoders only use some of them.
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            The embeddings of the head nodes for the current batch of length `batch_size`.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            The embeddings of the tail nodes for the current batch of length `batch_size`.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            The embeddings of the edges for the current batch of length `batch_size`.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes for the current batch of length `batch_size`.
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes for the current batch of length `batch_size`.
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges for the current batch of length `batch_size`.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : The embeddings of the head nodes for the current batch of length `batch_size`.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : The embeddings of the tail nodes for the current batch of length `batch_size`.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        : The embeddings of the edges for the current batch of length `batch_size`.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes for the current batch of length `batch_size`.
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes for the current batch of length `batch_size`.
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges for the current batch of length `batch_size`.
         
         Raises
         ------
-        NotImplementedError
-            The score method must be implemented by a convolutional decoder
-            inheriting from this interface.
+        
+        **NotImplementedError**
+        : The `score` method must be implemented by a convolutional decoder 
+        inheriting from this interface.
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
-            The score of each triplet as a tensor.
+        
+        **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
+        : The score of each triplet as a tensor.
         
         Notes
         -----
+        
         The batch can be the whole graph if it fits in memory.
         
         """
@@ -93,24 +103,30 @@ class ConvolutionalDecoder(Module):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            The node embedding as a ParameterList containing one Parameter by node type,
-            or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The edge embedding as a nn.Embedding containing one Parameter by edge type,
-            or only one if there is no node type.
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
+        : The node embedding as a ParameterList containing one Parameter by node type, 
+        or only one if there is no node type.
+        
+        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        : The edge embedding as a nn.Embedding containing one Parameter by edge type, 
+        or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The normalized edge embedding object.
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
+        : The normalized node embedding object.
+        
+        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        : The normalized edge embedding object.
         
         Notes
         -----
-        The normalize_parameters method can be implemented by a convolutional decoder inheriting from this class
+        
+        The `normalize_parameters` method can be implemented by a convolutional decoder inheriting from this class 
         if it has specific parameters to normalize.
+        
         If the decoder doesn't have dedicated normalization, nothing is returned. In 
         this case, it is not necessary to implement this method from the interface.
         
@@ -126,13 +142,15 @@ class ConvolutionalDecoder(Module):
         
         Returns
         -------
-        embeddings: Dict[str, torch.Tensor] or None
-            Decoder-specific embeddings, or None.
+        
+        **embeddings** *(Dict[str, torch.Tensor] or None)*
+        : Decoder-specific embeddings, or None.
         
         Notes
         -----
-        The get_embeddings method can be implemented by a convolutional decoder inheriting from this class
+        The `get_embeddings` method can be implemented by a convolutional decoder inheriting from this class 
         if it needed.
+        
         If the decoder doesn't have dedicated embeddings, nothing is returned. In 
         this case, it is not necessary to implement this method from the interface.
         
@@ -150,44 +168,56 @@ class ConvolutionalDecoder(Module):
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
-        Link prediction evaluation helper function. Get node embeddings
-        and edge embeddings. The output will be fed to the
+        Link prediction evaluation helper function. Get node embeddings 
+        and edge embeddings. The output will be fed to the 
         `inference_score_function` method.
 
         Refer to the specific decoder for details on this function's implementation.
+        
         While all arguments are given when called from the Architect class, most 
         decoders only use some of them.
         
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes (from KG).
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes (from KG).
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges (from KG).
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only)*
+        : Embeddings of all nodes.
+        
+        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only)*
+        : Embeddings of all edges.
+        
+        **node_inference** *(bool, optional, default to True, keyword-only)*
+        : If True, prepare candidate nodes; otherwise, prepare candidate edges.
         
         Raises
         ------
-        NotImplementedError
-            The inference_prepare_candidates method must be implemented by a convolutional decoder
-            inheriting from this interface.
+        
+        **NotImplementedError**
+        : The `inference_prepare_candidates` method must be implemented by a convolutional decoder 
+        inheriting from this interface.
         
         Returns
         -------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions]
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions])*
             Head node embeddings.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions]
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions])*
             Tail node embeddings.
-        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
+        
+        **edge_embeddings_inferred** *(torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions])*
             Edge embeddings.
-        candidates: torch.Tensor
+        
+        **candidates** *(torch.Tensor)*
             Candidate embeddings for nodes or edges.
         
         """    
@@ -201,38 +231,43 @@ class ConvolutionalDecoder(Module):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        Link prediction evaluation helper function. Compute the scores
+        Link prediction evaluation helper function. Compute the scores 
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        
         The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Refer to the specific decoder for details on this function's implementation.
+        
         While all arguments are given when called from the Architect class, most 
         decoders only use some of them.
         
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the batch.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the batch.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
-            Embeddings of the edges in the batch.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the batch.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the batch.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only)*
+        : Embeddings of the edges in the batch.
         
         Raises
         ------
-        NotImplementedError
-            The inference_score method must be implemented by a convolutional decoder
-            inheriting from this interface.
+        **NotImplementedError**
+        : The `inference_score` method must be implemented by a convolutional decoder 
+        inheriting from this interface.
 
         Returns
         -------
-        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            Tensor of score values.
-            First dimension: incomplete triplets tested
-            Second dimension: candidate indices
-            For example, if the function is called to infer the score of tails:
-            First dimension: (head_indices, edge_indices)
-            Second dimension: tail_indices
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : Tensor of score values.
+        : First dimension: incomplete triplets tested
+        : Second dimension: candidate indices
+        : For example, if the function is called to infer the score of tails:
+        : First dimension: (head_indices, edge_indices)
+        : Second dimension: tail_indices
         
         """
         raise NotImplementedError("Convolutional decoders must implement the inference_score function themselves.")
@@ -240,49 +275,62 @@ class ConvolutionalDecoder(Module):
 
 
 class ConvKB(ConvolutionalDecoder):
-    """
-    Implementation of ConvKB model detailed in the paper referenced below.
-    
-    This class inherits from the ConvolutionalDecoder interface. It inherits its attributes as well.
-
-    References
-    ----------
-    Dai Quoc Nguyen, Tu Dinh Nguyen, Dat Quoc Nguyen, Dinh Phung
-    `A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network`
-    https://arxiv.org/abs/1712.02121
-    In Proceedings of the 2018 Conference of the North American Chapter of the Association for Computational
-    Linguistics: Human Language Technologies (2018), vol. 2, pp. 327–333.
-    
-    Arguments
-    ---------
-    embedding_dimensions: int
-        Dimensions of embeddings.
-    filter_count: int
-        Number of convolution filters to apply.
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
-    
-    Attributes
-    ----------
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
-    embedding_dimensions: int
-        Dimensions of embeddings.
-    convolution_layer: torch.nn.Sequential
-        The convolution layer of the model.
-    output: torch.nn.Sequential
-        The reconstruction layer of the model.
-    
-    """
     def __init__(self,
                 node_count: int,
                 edge_count: int,
                 embedding_dimensions: int,
                 filter_count: int):
+        """
+        Implementation of ConvKB model detailed in the paper referenced below.
+
+        This class inherits from the ConvolutionalDecoder interface. It inherits its attributes as well.
+
+        References
+        ----------
+        
+        * Dai Quoc Nguyen, Tu Dinh Nguyen, Dat Quoc Nguyen, Dinh Phung
+        
+            `A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network`
+        
+            <https://arxiv.org/abs/1712.02121>
+        
+            In Proceedings of the 2018 Conference of the North American Chapter of the Association for Computational 
+            Linguistics: Human Language Technologies (2018), vol. 2, pp. 327–333.
+
+        Arguments
+        ---------
+        
+        **embedding_dimensions** *(int)*
+        : Dimensions of embeddings.
+        
+        **filter_count** *(int)*
+        : Number of convolution filters to apply.
+        
+        **node_count** *(int)*
+        : Number of nodes in the knowledge graph.
+        
+        **edge_count** *(int)*
+        : Number of edges in the knowledge graph.
+
+        Attributes
+        ----------
+        
+        **node_count** *(int)*
+        : Number of nodes in the knowledge graph.
+        
+        **edge_count** *(int)*
+        : Number of edges in the knowledge graph.
+        
+        **embedding_dimensions** *(int)*
+        : Dimensions of embeddings.
+        
+        **convolution_layer** *(torch.nn.Sequential)*
+        : The convolution layer of the model.
+        
+        **output** *(torch.nn.Sequential)*
+        : The reconstruction layer of the model.
+
+        """
         super().__init__()
         
         self.node_count = node_count
@@ -308,22 +356,25 @@ class ConvKB(ConvolutionalDecoder):
         """
         Compute the score function for the triplets given as argument.
         
-        See referenced paper for more details on the score:
-        https://arxiv.org/abs/1712.02121
+        See referenced paper for more details on the score: 
+        <https://arxiv.org/abs/1712.02121>
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            The embeddings of the head nodes for the current batch of length `batch_size`.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            The embeddings of the tail nodes for the current batch of length `batch_size`.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            The embeddings of the edges for the current batch of length `batch_size`.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : The embeddings of the head nodes for the current batch of length `batch_size`.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : The embeddings of the tail nodes for the current batch of length `batch_size`.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        : The embeddings of the edges for the current batch of length `batch_size`.
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
-            The score of each triplet as a tensor.
+        **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
+        : The score of each triplet as a tensor.
         
         Notes
         -----
@@ -352,35 +403,45 @@ class ConvKB(ConvolutionalDecoder):
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
-        Link prediction evaluation helper function. Get node embeddings
-        and edge embeddings. The output will be fed to the
+        Link prediction evaluation helper function. Get node embeddings 
+        and edge embeddings. The output will be fed to the 
         `inference_score_function` method.
         
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes (from KG).
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes (from KG).
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges (from KG).
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only)*
+        : Embeddings of all nodes.
+        
+        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only)*
+        : Embeddings of all edges.
+        
+        **node_inference** *(bool, optional, default to True, keyword-only)*
+        : If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions]
-            Head node embeddings.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions]
-            Tail node embeddings.
-        edge_embeddings_inferred: torch.Tensor
-            Edge embeddings.
-        candidates: torch.Tensor
-            Candidate embeddings for nodes or edges.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions])*
+        : Head node embeddings.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions])*
+        : Tail node embeddings.
+        
+        **edge_embeddings_inferred** *(torch.Tensor)*
+        : Edge embeddings.
+        
+        **candidates** *(torch.Tensor)*
+        : Candidate embeddings for nodes or edges.
 
         """
         batch_size = head_indices.shape[0]
@@ -410,37 +471,44 @@ class ConvKB(ConvolutionalDecoder):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        Link prediction evaluation helper function. Compute the scores
+        Link prediction evaluation helper function. Compute the scores 
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        
         The arguments should match the ones of the output of `inference_prepare_candidates`.
         
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
-            Embeddings of the edges in the knowledge graph.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only)*
+        : Embeddings of the edges in the knowledge graph.
         
         Raises
         ------
-        AssertionError #1
-            When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
-        AssertionError #2
-            When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
-        AssertionError #3
-            When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
+        
+        **AssertionError #1**
+        : When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
+        
+        **AssertionError #2**
+        : When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
+        
+        **AssertionError #3**
+        : When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
 
         Returns
         -------
-        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            Tensor of score values.
-            First dimension: incomplete triplets tested
-            Second dimension: candidate indices
-            For example, if the function is called to infer the score of tails:
-            First dimension: (head_indices, edge_indices)
-            Second dimension: tail_indices
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : Tensor of score values.
+            : First dimension: incomplete triplets tested
+            : Second dimension: candidate indices
+        : For example, if the function is called to infer the score of tails:
+            : First dimension: (head_indices, edge_indices)
+            : Second dimension: tail_indices
         
         """        
         batch_size = head_embeddings.shape[0]
