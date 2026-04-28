@@ -308,7 +308,7 @@ class Architect(Module):
         
         return self.edge_embedding_dimensions
 
-    def set_metadata(self, metadata: pd.DataFrame | os.PathLike):
+    def set_metadata(self, metadata: pd.DataFrame | os.PathLike | None):
         """
         Set the node metadata of the knowledge graph.
 
@@ -342,13 +342,13 @@ class Architect(Module):
             If the metadata object is not of the correct type.
             
         """
-        match type(metadata):
-            case pd.DataFrame:
+        match metadata:
+            case pd.DataFrame():
                 if not set(["id", "type"]).issubset(metadata.keys()):
                     raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
         
                 self.metadata = metadata
-            case os.PathLike:
+            case os.PathLike():
                 if Path(metadata).exists():
                     # Fuzzy identification of separator.
                     # TODO: find a cleaner way to do it
@@ -361,9 +361,9 @@ class Architect(Module):
                 
                     if self.metadata is None:
                         raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
+            case None:
+                return
             case _:
-                if metadata == "":
-                    return
                 raise TypeError(f"Metadata can only be given as a pandas DataFrame or a path to a CSV file, but got {type(metadata)}")
             
         if hasattr(self, "kg_train"):
