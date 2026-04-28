@@ -201,7 +201,8 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
         kg = kg.remove_duplicate_triplets()
 
     duplicated_edges_list = []
-
+    cartesian_edges = []
+    
     if config["preprocessing"]["flag_near_duplicate_edges"]:
         logging.info("Checking for near duplicates edges...")
         theta_first_edge_type = config["preprocessing"]["params"]["theta_first_edge_type"]
