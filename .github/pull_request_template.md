@@ -6,19 +6,21 @@
 Make sure your title matches the https://www.conventionalcommits.org/en/v1.0.0/ format.
 Ideally the title is less than or equal to 72 characters (GitHub cuts off commit titles longer than this length).
 
-TODO, rework/add: See https://github.com/BAUDOTlab/KGATE/blob/dev/CONTRIBUTING.md#-submitting-a-pull-request
+See https://github.com/BAUDOTlab/KGATE/blob/dev/CONTRIBUTING.md#-submitting-a-pull-request
 for more information on the allowed scopes and prefixes.
 
 Example:
-implements(decoder): SpherE complete implementation
-^           ^        ^
-|           |        |__ Subject
-|           |___________ Scope (optional)
-|_______________________ Prefix
+[Feat] (decoder) SpherE complete implementation
+^      ^         ^
+|      |         |__ Subject
+|      |____________ Scope (optional)
+|___________________ Prefix
+
 -->
 
 <!--
 Make sure that this PR is not overlapping with someone else's work.
+
 Please try to keep the PR self-contained (don't change a bunch of unrelated things).
 -->
 
@@ -28,7 +30,7 @@ The second and third section are mandatory.
 -->
 
 <!--
-This PR template was inspired by https://github.com/pagefaultgames/pokerogue
+This PR template was inspired by the one of https://github.com/pagefaultgames/pokerogue
 -->
 
 ## What are the changes for using KGATE?
@@ -56,7 +58,7 @@ Ex: What files have been changed? What classes/functions/variables/etc have been
 ## How to test the changes?
 <!--
 How can a reviewer test your changes once they check out on your branch?
-TODO, rework/add: Did you make use of the `utils.py` file?
+Did you make use of the `utils.py` file?
 Did you introduce any automated tests?
 Do the reviewers need to do something special in order to test your changes?
 -->

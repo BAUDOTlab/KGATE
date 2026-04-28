@@ -683,7 +683,7 @@ def get_average_heads_per_tail( graphindices: Tensor
     Returns
     -------
     average_heads_per_tail: Dict[float,float]
-        Keys: relation indices
+        Keys: edge indices
         Values: average number of heads per tail
         
     """
@@ -708,7 +708,7 @@ def get_average_tails_per_head( graphindices: Tensor
     Returns
     -------
     average_tails_per_head: Dict[float,float]
-        Keys: relation indices; Values: average number of tails per head
+        Keys: edge indices; Values: average number of tails per head
     
     """
     dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head", "tail", "edge", "triplet"])

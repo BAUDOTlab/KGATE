@@ -265,7 +265,6 @@ class KnowledgeGraph(Dataset):
                 dataframe_node_types = list(set(mapping_dataframe['head_type'].unique()).union(set(mapping_dataframe['tail_type'].unique())))
                 self.node_type_to_index = {node_type: i for i, node_type in enumerate(sorted(dataframe_node_types))}
                 self._identity = "id" # private attribute, for more info refer to identity property
-                
             else:
                 mapping_dataframe = dataframe
 
@@ -1237,7 +1236,7 @@ class KnowledgeGraph(Dataset):
             embeddings[mask] = node_embeddings[node_type_index][self.global_to_local_indices[mask]]
         
         return embeddings
-
+    
 
     def clean(self):
         """
@@ -1245,6 +1244,25 @@ class KnowledgeGraph(Dataset):
         
         """
         self.triplet_types = [triplet for triplet in self.triplet_types if triplet[1] != "self"]
+
+    @staticmethod
+    def from_hetero_data(hetero_data: HeteroData):
+        """
+        Create a new KGATE KnowledgeGraph instance from the PyTorch Geometric HeteroData object.
+        
+        Arguments
+        ---------
+        hetero_data : HeteroData
+            The knowledge graph as a PyTorch Geometric HeteroData object.
+
+        Returns
+        -------
+        KnowledgeGraph
+            The knowledge graph as a KGATE KnowledgeGraph object.
+            
+        """
+        # TODO for PyTorch Geometric compatibility
+        pass
 
 
     @staticmethod
