@@ -818,7 +818,7 @@ class KnowledgeGraph(Dataset):
             
         """
         index_to_edge = {value: key for key, value in self.edge_to_index.items()}
-
+        undirected_edges = [0]
         reverse_list = []
 
         # New triplets list
@@ -826,66 +826,63 @@ class KnowledgeGraph(Dataset):
         removed_triplets = [self.removed_triplets]
 
         for edge_index in undirected_edges:
-            reverse_edge = f"{index_to_edge[edge_index]}_inv"
-
-            # Check if the reverse edge already exists in the graph
-            if edge_index not in self.edge_to_index.values():
-                logging.info(f"Edge {edge_index} not found in knowledge graph. Skipping...")
-                continue
+            reverse_edge = f"{index_to_edge[edge_index]}_rev"
 
             edge_triplets = self.graphindices[:, self.graphindices[2] == edge_index]
-            triplets_indices = edge_triplets[3].unique()
+            triplets_indices: torch.Tensor = edge_triplets[3].unique()
             # Create a new ID for the reverse edge
             reverse_edge_index = len(self.edge_to_index)
             
             self.edge_to_index[reverse_edge] = reverse_edge_index
             for triplet_index in triplets_indices:
                 original_triplet = self.triplet_types[triplet_index]
-                reverse_triplet_index = len(self.triplet_types)
-                reverse_triplet_index_original_edge = reverse_triplet_index + 1
-                original_triplet_index_reverse_edge = reverse_triplet_index + 2
-
-                self.triplet_types.append((original_triplet[2], reverse_edge, original_triplet[0]))
-                reverse_triplet_original_edge = (original_triplet[2], edge_index, original_triplet[0])
+                
+                # When the reverse of (A, PPI, B) is (B, PPI_REV, A), we create :
+                # 1. The reverse triplets with the reverse edge (B, PPI_REV, A)
+                # 2. The reverse triplets with the original edge (B, PPI, A)
+                # 3. The original triplets with the reverse edge (A, PPI_REV, B)
+                # All except the triplets in 1. will only be considered in the ground truth for evaluation
+                reverse_triplet_reverse_edge = (original_triplet[2], reverse_edge, original_triplet[0])
+                reverse_triplet_original_edge = (original_triplet[2], index_to_edge[edge_index], original_triplet[0])
                 original_triplet_reverse_edge = (original_triplet[0], reverse_edge, original_triplet[2])
                 
-                if reverse_triplet_original_edge in self.triplets_types:
-                    reverse_triplet_index_original_edge = self.triplet_types.index(reverse_triplet_original_edge)
-                else: 
-                    reverse_triplet_index_original_edge = len(self.triplet_types)
-                    self.triplet_types.append(reverse_triplet_original_edge)
+                new_triplet_indices = []
 
-                if original_triplet_reverse_edge in self.triplet_types:
-                    original_triplet_index_reverse_edge = self.triplet_types.index(original_triplet_reverse_edge)
-                else:
-                    original_triplet_index_reverse_edge = len(self.triplet_types)
-                    self.triplet_types.append(original_triplet_reverse_edge)
-                
+                # For each kind of triplet created, we add its type and get the corresponding index
+                for triplet_type in [
+                    reverse_triplet_reverse_edge,
+                    reverse_triplet_original_edge,
+                    original_triplet_reverse_edge
+                    ]:
+                    if triplet_type in self.triplet_types:
+                        new_triplet_indices.append(self.triplet_types.index(triplet_type))
+                    else:
+                        new_triplet_indices.append(len(self.triplet_types))
+                        self.triplet_types.append(triplet_type)
+
                 mask = (self.graphindices[3] == triplet_index)
                 subset = self.graphindices[:, mask]
 
-                # In the new triplets when the reverse of (A, PPI, B) is (B, PPI_INV, A), we make :
-                # 1. The reverse triplets with the reverse edge (B, PPI_INV, A)
-                # 2. The reverse triplets with the original edge (B, PPI, A)
-                # 3. The original triplets with the inverse edge (A, PPI_INV, B)
-                # All except the triplets in 1. will only be considered in the ground truth for evaluation
-                new_triplet = torch.stack([
-                        [subset[1].repeat(2).unsqueeze(0), subset[0].unsqueeze(0)],
-                        [subset[0].repeat(2).unsqueeze(0), subset[1].unsqueeze(0)],
-                        [tensor(reverse_edge_index).repeat(subset.size(1)).unsqueeze(0), tensor(edge_index).repeat(subset.size(1)).unsqueeze(0), tensor(reverse_edge_index).repeat(subset.size(1)).unsqueeze(0)],
-                        [tensor(reverse_triplet_index).repeat(subset.size(1)).unsqueeze(0), tensor(reverse_triplet_index_original_edge).repeat(subset.size(1)).unsqueeze(0), tensor(original_triplet_index_reverse_edge).repeat(subset.size(1)).unsqueeze(0)]
-                    ])
-                graphindices.append(new_triplet)
+                # Reverse triplets with reverse edge are added to the graph
+                graphindices.append(torch.stack([
+                                subset[1],
+                                subset[0],
+                                tensor(reverse_edge_index).repeat(subset.size(1)),
+                                tensor(new_triplet_indices[0]).repeat(subset.size(1))
+                            ]))
+                
+                # Reverse triplets with original edge and original triplets with reverse edge
+                # are added to the ground truth only
                 removed_triplets.append(torch.stack([
-                    new_triplet[1],
-                    new_triplet[0],
-                    new_triplet[2],
-                    new_triplet[3]
-                ]))
-
-            new_graphindices = cat(graphindices, dim = 1)
-            new_removed_triplets = cat(removed_triplets, dim = 1)
+                        cat([subset[1], subset[0]]),
+                        cat([subset[0], subset[1]]),
+                        cat([tensor(edge_index).repeat(subset.size(1)), tensor(reverse_edge_index).repeat(subset.size(1))]),
+                        cat([tensor(new_triplet_indices[1]).repeat(subset.size(1)), tensor(new_triplet_indices[2]).repeat(subset.size(1))])
+                    ]))
             reverse_list.append((edge_index, reverse_edge_index))
+
+        new_graphindices = cat(graphindices, dim = 1)
+        new_removed_triplets = cat(removed_triplets, dim = 1)
 
         return self.__class__(
                 graphindices = new_graphindices,
