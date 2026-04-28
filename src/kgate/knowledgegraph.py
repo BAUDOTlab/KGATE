@@ -842,17 +842,38 @@ class KnowledgeGraph(Dataset):
             for triplet_index in triplets_indices:
                 original_triplet = self.triplet_types[triplet_index]
                 reverse_triplet_index = len(self.triplet_types)
+                reverse_triplet_index_original_edge = reverse_triplet_index + 1
+                original_triplet_index_reverse_edge = reverse_triplet_index + 2
 
                 self.triplet_types.append((original_triplet[2], reverse_edge, original_triplet[0]))
+                reverse_triplet_original_edge = (original_triplet[2], edge_index, original_triplet[0])
+                original_triplet_reverse_edge = (original_triplet[0], reverse_edge, original_triplet[2])
+                
+                if reverse_triplet_original_edge in self.triplets_types:
+                    reverse_triplet_index_original_edge = self.triplet_types.index(reverse_triplet_original_edge)
+                else: 
+                    reverse_triplet_index_original_edge = len(self.triplet_types)
+                    self.triplet_types.append(reverse_triplet_original_edge)
+
+                if original_triplet_reverse_edge in self.triplet_types:
+                    original_triplet_index_reverse_edge = self.triplet_types.index(original_triplet_reverse_edge)
+                else:
+                    original_triplet_index_reverse_edge = len(self.triplet_types)
+                    self.triplet_types.append(original_triplet_reverse_edge)
                 
                 mask = (self.graphindices[3] == triplet_index)
                 subset = self.graphindices[:, mask]
 
-                new_triplet = cat([
-                        subset[1].unsqueeze(0),
-                        subset[0].unsqueeze(0),
-                        tensor(reverse_edge_index).repeat(subset.size(1)).unsqueeze(0),
-                        tensor(reverse_triplet_index).repeat(subset.size(1)).unsqueeze(0)
+                # In the new triplets when the reverse of (A, PPI, B) is (B, PPI_INV, A), we make :
+                # 1. The reverse triplets with the reverse edge (B, PPI_INV, A)
+                # 2. The reverse triplets with the original edge (B, PPI, A)
+                # 3. The original triplets with the inverse edge (A, PPI_INV, B)
+                # All except the triplets in 1. will only be considered in the ground truth for evaluation
+                new_triplet = torch.stack([
+                        [subset[1].repeat(2).unsqueeze(0), subset[0].unsqueeze(0)],
+                        [subset[0].repeat(2).unsqueeze(0), subset[1].unsqueeze(0)],
+                        [tensor(reverse_edge_index).repeat(subset.size(1)).unsqueeze(0), tensor(edge_index).repeat(subset.size(1)).unsqueeze(0), tensor(reverse_edge_index).repeat(subset.size(1)).unsqueeze(0)],
+                        [tensor(reverse_triplet_index).repeat(subset.size(1)).unsqueeze(0), tensor(reverse_triplet_index_original_edge).repeat(subset.size(1)).unsqueeze(0), tensor(original_triplet_index_reverse_edge).repeat(subset.size(1)).unsqueeze(0)]
                     ])
                 graphindices.append(new_triplet)
                 removed_triplets.append(torch.stack([
