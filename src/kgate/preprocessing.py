@@ -201,7 +201,8 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
         kg = kg.remove_duplicate_triplets()
 
     duplicated_edges_list = []
-
+    cartesian_edges = []
+    
     if config["preprocessing"]["flag_near_duplicate_edges"]:
         logging.info("Checking for near duplicates edges...")
         theta_first_edge_type = config["preprocessing"]["params"]["theta_first_edge_type"]
@@ -215,6 +216,10 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
             logging.info(f"Adding {len(reverse_duplicate_edges)} anti-synonymous edges ({[index_to_edge_name[edge] for reverse_duplicate_pair in reverse_duplicate_edges for edge in reverse_duplicate_pair]}) to the list of known duplicated edges.")
             duplicated_edges_list.extend(reverse_duplicate_edges)
     
+    if config["preprocessing"]["flag_cartesian_edges"]:
+        logging.info("Checking for cartesian edges...")
+        cartesian_edges = kg.cartesian_product_edges(config["preprocessing"]["params"]["theta_cartesian"])
+
     if config["preprocessing"]["make_directed"]:
         undirected_edges_names = config["preprocessing"]["make_directed_edges"]
         if len(undirected_edges_names) == 0:
@@ -243,8 +248,10 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
         logging.info("Cleaning the train set to avoid data leakage...")
         logging.info("Step 1: with respect to validation set.")
         kg_train = clean_datasets(kg_train, kg_validation, known_reverses = duplicated_edges_list)
+        kg_validation, kg_train = clean_cartesians(kg_validation, kg_train, known_cartesian = cartesian_edges)
         logging.info("Step 2: with respect to test set.")
         kg_train = clean_datasets(kg_train, kg_test, known_reverses = duplicated_edges_list)
+        kg_test, kg_train = clean_cartesians(kg_test, kg_train, known_cartesian = cartesian_edges)
 
     kg_train_ok, _ = verify_node_coverage(kg_train, kg)
     if not kg_train_ok:
@@ -497,11 +504,11 @@ def clean_cartesians(kg_first: KnowledgeGraph,
     Returns
     -------
     kg_first: KnowledgeGraph
-        Cleaned train set knowledge graph, with cartesian triplets removed.
+        Cleaned knowledge graph, with cartesian triplets removed.
     kg_second: KnowledgeGraph
-        Augmented test set knowledge graph, with the transferred triplets added.
-        
+        Augmented knowledge graph, with the transferred triplets added. 
     """
+    #TODO: improve this method by adding split proportion
     assert node_type in ["head", "tail"], "node_type must be either 'head' or 'tail'"
     
     for edge_index in known_cartesian:
@@ -533,26 +540,13 @@ def clean_cartesians(kg_first: KnowledgeGraph,
             triplets_to_move = torch.stack([
                 kg_first.head_indices[all_indices_to_move],
                 kg_first.edge_indices[all_indices_to_move],
-                kg_first.tail_indices[all_indices_to_move]
+                kg_first.tail_indices[all_indices_to_move],
+                kg_first.triplets[all_indices_to_move]
             ], dim = 1)
             
             # Remove identified triplets from train set
             kg_first = kg_first.remove_triplets(torch.tensor(all_indices_to_move, dtype = torch.long))
             
-            # Add transferred triplets to test set while preserving KG structure
-            kg_second_dictionnary = {
-                "heads": torch.cat([kg_second.head_indices, triplets_to_move[:, 0]]),
-                "tails": torch.cat([kg_second.tail_indices, triplets_to_move[:, 2]]),
-                "edges": torch.cat([kg_second.edge_indices, triplets_to_move[:, 1]]),
-            }
-            
-            kg_second = kg_second.__class__(
-                kg = kg_second_dictionnary,
-                node_to_index = kg_second.node_to_index,
-                edge_to_index = kg_first.edge_to_index,
-                dict_of_heads = kg_second.dict_of_heads,
-                dict_of_tails = kg_second.dict_of_tails,
-                dict_of_rels = kg_second.dict_of_rels
-            )
+            kg_second = kg_second.add_triplets(triplets_to_move)
             
     return kg_first, kg_second
