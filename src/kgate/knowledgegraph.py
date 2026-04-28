@@ -818,7 +818,6 @@ class KnowledgeGraph(Dataset):
             
         """
         index_to_edge = {value: key for key, value in self.edge_to_index.items()}
-        undirected_edges = [0]
         reverse_list = []
 
         # New triplets list
