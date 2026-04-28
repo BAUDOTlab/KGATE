@@ -1426,20 +1426,20 @@ class Architect(Module):
         self.normalize_parameters()
         
         if isinstance(self.encoder, GNN):
-            node_embeddings: torch.Tensor = torch.zeros((self.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
-            full_kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
+            node_embeddings: torch.Tensor = torch.zeros((self.kg_train.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
+            full_kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test])
 
             with torch.no_grad():
                 # TODO: use not the whole graphindices but the unique nodes instead
-                for i in range(full_kg.graphindices.shape[1] // batch_size + 1):
-                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * batch_size : (i + 1) * batch_size].to(self.device), self.node_embeddings)
+                for i in range(full_kg.graphindices.shape[1] // self.train_batch_size + 1):
+                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * self.train_batch_size : (i + 1) * self.train_batch_size].to(self.device), self.node_embeddings)
 
                     encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
                     for node_type, indices in input.mapping.items():
                         node_embeddings[indices] = encoder_output[node_type].cpu()
         else:
-            node_embeddings = self.node_embeddings.weight.data.cpu()
+            node_embeddings = self.node_embeddings[0].data.cpu()
 
         edge_embeddings = self.edge_embeddings.weight.data.cpu()
 
