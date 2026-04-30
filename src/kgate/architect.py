@@ -308,7 +308,7 @@ class Architect(Module):
         
         return self.edge_embedding_dimensions
 
-    def set_metadata(self, metadata: pd.DataFrame | os.PathLike):
+    def set_metadata(self, metadata: pd.DataFrame | os.PathLike | None):
         """
         Set the node metadata of the knowledge graph.
 
@@ -342,13 +342,13 @@ class Architect(Module):
             If the metadata object is not of the correct type.
             
         """
-        match type(metadata):
-            case pd.DataFrame:
+        match metadata:
+            case pd.DataFrame():
                 if not set(["id", "type"]).issubset(metadata.keys()):
                     raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
         
                 self.metadata = metadata
-            case os.PathLike:
+            case os.PathLike():
                 if Path(metadata).exists():
                     # Fuzzy identification of separator.
                     # TODO: find a cleaner way to do it
@@ -361,11 +361,13 @@ class Architect(Module):
                 
                     if self.metadata is None:
                         raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
-            case _:
+            case None:
                 return
+            case _:
+                raise TypeError(f"Metadata can only be given as a pandas DataFrame or a path to a CSV file, but got {type(metadata)}")
             
-        if self.metadata is not None and hasattr(self, "kg_train"):
-            for knowledge_graph in (self.kg_train, self.kg_val, self.kg_test):
+        if hasattr(self, "kg_train"):
+            for knowledge_graph in (self.kg_train, self.kg_validation, self.kg_test):
                 knowledge_graph.add_metadata(self.metadata)
             
 
@@ -1424,20 +1426,20 @@ class Architect(Module):
         self.normalize_parameters()
         
         if isinstance(self.encoder, GNN):
-            node_embeddings: torch.Tensor = torch.zeros((self.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
-            full_kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
+            node_embeddings: torch.Tensor = torch.zeros((self.kg_train.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
+            full_kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test])
 
             with torch.no_grad():
                 # TODO: use not the whole graphindices but the unique nodes instead
-                for i in range(full_kg.graphindices.shape[1] // batch_size + 1):
-                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * batch_size : (i + 1) * batch_size].to(self.device), self.node_embeddings)
+                for i in range(full_kg.graphindices.shape[1] // self.train_batch_size + 1):
+                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * self.train_batch_size : (i + 1) * self.train_batch_size].to(self.device), self.node_embeddings)
 
                     encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
                     for node_type, indices in input.mapping.items():
                         node_embeddings[indices] = encoder_output[node_type].cpu()
         else:
-            node_embeddings = self.node_embeddings.weight.data.cpu()
+            node_embeddings = self.node_embeddings[0].data.cpu()
 
         edge_embeddings = self.edge_embeddings.weight.data.cpu()
 
