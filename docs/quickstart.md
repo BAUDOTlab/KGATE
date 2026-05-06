@@ -102,6 +102,6 @@ The object returned by `architect.get_embeddings()` is a python dictionary with 
 
 ```{warning}
 When using decoders with more than one embedding space (such as ComplEx which uses a real space and an imaginary space), they will
-both be concatenated in the `entities` tensor, which will then be of size (n_ent, ent_emb_dim * n_embedding_spaces). To retrieve them
+both be concatenated in the `entities` tensor, which will then be of size *(n_ent, ent_emb_dim * n_embedding_spaces)*. To retrieve them
 separately, split the tensor in part of equal size using `torch.tensor_split(embedding_tensor, n_embedding_spaces, dim=1)`.
 ```

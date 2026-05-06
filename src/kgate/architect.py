@@ -13,17 +13,24 @@ from collections.abc import Callable
 from glob import glob
 from inspect import signature
 from pathlib import Path
-from typing import Tuple, Dict, List, Any, Set, Literal
+from typing import Tuple, Dict, List, Any, Set, Literal, Optional
 
 import pandas as pd
 import numpy as np
-import yaml
+import tomli_w
+
+from torchkge import KnowledgeGraph
+from torchkge.models import Model
+import torchkge.sampling as sampling
+from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
+
+from torch_geometric.utils import k_hop_subgraph
 
 import torch
 from torch import tensor, Tensor
 from torch.nn import Parameter, Module
 import torch.optim as optim
-from torch.optim import lr_scheduler as learning_rate_scheduler
+
 from torch.utils.data import DataLoader
 
 from ignite.engine import Events, Engine
@@ -126,7 +133,7 @@ class Architect(Module):
     scheduler: learning_rate_scheduler.LRScheduler or None
         Learning rate scheduler of KGATE.
         Modules that alter the learning rate throughout the training.
-        For more details, refer to the `initialize_scheduler` function.
+        For more details, refer to the `initialize_learning_rate_scheduler` function.
     evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
         The evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
         For more details, refer to the `initialize_evaluator` function.
@@ -219,7 +226,7 @@ class Architect(Module):
 
         self.metadata = None
         if metadata is None:
-            metadata = self.config["metadata_csv"]
+            metadata = self.config["metadata_csv"] if self.config["metadata_csv"] != "" else None
         self.set_metadata(metadata = metadata)
         
         run_kg_preprocessing: bool = self.config["run_kg_preprocessing"]
@@ -341,7 +348,7 @@ class Architect(Module):
         
                 self.metadata = metadata
             case os.PathLike:
-                if metadata != "" and Path(metadata).exists():
+                if Path(metadata).exists():
                     # Fuzzy identification of separator.
                     # TODO: find a cleaner way to do it
                     for separator in SUPPORTED_SEPARATORS:
@@ -354,7 +361,7 @@ class Architect(Module):
                     if self.metadata is None:
                         raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
             case _:
-                raise TypeError(f"Metadata can only be given as a pandas DataFrame or a path to a CSV file, but got {type(metadata)}")
+                return
             
         if self.metadata is not None and hasattr(self, "kg_train"):
             for knowledge_graph in (self.kg_train, self.kg_val, self.kg_test):
@@ -657,15 +664,15 @@ class Architect(Module):
         
         # Mapping of scheduler names to their corresponding PyTorch classes
         learning_rate_scheduler_mapping = {
-            "StepLR": learning_rate_scheduler.StepLR,
-            "MultiStepLR": learning_rate_scheduler.MultiStepLR,
-            "ExponentialLR": learning_rate_scheduler.ExponentialLR,
-            "CosineAnnealingLR": learning_rate_scheduler.CosineAnnealingLR,
-            "CosineAnnealingWarmRestarts": learning_rate_scheduler.CosineAnnealingWarmRestarts,
-            "ReduceLROnPlateau": learning_rate_scheduler.ReduceLROnPlateau,
-            "LambdaLR": learning_rate_scheduler.LambdaLR,
-            "OneCycleLR": learning_rate_scheduler.OneCycleLR,
-            "CyclicLR": learning_rate_scheduler.CyclicLR,
+            "StepLR": optim.lr_scheduler.StepLR,
+            "MultiStepLR": optim.lr_scheduler.MultiStepLR,
+            "ExponentialLR": optim.lr_scheduler.ExponentialLR,
+            "CosineAnnealingLR": optim.lr_scheduler.CosineAnnealingLR,
+            "CosineAnnealingWarmRestarts": optim.lr_scheduler.CosineAnnealingWarmRestarts,
+            "ReduceLROnPlateau": optim.lr_scheduler.ReduceLROnPlateau,
+            "LambdaLR": optim.lr_scheduler.LambdaLR,
+            "OneCycleLR": optim.lr_scheduler.OneCycleLR,
+            "CyclicLR": optim.lr_scheduler.CyclicLR,
         }
 
         # Verify that the scheduler type is supported
@@ -675,7 +682,7 @@ class Architect(Module):
         
         # Initialize the scheduler based on its type
         try:
-            learning_rate_scheduler: learning_rate_scheduler.LRScheduler = learning_rate_scheduler_class(self.optimizer, **learning_rate_scheduler_params)
+            learning_rate_scheduler: optim.lr_scheduler.LRScheduler = learning_rate_scheduler_class(self.optimizer, **learning_rate_scheduler_params)
         except TypeError as e:
             raise ValueError(f"Error initializing '{learning_rate_scheduler_type}': {e}")
         
@@ -1045,61 +1052,47 @@ class Architect(Module):
 
         self.eval()
 
-        list_rel_1: List[str] = self.config["evaluation"]["made_directed_edges"]
-        list_rel_2: List[str] = self.config["evaluation"]["target_edges"]
-        thresholds: List[int] = self.config["evaluation"]["thresholds"]
-        metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.yaml")
+        target_edges: List[str] = self.config["evaluation"]["target_edges"]
+        metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.toml")
+
+        target_edges_result = {}
 
         all_edges: Set[Any] = set(self.kg_test.edge_to_index.keys())
-        remaining_edges = all_edges - set(list_rel_1) - set(list_rel_2)
+        remaining_edges = all_edges - set(target_edges)
         remaining_edges = list(remaining_edges)
+        
+        triplet_count_target_edges = 0
 
-        total_metrics_sum_list_1, triplet_count_list_1, individual_metrics_list_1, group_metrics_list_1 = self.calculate_metrics_for_edges(
-            self.kg_test, list_rel_1)
-        total_metrics_sum_list_2, triplet_count_list_2, individual_metrics_list_2, group_metrics_list_2 = self.calculate_metrics_for_edges(
-            self.kg_test, list_rel_2)
-        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(
-            self.kg_test, remaining_edges)
+        if len(remaining_edges) != len(all_edges):
+            metrics_sum_target_edges, triplet_count_target_edges, individual_metrics_target_edges, group_metrics_target_edges = self.calculate_metrics_for_edges(self.kg_test, target_edges)
+            
+            target_edges_result = {
+                "target_edges": {
+                    "Global_metrics": metrics_sum_target_edges,
+                    "Individual_metrics": individual_metrics_target_edges
+                },
+            }
 
-        global_metrics = (total_metrics_sum_list_1 + total_metrics_sum_list_2 + total_metrics_sum_remaining) / (triplet_count_list_1 + triplet_count_list_2 + triplet_count_remaining)
+        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(self.kg_test, remaining_edges)
+
+        global_metrics = (group_metrics_remaining + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
 
         logging.info(f"Final Test metrics with best model: {global_metrics}")
 
         results = {
             "Global_metrics": global_metrics,
-            "made_directed_edges": {
-                "Global_metrics": group_metrics_list_1,
-                "Individual_metrics": individual_metrics_list_1
-            },
-            "target_edges": {
-                "Global_metrics": group_metrics_list_2,
-                "Individual_metrics": individual_metrics_list_2
-            },
+            **target_edges_result, # if there is no target edges, don't add the block
             "remaining_edges": {
                 "Global_metrics": group_metrics_remaining,
                 "Individual_metrics": individual_metrics_remaining
             },
             "target_edges_by_frequency": {}  
         }
-
-        for i in range(len(list_rel_2)):
-            edge: str = list_rel_2[i]
-            threshold: int = thresholds[i]
-            frequent_indices, infrequent_indices = self.categorize_test_nodes(edge, threshold)
-            frequent_metrics, infrequent_metrics = self.calculate_metrics_for_categories(frequent_indices, infrequent_indices)
-            logging.info(f"Metrics for frequent nodes (threshold={threshold}) in edge {edge}: {frequent_metrics}")
-            logging.info(f"Metrics for infrequent nodes (threshold={threshold}) in edge {edge}: {infrequent_metrics}")
-
-            results["target_edges_by_frequency"][edge] = {
-                            "Frequent_metrics": frequent_metrics,
-                            "Infrequent_metrics": infrequent_metrics,
-                            "Threshold": threshold
-                            }
-        
+                
         self.test_results = results
         
-        with open(metrics_file, "w") as file:
-            yaml.dump(results, file, default_flow_style = False, sort_keys = False)
+        with open(metrics_file, "wb") as file:
+            tomli_w.dump(results, file)
 
         logging.info(f"Evaluation results stored in {metrics_file}")
 
@@ -1430,20 +1423,20 @@ class Architect(Module):
         self.normalize_parameters()
         
         if isinstance(self.encoder, GNN):
-            node_embeddings: torch.Tensor = torch.zeros((self.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
+            node_embeddings: torch.Tensor = torch.zeros((self.kg_train.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
             full_kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
 
             with torch.no_grad():
                 # TODO: use not the whole graphindices but the unique nodes instead
-                for i in range(full_kg.graphindices.shape[1] // batch_size + 1):
-                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * batch_size : (i + 1) * batch_size].to(self.device), self.node_embeddings)
+                for i in range(full_kg.graphindices.shape[1] // self.train_batch_size + 1):
+                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * self.train_batch_size : (i + 1) * self.train_batch_size].to(self.device), self.node_embeddings)
 
                     encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
                     for node_type, indices in input.mapping.items():
                         node_embeddings[indices] = encoder_output[node_type].cpu()
         else:
-            node_embeddings = self.node_embeddings.weight.data.cpu()
+            node_embeddings = self.node_embeddings[0].data.cpu()
 
         edge_embeddings = self.edge_embeddings.weight.data.cpu()
 
@@ -1695,8 +1688,8 @@ class Architect(Module):
 
         for edge_name in edge_indices:
             # Get triplets associated with index
-            relation_index = kg.edge_to_index.get(edge_name)
-            indices_to_keep = torch.nonzero(kg.edge_indices == relation_index, as_tuple = False).squeeze()
+            edge_index = kg.edge_to_index.get(edge_name)
+            indices_to_keep = torch.nonzero(kg.edge_indices == edge_index, as_tuple = False).squeeze()
 
             if indices_to_keep.numel() == 0:
                 continue  # Skip to next edge if no triplet found
