@@ -254,7 +254,7 @@ class Architect(Module):
         self.decoder_loss: MarginLoss | BinaryCrossEntropyLoss = None
         self.optimizer: optim.Optimizer = None
         self.sampler: NegativeSampler = None
-        self.scheduler: learning_rate_scheduler.LRScheduler | None = None
+        self.scheduler: optim.lr_scheduler.LRScheduler | None = None
         self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
         self.node_embeddings: nn.ParameterList
         self.edge_embeddings: nn.Embedding
@@ -634,7 +634,7 @@ class Architect(Module):
         return negative_sampler
     
     
-    def initialize_learning_rate_scheduler(self) -> learning_rate_scheduler.LRScheduler | None:
+    def initialize_learning_rate_scheduler(self) -> optim.lr_scheduler.LRScheduler | None:
         """
         Initializes the learning rate scheduler based on the provided configuration.
         
@@ -1532,7 +1532,7 @@ class Architect(Module):
                 validation_score = self.triplet_classification(self.kg_validation, self.kg_test)
                 engine.state.metrics["validation_metric_value"] = validation_score
                 logging.info(f"Validation Accuracy: {validation_score}")
-        if self.scheduler and isinstance(self.scheduler, learning_rate_scheduler.ReduceLROnPlateau):
+        if self.scheduler and isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
             self.scheduler.step(validation_score)
             logging.info("Stepping scheduler ReduceLROnPlateau.")
 
@@ -1544,7 +1544,7 @@ class Architect(Module):
         Scheduler update.
             
         """
-        if self.scheduler is not None and not isinstance(self.scheduler, learning_rate_scheduler.ReduceLROnPlateau):
+        if self.scheduler is not None and not isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
             self.scheduler.step()
 
     
