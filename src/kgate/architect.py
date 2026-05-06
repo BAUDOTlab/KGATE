@@ -1695,7 +1695,7 @@ class Architect(Module):
             if indices_to_keep.numel() == 0:
                 continue  # Skip to next edge if no triplet found
             
-            new_kg = kg.keep_triplets(indices_to_keep)
+            new_kg = kg.remove_triplets(~indices_to_keep)
 
             if isinstance(self.evaluator, LinkPredictionEvaluator):
                 test_metrics = self.link_prediction(new_kg)
@@ -1737,8 +1737,8 @@ class Architect(Module):
         
         """
         # Create subgraph for frequent and infrequent categories
-        kg_frequent = self.kg_test.keep_triplets(frequent_indices)
-        kg_infrequent = self.kg_test.keep_triplets(infrequent_indices)
+        kg_frequent = self.kg_test.remove_triplets(~frequent_indices)
+        kg_infrequent = self.kg_test.remove_triplets(~infrequent_indices)
         
         # Compute each category's MRR
         if isinstance(self.evaluator, LinkPredictionEvaluator):
@@ -1857,6 +1857,6 @@ class Architect(Module):
             logging.info(f"Permuting tails of edge type {edge_type}")
             self.kg_train = permute_tails(self.kg_train, edge_type)
 
-        self.kg_train, self.kg_validation, self.kg_test = kg.split_kg(split_proportions = self.config["preprocessing"]["split"])
+        self.kg_train, self.kg_validation, self.kg_test = kg.generate_masks(split_proportions = self.config["preprocessing"]["split"])
 
         self.train_model(attributes = attributes)

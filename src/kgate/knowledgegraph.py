@@ -171,6 +171,13 @@ class KnowledgeGraph(Dataset):
         TODO.What_that_variable_is_or_does
     global_to_local_indices: Dict[str, int]
         TODO.What_that_variable_is_or_does
+    train_mask: torch.Tensor, shape: [triplet_count], dtype: torch.bool
+        Boolean mask with the indices of triplets belonging to the training set.
+    validation_mask: torch.Tensor, shape: [triplet_count], dtype: torch.bool
+        Boolean mask with the indices of triplets belonging to the validation set.
+    test_mask: torch.Tensor, shape: [triplet_count], dtype: torch.bool
+        Boolean mask with the indices of triplets belonging to the test set.
+
             
     Raises
     ------
@@ -325,6 +332,8 @@ class KnowledgeGraph(Dataset):
             self.node_type_to_global[node_type] = global_index
             self.global_to_local_indices[global_index] = torch.arange(global_index.size(0))
 
+        self.train_mask = self.validation_mask = self.test_mask = torch.zeros(self.triplet_count, dtype = torch.bool)
+
 
     def __len__(self):
         return self.triplet_count
@@ -398,7 +407,33 @@ class KnowledgeGraph(Dataset):
         
         """
         return self.graphindices[:2]
-    
+
+    @property
+    def train_set(self) -> Tensor:
+        """
+        Slice of `self.graphindices` containing only the triplets present in the training set.
+        
+        It is a tensor of shape [4, train_set_size]
+        """
+        return self.graphindices[:, self.train_mask]
+
+    @property
+    def validation_set(self) -> Tensor:
+        """
+        Slice of `self.graphindices` containing only the triplets present in the validation set.
+        
+        It is a tensor of shape [4, validation_set_size]
+        """
+        return self.graphindices[:, self.validation_mask]
+
+    @property
+    def test_set(self) -> Tensor:
+        """
+        Slice of `self.graphindices` containing only the triplets present in the test set.
+        
+        It is a tensor of shape [4, test_set_size]
+        """
+        return self.graphindices[:, self.test_mask]
     
     @property
     def n_facts(self) -> int:
@@ -517,12 +552,12 @@ class KnowledgeGraph(Dataset):
         return dataframe
     
 
-    def split_kg(self,
+    def generate_masks(self,
                 split_proportions: Tuple[float, float, float] = (0.8, 0.1, 0.1), 
                 sizes: Tuple[int, int, int] | None = None
                 ) -> Tuple[Self, Self, Self]:
         """
-        Split a knowledge graph into 3 subsets: train, validation, test
+        Generate the masks corresponding to three subsets of the knowledge graph: train, validation, test
 
         Arguments
         ---------
@@ -548,26 +583,26 @@ class KnowledgeGraph(Dataset):
         if sizes is not None:
             assert sum(sizes) == self.triplet_count, "The sum of provided sizes must match the number of triplets."
             
-            mask_train = cat([
+            train_mask = cat([
                 tensor([1] * (sizes[0])), 
                 tensor([0] * (sizes[1] + sizes[2]))
             ]).bool()
             
-            mask_validation = cat([
+            validation_mask = cat([
                 tensor([0] * sizes[0]),
                 tensor([1] * sizes[1]),
                 tensor([0] * sizes[2])
             ]).bool()
             
-            mask_test = ~(mask_train | mask_validation)
+            test_mask = ~(train_mask | validation_mask)
         else:
             assert sum(split_proportions) == 1, "The sum of provided shares (`split_proportions`) must be equal to 1."
-            mask_train, mask_validation, mask_test = self.get_mask(split_proportions)
+            train_mask, validation_mask, test_mask = self.get_mask(split_proportions)
             
 
         # Ensure the training set has all nodes
         unique_nodes = np.arange(self.node_count)
-        unique_train_set_nodes = cat([self.head_indices[mask_train], self.tail_indices[mask_train]]).unique()
+        unique_train_set_nodes = cat([self.head_indices[train_mask], self.tail_indices[train_mask]]).unique()
         if len(unique_train_set_nodes) < self.node_count:
             missing_nodes = tensor(list(set(unique_nodes.tolist()) - set(unique_train_set_nodes.tolist())),
                                     dtype = torch.long)
@@ -588,37 +623,15 @@ class KnowledgeGraph(Dataset):
 
                 # We put some nodes in the train set, then remove them from both validation
                 # and test set (they are in either one, but we don't know which one).
-                mask_train[mask_subset[random[:train_set_size]]] = True
-                mask_validation[mask_subset[random[:train_set_size]]] = False
-                mask_test[mask_subset[random[:train_set_size]]] = False
+                train_mask[mask_subset[random[:train_set_size]]] = True
+                validation_mask[mask_subset[random[:train_set_size]]] = False
+                test_mask[mask_subset[random[:train_set_size]]] = False
         
-        assert not (mask_train & mask_validation & mask_test).any().item()
+        assert not (train_mask & validation_mask & test_mask).any().item()
         
-
-        return (
-            self.__class__(
-                graphindices = self.graphindices[:, mask_train], 
-                triplet_types = self.triplet_types,
-                node_to_index = self.node_to_index,
-                edge_to_index = self.edge_to_index,
-                node_type_to_index = self.node_type_to_index,
-                removed_triplets = self.removed_triplets
-            ),
-            self.__class__(
-                graphindices = self.graphindices[:, mask_validation], 
-                triplet_types = self.triplet_types,
-                node_to_index = self.node_to_index,
-                edge_to_index = self.edge_to_index,
-                node_type_to_index = self.node_type_to_index
-            ),
-            self.__class__(
-                graphindices = self.graphindices[:, mask_test], 
-                triplet_types = self.triplet_types,
-                node_to_index = self.node_to_index,
-                edge_to_index = self.edge_to_index,
-                node_type_to_index = self.node_type_to_index
-            )
-        )
+        self.train_mask = train_mask
+        self.validation_mask = validation_mask
+        self.test_mask = test_mask
 
 
     def get_mask(self,
@@ -678,46 +691,11 @@ class KnowledgeGraph(Dataset):
         
         return train_mask, validation_mask, test_mask
 
-    def keep_triplets(self,
-                    indices_to_keep: List[int] | torch.Tensor
-                    ) -> Self:
-        """
-        Keeps only the specified triplets in the knowledge graph and returns a new
-        KnowledgeGraph instance with these triplets.
-
-        Arguments
-        ---------
-        indices_to_keep : List[int] or torch.Tensor
-            Indices of triplets to keep in the knowledge graph.
-
-        Returns
-        -------
-        KnowledgeGraph
-            A new instance of KnowledgeGraph with only the specified triplets.
-            
-        """
-        # Create masks for indices to keep
-        mask = torch.zeros(self.triplet_count, dtype = torch.bool)
-        mask[indices_to_keep] = True
-        removed_triplets = cat([self.removed_triplets, self.graphindices[:, ~mask]], dim = 1)
-
-        # Create a new KnowledgeGraph instance
-        return self.__class__(
-            graphindices = self.graphindices[:, mask],
-            triplet_types = self.triplet_types,
-            node_to_index = self.node_to_index,
-            edge_to_index = self.edge_to_index,
-            node_type_to_index = self.node_type_to_index,
-            removed_triplets = removed_triplets
-        )
-
-
     def remove_triplets(self,
                         indices_to_remove: List[int] | torch.Tensor
                         ) -> Self:
         """
-        Removes specified triplets from the knowledge graph and returns a new
-        KnowledgeGraph instance without these triplets.
+        Removes specified triplets from the knowledge graph during training. 
 
         Arguments
         ---------
@@ -730,19 +708,9 @@ class KnowledgeGraph(Dataset):
             A new instance of KnowledgeGraph without the specified triplets.
             
         """
-        # Create masks for indices not to remove
-        mask = torch.ones(self.triplet_count, dtype = torch.bool)
-        mask[indices_to_remove] = False
-        removed_triplets = cat([self.removed_triplets, self.graphindices[:, ~mask]], dim = 1)
-
-        return self.__class__(
-            graphindices = self.graphindices[:, mask],
-            triplet_types = self.triplet_types,
-            node_to_index = self.node_to_index,
-            edge_to_index = self.edge_to_index,
-            node_type_to_index = self.node_type_to_index,
-            removed_triplets = removed_triplets
-        )
+        self.train_mask[indices_to_keep] = False
+        self.validation_mask[indices_to_keep] = False
+        self.test_mask[indices_to_keep] = False
     
     
     def add_triplets(self,
@@ -938,7 +906,7 @@ class KnowledgeGraph(Dataset):
                 logging.info(f"{len(pairs) - len(unique_triplets)} duplicates found. Keeping {len(unique_triplets)} unique triplets for edge {edge_type_index}")
 
         # Return a new KnowledgeGraph instance with only unique triplets retained
-        return self.keep_triplets(indices_to_keep)
+        return self.remove_triplets(~indices_to_keep)
 
 
     def get_pairs(  self,
