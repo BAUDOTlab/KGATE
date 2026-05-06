@@ -187,6 +187,8 @@ class KnowledgeGraph(Dataset):
                         | None = None,
                 graphindices: Tensor
                         | None = None,
+                temporalindices: Tensor
+                        | None = None,
                 metadata: pd.DataFrame
                         | None = None,
                 triplet_types: List[Tuple[str, str, str]]
@@ -202,10 +204,11 @@ class KnowledgeGraph(Dataset):
         
         if dataframe is None:
             assert  graphindices is not None and \
+                    temporalindices is not None and \
                     node_to_index is not None and \
                     edge_to_index is not None and \
                     triplet_types is not None and \
-                    node_type_to_index is not None, "If `dataframe` is not given, `graphindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided."
+                    node_type_to_index is not None, "If `dataframe` is not given, `graphindices`, `temporalindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided."
             self.triplet_count = graphindices.size(1)
         else:
             self.triplet_count = len(dataframe)
@@ -215,6 +218,12 @@ class KnowledgeGraph(Dataset):
             self.graphindices = graphindices.long()
         else:
             self.graphindices = tensor([], dtype = torch.long)
+
+        if temporalindices is not None:
+            assert temporalindices.size(0) == 1, "The `temporalindices` parameter must be a 2D tensor of size [1, triplet_count]."
+            self.temporalindices = temporalindices.long()
+        else:
+            self.temporalindices = tensor([], dtype = torch.long)
 
         if removed_triplets is not None and removed_triplets.numel() > 0:
             assert removed_triplets.size(0) == 4, "The `removed_triplets` parameter must be a 2D tensor of size [4, triplet_count]."
