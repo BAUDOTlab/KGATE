@@ -30,7 +30,7 @@ import torch
 from torch import tensor, Tensor
 from torch.nn import Parameter, Module
 import torch.optim as optim
-from torch.optim import lr_scheduler as learning_rate_scheduler
+
 from torch.utils.data import DataLoader
 
 from ignite.engine import Events, Engine
@@ -133,7 +133,7 @@ class Architect(Module):
     scheduler: learning_rate_scheduler.LRScheduler or None
         Learning rate scheduler of KGATE.
         Modules that alter the learning rate throughout the training.
-        For more details, refer to the `initialize_scheduler` function.
+        For more details, refer to the `initialize_learning_rate_scheduler` function.
     evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
         The evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
         For more details, refer to the `initialize_evaluator` function.
@@ -664,15 +664,15 @@ class Architect(Module):
         
         # Mapping of scheduler names to their corresponding PyTorch classes
         learning_rate_scheduler_mapping = {
-            "StepLR": learning_rate_scheduler.StepLR,
-            "MultiStepLR": learning_rate_scheduler.MultiStepLR,
-            "ExponentialLR": learning_rate_scheduler.ExponentialLR,
-            "CosineAnnealingLR": learning_rate_scheduler.CosineAnnealingLR,
-            "CosineAnnealingWarmRestarts": learning_rate_scheduler.CosineAnnealingWarmRestarts,
-            "ReduceLROnPlateau": learning_rate_scheduler.ReduceLROnPlateau,
-            "LambdaLR": learning_rate_scheduler.LambdaLR,
-            "OneCycleLR": learning_rate_scheduler.OneCycleLR,
-            "CyclicLR": learning_rate_scheduler.CyclicLR,
+            "StepLR": optim.lr_scheduler.StepLR,
+            "MultiStepLR": optim.lr_scheduler.MultiStepLR,
+            "ExponentialLR": optim.lr_scheduler.ExponentialLR,
+            "CosineAnnealingLR": optim.lr_scheduler.CosineAnnealingLR,
+            "CosineAnnealingWarmRestarts": optim.lr_scheduler.CosineAnnealingWarmRestarts,
+            "ReduceLROnPlateau": optim.lr_scheduler.ReduceLROnPlateau,
+            "LambdaLR": optim.lr_scheduler.LambdaLR,
+            "OneCycleLR": optim.lr_scheduler.OneCycleLR,
+            "CyclicLR": optim.lr_scheduler.CyclicLR,
         }
 
         # Verify that the scheduler type is supported
@@ -682,7 +682,7 @@ class Architect(Module):
         
         # Initialize the scheduler based on its type
         try:
-            learning_rate_scheduler: learning_rate_scheduler.LRScheduler = learning_rate_scheduler_class(self.optimizer, **learning_rate_scheduler_params)
+            learning_rate_scheduler: optim.lr_scheduler.LRScheduler = learning_rate_scheduler_class(self.optimizer, **learning_rate_scheduler_params)
         except TypeError as e:
             raise ValueError(f"Error initializing '{learning_rate_scheduler_type}': {e}")
         
