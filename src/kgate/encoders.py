@@ -266,7 +266,7 @@ class GCNEncoder(GNN):
             convolution = HeteroConv(
                 {edge_type: SAGEConv(   in_channels = -1,
                                         out_channels = embedding_dimensions,
-                                        aggregation = "mean")
+                                        )
                     for edge_type in self.edge_types},
                 aggr = self.aggregation
                 ).to(device)
