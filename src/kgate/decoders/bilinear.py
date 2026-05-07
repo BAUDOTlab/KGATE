@@ -387,6 +387,7 @@ class RESCAL(BilinearDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
+                                    edge_embeddings: Tensor,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
