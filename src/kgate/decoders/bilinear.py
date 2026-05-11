@@ -502,7 +502,7 @@ class RESCAL(BilinearDecoder):
             assert (len(head_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 3), \
                 "When inferring tails, the tensors `head_embeddings` must have 2 dimensions and `edge_embeddings` must have 3 dimensions."
             
-            head_edge_embeddings = matmul(head_embeddings.view(batch_size, 1, self.embedding_dimensions)).view(batch_size, 1, self.embedding_dimensions)
+            head_edge_embeddings = matmul(head_embeddings.view(batch_size, 1, self.embedding_dimensions), edge_embeddings)
             
             return (head_edge_embeddings * tail_embeddings).sum(dim = 2)
         

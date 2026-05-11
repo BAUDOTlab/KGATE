@@ -294,7 +294,7 @@ class LinkPredictionEvaluator:
                     )
                 
                 input = knowledge_graph.get_encoder_input(graphindices[:, edge_mask], node_embeddings)
-                encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
+                encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
                 
                 evaluation_node_embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count,
                                                             encoder_node_embedding_dimensions),

@@ -1382,7 +1382,7 @@ class Architect(Module):
                 
             input = kg.get_encoder_input(kg.graphindices[:, edge_mask].to(self.device), self.node_embeddings)
 
-            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_list)
+            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
             # As I understand it, this tensor is larger than needs to be because it needs to account for every possible
             # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
@@ -1442,7 +1442,10 @@ class Architect(Module):
 
         decoder_embeddings = self.decoder.get_embeddings()
 
-        embedding_dictionnary = {"nodes": node_embeddings, "edges": edge_embeddings,}
+        embedding_dictionnary = {"nodes": node_embeddings, 
+                                 "node_mapping": {v: k for k,v in self.kg_train.node_to_index.items()},
+                                 "edges": edge_embeddings,
+                                 "edge_mapping": {v: k for k,v in self.kg_train.edge_to_index.items()}}
 
         if decoder_embeddings is not None:
             embedding_dictionnary.update({"decoder": decoder_embeddings})
