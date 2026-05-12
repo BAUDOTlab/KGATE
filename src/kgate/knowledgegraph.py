@@ -527,7 +527,7 @@ class KnowledgeGraph(Dataset):
             self.metadata = pd.merge(self.metadata, metadata, on = "id")
 
 
-    def get_dataframe(self):
+    def get_dataframe(self, include_splits: bool = False) -> pd.DataFrame:
         """
         Returns a Pandas DataFrame with columns ['head', 'tail', 'edge'].
 
@@ -548,6 +548,12 @@ class KnowledgeGraph(Dataset):
         dataframe['head'] = dataframe['head'].apply(lambda x: index_to_node[x])
         dataframe['tail'] = dataframe['tail'].apply(lambda x: index_to_node[x])
         dataframe['edge'] = dataframe['edge'].apply(lambda x: index_to_edge[x])
+
+        if include_splits:
+            dataframe["split"] = "ground_truth"
+            dataframe["split"][self.train_mask] = "train"
+            dataframe["split"][self.validation_mask] = "validation"
+            dataframe["split"][self.test_mask] = "test"
 
         return dataframe
     
