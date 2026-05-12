@@ -714,16 +714,19 @@ class KnowledgeGraph(Dataset):
             A new instance of KnowledgeGraph without the specified triplets.
             
         """
-        self.train_mask[indices_to_keep] = False
-        self.validation_mask[indices_to_keep] = False
-        self.test_mask[indices_to_keep] = False
+        self.train_mask[indices_to_remove] = False
+        self.validation_mask[indices_to_remove] = False
+        self.test_mask[indices_to_remove] = False
     
     
     def add_triplets(self,
-                    new_triplets: torch.Tensor
+                    new_triplets: torch.Tensor,
+                    split: Literal["train", "validation", "test"] | None = None
                     ) -> Self:
         """
-        Adds new triplets to the Knowledge Graph
+        Adds new triplets to the Knowledge Graph.
+
+        This method cannot add new nodes or edge types.
 
         Arguments
         ---------
@@ -756,17 +759,14 @@ class KnowledgeGraph(Dataset):
             raise ValueError(f"The maximum triplet index ({max_triplet_index}) is superior to the number of edges ({len(self.triplet_types)}).")
 
         # Concatenate new triplets to existing ones
-        updated_graphindices = cat([self.graphindices, new_triplets], dim = 1)
+        self.graphindices = cat([self.graphindices, new_triplets], dim = 1)
 
-        # Create a new instance of the class with updated triplets
-        return self.__class__(
-            graphindices = updated_graphindices,
-            triplet_types = self.triplet_types,
-            node_to_index = self.node_to_index,
-            edge_to_index = self.edge_to_index,
-            node_type_to_index = self.node_type_to_index,
-            removed_triplets = self.removed_triplets
-        )
+        # Update masks
+        positive_mask = torch.ones_like(new_triplets[0]).bool()
+        negative_mask = torch.zeros_like(new_triplets[0]).bool()
+        self.train_mask = cat([self.train_mask, positive_mask if split == "train" else negative_mask], dim = 0)
+        self.validation_mask = cat([self.validation_mask, positive_mask if split == "validation" else negative_mask], dim = 0)
+        self.test_mask = cat([self.test_mask, positive_mask if split == "test" else negative_mask], dim = 0)
     
 
     def add_reverse_edges(self,
