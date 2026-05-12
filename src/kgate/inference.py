@@ -205,7 +205,7 @@ class EdgeInference:
                         )
                     
                     input = self.kg.get_encoder_input(self.kg.graphindices[:, edge_mask].to(device), node_embeddings)
-                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
+                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
             
                     for node_type, index in input.mapping.items():
                         node_embeddings[index] = encoder_output[node_type]
@@ -368,7 +368,7 @@ class NodeInference:
                                                                 dtype = torch.float)
 
                     input = self.kg.get_encoder_input(self.kg.graphindices[:, edge_mask], node_embeddings)
-                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
+                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
             
                     for node_type, index in input.mapping.items():
                         node_embeddings[index] = encoder_output[node_type]

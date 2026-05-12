@@ -225,6 +225,7 @@ class LinkPredictionEvaluator:
                 encoder: DefaultEncoder | GNN,
                 decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
                 knowledge_graph: KnowledgeGraph,
+                evaluated_knowledge_graph: KnowledgeGraph,
                 node_embeddings: nn.ParameterList,
                 edge_embeddings: nn.Embedding,
                 verbose: bool = True
@@ -241,6 +242,8 @@ class LinkPredictionEvaluator:
         decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
             Decoder model to evaluate.
         knowledge_graph: KnowledgeGraph
+            Knowledge graph from which fetch the embeddings (usuall, the train set).
+        evaluated_knowledge_graph: KnowledgeGraph
             Knowledge graph on which the evaluation will be done.
         node_embeddings: nn.ParameterList, keyword-only
             A list containing all embeddings for each node type.
@@ -262,13 +265,13 @@ class LinkPredictionEvaluator:
         """
         device = edge_embeddings.weight.device
 
-        self.rank_true_heads = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
-        self.rank_true_tails = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
-        self.filtered_rank_true_heads = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
-        self.filtered_rank_true_tails = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
+        self.rank_true_heads = empty(size = (evaluated_knowledge_graph.triplet_count,)).long().to(device)
+        self.rank_true_tails = empty(size = (evaluated_knowledge_graph.triplet_count,)).long().to(device)
+        self.filtered_rank_true_heads = empty(size = (evaluated_knowledge_graph.triplet_count,)).long().to(device)
+        self.filtered_rank_true_tails = empty(size = (evaluated_knowledge_graph.triplet_count,)).long().to(device)
 
-        dataloader = DataLoader(knowledge_graph, batch_size = batch_size)
-        graphindices = knowledge_graph.graphindices.to(device)
+        dataloader = DataLoader(evaluated_knowledge_graph, batch_size = batch_size)
+        graphindices = knowledge_graph.graphindices.to(device) # this is the training graphindices
         if decoder is not None and hasattr(decoder,"embedding_spaces"):
             encoder_node_embedding_dimensions: int = self.embedding_dimensions * decoder.embedding_spaces
         else:
@@ -294,9 +297,9 @@ class LinkPredictionEvaluator:
                     )
                 
                 input = knowledge_graph.get_encoder_input(graphindices[:, edge_mask], node_embeddings)
-                encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
+                encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
                 
-                evaluation_node_embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count,
+                evaluation_node_embeddings: torch.Tensor = torch.zeros((evaluated_knowledge_graph.node_count,
                                                             encoder_node_embedding_dimensions),
                                                             device = device,
                                                             dtype = torch.float)

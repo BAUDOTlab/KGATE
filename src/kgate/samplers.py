@@ -301,7 +301,7 @@ class BernoulliNegativeSampler(NegativeSampler):
         """
         device = batch.device
         batch_size = batch.shape[1]
-
+        
         negative_triplet_count = negative_triplet_count or self.negative_triplet_count
 
         negative_triplet_heads = batch[0].repeat(negative_triplet_count)
