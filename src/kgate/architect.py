@@ -1784,7 +1784,8 @@ class Architect(Module):
         head_predictions, tail_predictions = self.evaluator.evaluate(batch_size = self.evaluation_batch_size,
                                 encoder = self.encoder,
                                 decoder = self.decoder,
-                                knowledge_graph = kg,
+                                knowledge_graph = self.kg_train,
+                                evaluated_knowledge_graph = kg,
                                 node_embeddings = self.node_embeddings, 
                                 edge_embeddings = self.edge_embeddings,
                                 verbose = True)
