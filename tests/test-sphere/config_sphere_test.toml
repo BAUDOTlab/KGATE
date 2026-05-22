@@ -1,0 +1,27 @@
+output_directory = "/mnt/DATA_11TB/projects/knowledge_graph_embedding/working_on_kgate/sphere-test/output_folder"
+
+run_kg_preprocessing = false
+
+[preprocessing]
+remove_duplicate_triplets = false
+
+# If undirected edges are found, will make them directed by creating a reverse edge
+make_directed = false
+
+flag_near_duplicate_edges = false
+
+# Remove all flagged edges from the train set
+clean_train_set = false
+
+[model.decoder]
+name = "RotatE"
+
+# Hyperparameter to change to test only RotatE or SpherE as well
+sphere_embeddings = false
+
+sphere_alpha = 0.0
+sphere_beta = 0.1
+
+[sampler]
+# Positional causes an error that is currently unresolved
+name = "Uniform"

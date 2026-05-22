@@ -537,10 +537,7 @@ class Architect(Module):
                 decoder = TransR(node_embedding_dimensions = self.node_embedding_dimensions,
                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
                                 node_count = self.kg_train.node_count, 
-                                edge_count = self.kg_train.edge_count,
-                                sphere_embeddings = sphere_embeddings,
-                                alpha = alpha,
-                                beta = beta)
+                                edge_count = self.kg_train.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransD":
                 decoder = TransD(node_embedding_dimensions = self.node_embedding_dimensions,
@@ -552,8 +549,7 @@ class Architect(Module):
                 decoder = TorusE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
             case "RotatE":
-                decoder = TransR(node_embedding_dimensions = self.embedding_dimensions,
-                                edge_embedding_dimensions = self.edge_embedding_dimensions, 
+                decoder = RotatE(embedding_dimensions = self.node_embedding_dimensions,
                                 node_count = self.kg_train.node_count, 
                                 edge_count = self.kg_train.edge_count,
                                 sphere_embeddings = sphere_embeddings,
