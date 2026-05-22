@@ -68,11 +68,12 @@ gnn_layer_number = 1
 # - TransH: Translational model proposed by Wang et al. 2014
 # - TransR: Translational model proposed by Lin et al. 2015
 # - TransD: Translational model proposed by Ji et al. 2015
-# - TorusE: Translational model proposed by TODO
+# - RotatE: Translational model proposed by Sun et al. 2018
+# - TorusE: Translational model proposed by Ebisu and Ichise 2017
 # - ConvKB: Convolutional model proposed by Nguyen et al. 2018
 # - RESCAL: Bilinear model proposed by Nickel et al. 2011
 # - DistMult: Bilinear model proposed by Yang et al. 2014
-# - ComplEx: Bilinear model proposed by TODO
+# - ComplEx: Bilinear model proposed by Trouillon et al. 2016
 name = "TransE"
 
 # Translational decoders use a Margin Loss, which needs a margin parameter.
@@ -84,6 +85,17 @@ dissimilarity = "L2"
 
 # Number of convolutional filter used by ConvKB
 filter_count = 3
+
+# If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
+# Adaptation of SpherE (proposed by Li et al. 2024).
+# Is only possible for translational decoders. Will default to false and give a warning if set to true but impossible.
+# MRR is currently incompatible with sphere embeddings, due to the absence of ranks.
+sphere_embeddings = false
+
+# Hyperparameters for SpherE score function.
+# Unused if `sphere_embeddings` is set to false or if sphere embeddings are impossible.
+sphere_alpha = 0.1
+sphere_beta = 0.0
 
 [sampler]
 # Type of negative sampler to generate false triplets during the training.

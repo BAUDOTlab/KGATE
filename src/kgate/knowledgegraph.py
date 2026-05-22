@@ -450,7 +450,11 @@ class KnowledgeGraph(Dataset):
         Warns
         -----
         If all values are not unique in the new identity, a warning will be issued.
-            
+
+        Notes
+        -----
+        This function is user-facing.
+        
         """
         assert self.metadata is not None, "You need to add metadata in order to set an identity."
         assert new_identity in self.metadata, f"The given identity is not a valid metadata name. Valid names are: {self.metadata.columns}."
@@ -481,6 +485,10 @@ class KnowledgeGraph(Dataset):
             The number of rows in the metadata dataframe must match the number of nodes in the graph.
         AssertionError #3
             The metadata dataframe must have an `id` column identical to the existing metadata.
+
+        Notes
+        -----
+        This function is user-facing.
         
         """
         if self.metadata is None:
@@ -1279,7 +1287,11 @@ class KnowledgeGraph(Dataset):
         -------
         KnowledgeGraph
             The knowledge graph as a KGATE KnowledgeGraph object.
-            
+
+        Notes
+        -----
+        This function is user-facing.
+        
         """
         # TODO for PyTorch Geometric compatibility
         pass
@@ -1303,6 +1315,10 @@ class KnowledgeGraph(Dataset):
         -------
         KnowledgeGraph
             The knowledge graph as a KGATE KnowledgeGraph object.
+
+        Notes
+        -----
+        This function is user-facing.
             
         """
         if metadata is None:

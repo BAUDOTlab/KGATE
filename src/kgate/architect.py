@@ -432,10 +432,24 @@ class Architect(Module):
 
 
     def initialize_decoder( self,
-                            decoder_name: str = "",
+                            decoder_name: Literal[  "TransE",
+                                                    "TransH",
+                                                    "TransR",
+                                                    "TransD",
+                                                    "TorusE",
+                                                    "RotatE",
+                                                    "RESCAL",
+                                                    "DisMult",
+                                                    "ComplEx",
+                                                    "ConvKB",
+                                                    ""
+                                                ] = "",
                             dissimilarity: Literal["L1", "L2", "torus_L1", "torus_L2", "torus_eL2", ""] = "",
                             margin: int = 0,
-                            filter_count: int = 0
+                            filter_count: int = 0,
+                            sphere_embeddings: bool = False,
+                            alpha: float = -1,
+                            beta: float = -1
                             ) -> Tuple[
                                         BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
                                         MarginLoss | BinaryCrossEntropyLoss
@@ -445,9 +459,9 @@ class Architect(Module):
 
         The decoders are adapted and inherit from torchKGE decoders to be able to handle heterogeneous data.
         Not all torchKGE decoders are already implemented, but all of them and more will eventually be. Currently, 
-        the available decoders are **TransE** [1]_, **TransH** [2]_, **TransR** [3]_, **TransD** [4]_, **TorusE** [5]_,
-        **RESCAL** [6]_, **DistMult** [7]_, **ComplEx** [8]_ and **ConvKB** [9]_. See the description of decoder classes for details about 
-        their implementation, or read their original papers.
+        the available decoders are **TransE** [1]_, **TransH** [2]_, **TransR** [3]_, **TransD** [4]_,
+        **TorusE** [5]_, **RotatE** [6]_, **RESCAL** [7]_, **DistMult** [8]_, **ComplEx** [9]_ and **ConvKB** [10]_.
+        See the description of decoder classes for details about their implementation, or read their original papers.
 
         Translational models are used with a `torchkge.MarginLoss` while bilinear models are used with a 
         `torchkge.BinaryCrossEntropyLoss`.
@@ -461,22 +475,30 @@ class Architect(Module):
         .. [2] Wang, Zhen et al. “Knowledge Graph Embedding by Translating on Hyperplanes.” AAAI Conference on Artificial Intelligence (2014).
         .. [3] Lin, Yankai et al. “Learning Entity and Relation Embeddings for Knowledge Graph Completion.” AAAI Conference on Artificial Intelligence (2015).
         .. [4] Ji, Guoliang et al. “Knowledge Graph Embedding via Dynamic Mapping Matrix.” Annual Meeting of the Association for Computational Linguistics (2015).
-        .. [5] TODO: add reference to TorusE
-        .. [6] Nickel, Maximilian et al. “A Three-Way Model for Collective Learning on Multi-Relational Data.” International Conference on Machine Learning (2011).
-        .. [7] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2014).
+        .. [5] TODO.ref_TorusE
+        .. [6] TODO.ref_RotatE
+        .. [7] Nickel, Maximilian et al. “A Three-Way Model for Collective Learning on Multi-Relational Data.” International Conference on Machine Learning (2011).
+        .. [8] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2014).
         .. [8] TODO: add reference to ComplEx
-        .. [9] Nguyen, Dai Quoc et al. “A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network.” North American Chapter of the Association for Computational Linguistics (2017).
+        .. [10] Nguyen, Dai Quoc et al. “A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network.” North American Chapter of the Association for Computational Linguistics (2017).
 
         Arguments
         ----------
-        decoder_name: str, optional
+        decoder_name: Literal["TransE", "TransH", "TransR", "TransD", "TorusE", "SpherE", "RESCAL", "DisMult", "ComplEx","ConvKB"], optional
             Name of the decoder.
         dissimilarity: {"L1", "L2"}, optional
             Type of the dissimilarity metric.
         margin: int, optional, default to 0
             Margin to be used with MarginLoss. Unused with bilinear models.
         filter_count: int, optional, default to 0
-            Number of convolution filters.
+            Number of filters used for convolution.
+        sphere_embeddings: bool, optional, default to False
+            If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
+            Adaptation of SpherE.
+        alpha: float, optional, default to -1
+            Hyperparameter used for spheric scoring.
+        beta: float, optional, default to -1
+            Hyperparameter used for spheric scoring.
 
         Raises
         ------
@@ -501,6 +523,12 @@ class Architect(Module):
             margin = decoder_config["margin"]
         if filter_count == 0:
             filter_count = decoder_config["filter_count"]
+        if sphere_embeddings == "":
+            sphere_embeddings = decoder_config["sphere_embeddings"]
+        if alpha == -1:
+            alpha = decoder_config["sphere_alpha"]
+        if beta == -1:
+            beta = decoder_config["sphere_beta"]
 
         # Translational models
         match decoder_name:
@@ -527,6 +555,14 @@ class Architect(Module):
             case "TorusE":
                 decoder = TorusE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
+            case "RotatE":
+                decoder = RotatE(embedding_dimensions = self.node_embedding_dimensions,
+                                node_count = self.kg_train.node_count, 
+                                edge_count = self.kg_train.edge_count,
+                                sphere_embeddings = sphere_embeddings,
+                                alpha = alpha,
+                                beta = beta)
+                decoder_loss = MarginLoss(margin)
             case "RESCAL":
                 decoder = RESCAL(embedding_dimensions = self.node_embedding_dimensions,
                                 node_count = self.kg_train.node_count,
@@ -547,7 +583,7 @@ class Architect(Module):
                                 edge_count = self.kg_train.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case _:
-                raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
+                raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented. Supported decoders are: TransE, TransH, TransR, TransD, TorusE, RotatE, RESCAL, DisMult, ComplEx, ConvKB.")
 
         return decoder, decoder_loss
 
@@ -866,6 +902,7 @@ class Architect(Module):
 
         Notes
         -----
+        This function is user-facing.
         If there already is a configuration file in the output folder identical to the current configuration, KGATE will
         automatically attempt to restart the training from the most recent checkpoint in the `checkpoints/` folder. Otherwise,
         the output folder will be cleaned and the current configuration will be written as `kgate_config.toml`
@@ -953,6 +990,7 @@ class Architect(Module):
                     n_saved = 2,   # Only keep last 2 checkpoints
                     global_step_transform = lambda *_: trainer.state.epoch   # Include epoch number
         )
+
 
         def save_checkpoint_to_cpu(engine: Engine):
             """
@@ -1044,6 +1082,10 @@ class Architect(Module):
         results: Dict[str, float | Dict[str, float]]
             TODO.What_that_variable_is_or_does
         
+        Notes
+        -----
+        This function is user-facing.
+        
         """
         torch.cuda.empty_cache()
         gc.collect()
@@ -1133,6 +1175,10 @@ class Architect(Module):
         predictions: pd.DataFrame
             A DataFrame containing the prediction alongside their score.
         
+        Notes
+        -----
+        This function is user-facing.
+        
         """
         if not sum([len(arr) > 0 for arr in [heads, edges, tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, tails or edges.")
@@ -1170,7 +1216,8 @@ class Architect(Module):
             missing_triplet_part = missing_triplet_part,
             batch_size = self.evaluation_batch_size,
             node_embeddings = self.node_embeddings,   
-            edge_embeddings = self.edge_embeddings
+            edge_embeddings = self.edge_embeddings,
+            sphere_embeddings = self.config["model"]["sphere_embeddings"]
         )
 
         index_to_node = {value: key for key, value in self.kg_train.node_to_index.items()}
@@ -1323,13 +1370,13 @@ class Architect(Module):
         """
         batch = batch.T.to(self.device)
 
-        batch_count = self.sampler.corrupt_batch(batch)
-        batch_count = batch_count.to(self.device)
+        negative_batch = self.sampler.corrupt_batch(batch)
+        negative_batch = negative_batch.to(self.device)
         
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triplets
-        positive_triplet, negative_triplet = self(batch, batch_count)
+        positive_triplet, negative_triplet = self(batch, negative_batch)
         loss = self.decoder_loss(positive_triplet, negative_triplet)
         loss.backward()
 
@@ -1419,6 +1466,10 @@ class Architect(Module):
         -------
         embedding_dictionnary: Dict[str, Tensor]
             Embeddings of nodes and edges, as well as decoder-specific embeddings.
+
+        Notes
+        -----
+        This function is user-facing.
 
         """
         self.normalize_parameters()
@@ -1844,6 +1895,10 @@ class Architect(Module):
         ------
         ValueError
             An edge was not found in the knowledge graph.
+
+        Notes
+        -----
+        This function is user-facing.
         
         """
         logging.info("Preparing KG for data leakage evaluation procedure...")

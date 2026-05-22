@@ -12,10 +12,12 @@ The modifications are licensed under the BSD license according to the source lic
 """
 
 from typing import Tuple, Dict, Literal
+from math import pi
 
 from tqdm import tqdm
 
-from torch import nn, tensor, matmul, Tensor, empty
+import torch
+from torch import nn, empty, matmul, tensor, Tensor, tensor_split, stack
 from torch.cuda import empty_cache
 from torch.nn.functional import normalize
 from torch.nn import Module, Parameter, ParameterList
@@ -74,15 +76,15 @@ class TranslationalDecoder(Module):
         Arguments
         ---------
         head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            The embeddings of the head entities for the current batch.
+            The embeddings of the head nodes for the current batch.
         tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            The embeddings of the tail entities for the current batch.
+            The embeddings of the tail nodes for the current batch.
         edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             The embeddings of the edges for the current batch.
         head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head entities for the current batch.
+            The indices of the head nodes for the current batch.
         tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail entities for the current batch.
+            The indices of the tail nodes for the current batch.
         edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the edges for the current batch.
         
@@ -108,7 +110,7 @@ class TranslationalDecoder(Module):
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
                             edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+                            ) -> Tuple[nn.ParameterList, nn.Embedding]:
         """
         Interface method for the decoder's parameters normalization function.
 
@@ -138,7 +140,7 @@ class TranslationalDecoder(Module):
         this case, it is not necessary to implement this method from the interface.
         
         """
-        return None
+        return node_embeddings, edge_embeddings
 
 
     def get_embeddings(self) -> Dict[str, Tensor] | None:
@@ -244,9 +246,10 @@ class TranslationalDecoder(Module):
         Raises
         ------
         AssertionError #1
-            When inferring heads, the head_embeddings tensor should be of shape [batch_size, embedding_dimensions].
+            When inferring heads, the `head_embeddings` tensor should be of shape [batch_size, embedding_dimensions].
         AssertionError #2
-            When inferring tails, the head_embeddings tensor should be of shape [batch_size, embedding_dimensions].
+            When inferring tails, `the head_embeddings` tensor should be of shape [batch_size, embedding_dimensions].
+        ValueError
 
         Returns
         -------
@@ -261,23 +264,41 @@ class TranslationalDecoder(Module):
         """
         batch_size = head_embeddings.shape[0]
 
-        # When the shape of the edges is [batch_size, node_embedding_dimensions]
-        if len(edge_embeddings.shape) == 2:
-            if len(tail_embeddings.shape) == 3:
-                assert len(head_embeddings.shape) == 2, "When inferring tails, the `head_embeddings` tensor should be of shape [batch_size, node_embedding_dimensions]"
+        head_embeddings_shape = len(head_embeddings.shape)
+        tail_embeddings_shape = len(tail_embeddings.shape)
+        edge_embeddings_shape = len(edge_embeddings.shape)
+        # Simplifying cases of inference
+        if head_embeddings_shape == 3 and \
+            tail_embeddings_shape == 2 and \
+            edge_embeddings_shape == 2:
+                inference_target = "heads"
+        elif head_embeddings_shape == 2 and \
+            tail_embeddings_shape == 3 and \
+            edge_embeddings_shape == 2:
+                inference_target = "tails"
+        elif head_embeddings_shape == 2 and \
+            tail_embeddings_shape == 2 and \
+            edge_embeddings_shape == 3:
+                inference_target = "edges"
+        else:
+            raise ValueError("Mismatch in the shapes of the embeddings. To properly infer tails, heads or edges, the corresponding tensor must be of length 3 and the other two of length 2.")
 
-                translated_heads = (head_embeddings + edge_embeddings).view(batch_size, 1, edge_embeddings.size(1))
-                return - self.dissimilarity(translated_heads, tail_embeddings)
-            
-            else:
-                assert (len(head_embeddings.shape) == 3) and (len(tail_embeddings.shape) == 2), "When inferring heads, the `head_embeddings` tensor should be of shape [batch_size, node_embedding_dimensions]"
-
-                edges_extended = edge_embeddings.view(batch_size, 1, edge_embeddings.size(1))
-                tails_extended = tail_embeddings.view(batch_size, 1, edge_embeddings.size(1))
+        if inference_target == "heads":
+            # Inferring heads
+            edges_extended = edge_embeddings.view(batch_size, 1, edge_embeddings.size(1))
+            tails_extended = tail_embeddings.view(batch_size, 1, edge_embeddings.size(1))
                 
-                return - self.dissimilarity(head_embeddings + edges_extended, tails_extended)
+            batch_score = - self.dissimilarity(head_embeddings + edges_extended, tails_extended) 
+            return batch_score
         
-        elif len(edge_embeddings.shape) == 3:
+        elif inference_target == "tails":
+            # Inferring tails
+            translated_heads = (head_embeddings + edge_embeddings).view(batch_size, 1, edge_embeddings.size(1))
+            
+            batch_score = - self.dissimilarity(translated_heads, tail_embeddings)
+            return batch_score
+        
+        elif inference_target == "edges":
             if hasattr(self, "evaluated_projections"):
                 head_embeddings = head_embeddings.view(batch_size, -1, edge_embeddings.size(1))
                 tail_embeddings = tail_embeddings.view(batch_size, -1, edge_embeddings.size(1))
@@ -286,8 +307,9 @@ class TranslationalDecoder(Module):
                 head_embeddings = head_embeddings.view(batch_size, -1, head_embeddings.size(1))
                 tail_embeddings = tail_embeddings.view(batch_size, -1, tail_embeddings.size(1))
 
-            return - self.dissimilarity(head_embeddings + edge_embeddings, tail_embeddings)
-        # TODO: would a ValueError in an 'else' be needed?
+            batch_score = - self.dissimilarity(head_embeddings + edge_embeddings, tail_embeddings)
+            return batch_score
+
 
 
 
@@ -459,9 +481,9 @@ class TransE(TranslationalDecoder):
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
 
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
-    
-    
-    
+
+
+
 class TransH(TranslationalDecoder):
     """
     Implementation of TransH model detailed in the paper referenced below.
@@ -759,6 +781,13 @@ class TransR(TranslationalDecoder):
         Dimensions of node embeddings.
     edge_embedding_dimensions: int
         Dimensions of edge embeddings.
+    sphere_embeddings: bool, optional, default to False
+        If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
+        Adaptation of SpherE.
+    alpha: float, optional, default to -1
+        Hyperparameter used for spheric scoring.
+    beta: float, optional, default to -1
+        Hyperparameter used for spheric scoring.
 
     Attributes
     ----------
@@ -781,13 +810,25 @@ class TransR(TranslationalDecoder):
         This should be set to True every time a backward pass is done in train mode.
     projected_nodes: torch.nn.Parameter, shape: [edge_count, node_count, edge_embedding_dimensions]
         Contains the projection of each node in each edge-specific sub-space.
+    sphere_embeddings: bool, optional, default to False
+        If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
+        Adaptation of SpherE.
+    node_radii: TODO
+        TODO
+    alpha: float, optional, default to -1
+        Hyperparameter used for spheric scoring.
+    beta: float, optional, default to -1
+        Hyperparameter used for spheric scoring.
     
     """
     def __init__(self,
                 node_count: int,
                 edge_count: int,
                 node_embedding_dimensions: int,
-                edge_embedding_dimensions: int):
+                edge_embedding_dimensions: int,
+                sphere_embeddings: bool,
+                alpha: float,
+                beta: float):
         super().__init__()
 
         self.node_count = node_count
@@ -804,6 +845,12 @@ class TransR(TranslationalDecoder):
                                                         node_count,
                                                         node_embedding_dimensions)),
                                                         requires_grad = False)
+        
+        # For SpherE
+        self.sphere_embeddings = sphere_embeddings
+        self.node_radii = initialize_embedding(self.node_count, 1)	# 1 for the sphere radius
+        self.alpha = alpha
+        self.beta = beta
 
 
     def score(  self,
@@ -811,6 +858,8 @@ class TransR(TranslationalDecoder):
                 head_embeddings: Tensor,
                 tail_embeddings: Tensor,
                 edge_embeddings: Tensor,
+                head_indices: Tensor,
+                tail_indices: Tensor,
                 edge_indices: Tensor,
                 **_) -> Tensor:
         """
@@ -847,6 +896,10 @@ class TransR(TranslationalDecoder):
         
         batch_score = - self.dissimilarity( self.project(head_normalized_embeddings, projection_matrix) + edge_embeddings,
                                             self.project(tail_normalized_embeddings, projection_matrix))
+        
+        # Apply spheric embeddings
+        if self.sphere_embeddings:
+            batch_score = self.sphere_score(head_indices, tail_indices, batch_score)
         
         return batch_score
     
@@ -920,7 +973,7 @@ class TransR(TranslationalDecoder):
         embeddings: Dict[str, torch.Tensor]
             Key: "projection_matrix"
             Value: tensors representing nodes and edges in current model
-            
+        
         """
         return {"projection_matrix": self.projection_matrix.weight.data.view(-1,
                                                         self.edge_embedding_dimensions,
@@ -1029,6 +1082,65 @@ class TransR(TranslationalDecoder):
             del projected_masked_node_embeddings
 
         self.evaluated_projections = True
+
+
+    def sphere_score(self,
+                    *,
+                    head_indices: Tensor,
+                    tail_indices: Tensor,
+                    dissimilarity_score: Tensor
+                    )-> Tensor:
+        """
+        Adaptation of SpherE model detailed in the paper referenced below.
+        
+        Only used - in `score` - if the config parameter `sphere_embeddings` is set to true.
+
+        References
+        ----------
+        Zihao Li, Yuyi Ao, Jingrui He.
+        `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval`
+        https://arxiv.org/pdf/2404.19130
+        Journal_period_date
+
+        Arguments
+        ---------
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes for the current batch.
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes for the current batch.
+        dissimilarity_score: torch.Tensor, keyword-only
+            Dissimilarity score, output of the `decoder.score` function.
+
+        Returns
+        -------
+        score: torch.Tensor
+            The score of each triplet as a tensor, using SpherE formula.
+            Score is positive for a positive triplet. Score is negative for a negative triplet.
+            
+        Notes
+        -----
+        Only return score values. Architect handles interpreting these values as booleans - yes for positive
+        and no for negative - and creating the list of results, as it does hit@k ranked lists.
+        
+        """
+        # Creation of node radii
+        head_radius = self.node_radii(head_indices)
+        tail_radius = self.node_radii(tail_indices)
+        
+        # TODO: check why stack like this, opposed to the original formula
+        # Loss function from SpherE article
+        spheric_score = torch.stack(dissimilarity_score - head_radius - tail_radius,
+                                    - self.alpha * head_radius - self.beta * tail_radius)
+        
+        # We take the highest score for each triplet
+        # The value is the negative of the mathematical score function result
+        opposite_score, _ = torch.max(spheric_score, 0)
+        
+        # Score must be positive for a positive triplet
+        # Score must be negative for a negative triplet
+        score = - opposite_score
+        
+        return score
 
 
 
@@ -1362,7 +1474,7 @@ class TorusE(TranslationalDecoder):
     `TorusE: Knowledge Graph Embedding on a Lie Group.`
     https://arxiv.org/abs/1711.05435
     In Proceedings of the 32nd AAAI Conference on Artificial Intelligence
-    (New Orleans, LA, USA, Feb. 2018),AAAI Press, pp. 1819–1826.
+    (New Orleans, LA, USA, Feb. 2018), AAAI Press, pp. 1819–1826.
 
     Arguments
     ---------
@@ -1541,3 +1653,374 @@ class TorusE(TranslationalDecoder):
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
+
+
+
+class RotatE(TranslationalDecoder):
+    """
+    Implementation of RotatE model detailed in the paper referenced below.
+    
+    This class inherits from the TranslationDecoder interface. It inherites its attributes as well.
+
+    References
+    ----------
+    Zhiqing Sun, Zhihong Deng, Jian-Yun Nie and Jian Tang.
+    `RotatE: Knowledge Graph Embedding by Relational Rotation in Complex Space.`
+    https://arxiv.org/pdf/1902.10197
+    In ArXiv, volume abs/1902.10197, 2018.
+
+    Arguments
+    ---------
+    TODO: check as this is just a copy-paste from TransR
+    node_count: int
+        Number of nodes in the knowledge graph.
+    edge_count: int
+        Number of edges in the knowledge graph.
+    node_embedding_dimensions: int
+        Dimensions of node embeddings.
+    edge_embedding_dimensions: int
+        Dimensions of edge embeddings.
+    sphere_embeddings: bool, optional, default to False
+        If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
+        Adaptation of SpherE.
+    alpha: float, optional, default to -1
+        Hyperparameter used for spheric scoring.
+    beta: float, optional, default to -1
+        Hyperparameter used for spheric scoring.
+
+    Attributes
+    ----------
+    TODO: check as this is just a copy-paste from TransR
+    node_count: int
+        Number of nodes in the knowledge graph.
+    edge_count: int
+        Number of edges in the knowledge graph.
+    node_embedding_dimensions: int
+        Dimensions of node embeddings.
+    edge_embedding_dimensions: int
+        Dimensions of edge embeddings.
+    projection_matrix: torch.nn.Embedding, shape: [edge_count, edge_embedding_dimensions * node_embedding_dimensions]
+        Edge-specific projection matrices. See paper for more details.
+    dissimilarity: function described in `torchkge.utils.dissimilarities`
+        The dissimilarity function used to compare translated head embeddings 
+        to tail embeddings.
+        See details from torchkge here: https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities
+    evaluated_projections: bool
+        Indicates whether `projected_nodes` has been computed.
+        This should be set to True every time a backward pass is done in train mode.
+    projected_nodes: torch.nn.Parameter, shape: [edge_count, node_count, edge_embedding_dimensions]
+        Contains the projection of each node in each edge-specific sub-space.
+    sphere_embeddings: bool, optional, default to False
+        If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
+        Adaptation of SpherE.
+    alpha: float, optional, default to -1
+        Hyperparameter used for spheric scoring.
+    beta: float, optional, default to -1
+        Hyperparameter used for spheric scoring.
+    
+    """
+    def __init__(self,
+                node_count: int,
+                edge_count: int,
+                embedding_dimensions: int,
+                sphere_embeddings: bool,
+                alpha: float,
+                beta: float):
+        super().__init__()
+
+        self.node_count = node_count
+        self.edge_count = edge_count
+        self.embedding_dimensions = embedding_dimensions
+        
+        self.embedding_spaces = 2
+        self.embedding_range = None # TODO
+        self.gamma = None # TODO
+
+        self.dissimilarity = l1_dissimilarity
+        
+        # For SpherE
+        self.sphere_embeddings = sphere_embeddings
+        self.node_radii = initialize_embedding(self.node_count, 1)	# 1 for the sphere radius
+        self.alpha = alpha
+        self.beta = beta
+
+
+    def score(  self,
+                *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_embeddings: Tensor,
+                **_) -> Tensor:
+        """
+        Compute the score function for the triplets given as argument.
+        
+        See referenced paper for more details on the score:
+        https://www.aaai.org/ocs/index.php/AAAI/AAAI15/paper/view/9571/9523
+
+        Arguments
+        ---------
+        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            Embeddings of the head nodes in the knowledge graph.
+        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            Embeddings of the tail nodes in the knowledge graph.
+        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+            The edge embeddings, of shape [edge_count, edge_embedding_dimensions]
+
+        Returns
+        -------
+        score: torch.Tensor, dtype: torch.float, shape: [batch_size]
+            The score of each triplet as a tensor.
+        
+        Notes
+        -----
+        KGATE does not differentiate 'head-batch' from 'tail-batch' modes when creating negative triplets.
+        Here we use the equivalent of 'head-batch'.
+        
+        """
+        real_head_embedddings, imaginary_head_embeddings = tensor_split(head_embeddings, 2, dim = 1)
+        real_tail_embedddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim = 1)
+        real_edge_embedddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim = 1)
+        
+        # TODO: create attribute self.embedding_range
+        # Make phases of edges uniformly distributed in [-pi, pi]
+        phase_edge = edge_embeddings / (self.embedding_range.item() / pi)
+        
+        real_edge_embedddings = torch.cos(phase_edge)
+        imaginary_edge_embeddings = torch.sin(phase_edge)
+        
+        real_score = (real_edge_embedddings * real_tail_embedddings + imaginary_edge_embeddings * imaginary_tail_embeddings) - real_head_embedddings
+        imaginary_score = (real_edge_embedddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embedddings) - imaginary_head_embeddings
+        
+        score = stack([real_score, imaginary_score], dim = 0)
+        score = score.norm(dim = 0)
+        
+        score = self.gamma.item() - score.sum(dim = 1)
+        
+        return score
+    
+    
+    def inference_prepare_candidates(self,
+                                    *,
+                                    node_embeddings: Tensor,
+                                    edge_embeddings: nn.Embedding,
+                                    head_indices: Tensor,
+                                    tail_indices: Tensor,
+                                    edge_indices: Tensor,
+                                    node_inference: bool = True
+                                    ) -> Tuple[
+                                        Tuple[Tensor, Tensor],
+                                        Tuple[Tensor, Tensor],
+                                        Tuple[Tensor, Tensor],
+                                        Tuple[Tensor, Tensor]]:
+        """
+        TODO: check if it follows the original implementation
+        Link prediction evaluation helper function. Get node embeddings
+        and edge embeddings. The output will be fed to the
+        `inference_score_function` method.
+
+        Arguments
+        ---------
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            Embeddings of all nodes.
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+            Embeddings of all edges.
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes (from KG).
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes (from KG).
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the edges (from KG).
+        node_inference: bool, optional, default to True, keyword-only
+            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
+        Returns
+        -------
+        (real_head_embeddings, imaginary_head_embeddings): Tuple[Tensor, Tensor]
+            Head node embeddings, both the real and the imaginary ones.
+        (real_tail_embeddings, imaginary_tail_embeddings): Tuple[Tensor, Tensor]
+            Tail node embeddings, both the real and the imaginary ones.
+        (real_edge_embeddings, imaginary_edge_embeddings): Tuple[Tensor, Tensor]
+            Edge embeddings, both the real and the imaginary ones.
+        (real_candidates, imaginary_candidates): Tuple[Tensor, Tensor]
+            Candidate embeddings for nodes or edges, both the real and the imaginary ones.
+
+        """
+        batch_size = head_indices.shape[0]
+
+        real_head_embeddings, imaginary_head_embeddings = tensor_split(node_embeddings[head_indices], 2, dim = 1)
+        real_tail_embeddings, imaginary_tail_embeddings = tensor_split(node_embeddings[tail_indices], 2, dim = 1)
+        real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings(edge_indices), 2, dim = 1)
+
+        if node_inference:
+            real_candidates, imaginary_candidates = tensor_split(node_embeddings, 2, dim = 1)
+        else:
+            real_candidates, imaginary_candidates = tensor_split(edge_embeddings.weight.data, 2, dim = 1)
+        
+        real_candidates = real_candidates.unsqueeze(0).expand(batch_size, -1, -1)
+        imaginary_candidates = imaginary_candidates.unsqueeze(0).expand(batch_size, -1, -1)
+
+        return  (real_head_embeddings, imaginary_head_embeddings), \
+                (real_tail_embeddings, imaginary_tail_embeddings), \
+                (real_edge_embeddings, imaginary_edge_embeddings), \
+                (real_candidates, imaginary_candidates)
+    
+    
+    def inference_score(self,
+                        *,
+                        head_embeddings: Tuple[Tensor, Tensor],
+                        tail_embeddings: Tuple[Tensor, Tensor],
+                        edge_embeddings: Tuple[Tensor, Tensor]
+                        ) -> Tensor:
+        """
+        TODO: check if it follows the original implementation, as this is just a copy-paste from ComplEx
+        Link prediction evaluation helper function. Compute the scores
+        of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        The arguments should match the ones of `inference_prepare_candidates`.
+
+        Arguments
+        ---------
+        head_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
+            Embeddings of the head nodes in the knowledge graph. 
+            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
+        tail_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
+            Embeddings of the tail nodes in the knowledge graph. 
+            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
+        edge_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
+            Embeddings of the edges in the knowledge graph. 
+            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
+
+        Raises
+        ------
+        ValueError
+            If none of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.
+
+        Returns
+        -------
+        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
+            Tensor of score values.
+            First dimension: incomplete triplets tested
+            Second dimension: candidate indices
+            For example, if the function is called to infer the score of tails:
+            First dimension: (head_indices, edge_indices)
+            Second dimension: tail_indices
+        
+        """
+        real_head_embeddings, imaginary_head_embeddings = head_embeddings
+        real_tail_embeddings, imaginary_tail_embeddings = tail_embeddings
+        real_edge_embeddings, imaginary_edge_embeddings = edge_embeddings
+        
+        batch_size = real_head_embeddings.shape[0]
+        
+        real_head_embeddings_shape = len(real_head_embeddings.shape)
+        real_tail_embeddings_shape = len(real_tail_embeddings.shape)
+        real_edge_embeddings_shape = len(real_edge_embeddings.shape)
+        # Simplifying cases of inference
+        if real_head_embeddings_shape == 3 and \
+            real_tail_embeddings_shape == 2 and \
+            real_edge_embeddings_shape == 2:
+                inference_target = "heads"
+        elif real_head_embeddings_shape == 2 and \
+            real_tail_embeddings_shape == 3 and \
+            real_edge_embeddings_shape == 2:
+                inference_target = "tails"
+        elif real_head_embeddings_shape == 2 and \
+            real_tail_embeddings_shape == 2 and \
+            real_edge_embeddings_shape == 3:
+                inference_target = "edges"
+        else:
+            raise ValueError("Mismatch in the shapes of the embeddings. To properly infer tails, heads or edges, the corresponding tensor must be of length 3 and the other two of length 2.")
+
+        if inference_target == "heads":
+            score = (real_head_embeddings * 
+                        (real_edge_embeddings * real_tail_embeddings 
+                         + imaginary_edge_embeddings * imaginary_tail_embeddings
+                        ).view(batch_size, 1, self.embedding_dimensions)
+                    + imaginary_head_embeddings * 
+                        (real_edge_embeddings * imaginary_tail_embeddings
+                        - imaginary_edge_embeddings * real_tail_embeddings
+                        ).view(batch_size, 1, self.embedding_dimensions)
+                    ).sum(dim = 2)
+            return score
+        
+        elif inference_target == "tails":
+            score = ((real_head_embeddings * real_edge_embeddings
+                        - imaginary_head_embeddings * imaginary_edge_embeddings
+                        ).view(batch_size, 1, self.embedding_dimensions)
+                    * real_tail_embeddings
+                    + (real_head_embeddings * imaginary_edge_embeddings
+                        + imaginary_head_embeddings * real_edge_embeddings
+                        ).view(batch_size, 1, self.embedding_dimensions)
+                    * imaginary_tail_embeddings
+                    ).sum(dim = 2)
+            return score
+        
+        elif inference_target == "edges":
+            score = ((real_head_embeddings * real_tail_embeddings
+                        + imaginary_head_embeddings * imaginary_tail_embeddings
+                        ).view(batch_size, 1, self.embedding_dimensions)
+                    * real_edge_embeddings
+                    + (real_head_embeddings * imaginary_tail_embeddings
+                        - imaginary_head_embeddings * real_tail_embeddings
+                        ).view(batch_size, 1, self.embedding_dimensions)
+                    * imaginary_edge_embeddings
+                    ).sum(dim = 2)
+            return score
+    
+
+    def sphere_score(self,
+                    *,
+                    head_indices: Tensor,
+                    tail_indices: Tensor,
+                    dissimilarity_score: Tensor
+                    )-> Tensor:
+        """
+        Adaptation of SpherE model detailed in the paper referenced below.
+        
+        Only used - in `score` - if the config parameter `sphere_embeddings` is set to true.
+
+        References
+        ----------
+        Zihao Li, Yuyi Ao, Jingrui He.
+        `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval`
+        https://arxiv.org/pdf/2404.19130
+        SIGIR ’24, July 14–18, 2024, Washington, DC, USA
+
+        Arguments
+        ---------
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes for the current batch.
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes for the current batch.
+        dissimilarity_score: torch.Tensor, keyword-only
+            Dissimilarity score, output of the `decoder.score` function.
+
+        Returns
+        -------
+        score: torch.Tensor
+            The score of each triplet as a tensor, using SpherE formula.
+            Score is positive for a positive triplet. Score is negative for a negative triplet.
+            
+        Notes
+        -----
+        Only return score values. Architect handles interpreting these values as booleans - yes for positive
+        and no for negative - and creating the list of results, as it does hit@k ranked lists.
+        
+        """
+        # Creation of node radii
+        head_radius = self.node_radii(head_indices)
+        tail_radius = self.node_radii(tail_indices)
+        
+        # TODO: check why stack like this, opposed to the original formula
+        # Loss function from SpherE article
+        spheric_score = torch.stack(dissimilarity_score - head_radius - tail_radius,
+                                    - self.alpha * head_radius - self.beta * tail_radius)
+        
+        # We take the highest score for each triplet
+        # The value is the negative of the mathematical score function result
+        opposite_score, _ = torch.max(spheric_score, 0)
+        
+        # Score must be positive for a positive triplet
+        # Score must be negative for a negative triplet
+        score = - opposite_score
+        
+        return score

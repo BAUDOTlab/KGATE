@@ -662,11 +662,11 @@ def get_dictionary_mapping( dataframe: pd.DataFrame,
     """
     if nodes:
         unique_nodes = list(set(dataframe["head"].unique()).union(set(dataframe["tail"])))
-        return {node: index for index, node in enumerate(sorted(unique_nodes))}
+        return {node: index for index, node in enumerate(unique_nodes)}
     
     else:
         unique_edges = list(dataframe["edge"].unique())
-        return {edge: index for index, edge in enumerate(sorted(unique_edges))}
+        return {edge: index for index, edge in enumerate(unique_edges)}
 
 
 def get_average_heads_per_tail( graphindices: Tensor
