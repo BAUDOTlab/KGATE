@@ -1173,12 +1173,12 @@ class KnowledgeGraph(Dataset):
             edge_index = self.edge_list
         )
 
-        subgraph = self.graphindices[:, edge_mask].to(device)
+        subgraph = self.graphindices[:, edge_mask]
 
         # All seed nodes not present in the subgraph are put in this dictionary 
         # to be used in the self-loop addition at the end of this function        
-        missing_nodes_indices: Dict[str, Tensor] = defaultdict(lambda: torch.empty(0, dtype=torch.long, device=device)) # key : node type, value: isolated node indices
-        uniques, counts = torch.cat((subgraph[:2].unique(), seed_nodes.to(device))).unique(return_counts=True)
+        missing_nodes_indices: Dict[str, Tensor] = defaultdict(lambda: torch.empty(0, dtype=torch.long)) # key : node type, value: isolated node indices
+        uniques, counts = torch.cat((subgraph[:2].unique(), seed_nodes)).unique(return_counts=True)
         index_to_node_type = {v: k for k,v in self.node_type_to_index.items()}
 
         for missing_node in uniques[counts == 1]:
@@ -1193,6 +1193,12 @@ class KnowledgeGraph(Dataset):
         pyg_edge_index = {}
         x_dict = {}
 
+        all_subgraph_nodes = torch.cat([subgraph[0], subgraph[1]]).unique()
+
+        for node_type, node_type_index in self.node_type_to_index.items():
+            mask = self.node_types[all_subgraph_nodes] == node_type_index
+            node_indices[node_type] = all_subgraph_nodes[mask]
+
         for triplet_index in triplet_type_indices:
             triplet_type = self.triplet_types[triplet_index]
             head_node_type, _, tail_node_type = triplet_type
@@ -1202,13 +1208,11 @@ class KnowledgeGraph(Dataset):
 
             source_nodes = triplets[0]
             target_nodes = triplets[1]
-
-            node_indices[head_node_type] = torch.cat([node_indices[head_node_type], source_nodes]).long().unique()
-            node_indices[tail_node_type] = torch.cat([node_indices[tail_node_type], target_nodes]).long().unique()
-
+        
             head_sorted_identifiers, head_sorted_indices = torch.sort(node_indices[head_node_type])
-            head_list = head_sorted_indices[torch.searchsorted(head_sorted_identifiers, source_nodes)]
             tail_sorted_identifiers, tail_sorted_indices = torch.sort(node_indices[tail_node_type])
+
+            head_list = head_sorted_indices[torch.searchsorted(head_sorted_identifiers, source_nodes)]
             tail_list = tail_sorted_indices[torch.searchsorted(tail_sorted_identifiers, target_nodes)]
 
             edge_list = torch.stack([
@@ -1217,8 +1221,6 @@ class KnowledgeGraph(Dataset):
             ], dim = 0)
 
             pyg_edge_index[triplet_type] = edge_list.to(device)
-        
-        self.global_to_local_indices = self.global_to_local_indices.to(device)
 
         # If we have node types without any sampled edge, we add them forcefully to node_indices here
         missing_node_types = [missing_node_type_key for missing_node_type_key in missing_nodes_indices if missing_node_type_key not in node_indices.keys()]
@@ -1229,7 +1231,7 @@ class KnowledgeGraph(Dataset):
         for node_type, indices in node_indices.items():
             node_type_index = self.node_type_to_index[node_type]
             # Add missing nodes back here to be considered in the final input
-            indices = cat((indices, missing_nodes_indices[node_type])).long()
+            indices = torch.cat((indices, missing_nodes_indices[node_type])).long()
             node_indices[node_type] = indices
 
             local_index = self.global_to_local_indices[indices]
@@ -1251,7 +1253,7 @@ class KnowledgeGraph(Dataset):
             sorted_ids, permutation = torch.sort(indices)
 
             local_seed_positions = permutation[
-                torch.searchsorted(sorted_ids, current_seed_nodes.to(device))
+                torch.searchsorted(sorted_ids, current_seed_nodes)
             ]
 
             seed_mapping[node_type] = local_seed_positions

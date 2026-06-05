@@ -188,6 +188,7 @@ class Architect(Module):
                 cudnn_benchmark: bool = True,
                 number_of_cores: int = 0,
                 **kwargs):
+        super().__init__()
         # kg should be of type KnowledgeGraph, if exists use it instead of the one in config
         # dataframe should have columns head, tail and edge
         self.config: dict = parse_config(config_path, kwargs)
@@ -247,7 +248,6 @@ class Architect(Module):
                 self.kg_train, self.kg_validation, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
                 logging.info("Done")
 
-        super().__init__()
         # Initialize attributes
         self.encoder: DefaultEncoder | GNN = None
         self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
@@ -256,8 +256,8 @@ class Architect(Module):
         self.sampler: NegativeSampler = None
         self.scheduler: optim.lr_scheduler.LRScheduler | None = None
         self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
-        self.node_embeddings: nn.ParameterList
-        self.edge_embeddings: nn.Embedding
+        self.node_embeddings: nn.ParameterList = None
+        self.edge_embeddings: nn.Embedding = None
 
 
     @property
@@ -364,7 +364,7 @@ class Architect(Module):
                 return
             
         if self.metadata is not None and hasattr(self, "kg_train"):
-            for knowledge_graph in (self.kg_train, self.kg_val, self.kg_test):
+            for knowledge_graph in (self.kg_train, self.kg_validation, self.kg_test):
                 knowledge_graph.add_metadata(self.metadata)
             
 
@@ -433,8 +433,8 @@ class Architect(Module):
     def initialize_decoder( self,
                             decoder_name: str = "",
                             dissimilarity: Literal["L1", "L2", "torus_L1", "torus_L2", "torus_eL2", ""] = "",
-                            margin: int = 0,
-                            filter_count: int = 0
+                            margin: int = None,
+                            filter_count: int = None
                             ) -> Tuple[
                                         BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
                                         MarginLoss | BinaryCrossEntropyLoss
@@ -496,9 +496,9 @@ class Architect(Module):
             decoder_name = decoder_config["name"]
         if dissimilarity == "":
             dissimilarity = decoder_config["dissimilarity"]
-        if margin == 0:
+        if margin is None:
             margin = decoder_config["margin"]
-        if filter_count == 0:
+        if filter_count is None:
             filter_count = decoder_config["filter_count"]
 
         # Translational models
@@ -1019,7 +1019,7 @@ class Architect(Module):
                 if trainer.state.epoch < self.max_epochs:
                     logging.info(f"Starting from epoch {trainer.state.epoch}")
                     if not dry_run:
-                        trainer.run(data_loader)
+                        trainer.run(data_loader, max_epochs = self.max_epochs)
                 else:
                     logging.info(f"Training already completed. Last epoch is {trainer.state.epoch} and max_epochs is set to {self.max_epochs}")
             else:
@@ -1075,7 +1075,7 @@ class Architect(Module):
 
         total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(self.kg_test, remaining_edges)
 
-        global_metrics = (group_metrics_remaining + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
+        global_metrics = (metrics_sum_target_edges + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
 
         logging.info(f"Final Test metrics with best model: {global_metrics}")
 
@@ -1145,18 +1145,18 @@ class Architect(Module):
         full_kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test], True)
 
         if do_heads_inference:
-            first_known_triplet_part = tensor([self.kg_train.node_to_index[tail] for tail in tails]).long()
-            second_known_triplet_part = tensor([self.kg_train.edge_to_index[edge] for edge in edges]).long()
+            first_known_triplet_part = tensor([full_kg.node_to_index[tail] for tail in tails]).long()
+            second_known_triplet_part = tensor([full_kg.edge_to_index[edge] for edge in edges]).long()
             missing_triplet_part = "head"
             inference = NodeInference(full_kg)
         elif do_tails_inference:
-            first_known_triplet_part = tensor([self.kg_train.node_to_index[head] for head in heads]).long()
-            second_known_triplet_part = tensor([self.kg_train.edge_to_index[edge] for edge in edges]).long()
+            first_known_triplet_part = tensor([full_kg.node_to_index[head] for head in heads]).long()
+            second_known_triplet_part = tensor([full_kg.edge_to_index[edge] for edge in edges]).long()
             missing_triplet_part = "tail"
             inference = NodeInference(full_kg)
         elif do_edges_inference:
-            first_known_triplet_part = tensor([self.kg_train.node_to_index[head] for head in heads]).long()
-            second_known_triplet_part = tensor([self.kg_train.node_to_index[tail] for tail in tails]).long()
+            first_known_triplet_part = tensor([full_kg.node_to_index[head] for head in heads]).long()
+            second_known_triplet_part = tensor([full_kg.node_to_index[tail] for tail in tails]).long()
             missing_triplet_part = "edge"
             inference = EdgeInference(full_kg)
             
@@ -1172,7 +1172,7 @@ class Architect(Module):
             edge_embeddings = self.edge_embeddings
         )
 
-        index_to_node = {value: key for key, value in self.kg_train.node_to_index.items()}
+        index_to_node = {value: key for key, value in full_kg.node_to_index.items()}
         prediction_index = predictions.reshape(-1)
         prediction_names = np.vectorize(index_to_node.get)(prediction_index)
 
@@ -1697,7 +1697,7 @@ class Architect(Module):
         for edge_name in edge_indices:
             # Get triplets associated with index
             edge_index = kg.edge_to_index.get(edge_name)
-            indices_to_keep = torch.nonzero(kg.edge_indices == edge_index, as_tuple = False).squeeze()
+            indices_to_keep = torch.nonzero(kg.edge_indices == edge_index, as_tuple = False).squeeze(1)
 
             if indices_to_keep.numel() == 0:
                 continue  # Skip to next edge if no triplet found
