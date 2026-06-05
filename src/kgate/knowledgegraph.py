@@ -22,6 +22,7 @@ from torch.utils.data import Dataset
 from torch.types import Number
 
 from torch_geometric.data import HeteroData
+from torch_geometric.utils import k_hop_subgraph
 
 import torchkge
 
@@ -46,8 +47,10 @@ class EncoderInput:
     edge_list: Dict[Tuple[str,str,str], Tensor]
         Pytorch Geometric equivalent to `graphindices`.
         Each key is the tuple representing the triplet type, and the tensors are of shape [2,n] where n is the number of triplets of this type.
-    mapping: Dict[str, Tensor]
-        Dictionary allowing the mapping of nodes within the `x_dict` to their global index in the knowledge graph.
+    node_mapping: Dict[str, Tensor]
+        Dictionary allowing the mapping of all nodes within the `x_dict` to their global index in the knowledge graph.
+    seed_mapping: Dict[str, Tensor]
+        Dictionary containing the same mapping as above, but only for nodes used to generate the input.
 
     Attributes
     ----------
@@ -58,18 +61,21 @@ class EncoderInput:
     edge_list: Dict[Tuple[str,str,str], Tensor]
         Pytorch Geometric equivalent to `graphindices`.
         Each key is the tuple representing the triplet type, and the tensors are of shape [2,n] where n is the number of triplets of this type.
-    mapping: Dict[str, Tensor]
+    node_mapping: Dict[str, Tensor]
         Dictionary allowing the mapping of nodes within the `x_dict` to their global index in the knowledge graph.
-    
+    seed_mapping: Dict[str, Tensor]
+        Dictionary containing the same mapping as above, but only for nodes used to generate the input.
     """
     def __init__(self,
                 x_dict: Dict[str, Tensor],
                 edge_list: Dict[Tuple[str,str,str], Tensor],
-                mapping: Dict[str, Tensor]):
+                node_mapping: Dict[str, Tensor],
+                seed_mapping: Dict[str, Tensor]):
         
         self.x_dict = x_dict
         self.edge_index = edge_list
-        self.mapping = mapping
+        self.node_mapping = node_mapping
+        self.seed_mapping = seed_mapping
 
 
     def __repr__(self):
@@ -83,7 +89,7 @@ class EncoderInput:
         ])
         mapping_repr = "\n\t".join([
             f"{node_type}: {index}"
-            for node_type, index in self.mapping.items()
+            for node_type, index in self.node_mapping.items()
         ])
 
         message = f"""{self.__class__.__name__} (
@@ -1127,18 +1133,22 @@ class KnowledgeGraph(Dataset):
         return selected_edges
 
 
-    def get_encoder_input(  self,
-                            data: Tensor,
-                            node_embedding: nn.ParameterList
+    def get_encoder_input(  self, 
+                            *,
+                            seed_nodes: Tensor,
+                            hop_count: int,
+                            node_embeddings: nn.ParameterList
                             ) -> EncoderInput:
         """
         From a `graphindices`-like tensor and node embeddings, build the `EncoderInput` object that will be fed to the GNN encoder.
 
         Arguments
         ---------
-        data: torch.Tensor, shape: [4, batch_size]
-            `graphindices`-like tensor
-        node_embedding: nn.ParameterList
+        seed_nodes: torch.Tensor, shape: [batch_size]
+            Tensor containing the unique nodes that will be the source of the encoder input.
+        hop_count: int
+            How far the subgraph will be sampled. Must correspond to the number of GNN layers.
+        node_embeddings: nn.ParameterList
             A list containing all embeddings for each node type.
             keys: node type index
             values: tensors of shape (node_count, embedding_dimensions)
@@ -1155,11 +1165,30 @@ class KnowledgeGraph(Dataset):
             from a subsampling according to a given batch.
         
         """
-        assert data.device == node_embedding[0].device
-        device = data.device
+        device = node_embeddings[0].device
+        
+        subset, edge_index, mapping, edge_mask = k_hop_subgraph(
+            node_idx = seed_nodes,
+            num_hops = hop_count,
+            edge_index = self.edge_list
+        )
 
-        triplet_type_indices = data[3].unique()
-        node_indices: Dict[str, Tensor] = defaultdict(Tensor)
+        subgraph = self.graphindices[:, edge_mask].to(device)
+
+        # All seed nodes not present in the subgraph are put in this dictionary 
+        # to be used in the self-loop addition at the end of this function        
+        missing_nodes_indices: Dict[str, Tensor] = defaultdict(lambda: torch.empty(0, dtype=torch.long, device=device)) # key : node type, value: isolated node indices
+        uniques, counts = torch.cat((subgraph[:2].unique(), seed_nodes.to(device))).unique(return_counts=True)
+        index_to_node_type = {v: k for k,v in self.node_type_to_index.items()}
+
+        for missing_node in uniques[counts == 1]:
+            node_type = index_to_node_type[self.node_types[missing_node].item()]
+            missing_nodes_indices[node_type] = torch.cat([missing_nodes_indices[node_type], missing_node.reshape(1)])
+
+        triplet_type_indices = subgraph[3].unique()
+        # Create empty tensor to preallocate memory with the correct dtype and device 
+        node_indices: Dict[str, Tensor] = defaultdict(lambda: torch.empty(0, dtype=torch.long, device=device))
+        seed_mapping = {}
 
         pyg_edge_index = {}
         x_dict = {}
@@ -1168,14 +1197,14 @@ class KnowledgeGraph(Dataset):
             triplet_type = self.triplet_types[triplet_index]
             head_node_type, _, tail_node_type = triplet_type
 
-            mask: Tensor = data[3] == triplet_index
-            triplets = data[:, mask]
+            mask: Tensor = subgraph[3] == triplet_index
+            triplets = subgraph[:, mask]
 
             source_nodes = triplets[0]
             target_nodes = triplets[1]
 
-            node_indices[head_node_type] = torch.cat([node_indices[head_node_type].to(device), source_nodes]).long().unique()
-            node_indices[tail_node_type] = torch.cat([node_indices[tail_node_type].to(device), target_nodes]).long().unique()
+            node_indices[head_node_type] = torch.cat([node_indices[head_node_type], source_nodes]).long().unique()
+            node_indices[tail_node_type] = torch.cat([node_indices[tail_node_type], target_nodes]).long().unique()
 
             head_sorted_identifiers, head_sorted_indices = torch.sort(node_indices[head_node_type])
             head_list = head_sorted_indices[torch.searchsorted(head_sorted_identifiers, source_nodes)]
@@ -1190,17 +1219,44 @@ class KnowledgeGraph(Dataset):
             pyg_edge_index[triplet_type] = edge_list.to(device)
         
         self.global_to_local_indices = self.global_to_local_indices.to(device)
-        for node_type, index in node_indices.items():
-            local_index = self.global_to_local_indices[index]
-            x_dict[node_type] = node_embedding[self.node_type_to_index[node_type]][local_index]
+
+        # If we have node types without any sampled edge, we add them forcefully to node_indices here
+        missing_node_types = [missing_node_type_key for missing_node_type_key in missing_nodes_indices if missing_node_type_key not in node_indices.keys()]
+        for missing_node_type in missing_node_types:
+            node_indices[missing_node_type] = missing_nodes_indices[missing_node_type]
+            del missing_nodes_indices[missing_node_type]
+                                  
+        for node_type, indices in node_indices.items():
+            node_type_index = self.node_type_to_index[node_type]
+            # Add missing nodes back here to be considered in the final input
+            indices = cat((indices, missing_nodes_indices[node_type])).long()
+            node_indices[node_type] = indices
+
+            local_index = self.global_to_local_indices[indices]
+            x_dict[node_type] = node_embeddings[node_type_index][local_index]
             
             # We add self-loops to each nodes, to make sure they are their own neighbors.
             triplet_type = (node_type, "self", node_type)
-            self_loops = torch.arange(index.size(0), device = device)
+            self_loops = torch.arange(indices.size(0), device = device)
             edge_index_self = torch.stack([self_loops, self_loops], dim = 0)
             pyg_edge_index[triplet_type] = edge_index_self
 
-        encoder_input = EncoderInput(x_dict, pyg_edge_index, node_indices)
+            #seed node mapping
+            node_type_mask = (self.node_types[seed_nodes] == node_type_index)
+            current_seed_nodes = seed_nodes[node_type_mask]
+
+            if len(current_seed_nodes) == 0:
+                continue
+
+            sorted_ids, permutation = torch.sort(indices)
+
+            local_seed_positions = permutation[
+                torch.searchsorted(sorted_ids, current_seed_nodes.to(device))
+            ]
+
+            seed_mapping[node_type] = local_seed_positions
+
+        encoder_input = EncoderInput(x_dict, pyg_edge_index, node_indices, seed_mapping)
         
         return encoder_input
 

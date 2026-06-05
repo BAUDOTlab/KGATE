@@ -1370,17 +1370,13 @@ class Architect(Module):
         head_indices, tail_indices, edge_indices = batch[0], batch[1], batch[2]
         
         if isinstance(self.encoder, GNN):
-            seed_nodes: Tensor = batch[:2].unique()
+            seed_nodes: Tensor = batch[:2].unique().cpu()
             hop_count: int = self.encoder.layer_count
-            edge_list: Tensor = kg.edge_list
-            
-            _,_,_, edge_mask = k_hop_subgraph(
-                node_idx = seed_nodes,
-                num_hops = hop_count,
-                edge_index = edge_list
-                )
-                
-            input = kg.get_encoder_input(kg.graphindices[:, edge_mask].to(self.device), self.node_embeddings)
+
+            input = kg.get_encoder_input(
+                seed_nodes = seed_nodes,
+                hop_count = hop_count, 
+                node_embeddings = self.node_embeddings)
 
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
@@ -1392,7 +1388,7 @@ class Architect(Module):
                                                     device = self.device,
                                                     dtype = torch.float)
 
-            for node_type, index in input.mapping.items():
+            for node_type, index in input.node_mapping.items():
                 embeddings[index] = encoder_output[node_type]
 
         else:
@@ -1424,17 +1420,26 @@ class Architect(Module):
         
         if isinstance(self.encoder, GNN):
             node_embeddings: torch.Tensor = torch.zeros((self.kg_train.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
-            full_kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
+            full_kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test])
 
             with torch.no_grad():
+                all_nodes = full_kg.graphindices[:2].unique()
                 # TODO: use not the whole graphindices but the unique nodes instead
-                for i in range(full_kg.graphindices.shape[1] // self.train_batch_size + 1):
-                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * self.train_batch_size : (i + 1) * self.train_batch_size].to(self.device), self.node_embeddings)
+                for i in range((full_kg.graphindices.shape[1] // self.train_batch_size) + 1):
+                    seed_nodes = all_nodes[i * self.train_batch_size : (i + 1) * self.train_batch_size]
+                    
+                    input = full_kg.get_encoder_input(
+                        seed_nodes = seed_nodes,
+                        hop_count = self.encoder.layer_count,
+                        node_embeddings = self.node_embeddings
+                        )
 
                     encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
-                    for node_type, indices in input.mapping.items():
-                        node_embeddings[indices] = encoder_output[node_type].cpu()
+                    for node_type, indices in input.seed_mapping.items():
+                        node_type_index = full_kg.node_type_to_index[node_type]
+                        node_type_mask = (full_kg.node_types[seed_nodes] == node_type_index)
+                        node_embeddings[seed_nodes[node_type_mask]] = encoder_output[node_type][indices].cpu()
         else:
             node_embeddings = self.node_embeddings[0].data.cpu()
 
