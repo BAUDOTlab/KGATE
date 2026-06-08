@@ -1,12 +1,16 @@
 import os
-from typing import Sequence, List, Literal
+from typing import Sequence, List, Literal, Tuple
 import logging
 
 from pathlib import Path
 import tomllib
+import tomli_w
 from importlib.resources import open_binary
 
-from .constants import SUPPORTED_ENCODERS, SUPPORTED_DECODERS
+from .constants import SUPPORTED_ENCODERS, SUPPORTED_DECODERS, SUPPORTED_SAMPLERS
+from .utils import set_random_seeds
+
+import torch
 
 logging_level = logging.INFO
 logging.basicConfig(
@@ -20,7 +24,7 @@ class Config:
         self._configuration = Config.parse(config_path, config_dict)
 
     @staticmethod
-    def parse(config_path: os.PathLike, config_dictionnary: dict):
+    def parse(self, config_path: os.PathLike, config_dictionnary: dict):
         """
         Parse the configuration file and integrates it with the default and inline configurations.
         
@@ -71,7 +75,7 @@ class Config:
         # 2. Configuration file (config)
         # 3. Default configuration (default_config)
         # If a default value is None, consider it required and not defaultable
-        config = {  key: set_config_key(key, default_config, config, config_dictionnary)
+        config = {  key: Config.set_config_key(key, default_config, config, config_dictionnary)
                     for key
                     in default_config}
 
@@ -137,7 +141,7 @@ class Config:
                 # If they exist, keys are taken from inline inputs
                 keys += (list(inline_value.keys()))
             for child_key in set(keys):
-                new_value.update({child_key: set_config_key(child_key, default[key], config_value, inline_value)})
+                new_value.update({child_key: Config.set_config_key(child_key, default[key], config_value, inline_value)})
             return new_value
         
         # Return the key value in priority from: inline, config, default
@@ -280,7 +284,7 @@ class Config:
 
     @node_embedding_dimensions.setter
     def set_node_embedding_dimensions(self, dimensions: int):
-        assert dimensions > 0 and isintance(dimensions, int), f"The node embedding dimension must be a positive integer, but got {dimensions}"
+        assert dimensions > 0 and isinstance(dimensions, int), f"The node embedding dimension must be a positive integer, but got {dimensions}"
 
         self._configuration["model"]["node_embedding_dimensions"] = dimensions
 
@@ -300,7 +304,7 @@ class Config:
 
     @edge_embedding_dimensions.setter
     def set_edge_embedding_dimensions(self, dimensions: int):
-        assert (dimensions > 0 or dimensions == -1) and isintance(dimensions, int), f"The edge embedding dimension must be a positive integer or -1, but got {dimensions}"
+        assert (dimensions > 0 or dimensions == -1) and isinstance(dimensions, int), f"The edge embedding dimension must be a positive integer or -1, but got {dimensions}"
 
         self._configuration["model"]["edge_embedding_dimensions"] = dimensions
 
@@ -548,7 +552,7 @@ class Encoder_Config:
 
     @name.setter
     def set_name(self, name: str):
-        assert name in self.supported_encoders, f"Unsupported encoder given. KGATE supports {', '.join(supported_encoders)} but got {name}. If you want to register a custom encoder name, use Config.encoder.register_name()"
+        assert name in self.supported_encoders, f"Unsupported encoder given. KGATE supports {', '.join(SUPPORTED_ENCODERS)} but got {name}. If you want to register a custom encoder name, use Config.encoder.register_name()"
 
         self._configuration["name"] = name
 
@@ -639,7 +643,7 @@ class Decoder_Config:
 
     @name.setter
     def set_name(self, name: str):
-        assert name in self.supported_decoders, f"Unsupported decoder given. KGATE supports {', '.join(supported_decoders)} but got {name}. If you want to register a custom decoder name, use Config.decoder.register_name()"
+        assert name in self.supported_decoders, f"Unsupported decoder given. KGATE supports {', '.join(SUPPORTED_DECODERS)} but got {name}. If you want to register a custom decoder name, use Config.decoder.register_name()"
 
         self._configuration["name"] = name
 
@@ -716,3 +720,164 @@ class Decoder_Config:
     def set_filter_count(self, filter_count: int):
         assert filter_count >= 1, "Cannot use less than one filter."
         self._configuration["filter_count"] = filter_count
+
+class Sampler_Config:
+    """
+    Sampler part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    sampler_configuration: dict
+        Dictionary containing only the sampler configuration.
+    """
+    def __init__(self, sampler_configuration):
+        self._configuration = sampler_configuration
+
+        self.supported_samplers = SUPPORTED_SAMPLERS
+
+        # If we load a configuration with an unsupported sampler name, 
+        # assume it is correct but warn the user.
+        if sampler_configuration["name"] not in SUPPORTED_SAMPLERS:
+            logging.warn(f"Sampler name {sampler_configuration["name"]} is not a builtin KGATE negative sampler. It will be considered a custom negative sampler.")
+            self.register_name(sampler_configuration["name"])
+
+
+    @property
+    def name(self) -> str:
+        """
+        The type of negative sampler that will generate false triplets during
+        the training.
+
+        Supported options are:
+         - Positional: proposed by Socher et al. 2011, replaces either the head or tail of a triplet by another node in the same place with the same edge.
+         - Uniform: proposed by Bordes et al. 2013, replaces either the head or tail by another node at random following an uniform distribution.
+         - Bernoulli: proposed by Wang et al. 2014, replaces either the head or tail using probabilities taking edges into account.
+         - Mixed: proposed by Brière et al. 2025, combines the three negative samplers above, sampling negative_triplet_count negative samples for each triplet.
+        """
+        return self._configuration["name"]
+    
+    @name.setter
+    def set_name(self, new_name):
+        assert new_name in self.supported_samplers, f"Unsupported negative sampler given. KGATE supports {', '.join(SUPPORTED_SAMPLERS)} but got {new_name}. If you want to register a custom negative sampler name, use Config.sampler.register_name()"
+
+        self._configuration["name"] = new_name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid negative sampler.
+
+        Adds the given name to the list of supported negative samplers and set it
+        as the current negative sampler name in the configuration.
+
+        KGATE has a limited set of builtin negative samplers and validates inputs
+        against this list. To make sure your custom negative sampler pass the
+        sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the negative sampler to register.
+        """
+         
+        self.supported_samplers.append(name)
+
+        self.name = name
+
+    @property
+    def negative_triplet_count(self) -> int:
+        """
+        The number of negative samples that will be generated for each triplet.
+        """
+        return self._configuration["negative_triplet_count"]
+
+    @negative_triplet_count.setter
+    def set_negative_triplet_count(self, new_count: int):
+        assert new_count > 0, f"KGE models need at least 1 negative triplet per true triplet to be trained, but got {new_count}"
+
+        self._configuration["negative_triplet_count"] = new_count
+
+class Optimizer_Config:
+    """
+    Optimizer part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    optimizer_configuration: dict
+        Dictionary containing only the optimizer configuration.
+    """
+    def __init__(self, optimizer_configuration):
+        self._configuration = optimizer_configuration
+        self._other_parameters = {}
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the PyTorch optimizer used to guide training.
+
+        It is identical to the name of the algorithms in torch.optim.
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def set_name(self, new_name: str):
+        assert new_name in dir(torch.optim), f"The optimizer name {new_name} is not a valid PyTorch optimizer."
+
+        self._configuration["name"] = new_name
+
+    @property
+    def weight_decay(self) -> float:
+        """
+        Weight reduction at each epoch.
+
+        See PyTorch documentation for details.
+        """
+        return self._configuration["weight_decay"]
+
+    @weight_decay.setter
+    def set_weight_decay(self, new_decay: float):
+        assert 0 <= new_decay <= 1, f"weight_decay must be between 0 and 1, but got {new_decay}"
+
+        self._configuration["weight_decay"] = new_decay
+
+    @property
+    def learning_rate(self) -> float:
+        """
+        The initial learning rate.
+
+        It may evolve during training if a learning rate scheduler is set up.
+        """
+        return self._configuration["learning_rate"]
+
+    @learning_rate.setter
+    def set_learning_rate(self, new_learning_rate):
+        assert 0 <= new_learning_rate <= 1, f"learning_rate must be between 0 and 1, but got {new_learning_rate}"
+
+        self._configuration["learning_rate"] = new_learning_rate
+
+    @property
+    def other_parameters(self) -> dict:
+        """
+        A dictionary containing optimizer parameters not included in KGATE default configuration.
+        """
+        return self._other_parameters
+
+    @other_parameters.setter
+    def set_other_parameters(self, parameters: dict):
+        self._other_parameters = parameters
+
+    @property
+    def parameters(self) -> dict:
+        """
+        The optimizer parameter dictionary, formatted to be directly passed to the PyTorch optimizer constructor.
+        """
+        return {
+            "weight_decay": self.weight_decay,
+            "lr": self.learning_rate,
+            **self.other_parameters
+        }

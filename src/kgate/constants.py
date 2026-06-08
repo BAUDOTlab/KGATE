@@ -20,3 +20,11 @@ SUPPORTED_DECODERS = [
     "ComplEx",
     "ConvKB"
 ]
+
+# Builtin KGATE negative samplers
+SUPPORTED_SAMPLERS = [
+    "Positional",
+    "Uniform",
+    "Bernoulli",
+    "Mixed"
+]
