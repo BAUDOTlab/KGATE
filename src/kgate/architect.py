@@ -124,6 +124,10 @@ class Architect(Module):
     decoder_loss: MarginLoss or BinaryCrossEntropyLoss
         The loss object associated with the proper decoder, but may be overwritten.
         Either `MarginLoss(margin)` or `BinaryCrossEntropyLoss()`.
+    skip_normalization: bool, default to False
+        Some decoders should not normalize their parameters. To avoid unnecessary calls during training,
+        this flag allows the trainer to skip the normalization step completely. This is done automatically by detecting whether
+        the decoder has a "normalize_parameters" method, but can be overwritten if needed.
     sampler: NegativeSampler
         Negative sampler.
         For more details, refer to the `initialize_sampler` function.
@@ -252,6 +256,7 @@ class Architect(Module):
         self.encoder: DefaultEncoder | GNN = None
         self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
         self.decoder_loss: MarginLoss | BinaryCrossEntropyLoss = None
+        self.skip_normalization: bool = False
         self.optimizer: optim.Optimizer = None
         self.sampler: NegativeSampler = None
         self.scheduler: optim.lr_scheduler.LRScheduler | None = None
@@ -547,6 +552,9 @@ class Architect(Module):
                 decoder_loss = BinaryCrossEntropyLoss()
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
+
+        if not callable(getattr(decoder, "normalize_parameters", None)):
+            self.skip_normalization = True
 
         return decoder, decoder_loss
 
@@ -1334,7 +1342,8 @@ class Architect(Module):
 
         self.optimizer.step()
 
-        self.normalize_parameters()
+        if not self.skip_normalization:
+            self.normalize_parameters()
 
         return loss.item()
 

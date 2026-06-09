@@ -408,7 +408,7 @@ class TripletClassificationEvaluator:
         self.architect = architect
         self.kg_validation = kg_validation
         self.kg_test = kg_test
-        self.device = self.architect.device.type == "cuda"
+        self.is_cuda = self.architect.device.type == "cuda"
 
         self.evaluated = False
         self.thresholds = None
@@ -556,4 +556,4 @@ class TripletClassificationEvaluator:
         negative_scores = (negative_scores < self.thresholds[edge_indices])
 
         return (scores.sum().item() +
-                negative_scores.sum().item()) / (2 * self.kg_test.triplet_count)
+                negative_scores.sum().item()) / (2 * kg_test.triplet_count)

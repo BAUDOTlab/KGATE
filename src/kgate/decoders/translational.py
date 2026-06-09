@@ -104,41 +104,41 @@ class TranslationalDecoder(Module):
         """
         raise NotImplementedError("The `score` method must be implemented by the translational decoder.")
 
+    #TODO: either remove completely from the interface or add a normalisation flag
+    # def normalize_parameters(self,
+    #                         node_embeddings: nn.ParameterList,
+    #                         edge_embeddings: nn.Embedding
+    #                         ) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+    #     """
+    #     Interface method for the decoder's parameters normalization function.
 
-    def normalize_parameters(self,
-                            node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding] | None:
-        """
-        Interface method for the decoder's parameters normalization function.
-
-        Refer to the specific decoder for details on this function's implementation.
+    #     Refer to the specific decoder for details on this function's implementation.
         
-        Arguments
-        ---------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            The node embedding as a ParameterList containing one Parameter by node type,
-            or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The edge embedding as a nn.Embedding containing one Parameter by edge type,
-            or only one if there is no node type.
+    #     Arguments
+    #     ---------
+    #     node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
+    #         The node embedding as a ParameterList containing one Parameter by node type,
+    #         or only one if there is no node type.
+    #     edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
+    #         The edge embedding as a nn.Embedding containing one Parameter by edge type,
+    #         or only one if there is no node type.
         
-        Returns
-        -------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The normalized edge embedding object.
+    #     Returns
+    #     -------
+    #     node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
+    #         The normalized node embedding object.
+    #     edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
+    #         The normalized edge embedding object.
         
-        Notes
-        -----
-        The normalize_parameters method can be implemented by a translational decoder inheriting from this class
-        if it has specific parameters to normalize.
-        If the decoder doesn't have dedicated normalization, nothing is returned. In 
-        this case, it is not necessary to implement this method from the interface.
+    #     Notes
+    #     -----
+    #     The normalize_parameters method can be implemented by a translational decoder inheriting from this class
+    #     if it has specific parameters to normalize.
+    #     If the decoder doesn't have dedicated normalization, nothing is returned. In 
+    #     this case, it is not necessary to implement this method from the interface.
         
-        """
-        return None
+    #     """
+    #     return None
 
 
     def get_embeddings(self) -> Dict[str, Tensor] | None:

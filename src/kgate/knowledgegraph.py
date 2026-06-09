@@ -462,7 +462,7 @@ class KnowledgeGraph(Dataset):
         assert self.metadata is not None, "You need to add metadata in order to set an identity."
         assert new_identity in self.metadata, f"The given identity is not a valid metadata name. Valid names are: {self.metadata.columns}."
 
-        if not self.metadata[new_identity].is_unique():
+        if not self.metadata[new_identity].is_unique:
             logging.warning(f"All values are not unique across identity {new_identity}, which may introduce ambiguities. Unexpected output may come from inference.")
         
         self._identity = new_identity
@@ -495,7 +495,7 @@ class KnowledgeGraph(Dataset):
             assert metadata.shape[0] == self.node_count, f"The number of rows in the metadata dataframe must match the number of nodes in the graph, but found {metadata.shape[0]} rows for {self.node_count} nodes."
             self.metadata = metadata
         else:
-            assert "id" in metadata.columns and metadata["id"] == self.metadata["id"], "The metadata dataframe must have an `id` column identical to the existing metadata."
+            assert "id" in metadata.columns and (metadata["id"] == self.metadata["id"]).all(), "The metadata dataframe must have an `id` column identical to the existing metadata."
             self.metadata = pd.merge(self.metadata, metadata, on = "id")
 
 
@@ -1349,7 +1349,7 @@ class KnowledgeGraph(Dataset):
             graphindices = torch.stack([torchkge_kg.head_idx,
                                         torchkge_kg.tail_idx,
                                         torchkge_kg.relations,
-                                        tensor(0).repeat(torchkge_kg.n_facts)],
+                                        torch.zeros(torchkge_kg.n_facts, dtype = torch.long)],
                                         dim = 0).long()
             node_type_to_index = {"Node":0}
             triplet_types = [("Node", edge, "Node")
