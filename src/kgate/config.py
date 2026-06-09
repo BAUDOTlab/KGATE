@@ -1,3 +1,4 @@
+from torch.distributed import new_subgroups
 from typing import Any
 import os
 from typing import Sequence, List, Literal, Tuple
@@ -9,7 +10,7 @@ import tomli_w
 from importlib.resources import open_binary
 
 from .constants import SUPPORTED_ENCODERS, SUPPORTED_DECODERS, SUPPORTED_SAMPLERS
-from .utils import set_random_seeds
+from .utils import random_seeds
 
 import torch
 
@@ -23,6 +24,15 @@ logging.basicConfig(
 class Config:
     def __init__(self, *, config_path: os.PathLike = "", config_dict: dict  = {}):
         self._configuration = Config.parse(config_path, config_dict)
+
+        self.preprocessing = Preprocessing_Config(self._configuration["preprocessing"])
+        self.encoder = Encoder_Config(self._configuration["model"]["encoder"])
+        self.decoder = Decoder_Config(self._configuration["model"]["decoder"])
+        self.negative_sampler = Sampler_Config(self._configuration["negative_sampler"])
+        self.optimizer = Optimizer_Config(self._configuration["optimizer"])
+        self.learning_rate_scheduler = Learning_Rate_Scheduler_Config(self._configuration["learning_rate_scheduler"])
+        self.training = Training_Config(self._configuration["training"])
+        self.evaluation = Evaluation_Config(self._configuration["evaluation"])
 
     @staticmethod
     def parse(config_path: os.PathLike, config_dictionnary: dict):
@@ -189,10 +199,10 @@ class Config:
         return self._configuration["seed"]
     
     @seed.setter
-    def set_seed(self, new_seed: int):
+    def seed(self, new_seed: int):
         if new_seed != self.seed:
             logging.warn("The seed has changed in the configuration! All random generators reset according to the new seed.")
-            set_random_seeds(new_seed)
+            random_seeds(new_seed)
 
         self._configuration["seed"] = new_seed
 
@@ -206,7 +216,7 @@ class Config:
         return Path(self._configuration["kg_csv"])
 
     @knowledge_graph_csv_file.setter
-    def set_knowledge_graph_csv_file(self, path: os.PathLike):
+    def knowledge_graph_csv_file(self, path: os.PathLike):
         if path != "" and not Path(path).exists():
             raise FileNotFoundError(f"The knowledge graph file has not been found at path {path}.")
 
@@ -220,7 +230,7 @@ class Config:
         return Path(self._configuration["kg_pkl"])
 
     @knowledge_graph_pickle_file.setter
-    def set_knowledge_graph_pickle_file(self, path: os.PathLike):
+    def knowledge_graph_pickle_file(self, path: os.PathLike):
         if path != "" and not Path(path).exists():
             raise FileNotFoundError(f"The knowledge graph file has not been found at path {path}.")
 
@@ -238,7 +248,7 @@ class Config:
         return Path(self._configuration["metadata_csv"])
     
     @metadata_path.setter
-    def set_metadata_path(self, path: os.PathLike):
+    def metadata_path(self, path: os.PathLike):
         if path != "" and not Path(path).exists():
             raise FileNotFoundError(f"The metadata file has not been found at path {path}.")
 
@@ -252,7 +262,7 @@ class Config:
         return Path(self._configuration["output_directory"])
 
     @output_directory.setter
-    def set_output_directory(self, path: os.PathLike):
+    def output_directory(self, path: os.PathLike):
         Path(path).mkdir(parents = True, exist_ok = True)
         self._configuration["output_directory"] = path
 
@@ -266,7 +276,7 @@ class Config:
         return self._configuration["verbose"]
     
     @verbose.setter
-    def set_verbose(self, verbose: bool):
+    def verbose(self, verbose: bool):
         self._configuration["verbose"] = verbose
 
     @property
@@ -284,7 +294,7 @@ class Config:
         return self._configuration["model"]["node_embedding_dimensions"]
 
     @node_embedding_dimensions.setter
-    def set_node_embedding_dimensions(self, dimensions: int):
+    def node_embedding_dimensions(self, dimensions: int):
         assert dimensions > 0 and isinstance(dimensions, int), f"The node embedding dimension must be a positive integer, but got {dimensions}"
 
         self._configuration["model"]["node_embedding_dimensions"] = dimensions
@@ -304,7 +314,7 @@ class Config:
         return self._configuration["model"]["edge_embedding_dimensions"]
 
     @edge_embedding_dimensions.setter
-    def set_edge_embedding_dimensions(self, dimensions: int):
+    def edge_embedding_dimensions(self, dimensions: int):
         assert (dimensions > 0 or dimensions == -1) and isinstance(dimensions, int), f"The edge embedding dimension must be a positive integer or -1, but got {dimensions}"
 
         self._configuration["model"]["edge_embedding_dimensions"] = dimensions
@@ -348,7 +358,7 @@ class Preprocessing_Config:
         return self._configuration["run_kg_preprocessing"]
 
     @run.setter
-    def set_run(self, run_preprocessing: bool):
+    def run(self, run_preprocessing: bool):
         self._configuration["run_kg_preprocessing"] = run_preprocessing
     
     @property
@@ -361,7 +371,7 @@ class Preprocessing_Config:
         return self._configuration["remove_duplicate_triplets"]
 
     @remove_duplicate_triplets.setter
-    def set_remove_duplicate_triplets(self, remove_duplicate_triplets: bool):
+    def remove_duplicate_triplets(self, remove_duplicate_triplets: bool):
         self._configuration["remove_duplicate_triplets"] = remove_duplicate_triplets
 
     @property
@@ -378,7 +388,7 @@ class Preprocessing_Config:
         return self._configuration["make_directed_edges"]
 
     @make_directed.setter
-    def set_make_directed(self, edges_to_direct: List[str] | Literal["all"]):
+    def make_directed(self, edges_to_direct: List[str] | Literal["all"]):
         if isinstance(edges_to_direct, str):
             assert edges_to_direct == "all", "The edges to make directed must be either a list of edges or \"all\" to make the whole graph directed."
 
@@ -412,7 +422,7 @@ class Preprocessing_Config:
         return self._configuration["flag_near_duplicate_edges"]
 
     @flag_near_duplicate_edges.setter
-    def set_flag_near_duplicate_edges(self, flag: bool):
+    def flag_near_duplicate_edges(self, flag: bool):
         self._configuration["flag_near_duplicate_edges"] = flag
 
     @property
@@ -441,7 +451,7 @@ class Preprocessing_Config:
         return self._configuration["theta_first_edge_type"]
 
     @theta_first_edge_type.setter
-    def set_theta_first_edge_type(self, theta: float):
+    def theta_first_edge_type(self, theta: float):
         assert theta >= 0 and theta <= 1, f"Theta value must be between 0 and 1, got {theta}"
 
         self._configuration["theta_first_edge_type"] = theta
@@ -472,7 +482,7 @@ class Preprocessing_Config:
         return self._configuration["theta_second_edge_type"]
 
     @theta_second_edge_type.setter
-    def set_theta_second_edge_type(self, theta: float):
+    def theta_second_edge_type(self, theta: float):
         assert theta >= 0 and theta <= 1, f"Theta value must be between 0 and 1, got {theta}"
 
         self._configuration["theta_second_edge_type"] = theta
@@ -490,7 +500,7 @@ class Preprocessing_Config:
         return self._configuration["clean_train_set"]
     
     @clean_train_set.setter
-    def set_clean_train_set(self, clean: bool):
+    def clean_train_set(self, clean: bool):
         self._configuration["clean_train_set"] = clean
 
     @property
@@ -505,7 +515,7 @@ class Preprocessing_Config:
         return self._configuration["split"]
     
     @split_proportions.setter
-    def set_split_proportions(self, proportions: Sequence[int, int, int]):
+    def split_proportions(self, proportions: Sequence[int, int, int]):
         assert sum(proportions) == 1, f"The sum of all proportions must be 1 but got {sum(proportions)}."
 
         self._configuration["split"] = proportions
@@ -552,7 +562,7 @@ class Encoder_Config:
         return self._configuration["name"]
 
     @name.setter
-    def set_name(self, name: str):
+    def name(self, name: str):
         assert name in self.supported_encoders, f"Unsupported encoder given. KGATE supports {', '.join(SUPPORTED_ENCODERS)} but got {name}. If you want to register a custom encoder name, use Config.encoder.register_name()"
 
         self._configuration["name"] = name
@@ -590,7 +600,7 @@ class Encoder_Config:
         return self._configuration["gnn_layer_number"]
 
     @gnn_layers.setter
-    def set_gnn_layers(self, gnn_layers: int):
+    def gnn_layers(self, gnn_layers: int):
         assert gnn_layers >= 0 and isinstance(gnn_layers, int), f"GNN layers must be 0 or a positive integer, but got {gnn_layers}"
 
         self._configuration["gnn_layer_number"] = gnn_layers
@@ -643,7 +653,7 @@ class Decoder_Config:
         return self._configuration["name"]
 
     @name.setter
-    def set_name(self, name: str):
+    def name(self, name: str):
         assert name in self.supported_decoders, f"Unsupported decoder given. KGATE supports {', '.join(SUPPORTED_DECODERS)} but got {name}. If you want to register a custom decoder name, use Config.decoder.register_name()"
 
         self._configuration["name"] = name
@@ -682,7 +692,7 @@ class Decoder_Config:
         return self._configuration["margin"]
 
     @margin.setter
-    def set_margin(self, margin: int) -> int:
+    def margin(self, margin: int) -> int:
         self._configuration["margin"] = margin
 
     @property
@@ -701,7 +711,7 @@ class Decoder_Config:
         return self._configuration["dissimilarity"]
     
     @dissimilarity.setter
-    def set_dissimilarity(self, dissimilarity: str):
+    def dissimilarity(self, dissimilarity: str):
         if "torus" in dissimilarity.lower() and not self.name != "TorusE":
             raise ValueError(f"Only the TorusE decoder can be used with torus-specific dissimilarities. The current decoder is {self.name}.")
         self._configuration["dissimilarity"] = dissimilarity
@@ -718,7 +728,7 @@ class Decoder_Config:
         return self._configuration["filter_count"]
 
     @filter_count.setter
-    def set_filter_count(self, filter_count: int):
+    def filter_count(self, filter_count: int):
         assert filter_count >= 1, "Cannot use less than one filter."
         self._configuration["filter_count"] = filter_count
 
@@ -734,7 +744,7 @@ class Sampler_Config:
     sampler_configuration: dict
         Dictionary containing only the sampler configuration.
     """
-    def __init__(self, sampler_configuration):
+    def Negative_Sampler_Config(self, sampler_configuration):
         self._configuration = sampler_configuration
 
         self.supported_samplers = SUPPORTED_SAMPLERS
@@ -761,7 +771,7 @@ class Sampler_Config:
         return self._configuration["name"]
     
     @name.setter
-    def set_name(self, new_name):
+    def name(self, new_name):
         assert new_name in self.supported_samplers, f"Unsupported negative sampler given. KGATE supports {', '.join(SUPPORTED_SAMPLERS)} but got {new_name}. If you want to register a custom negative sampler name, use Config.sampler.register_name()"
 
         self._configuration["name"] = new_name
@@ -795,7 +805,7 @@ class Sampler_Config:
         return self._configuration["negative_triplet_count"]
 
     @negative_triplet_count.setter
-    def set_negative_triplet_count(self, new_count: int):
+    def negative_triplet_count(self, new_count: int):
         assert new_count > 0, f"KGE models need at least 1 negative triplet per true triplet to be trained, but got {new_count}"
 
         self._configuration["negative_triplet_count"] = new_count
@@ -826,7 +836,7 @@ class Optimizer_Config:
         return self._configuration["name"]
 
     @name.setter
-    def set_name(self, new_name: str):
+    def name(self, new_name: str):
         assert new_name in dir(torch.optim), f"The optimizer name {new_name} is not a valid PyTorch optimizer."
 
         self._configuration["name"] = new_name
@@ -841,7 +851,7 @@ class Optimizer_Config:
         return self._configuration["weight_decay"]
 
     @weight_decay.setter
-    def set_weight_decay(self, new_decay: float):
+    def weight_decay(self, new_decay: float):
         assert 0 <= new_decay <= 1, f"weight_decay must be between 0 and 1, but got {new_decay}"
 
         self._configuration["weight_decay"] = new_decay
@@ -856,7 +866,7 @@ class Optimizer_Config:
         return self._configuration["learning_rate"]
 
     @learning_rate.setter
-    def set_learning_rate(self, new_learning_rate):
+    def learning_rate(self, new_learning_rate):
         assert 0 <= new_learning_rate <= 1, f"learning_rate must be between 0 and 1, but got {new_learning_rate}"
 
         self._configuration["learning_rate"] = new_learning_rate
@@ -869,10 +879,10 @@ class Optimizer_Config:
         return self._other_parameters
 
     @other_parameters.setter
-    def set_other_parameters(self, parameters: dict):
+    def other_parameters(self, parameters: dict):
         self._other_parameters = parameters
 
-    def set_parameter(self, name: str, value: Any):
+    def parameter(self, name: str, value: Any):
         self._other_parameters[name] = value
 
     @property
@@ -917,7 +927,7 @@ class Learning_Rate_Scheduler_Config:
         return self._configuration["name"]
 
     @name.setter
-    def set_name(self, new_name: str):
+    def name(self, new_name: str):
         assert new_name in dir(torch.optim.lr_scheduler), f"The learning rate scheduler name {new_name} is not a valid PyTorch learning rate scheduler."
 
         self._configuration["name"] = new_name
@@ -930,15 +940,15 @@ class Learning_Rate_Scheduler_Config:
         return self._parameters
 
     @parameters.setter
-    def set_parameters(self, parameters: dict):
+    def parameters(self, parameters: dict):
         self._parameters = parameters
 
-    def set_parameter(self, name: str, value: Any):
+    def parameter(self, name: str, value: Any):
         self._parameters[name] = value
 
 class Training_Config:
     """
-    Learning rate scheduler part of the main configuration.
+    Training part of the main configuration.
 
     This class is not meant to be used as a standalone, but to make access to 
     configuration parameter easier.
@@ -961,9 +971,104 @@ class Training_Config:
         return self._configuration["max_epochs"]
 
     @max_epochs.setter
-    def set_max_epochs(self, max_epochs: int):
+    def max_epochs(self, max_epochs: int):
         assert max_epochs > 0, f"The maximum epoch must be a positive integer, but got {max_epochs}"
 
         self._configuration["max_epochs"] = max_epochs
 
+    @property
+    def patience(self) -> int:
+        """
+        Number of evaluations with no significant loss improvement before the training is stopped early.
+        """
+        return self._configuration["patience"]
+
+    @patience.setter
+    def patience(self, patience: int):
+        assert patience > 0, f"You must wait at least 1 evaluation step to compare the results, but got {patience}"
+
+        self._configuration["patience"] = patience
+
+    @property
+    def train_batch_size(self) -> int:
+        """
+        Size of a training batch. The higher it is, the faster the training goes, within reasons.
+        """
+        return self._configuration["train_batch_size"]
+
+    @train_batch_size.setter
+    def train_batch_size(self, new_batch_size: int):
+        assert new_batch_size > 0, f"Train batch size must be at least 1, but got {new_batch_size}"
+
+        self._configuration["train_batch_size"] = new_batch_size
+
+    @property
+    def evaluation_batch_size(self) -> int:
+        """
+        Size of an evaluation batch. The higher it is, the faster the evaluation goes, within reasons.
+        """
+        return self._configuration["evaluation_batch_size"]
+
+    @evaluation_batch_size.setter
+    def evaluation_batch_size(self, new_batch_size: int):
+        assert new_batch_size > 0, f"Evaluation batch size must be at least 1, but got {new_batch_size}"
+
+        self._configuration["evaluation_batch_size"] = new_batch_size
+
+    @property
+    def evaluation_interval(self) -> int:
+        """
+        Number of epochs between two evaluations of the model on the validation set.
+        """
+        return self._configuration["evaluation_interval"]
+
+    @evaluation_interval.setter
+    def evaluation_interval(self, new_interval: int):
+        assert new_interval > 0, f"Evaluation interval must be at least 1, but got {new_interval}"
+
+        self._configuration["evaluation_interval"]
+    
+    @property
+    def pretrained_embeddings(self) -> str:
+        """
+        Either the absolute path towards a pretrained checkpoint, or "auto" to let KGATE find automatically the latest
+        Embeddings in the output_directory.
+        """
+        return self._configuration["pretrained_embeddings"]
+
+    @pretrained_embeddings.setter
+    def pretrained_embeddings(self, embedding_path: os.PathLike | str):
+        assert Path(embedding_path).exists() or embedding_path == "auto", "Pretrained embeddings must be either a path to a checkpoint, or auto to let KGATE infer the path."
+
+        self._configuration["pretrained_embeddings"] = str(embedding_path)
+
+class Evaluation_Config:
+    """
+    Evaluation part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    evaluation_configuration: dict
+        Dictionary containing only the optimizer configuration.
+    """
+    def __init__(self, evaluation_configuration):
+        self._configuration = evaluation_configuration
+
+    @property
+    def objective(self) -> Literal["Link Prediction", "Triplet Classification"]:
+        """# Types of evaluation to be run on the validation and testing set.
+        Supported options are:
+        - Link Prediction: Predicts plausible edges between two nodes of the graph
+        - Triplet Classification: Discriminates between true and false triplets
+        """
+        return self._configuration["objective"]
+    
+    @objective.setter
+    def objective(self, new_objective: Literal["Link Prediction", "Triplet Classification"]):
+        assert new_objective in ["Link Prediction", "Triplet Classification"], f"Evaluation objective must be one of 'Link Prediction' or 'Triplet Classification', but got {new_objective}"
+
+        self._configuration["objective"] = new_objective
     
