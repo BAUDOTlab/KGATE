@@ -21,18 +21,18 @@ logging.basicConfig(
 )
 
 
-class Config:
+class Configuration:
     def __init__(self, *, config_path: os.PathLike = "", config_dict: dict  = {}):
-        self._configuration = Config.parse(config_path, config_dict)
+        self._configuration = Configuration.parse(config_path, config_dict)
 
-        self.preprocessing = Preprocessing_Config(self._configuration["preprocessing"])
-        self.encoder = Encoder_Config(self._configuration["model"]["encoder"])
-        self.decoder = Decoder_Config(self._configuration["model"]["decoder"])
-        self.negative_sampler = Sampler_Config(self._configuration["negative_sampler"])
-        self.optimizer = Optimizer_Config(self._configuration["optimizer"])
-        self.learning_rate_scheduler = Learning_Rate_Scheduler_Config(self._configuration["learning_rate_scheduler"])
-        self.training = Training_Config(self._configuration["training"])
-        self.evaluation = Evaluation_Config(self._configuration["evaluation"])
+        self.preprocessing = Preprocessing_Configuration(self._configuration["preprocessing"])
+        self.encoder = Encoder_Configuration(self._configuration["model"]["encoder"])
+        self.decoder = Decoder_Configuration(self._configuration["model"]["decoder"])
+        self.negative_sampler = Sampler_Configuration(self._configuration["negative_sampler"])
+        self.optimizer = Optimizer_Configuration(self._configuration["optimizer"])
+        self.learning_rate_scheduler = Learning_Rate_Scheduler_Configuration(self._configuration["learning_rate_scheduler"])
+        self.training = Training_Configuration(self._configuration["training"])
+        self.evaluation = Evaluation_Configuration(self._configuration["evaluation"])
 
     @staticmethod
     def parse(config_path: os.PathLike, config_dictionnary: dict):
@@ -86,7 +86,7 @@ class Config:
         # 2. Configuration file (config)
         # 3. Default configuration (default_config)
         # If a default value is None, consider it required and not defaultable
-        configuration = {  key: Config.set_config_key(key, default_config, configuration, config_dictionnary)
+        configuration = {  key: Configuration.set_config_key(key, default_config, configuration, config_dictionnary)
                     for key
                     in default_config}
 
@@ -152,7 +152,7 @@ class Config:
                 # If they exist, keys are taken from inline inputs
                 keys += (list(inline_value.keys()))
             for child_key in set(keys):
-                new_value.update({child_key: Config.set_config_key(child_key, default[key], config_value, inline_value)})
+                new_value.update({child_key: Configuration.set_config_key(child_key, default[key], config_value, inline_value)})
             return new_value
         
         # Return the key value in priority from: inline, config, default
@@ -319,7 +319,7 @@ class Config:
 
         self._configuration["model"]["edge_embedding_dimensions"] = dimensions
 
-class Preprocessing_Config:
+class Preprocessing_Configuration:
     """
     Preprocessing part of the main configuration.
 
@@ -520,7 +520,7 @@ class Preprocessing_Config:
 
         self._configuration["split"] = proportions
 
-class Encoder_Config:
+class Encoder_Configuration:
     """
     Encoder part of the main configuration.
 
@@ -605,7 +605,7 @@ class Encoder_Config:
 
         self._configuration["gnn_layer_number"] = gnn_layers
 
-class Decoder_Config:
+class Decoder_Configuration:
     """
     Decoder part of the main configuration.
 
@@ -732,7 +732,7 @@ class Decoder_Config:
         assert filter_count >= 1, "Cannot use less than one filter."
         self._configuration["filter_count"] = filter_count
 
-class Sampler_Config:
+class Sampler_Configuration:
     """
     Sampler part of the main configuration.
 
@@ -810,7 +810,7 @@ class Sampler_Config:
 
         self._configuration["negative_triplet_count"] = new_count
 
-class Optimizer_Config:
+class Optimizer_Configuration:
     """
     Optimizer part of the main configuration.
 
@@ -882,7 +882,7 @@ class Optimizer_Config:
     def other_parameters(self, parameters: dict):
         self._other_parameters = parameters
 
-    def parameter(self, name: str, value: Any):
+    def set_parameter(self, name: str, value: Any):
         self._other_parameters[name] = value
 
     @property
@@ -896,7 +896,7 @@ class Optimizer_Config:
             **self.other_parameters
         }
     
-class Learning_Rate_Scheduler_Config:
+class Learning_Rate_Scheduler_Configuration:
     """
     Learning rate scheduler part of the main configuration.
 
@@ -943,10 +943,10 @@ class Learning_Rate_Scheduler_Config:
     def parameters(self, parameters: dict):
         self._parameters = parameters
 
-    def parameter(self, name: str, value: Any):
+    def set_parameter(self, name: str, value: Any):
         self._parameters[name] = value
 
-class Training_Config:
+class Training_Configuration:
     """
     Training part of the main configuration.
 
@@ -1029,6 +1029,19 @@ class Training_Config:
         self._configuration["evaluation_interval"]
     
     @property
+    def save_interval(self) -> int:
+        """
+        Number of epochs after which a checkpoint is saved to retain the training state of a model.
+        """
+        return self._configuration["save_interval"]
+
+    @save_interval.setter
+    def save_interval(self, new_interval: int):
+        assert new_interval > 0, f"Save interval must be at least 1, but got {new_interval}"
+
+        self._configuration["save_interval"]
+
+    @property
     def pretrained_embeddings(self) -> str:
         """
         Either the absolute path towards a pretrained checkpoint, or "auto" to let KGATE find automatically the latest
@@ -1042,7 +1055,7 @@ class Training_Config:
 
         self._configuration["pretrained_embeddings"] = str(embedding_path)
 
-class Evaluation_Config:
+class Evaluation_Configuration:
     """
     Evaluation part of the main configuration.
 

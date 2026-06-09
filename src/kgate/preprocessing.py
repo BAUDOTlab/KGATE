@@ -15,11 +15,12 @@ from torch import cat
 
 import torchkge
 
+from .config import Configuration
 from .knowledgegraph import KnowledgeGraph
 from .utils import set_random_seeds, compute_triplet_proportions
 from .constants import SUPPORTED_SEPARATORS
 
-def prepare_knowledge_graph(config: dict, 
+def prepare_knowledge_graph(configuration: Configuration, 
                             kg: KnowledgeGraph | None = None, 
                             dataframe: pd.DataFrame | None = None,
                             metadata: pd.DataFrame | None = None
@@ -33,7 +34,7 @@ def prepare_knowledge_graph(config: dict,
 
     Arguments
     ---------
-    config: dict
+    configuration: Config
         The full configuration, usually parsed from the KGATE configuration file.
     kg: KnowledgeGraph, optional
         The knowledge graph as a single object of class KnowledgeGraph or inheriting the class (KnowledgeGraph inherits the class)
@@ -67,7 +68,7 @@ def prepare_knowledge_graph(config: dict,
     """
     # Load knowledge graph
     if kg is None and dataframe is None:
-        input_file = config["kg_csv"]
+        input_file = configuration.knowledge_graph_csv_file
         kg_dataframe: pd.DataFrame = None
 
         for separator in SUPPORTED_SEPARATORS:
@@ -97,15 +98,15 @@ def prepare_knowledge_graph(config: dict,
             kg = KnowledgeGraph(dataframe = dataframe, metadata = metadata)
                 
     # Clean and process knowledge graph
-    kg_train, kg_validation, kg_test = clean_knowledge_graph(kg, config)
+    kg_train, kg_validation, kg_test = clean_knowledge_graph(kg, configuration)
 
     # Save results
-    save_knowledge_graph(config, kg_train, kg_validation, kg_test)
+    save_knowledge_graph(configuration, kg_train, kg_validation, kg_test)
 
     return kg_train, kg_validation, kg_test
 
 
-def save_knowledge_graph(config: dict,
+def save_knowledge_graph(configuration: Configuration,
                         kg_train: KnowledgeGraph,
                         kg_validation: KnowledgeGraph,
                         kg_test: KnowledgeGraph):
@@ -113,11 +114,11 @@ def save_knowledge_graph(config: dict,
     Save the knowledge graph to a pickle file.
     
     If the name of a pickle file is specified in the configuration, it will be used. Otherwise, the 
-    file will be created in `config["output_directory"]/kg.pkl`.
+    file will be created in `config.output_directory/kg.pkl`.
     
     Arguments
     ---------
-    config: dict
+    configuration: Config
         The full configuration, usually parsed from the KGATE configuration file.
     kg_train: KnowledgeGraph
         The training subpart of the knowledge graph.
@@ -127,10 +128,10 @@ def save_knowledge_graph(config: dict,
         The testing subpart of the knowledge graph.
         
     """
-    if config["kg_pkl"] == "":
-        pickle_filename = Path(config["output_directory"], "kg.pkl")
+    if config.knowledge_graph_pickle_file == "":
+        pickle_filename = Path(config.output_directory, "kg.pkl")
     else:
-        pickle_filename = config["kg_pkl"]
+        pickle_filename = config.knowledge_graph_pickle_file
 
     with open(pickle_filename, "wb") as file:
         pickle.dump(kg_train, file)
@@ -162,7 +163,7 @@ def load_knowledge_graph(pickle_filename: Path):
 
 
 def clean_knowledge_graph(  kg: KnowledgeGraph,
-                            config: dict
+                            configuration: Configuration
                             ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
     """
     Clean and prepare the knowledge graph according to the configuration.
@@ -171,7 +172,7 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
     ---------
     kg: KnowledgeGraph
         Knowledge graph on which the cleaning will be done.
-    config: dict
+    configuration: Config
         The full configuration, usually parsed from the KGATE configuration file.
     
     Raises
@@ -189,20 +190,20 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
         Cleaned test knowledge graph.
     
     """
-    set_random_seeds(config["seed"])
+    set_random_seeds(config.seed)
 
     index_to_edge_name = {value: key for key, value in kg.edge_to_index.items()}
 
-    if config["preprocessing"]["remove_duplicate_triplets"]:
+    if config.preprocessing.remove_duplicate_triplets:
         logging.info("Removing duplicated triplets...")
         kg = kg.remove_duplicate_triplets()
 
     duplicated_edges_list = []
 
-    if config["preprocessing"]["flag_near_duplicate_edges"]:
+    if config.preprocessing.flag_near_duplicate_edges:
         logging.info("Checking for near duplicates edges...")
-        theta_first_edge_type = config["preprocessing"]["params"]["theta_first_edge_type"]
-        theta_second_edge_type = config["preprocessing"]["params"]["theta_second_edge_type"]
+        theta_first_edge_type = config.preprocessing.theta_first_edge_type
+        theta_second_edge_type = config.preprocessing.theta_second_edge_type
         duplicate_edges, reverse_duplicate_edges = kg.duplicates(theta_first_edge_type = theta_first_edge_type,
                                                                 theta_second_edge_type = theta_second_edge_type)
         if duplicate_edges:
@@ -212,21 +213,21 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
             logging.info(f"Adding {len(reverse_duplicate_edges)} anti-synonymous edges ({[index_to_edge_name[edge] for reverse_duplicate_pair in reverse_duplicate_edges for edge in reverse_duplicate_pair]}) to the list of known duplicated edges.")
             duplicated_edges_list.extend(reverse_duplicate_edges)
     
-    if config["preprocessing"]["make_directed"]:
-        undirected_edges_names = config["preprocessing"]["make_directed_edges"]
-        if len(undirected_edges_names) == 0:
+    if len(config.preprocessing.make_directed) > 0:
+        undirected_edges_names = config.preprocessing.make_directed
+        if undirected_edges_names == "all":
             undirected_edges_names = list(kg.edge_to_index.keys())
         logging.info(f"Adding reverse triplets for edges {undirected_edges_names}...")
         edges_to_process = [kg.edge_to_index[edge_name] for edge_name in undirected_edges_names]
         kg, undirected_edges_list = kg.add_reverse_edges(edges_to_process)
             
-        if config["preprocessing"]["flag_near_duplicate_edges"]:
+        if config.preprocessing.flag_near_duplicate_edges:
             logging.info(f"Adding created reverses {[(edge_name, edge_name + "_inv") for edge_name in undirected_edges_names]} to the list of known duplicated edges.")
             duplicated_edges_list.extend(undirected_edges_list)
 
     # Split the knowledge graph into 3 datasets: train, validation, set
     logging.info("Splitting the dataset into train, validation and test sets...")
-    kg_train, kg_validation, kg_test = kg.split_kg(split_proportions = config["preprocessing"]["split"])
+    kg_train, kg_validation, kg_test = kg.split_kg(split_proportions = config.preprocessing.split_proportions)
 
     # Verify the node coverage
     kg_train_ok, _ = verify_node_coverage(kg_train, kg)
@@ -236,7 +237,7 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
         logging.info("Node coverage verified successfully.")
 
     # Clean the dataset if set as TRUE in the config file
-    if config["preprocessing"]["clean_train_set"]:
+    if config.preprocessing.clean_train_set:
         logging.info("Cleaning the train set to avoid data leakage...")
         logging.info("Step 1: with respect to validation set.")
         kg_train = clean_datasets(kg_train, kg_validation, known_reverses = duplicated_edges_list)

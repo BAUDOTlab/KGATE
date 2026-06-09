@@ -35,6 +35,7 @@ from torch_geometric.utils import k_hop_subgraph
 
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
 
+from .config import Configuration
 from .data_leakage import permute_tails
 from .decoders import *
 from .encoders import *
@@ -88,7 +89,7 @@ class Architect(Module):
     
     Attributes
     ----------
-    config: dict
+    configuration: Config
         The parsed configuration as a python dictionnary.
     kg_train: KnowledgeGraph
         Train split from the knowledge graph.
@@ -185,7 +186,7 @@ class Architect(Module):
                 **kwargs):
         # kg should be of type KnowledgeGraph, if exists use it instead of the one in config
         # dataframe should have columns head, tail and edge
-        self.config: dict = parse_config(config_path, kwargs)
+        self.configuration: Configuration = Configuration(config_path = config_path, config_dict = kwargs)
 
         if torch.cuda.is_available():
             # Benchmark convolution algorithms to chose the optimal one.
@@ -202,7 +203,7 @@ class Architect(Module):
         logging.info(f"Setting number of threads to {number_of_cores}")
         torch.set_num_threads(number_of_cores)
 
-        output_directory: Path = Path(self.config["output_directory"])
+        output_directory: Path = Path(self.configuration.output_directory)
         # Create output folder if it doesn't exist
         logging.info(f"Output folder: {output_directory}")
         output_directory.mkdir(parents = True, exist_ok = True)
@@ -211,23 +212,23 @@ class Architect(Module):
         self.device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logging.info(f"Detected device: {self.device}")
 
-        set_random_seeds(self.config["seed"])
+        set_random_seeds(self.configuration.seed)
 
-        self.node_embedding_dimensions: int = self.config["model"]["node_embedding_dimensions"]
-        self.edge_embedding_dimensions: int = self.config["model"]["edge_embedding_dimensions"]
+        self.node_embedding_dimensions: int = self.configuration.node_embedding_dimensions
+        self.edge_embedding_dimensions: int = self.configuration.edge_embedding_dimensions
         if self.edge_embedding_dimensions == -1:
             self.edge_embedding_dimensions = self.node_embedding_dimensions
-        self.evaluation_batch_size: int = self.config["training"]["evaluation_batch_size"]
+        self.evaluation_batch_size: int = self.configuration.training.evaluation_batch_size
 
         if metadata is not None and not set(["id", "type"]).issubset(metadata.keys()):
             raise pd.errors.InvalidColumnName("The columns \"id\" and \"type\" must be present in the given metadata dataframe.")
         
         self.metadata = metadata
 
-        if metadata is None and self.config["metadata_csv"] != "" and Path(self.config["metadata_csv"]).exists():
+        if metadata is None and self.configuration.metadata_path != "" and Path(self.configuration.metadata_path).exists():
             for separator in SUPPORTED_SEPARATORS:
                 try:
-                    self.metadata = pd.read_csv(self.config["metadata_csv"], sep = separator, usecols = ["type", "id"])
+                    self.metadata = pd.read_csv(self.configuration.metadata_path, sep = separator, usecols = ["type", "id"])
                     break
                 except ValueError:
                     continue
@@ -235,11 +236,11 @@ class Architect(Module):
             if self.metadata is None:
                 raise ValueError(f"The metadata csv file uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
-        run_kg_preprocessing: bool = self.config["run_kg_preprocessing"]
+        run_kg_preprocessing: bool = self.configuration.preprocessing.run
 
         if run_kg_preprocessing:
             logging.info(f"Preparing KG...")
-            self.kg_train, self.kg_validation, self.kg_test = prepare_knowledge_graph(self.config, kg, dataframe, self.metadata)
+            self.kg_train, self.kg_validation, self.kg_test = prepare_knowledge_graph(self.configuration, kg, dataframe, self.metadata)
             logging.info("KG preprocessed.")
         else:
             if kg is not None:
@@ -250,7 +251,7 @@ class Architect(Module):
                     raise ValueError("The KG needs to be preprocessed and given as a tuple of training, validation and test KG. Otherwise, set `run_kg_preprocessing` to True in the config file.")
             else:
                 logging.info("Loading KG...")
-                self.kg_train, self.kg_validation, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
+                self.kg_train, self.kg_validation, self.kg_test = load_knowledge_graph(Path(self.configuration.knowledge_graph_pickle_file))
                 logging.info("Done")
 
         super().__init__()
@@ -351,12 +352,12 @@ class Architect(Module):
             The encoder object.
         
         """
-        encoder_config: dict = self.config["model"]["encoder"]
+        encoder_config = self.configuration.encoder
         if encoder_name == "":
-            encoder_name = encoder_config["name"]
+            encoder_name = encoder_config.name
         
         if gnn_layers == 0:
-            gnn_layers = encoder_config["gnn_layer_number"]
+            gnn_layers = encoder_config.gnn_layers
 
         edge_types = self.kg_train.triplet_types
 
@@ -368,7 +369,7 @@ class Architect(Module):
             case "GAT":
                 encoder = GATEncoder(edge_types, self.encoder_node_embedding_dimensions, gnn_layers)
             case "Node2Vec":
-                encoder = Node2VecEncoder(self.kg_train.edge_list, self.encoder_node_embedding_dimensions, device = self.device, **encoder_config["params"])
+                encoder = Node2VecEncoder(self.kg_train.edge_list, self.encoder_node_embedding_dimensions, device = self.device)
             case _:
                 encoder = DefaultEncoder()
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
@@ -436,16 +437,16 @@ class Architect(Module):
             The loss object.
         """
         
-        decoder_config: dict = self.config["model"]["decoder"]
+        decoder_config = self.configuration.decoder
 
         if decoder_name == "":
-            decoder_name = decoder_config["name"]
+            decoder_name = decoder_config.name
         if dissimilarity == "":
-            dissimilarity = decoder_config["dissimilarity"]
+            dissimilarity = decoder_config.dissimilarity
         if margin == 0:
-            margin = decoder_config["margin"]
+            margin = decoder_config.margin
         if filter_count == 0:
-            filter_count = decoder_config["filter_count"]
+            filter_count = decoder_config.filter_count
 
         # Translational models
         match decoder_name:
@@ -515,25 +516,13 @@ class Architect(Module):
             Initialized optimizer.
             
         """
-        optimizer_name: str = self.config["optimizer"]["name"]
+        optimizer_name: str = self.configuration.optimizer.name
 
         # Retrieve optimizer parameters, defaulting to an empty dictionnary if not specified
-        optimizer_params: dict = self.config["optimizer"]["params"]
+        optimizer_params: dict = self.configuration.optimizer.parameters
 
-        # Mapping of optimizer names to their corresponding PyTorch classes
-        optimizer_mapping = {
-            "Adam": optim.Adam,
-            "SGD": optim.SGD,
-            "RMSprop": optim.RMSprop,
-            # Add other optimizers here as needed
-        }
+        optimizer_class = getattr(optim, optimizer_name)
 
-        # Check if the specified optimizer is supported
-        if optimizer_name not in optimizer_mapping:
-            raise NotImplementedError(f"Optimizer type '{optimizer_name}' is not supported. Please check the configuration. Supported optimizers are:\n{'\n'.join(optimizer_mapping.keys())}")
-
-        optimizer_class = optimizer_mapping[optimizer_name]
-    
         # Initialize the optimizer with given parameters
         optimizer: optim.Optimizer = optimizer_class(self.parameters(), **optimizer_params)
 
@@ -561,9 +550,9 @@ class Architect(Module):
             The initialized sampler.
         
         """
-        negative_sampler_config: dict = self.config["sampler"]
-        negative_sampler_name: str = negative_sampler_config["name"]
-        negative_triplet_count: int = negative_sampler_config["negative_triplet_count"]
+        negative_sampler_config = self.configuration.negative_sampler
+        negative_sampler_name: str = negative_sampler_config.name
+        negative_triplet_count: int = negative_sampler_config.negative_triplet_count
 
         match negative_sampler_name:
             case "Positional":
@@ -599,40 +588,25 @@ class Architect(Module):
             Instance of the specified scheduler or None if no scheduler is configured.
         
         """
-        learning_rate_scheduler_config: dict = self.config["learning_rate_scheduler"]
-        
-        if learning_rate_scheduler_config["type"] == "":
+        learning_rate_scheduler_config = self.configuration.learning_rate_scheduler
+
+        learning_rate_scheduler_name: str = learning_rate_scheduler_config.name
+
+        if learning_rate_scheduler_name == "":
             warnings.warn("No learning rate scheduler specified in the configuration, none will be used.")
             return None
     
-        learning_rate_scheduler_type: str = learning_rate_scheduler_config["type"]
-        learning_rate_scheduler_params: dict = learning_rate_scheduler_config["params"]
-        
-        # Mapping of scheduler names to their corresponding PyTorch classes
-        learning_rate_scheduler_mapping = {
-            "StepLR": learning_rate_scheduler.StepLR,
-            "MultiStepLR": learning_rate_scheduler.MultiStepLR,
-            "ExponentialLR": learning_rate_scheduler.ExponentialLR,
-            "CosineAnnealingLR": learning_rate_scheduler.CosineAnnealingLR,
-            "CosineAnnealingWarmRestarts": learning_rate_scheduler.CosineAnnealingWarmRestarts,
-            "ReduceLROnPlateau": learning_rate_scheduler.ReduceLROnPlateau,
-            "LambdaLR": learning_rate_scheduler.LambdaLR,
-            "OneCycleLR": learning_rate_scheduler.OneCycleLR,
-            "CyclicLR": learning_rate_scheduler.CyclicLR,
-        }
+        learning_rate_scheduler_params: dict = learning_rate_scheduler_config.parameters
 
-        # Verify that the scheduler type is supported
-        if learning_rate_scheduler_type not in learning_rate_scheduler_mapping:
-            raise ValueError(f"Scheduler type '{learning_rate_scheduler_type}' is not supported. Please check the configuration.")
-        learning_rate_scheduler_class = learning_rate_scheduler_mapping[learning_rate_scheduler_type]
+        learning_rate_scheduler_class = getattr(optim.lr_scheduler, learning_rate_scheduler_name)
         
         # Initialize the scheduler based on its type
         try:
             learning_rate_scheduler: learning_rate_scheduler.LRScheduler = learning_rate_scheduler_class(self.optimizer, **learning_rate_scheduler_params)
         except TypeError as e:
-            raise ValueError(f"Error initializing '{learning_rate_scheduler_type}': {e}")
+            raise ValueError(f"Error initializing '{learning_rate_scheduler_name}': {e}")
         
-        logging.info(f"Scheduler '{learning_rate_scheduler_type}' initialized with parameters: {learning_rate_scheduler_params}")
+        logging.info(f"Scheduler '{learning_rate_scheduler_name}' initialized with parameters: {learning_rate_scheduler_params}")
         
         return learning_rate_scheduler
 
@@ -658,7 +632,7 @@ class Architect(Module):
             The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
         
         """
-        match self.config["evaluation"]["objective"]:
+        match self.configuration.evaluation.objective:
             case "Link Prediction":
                 full_graphindices = torch.cat([
                     self.kg_train.graphindices,
@@ -676,9 +650,9 @@ class Architect(Module):
                                                         kg_test = self.kg_test)
                 self.validation_metric = "Accuracy"
             case _:
-                raise NotImplementedError(f"The requested evaluator {self.config["evaluation"]["objective"]} is not implemented.")
+                raise NotImplementedError(f"The requested evaluator {self.configuration.evaluation.objective} is not implemented.")
             
-        logging.info(f"Using {self.config["evaluation"]["objective"]} evaluator.")
+        logging.info(f"Using {self.configuration.evaluation.objective} evaluator.")
         
         return evaluator
     
@@ -816,25 +790,25 @@ class Architect(Module):
         the output folder will be cleaned and the current configuration will be written as `kgate_config.toml`
         
         """
-        train_config: dict = self.config["training"]
-        self.max_epochs: int = train_config["max_epochs"]
-        self.train_batch_size: int = train_config["train_batch_size"]
-        self.patience: int = train_config["patience"]
-        self.evaluation_interval: int = train_config["evaluation_interval"]
-        self.save_interval: int = train_config["save_interval"]
+        train_config = self.configuration.training
+        self.max_epochs: int = train_config.max_epochs
+        self.train_batch_size: int = train_config.train_batch_size
+        self.patience: int = train_config.patience
+        self.evaluation_interval: int = train_config.evaluation_interval
+        self.save_interval: int = train_config.save_interval
 
-        match train_config["pretrained_embeddings"]:
+        match train_config.pretrained_embeddings:
             case "auto":
-                pretrained = Path(self.config["output_directory"]).joinpath("embeddings.pt")
+                pretrained = Path(self.configuration.output_directory).joinpath("embeddings.pt")
             case "":
                 pretrained = None
             case _:
-                pretrained = Path(train_config["pretrained_embeddings"])
+                pretrained = Path(train_config.pretrained_embeddings)
                 if not pretrained.exists(): pretrained = None
         
         self.initialize_model(attributes = attributes, pretrained = pretrained)
 
-        self.train_metrics_file: Path = Path(self.config["output_directory"], "training_metrics.csv")
+        self.train_metrics_file: Path = Path(self.configuration.output_directory, "training_metrics.csv")
 
         if checkpoint_file is None:
             with open(self.train_metrics_file, mode = "w", newline = "") as file:
@@ -861,11 +835,11 @@ class Architect(Module):
         )
 
         # If we find an identical config we resume training from it, otherwise we clean the checkpoints directory.
-        existing_config_path: Path = Path(self.config["output_directory"]).joinpath("kgate_config.toml")
+        existing_config_path: Path = Path(self.configuration.output_directory).joinpath("kgate_config.toml")
         if existing_config_path.exists():
             existing_config = parse_config(str(existing_config_path), {})
             all_checkpoints = glob(f"{self.checkpoints_directory}/checkpoint_*.pt")
-            if existing_config == self.config and len(all_checkpoints) > 0:
+            if existing_config == self.configuration and len(all_checkpoints) > 0:
                 checkpoint_file = checkpoint_file or Path(max(all_checkpoints, key = os.path.getctime))
                 logging.info("Found previous run with the same configuration in the output folder...")
         elif self.checkpoints_directory.exists() and len(os.listdir(self.checkpoints_directory)) > 0:
@@ -948,7 +922,7 @@ class Architect(Module):
             to_save
         )
 
-        save_config(self.config)
+        save_config(self.configuration)
 
         if checkpoint_file is not None:
             if Path(checkpoint_file).is_file():
@@ -998,10 +972,10 @@ class Architect(Module):
 
         self.eval()
 
-        list_rel_1: List[str] = self.config["evaluation"]["made_directed_edges"]
-        list_rel_2: List[str] = self.config["evaluation"]["target_edges"]
-        thresholds: List[int] = self.config["evaluation"]["thresholds"]
-        metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.yaml")
+        list_rel_1: List[str] = self.configuration["evaluation"]["made_directed_edges"]
+        list_rel_2: List[str] = self.configuration["evaluation"]["target_edges"]
+        thresholds: List[int] = self.configuration["evaluation"]["thresholds"]
+        metrics_file: Path = Path(self.configuration.output_directory, "evaluation_metrics.yaml")
 
         all_edges: Set[Any] = set(self.kg_test.edge_to_index.keys())
         remaining_edges = all_edges - set(list_rel_1) - set(list_rel_2)
@@ -1537,7 +1511,7 @@ class Architect(Module):
         """
         logging.info(f"Training completed after {engine.state.epoch} epochs.")
 
-        plot_learning_curves(self.train_metrics_file, self.config["output_directory"], self.validation_metric)
+        plot_learning_curves(self.train_metrics_file, self.configuration.output_directory, self.validation_metric)
 
 
     # TODO: create a script to isolate prediction functions. Maybe a Predictor class?
@@ -1803,7 +1777,7 @@ class Architect(Module):
         
         """
         logging.info("Preparing KG for data leakage evaluation procedure...")
-        data_leakage_config = self.config["data_leakage"]
+        data_leakage_config = self.configuration["data_leakage"]
 
         kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test])
 
@@ -1813,6 +1787,6 @@ class Architect(Module):
             logging.info(f"Permuting tails of edge type {edge_type}")
             self.kg_train = permute_tails(self.kg_train, edge_type)
 
-        self.kg_train, self.kg_validation, self.kg_test = kg.split_kg(split_proportions = self.config["preprocessing"]["split"])
+        self.kg_train, self.kg_validation, self.kg_test = kg.split_kg(split_proportions = self.configuration["preprocessing"]["split"])
 
         self.train_model(attributes = attributes)
