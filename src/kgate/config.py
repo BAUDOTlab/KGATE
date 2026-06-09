@@ -1,3 +1,4 @@
+from typing import Any
 import os
 from typing import Sequence, List, Literal, Tuple
 import logging
@@ -24,7 +25,7 @@ class Config:
         self._configuration = Config.parse(config_path, config_dict)
 
     @staticmethod
-    def parse(self, config_path: os.PathLike, config_dictionnary: dict):
+    def parse(config_path: os.PathLike, config_dictionnary: dict):
         """
         Parse the configuration file and integrates it with the default and inline configurations.
         
@@ -63,30 +64,30 @@ class Config:
         with open_binary("kgate", "config_template.toml") as f:
             default_config = tomllib.load(f)
 
-        self.config = {}
+        configuration = {}
 
         if config_path != "":
             logging.info(f"Loading parameters from {config_path}")
             with open(config_path, "rb") as f:
-                config = tomllib.load(f)
+                configuration = tomllib.load(f)
 
         # Make the final configuration, using priority orders:
         # 1. Inline configuration (config_dictionnary)
         # 2. Configuration file (config)
         # 3. Default configuration (default_config)
         # If a default value is None, consider it required and not defaultable
-        config = {  key: Config.set_config_key(key, default_config, config, config_dictionnary)
+        configuration = {  key: Config.set_config_key(key, default_config, configuration, config_dictionnary)
                     for key
                     in default_config}
 
-        return config
+        return configuration
 
     @staticmethod
     def set_config_key( key: str,
                         default: dict,
                         config: dict | None = None,
                         inline: dict | None = None
-                        ) -> str | int | list | dict:
+                        ) -> str | int | bool | list | dict:
         """
         For a specific parameter, a 'key', compare default, inline and user-made configurations to give
         the key value with priority order: inline configuration, configuration file, default configuration.
@@ -871,6 +872,9 @@ class Optimizer_Config:
     def set_other_parameters(self, parameters: dict):
         self._other_parameters = parameters
 
+    def set_parameter(self, name: str, value: Any):
+        self._other_parameters[name] = value
+
     @property
     def parameters(self) -> dict:
         """
@@ -881,3 +885,85 @@ class Optimizer_Config:
             "lr": self.learning_rate,
             **self.other_parameters
         }
+    
+class Learning_Rate_Scheduler_Config:
+    """
+    Learning rate scheduler part of the main configuration.
+
+    The Learning Rate Scheduler is an optional module that alters the learning rate throughout the training.
+    They follow different patterns following the type of LR scheduler and parameters.
+    learning_rate_scheduler.params are the parameters passed to the LR scheduler. The name of the parameters must be the same
+    as those found in Pytorch's torch.optim.lr_scheduler documentation.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    lr_scheduler_configuration: dict
+        Dictionary containing only the optimizer configuration.
+    """
+    def __init__(self, lr_scheduler_configuration):
+        self._configuration = lr_scheduler_configuration
+        self._parameters = {}
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the PyTorch learning rate scheduler used to guide training.
+
+        It is identical to the name of the algorithms in torch.optim.lr_scheduler.
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def set_name(self, new_name: str):
+        assert new_name in dir(torch.optim.lr_scheduler), f"The learning rate scheduler name {new_name} is not a valid PyTorch learning rate scheduler."
+
+        self._configuration["name"] = new_name
+
+    @property
+    def parameters(self) -> dict:
+        """
+        A dictionary containing optimizer parameters not included in KGATE default configuration.
+        """
+        return self._parameters
+
+    @parameters.setter
+    def set_parameters(self, parameters: dict):
+        self._parameters = parameters
+
+    def set_parameter(self, name: str, value: Any):
+        self._parameters[name] = value
+
+class Training_Config:
+    """
+    Learning rate scheduler part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    training_configuration: dict
+        Dictionary containing only the optimizer configuration.
+    """
+    def __init__(self, training_configuration):
+        self._configuration = training_configuration
+
+    @property
+    def max_epochs(self) -> int:
+        """
+        Maximum number of training epochs. 
+
+        The training may stop before, but will at most do this many epochs.
+        """
+        return self._configuration["max_epochs"]
+
+    @max_epochs.setter
+    def set_max_epochs(self, max_epochs: int):
+        assert max_epochs > 0, f"The maximum epoch must be a positive integer, but got {max_epochs}"
+
+        self._configuration["max_epochs"] = max_epochs
+
+    
