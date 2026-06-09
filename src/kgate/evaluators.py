@@ -271,7 +271,7 @@ class LinkPredictionEvaluator:
         self.filtered_rank_true_tails = empty(size = (evaluated_knowledge_graph.triplet_count,)).long().to(device)
 
         dataloader = DataLoader(evaluated_knowledge_graph, batch_size = batch_size)
-        graphindices = knowledge_graph.graphindices.to(device) # this is the training graphindices
+
         if decoder is not None and hasattr(decoder,"embedding_spaces"):
             encoder_node_embedding_dimensions: int = self.embedding_dimensions * decoder.embedding_spaces
         else:

@@ -1540,6 +1540,7 @@ class Architect(Module):
         """
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
         self.eval()  # Set the model to evaluation mode
+        validation_score = 0
         with torch.no_grad():
             if isinstance(self.evaluator,LinkPredictionEvaluator):
                 validation_score = self.link_prediction(self.kg_validation) 
