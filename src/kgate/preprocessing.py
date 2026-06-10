@@ -26,7 +26,7 @@ def prepare_knowledge_graph(config: dict,
                             kg: KnowledgeGraph | None = None, 
                             dataframe: pd.DataFrame | None = None,
                             metadata: pd.DataFrame | None = None
-                            ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
+                            ) -> KnowledgeGraph:
     """
     Prepare and clean the knowledge graph.
     
@@ -56,13 +56,8 @@ def prepare_knowledge_graph(config: dict,
         
     Returns
     -------
-    kg_train: KnowledgeGraph
-        Subpart of the preprocessed and split knowledge graph, for training.
-    kg_validation: KnowledgeGraph
-        Subpart of the preprocessed and split knowledge graph, for validation.
-    kg_test: KnowledgeGraph
-        Subpart of the preprocessed and split knowledge graph, for test.
-    
+        knowledge_graph:
+            The processed knowledge graph, with train, validation and test sets as masks.    
     Notes
     -----
     The CSV file can have any number of columns but at least three named head, tail and edge.
@@ -90,28 +85,23 @@ def prepare_knowledge_graph(config: dict,
     else:
         if kg is not None:
             if isinstance(kg, torchkge.KnowledgeGraph):
-                kg_dataframe = kg.get_dataframe()
-                kg = KnowledgeGraph(dataframe = kg_dataframe, metadata = metadata)
-            elif isinstance(kg, KnowledgeGraph):
-                kg = kg
-            else:
+                kg = KnowledgeGraph.from_torchkge(kg, metadata)
+            elif not isinstance(kg, KnowledgeGraph):
                 raise NotImplementedError(f"Knowledge graph type {type(kg)} is not supported. Supported knowledge graph types are KGATE's and TorchKGE's.")
         elif dataframe is not None:
             kg = KnowledgeGraph(dataframe = dataframe, metadata = metadata)
                 
     # Clean and process knowledge graph
-    kg_train, kg_validation, kg_test = clean_knowledge_graph(kg, config)
+    knowledge_graph = clean_knowledge_graph(kg, config)
 
     # Save results
-    save_knowledge_graph(config, kg_train, kg_validation, kg_test)
+    save_knowledge_graph(config, knowledge_graph)
 
-    return kg_train, kg_validation, kg_test
+    return knowledge_graph
 
 
 def save_knowledge_graph(config: dict,
-                        kg_train: KnowledgeGraph,
-                        kg_validation: KnowledgeGraph,
-                        kg_test: KnowledgeGraph):
+                        knowledge_graph: KnowledgeGraph):
     """
     Save the knowledge graph to a pickle file.
     
@@ -122,13 +112,8 @@ def save_knowledge_graph(config: dict,
     ---------
     config: dict
         The full configuration, usually parsed from the KGATE configuration file.
-    kg_train: KnowledgeGraph
-        The training subpart of the knowledge graph.
-    kg_validation: KnowledgeGraph
-        The validation subpart of the knowledge graph.
-    kg_test: KnowledgeGraph
-        The testing subpart of the knowledge graph.
-        
+    knowledge_graph: KnowledgeGraph
+        The knowledge graph to save.        
     """
     if config["kg_pkl"] == "":
         pickle_filename = Path(config["output_directory"], "kg.pkl")
@@ -136,12 +121,10 @@ def save_knowledge_graph(config: dict,
         pickle_filename = config["kg_pkl"]
 
     with open(pickle_filename, "wb") as file:
-        pickle.dump(kg_train, file)
-        pickle.dump(kg_validation, file)
-        pickle.dump(kg_test, file)
+        pickle.dump(knowledge_graph, file)
 
 
-def load_knowledge_graph(pickle_filename: Path):
+def load_knowledge_graph(pickle_filename: Path) -> KnowledgeGraph:
     """
     Load the knowledge graph from a pickle file.
         
@@ -152,27 +135,25 @@ def load_knowledge_graph(pickle_filename: Path):
         
     Returns
     -------
-    kg_train, kg_validation, kg_test: KnowledgeGraph
-        A tuple containing the preprocessed and split knowledge graph.
+    knowledge_graph: KnowledgeGraph
+        The knowledge graph contained in the pickle file.
     
     """
     with open(pickle_filename, "rb") as file:
-        kg_train = pickle.load(file)
-        kg_validation = pickle.load(file)
-        kg_test = pickle.load(file)
+        knowledge_graph = pickle.load(file)
         
-    return kg_train, kg_validation, kg_test
+    return knowledge_graph
 
 
-def clean_knowledge_graph(  kg: KnowledgeGraph,
+def clean_knowledge_graph(  knowledge_graph: KnowledgeGraph,
                             config: dict
-                            ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
+                            ) -> KnowledgeGraph:
     """
     Clean and prepare the knowledge graph according to the configuration.
         
     Arguments
     ---------
-    kg: KnowledgeGraph
+    knowledge_graph: KnowledgeGraph
         Knowledge graph on which the cleaning will be done.
     config: dict
         The full configuration, usually parsed from the KGATE configuration file.
@@ -184,21 +165,17 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
         
     Returns
     -------
-    new_kg_train: KnowledgeGraph
-        Cleaned training knowledge graph.
-    new_kg_validation: KnowledgeGraph
-        Cleaned validation knowledge graph.
-    new_kg_test: KnowledgeGraph
-        Cleaned test knowledge graph.
+    knowledge_graph: KnowledgeGraph
+        Cleaned knowledge graph.
     
     """
     set_random_seeds(config["seed"])
 
-    index_to_edge_name = {value: key for key, value in kg.edge_to_index.items()}
+    index_to_edge_name = {value: key for key, value in knowledge_graph.edge_to_index.items()}
 
     if config["preprocessing"]["remove_duplicate_triplets"]:
         logging.info("Removing duplicated triplets...")
-        kg = kg.remove_duplicate_triplets()
+        knowledge_graph.remove_duplicate_triplets()
 
     duplicated_edges_list = []
     cartesian_edges = []
@@ -207,7 +184,7 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
         logging.info("Checking for near duplicates edges...")
         theta_first_edge_type = config["preprocessing"]["params"]["theta_first_edge_type"]
         theta_second_edge_type = config["preprocessing"]["params"]["theta_second_edge_type"]
-        duplicate_edges, reverse_duplicate_edges = kg.duplicates(theta_first_edge_type = theta_first_edge_type,
+        duplicate_edges, reverse_duplicate_edges = knowledge_graph.duplicates(theta_first_edge_type = theta_first_edge_type,
                                                                 theta_second_edge_type = theta_second_edge_type)
         if duplicate_edges:
             logging.info(f"Adding {len(duplicate_edges)} synonymous edges ({[index_to_edge_name[edge] for duplicate_pair in duplicate_edges for edge in duplicate_pair]}) to the list of known duplicated edges.")
@@ -218,15 +195,15 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
     
     if config["preprocessing"]["flag_cartesian_edges"]:
         logging.info("Checking for cartesian edges...")
-        cartesian_edges = kg.cartesian_product_edges(config["preprocessing"]["params"]["theta_cartesian"])
+        cartesian_edges = knowledge_graph.cartesian_product_edges(config["preprocessing"]["params"]["theta_cartesian"])
 
     if config["preprocessing"]["make_directed"]:
         undirected_edges_names = config["preprocessing"]["make_directed_edges"]
         if len(undirected_edges_names) == 0:
-            undirected_edges_names = list(kg.edge_to_index.keys())
+            undirected_edges_names = list(knowledge_graph.edge_to_index.keys())
         logging.info(f"Adding reverse triplets for edges {undirected_edges_names}...")
-        edges_to_process = [kg.edge_to_index[edge_name] for edge_name in undirected_edges_names]
-        kg, undirected_edges_list = kg.add_reverse_edges(edges_to_process)
+        edges_to_process = [knowledge_graph.edge_to_index[edge_name] for edge_name in undirected_edges_names]
+        undirected_edges_list = knowledge_graph.add_reverse_edges(edges_to_process)
             
         if config["preprocessing"]["flag_near_duplicate_edges"]:
             logging.info(f"Adding created reverses {[(edge_name, edge_name + "_inv") for edge_name in undirected_edges_names]} to the list of known duplicated edges.")
@@ -234,11 +211,11 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
 
     # Split the knowledge graph into 3 datasets: train, validation, set
     logging.info("Splitting the dataset into train, validation and test sets...")
-    kg_train, kg_validation, kg_test = kg.split_kg(split_proportions = config["preprocessing"]["split"])
+    knowledge_graph.generate_masks(split_proportions = config["preprocessing"]["split"])
 
     # Verify the node coverage
-    kg_train_ok, _ = verify_node_coverage(kg_train, kg)
-    if not kg_train_ok:
+    knowledge_graph_ok, _ = verify_node_coverage(kg_train, kg)
+    if not knowledge_graph_ok:
         logging.info("Node coverage verification failed...")  
     else:
         logging.info("Node coverage verified successfully.")
@@ -247,13 +224,12 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
     if config["preprocessing"]["clean_train_set"]:
         logging.info("Cleaning the train set to avoid data leakage...")
         logging.info("Step 1: with respect to validation set.")
-        kg_train = clean_datasets(kg_train, kg_validation, known_reverses = duplicated_edges_list)
+        kg_train = clean_datasets(knowledge_graph, known_reverses = duplicated_edges_list)
+        # TODO
         kg_validation, kg_train = clean_cartesians(kg_validation, kg_train, known_cartesian = cartesian_edges)
-        logging.info("Step 2: with respect to test set.")
-        kg_train = clean_datasets(kg_train, kg_test, known_reverses = duplicated_edges_list)
         kg_test, kg_train = clean_cartesians(kg_test, kg_train, known_cartesian = cartesian_edges)
 
-    kg_train_ok, _ = verify_node_coverage(kg_train, kg)
+    kg_train_ok, _ = verify_node_coverage(knowledge_graph)
     if not kg_train_ok:
         logging.info("Node coverage verification failed...")
     else:
@@ -275,18 +251,15 @@ def clean_knowledge_graph(  kg: KnowledgeGraph,
     return new_kg_train, new_kg_validation, new_kg_test
 
 
-def verify_node_coverage(kg_train: KnowledgeGraph,
-                        kg_full: KnowledgeGraph
+def verify_node_coverage(knowledge_graph: KnowledgeGraph
                         ) -> Tuple[bool, List[str]]:
     """
     Verify that all nodes in the full knowledge graph are represented in the training set.
 
     Arguments
     ---------
-    kg_train: KnowledgeGraph
-        The training knowledge graph subset.
-    kg_full: KnowledgeGraph
-        The full knowledge graph.
+    knowledge_graph: KnowledgeGraph
+        The knowledge graph with train, validation and test masks generated.
 
     Returns
     -------
@@ -296,15 +269,15 @@ def verify_node_coverage(kg_train: KnowledgeGraph,
     
     """
     # Get node identifiers for the train graph and full graph
-    node_indices_train = set(cat((kg_train.head_indices, kg_train.tail_indices)).tolist())
-    node_indices_full = set(cat((kg_full.head_indices, kg_full.tail_indices)).tolist())
+    node_indices_train = knowledge_graph.graphindices[:2, knowledge_graph.train_mask].unique()
+    node_indices_full = knowledge_graph.graphindices[:2].unique()
     
     # Missing nodes in the train graph
     missing_node_indices = node_indices_full - node_indices_train
     
     if missing_node_indices:
         # Invert node_to_index dictionnary to get index_to_node
-        index_to_node = {value: key for key, value in kg_full.node_to_index.items()}
+        index_to_node = {value: key for key, value in knowledge_graph.node_to_index.items()}
         
         # Get missing node names from their indices
         missing_node_names = [index_to_node[index] for index in missing_node_indices if index in index_to_node]
@@ -379,7 +352,7 @@ def ensure_node_coverage(kg_train: KnowledgeGraph,
             kg_train = kg_train.add_triplets(triplets)
 
             # Remove the triplets from source_kg
-            kg_cleaned = kg_source.remove_triplets(indices)
+            kg_cleaned = kg_source.remove_triplets_from_training(indices)
             if kg_source == kg_validation:
                 kg_validation = kg_cleaned
             else:
@@ -406,8 +379,7 @@ def ensure_node_coverage(kg_train: KnowledgeGraph,
     return kg_train, kg_validation, kg_test
 
 
-def clean_datasets( kg_train: KnowledgeGraph,
-                    kg_second: KnowledgeGraph,
+def clean_datasets( knowledge_graph: KnowledgeGraph,
                     known_reverses: List[Tuple[int, int]]
                     ) -> KnowledgeGraph:
     """
@@ -429,51 +401,55 @@ def clean_datasets( kg_train: KnowledgeGraph,
         The cleaned train knowledge graph subset.
         
     """
+    logging.info("Cleaning knowledge graph by removing duplicated edges...")
+
     for first_edge_type, second_edge_type in known_reverses:
 
         logging.info(f"Processing edge pair: ({first_edge_type}, {second_edge_type})")
+        encoded_indices = knowledge_graph.head_indices * knowledge_graph.node_count + knowledge_graph.tail_indices
 
         # Get (head, tail) pairs, in kg_second, that are related by first_edge_type
-        first_edge_type_pairs_in_kg_second = kg_second.get_pairs(first_edge_type, type = "head_tail")
+        first_edge_type_pairs_in_validation_split = knowledge_graph.get_pairs(first_edge_type, split = "validation")
+        first_edge_type_pairs_in_test_split = knowledge_graph.get_pairs(first_edge_type, split = "test")
         
         # Get indices of the (head, tail) pairs, in kg_train, that are related by second_edge_type
-        indices_to_remove_kg_train = [edge_index
-                                        for edge_index, (head, tail)
-                                        in enumerate(zip(kg_train.tail_indices, kg_train.head_indices))
-                                        if (head.item(), tail.item()) in first_edge_type_pairs_in_kg_second
-                                        and kg_train.edge_indices[edge_index].item() == second_edge_type]
-        indices_to_remove_kg_train.extend([edge_index
-                                            for edge_index, (head, tail)
-                                            in enumerate(zip(kg_train.head_indices, kg_train.tail_indices))
-                                            if (head.item(), tail.item()) in first_edge_type_pairs_in_kg_second
-                                            and kg_train.edge_indices[edge_index].item() == second_edge_type])
+        encoded_validation_indices = first_edge_type_pairs_in_validation_split[0] * knowledge_graph.node_count \
+                                    + first_edge_type_pairs_in_validation_split[1]
+        encoded_test_indices = first_edge_type_pairs_in_test_split[0] * knowledge_graph.node_count \
+                                + first_edge_type_pairs_in_test_split
+        pair_mask = torch.isin(encoded_indices, torch.cat((encoded_validation_indices, encoded_test_indices)))
+        edge_mask = knowledge_graph.edge_indices == second_edge_type
+        indices_to_remove_from_train = torch.nonzero(pair_mask & edge_mask & knowledge_graph.train_mask).squeeze(1)
+        #                                 [edge_index
+        #                                 for edge_index, (head, tail)
+        #                                 in enumerate(zip(kg_train.tail_indices, kg_train.head_indices))
+        #                                 if (head.item(), tail.item()) in first_edge_type_in_validation_split
+        #                                 and kg_train.edge_indices[edge_index].item() == second_edge_type]
+        # indices_to_remove_kg_train.extend([edge_index
+        #                                     for edge_index, (head, tail)
+        #                                     in enumerate(zip(kg_train.head_indices, kg_train.tail_indices))
+        #                                     if (head.item(), tail.item()) in first_edge_type_in_validation_split
+        #                                     and kg_train.edge_indices[edge_index].item() == second_edge_type])
         
         # Remove these (head, tail) pairs from kg_train
-        kg_train = kg_train.remove_triplets(torch.tensor(indices_to_remove_kg_train, dtype = torch.long))
+        knowledge_graph.remove_triplets_from_training(indices_to_remove_from_train)
 
-        logging.info(f"Found {len(indices_to_remove_kg_train)} triplets to remove for edge {second_edge_type} with reverse {first_edge_type}.")
+        logging.info(f"Found {len(indices_to_remove_from_train)} triplets to remove for edge {second_edge_type} with reverse {first_edge_type}.")
 
-        # Get (head, tail) pairs, in kg_second, that are related by second_edge_type
-        second_edge_type_pairs_in_kg_second = kg_second.get_pairs(second_edge_type, type = "head_tail")
+        second_edge_type_pairs_in_validation_split = knowledge_graph.get_pairs(second_edge_type, split = "validation")
+        second_edge_type_pairs_in_test_split = knowledge_graph.get_pairs(second_edge_type, split = "test")
         
-        # Get indices of the (head, tail) pairs, in kg_train, that are related by first_edge_type
-        indices_to_remove_kg_train_reverse = [edge_index
-                                                for edge_index, (head, tail)
-                                                in enumerate(zip(kg_train.tail_indices, kg_train.head_indices))
-                                                if (head.item(), tail.item()) in second_edge_type_pairs_in_kg_second
-                                                and kg_train.edge_indices[edge_index].item() == first_edge_type]
-        indices_to_remove_kg_train_reverse.extend([edge_index
-                                                    for edge_index, (head, tail)
-                                                    in enumerate(zip(kg_train.head_indices, kg_train.tail_indices))
-                                                    if (head.item(), tail.item()) in second_edge_type_pairs_in_kg_second
-                                                    and kg_train.edge_indices[edge_index].item() == first_edge_type])
+        # Get indices of the (head, tail) pairs, in kg_train, that are related by second_edge_type
+        encoded_validation_indices = second_edge_type_pairs_in_validation_split[0] * knowledge_graph.node_count \
+                                    + second_edge_type_pairs_in_validation_split[1]
+        encoded_test_indices = second_edge_type_pairs_in_test_split[0] * knowledge_graph.node_count \
+                                + second_edge_type_pairs_in_test_split
+        pair_mask = torch.isin(encoded_indices, torch.cat((encoded_validation_indices, encoded_test_indices)))
+        edge_mask = knowledge_graph.edge_indices == first_edge_type
+        indices_to_remove_from_train = torch.nonzero(pair_mask & edge_mask & knowledge_graph.train_mask).squeeze(1)
 
-        # Remove these (head, tail) pairs from kg_train
-        kg_train = kg_train.remove_triplets(torch.tensor(indices_to_remove_kg_train_reverse, dtype=torch.long))
-
-        logging.info(f"Found {len(indices_to_remove_kg_train_reverse)} reverse triplets to remove for edge {first_edge_type} with reverse {second_edge_type}.")
+        logging.info(f"Found {len(indices_to_remove_from_train)} reverse triplets to remove for edge {first_edge_type} with reverse {second_edge_type}.")
     
-    return kg_train
 
 def clean_cartesians(
         first_kg: KnowledgeGraph, 
@@ -541,7 +517,7 @@ def clean_cartesians(
             triplets_to_move = first_kg.graphindices[:,all_triplet_indices_to_move]
             
             # Remove identified triplets from train set
-            first_kg = first_kg.remove_triplets(torch.tensor(all_triplet_indices_to_move, dtype = torch.long))
+            first_kg = first_kg.remove_triplets_from_training(torch.tensor(all_triplet_indices_to_move, dtype = torch.long))
             
             second_kg = second_kg.add_triplets(triplets_to_move)
             
