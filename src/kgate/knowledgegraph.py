@@ -324,6 +324,8 @@ class KnowledgeGraph(Dataset):
 
         self.train_mask = self.validation_mask = self.test_mask = torch.zeros(self.triplet_count, dtype = torch.bool)
 
+        self._node_embeddings: nn.ParameterList
+        self._edge_embeddings: nn.Parameter
 
     def __len__(self):
         return self.triplet_count
@@ -333,11 +335,32 @@ class KnowledgeGraph(Dataset):
         return self.graphindices[:, index]
     
     @property
-    def head_idx(self) -> Tensor:
+    def node_embeddings(self) -> nn.ParameterList:
         """
-        TorchKGE alias for head_indices
+        The latent representation of the knowledge graph, learned during training. 
+        Each node is associated with a vector.
         """
-        return self.head_indices
+        return self._node_embeddings
+
+    @node_embeddings.setter
+    def node_embeddings(self, new_embeddings: nn.ParameterList) -> None:
+        assert len(new_embeddings) == len(self.node_type_to_index.keys()), f"The node embedding list must have as many entries as there are node types."
+        # also validate that there are the same number of vectors in each type
+        self._node_embeddings = new_embeddings
+
+    @property
+    def edge_embeddings(self) -> nn.Parameter:
+        """
+        The latent representation of the knowledge graph, learned during training. 
+        Each edge type is associated with a vector.
+        """
+        return self._edge_embeddings
+
+    @edge_embeddings.setter
+    def edge_embeddings(self, new_embeddings: nn.Parameter) -> None:
+        assert len(new_embeddings) == len(self.edge_to_index.keys()), f"The edge embeddings must have as many entries as there are edge types."
+
+        self._edge_embeddings = new_embeddings
 
     @property
     def tail_idx(self) -> Tensor:
@@ -1082,21 +1105,16 @@ class KnowledgeGraph(Dataset):
 
 
     def get_encoder_input(  self,
-                            data: Tensor,
-                            node_embedding: nn.ParameterList
+                            indices: Tensor
                             ) -> EncoderInput:
         """
         From a `graphindices`-like tensor and node embeddings, build the `EncoderInput` object that will be fed to the GNN encoder.
 
         Arguments
         ---------
-        data: torch.Tensor, shape: [4, batch_size]
+        indices: torch.Tensor, shape: [4, batch_size]
             `graphindices`-like tensor
-        node_embedding: nn.ParameterList
-            A list containing all embeddings for each node type.
-            keys: node type index
-            values: tensors of shape (node_count, embedding_dimensions)
-
+        
         Raises
         ------
         AssertionError
@@ -1109,10 +1127,10 @@ class KnowledgeGraph(Dataset):
             from a subsampling according to a given batch.
         
         """
-        assert data.device == node_embedding[0].device
-        device = data.device
+        assert indices.device == self.node_embeddings[0].device
+        device = indices.device
 
-        triplet_type_indices = data[3].unique()
+        triplet_type_indices = indices[3].unique()
         node_indices: Dict[str, Tensor] = defaultdict(Tensor)
 
         pyg_edge_index = {}
@@ -1122,8 +1140,8 @@ class KnowledgeGraph(Dataset):
             triplet_type = self.triplet_types[triplet_index]
             head_node_type, _, tail_node_type = triplet_type
 
-            mask: Tensor = data[3] == triplet_index
-            triplets = data[:, mask]
+            mask: Tensor = indices[3] == triplet_index
+            triplets = indices[:, mask]
 
             source_nodes = triplets[0]
             target_nodes = triplets[1]
@@ -1146,7 +1164,7 @@ class KnowledgeGraph(Dataset):
         self.global_to_local_indices = self.global_to_local_indices.to(device)
         for node_type, index in node_indices.items():
             local_index = self.global_to_local_indices[index]
-            x_dict[node_type] = node_embedding[self.node_type_to_index[node_type]][local_index]
+            x_dict[node_type] = self.node_embeddings[self.node_type_to_index[node_type]][local_index]
             
             # We add self-loops to each nodes, to make sure they are their own neighbors.
             triplet_type = (node_type, "self", node_type)
@@ -1159,9 +1177,7 @@ class KnowledgeGraph(Dataset):
         return encoder_input
 
 
-    def flatten_embeddings( self,
-                            node_embeddings: nn.ParameterList
-                            ) -> Tensor:
+    def flatten_embeddings(self) -> Tensor:
         """
         TODO.What_the_function_does_about_globally
 
@@ -1169,26 +1185,19 @@ class KnowledgeGraph(Dataset):
         ----------
         TODO
 
-        Arguments
-        ---------
-        node_embeddings: nn.ParameterList, keyword-only
-            A list containing all embeddings for each node type.
-            keys: node type index
-            values: tensors of shape (node_count, embedding_dimensions)
-
         Returns
         -------
         embeddings: torch.Tensor
             TODO.What_that_variable_is_or_does
             
         """
-        embeddings: torch.Tensor = torch.zeros((self.node_count, node_embeddings[0].size(1)),
-                                                device = node_embeddings[0].device,
+        embeddings: torch.Tensor = torch.zeros((self.node_count, self.node_embeddings[0].size(1)),
+                                                device = self.node_embeddings[0].device,
                                                 dtype = torch.float)
 
         for node_type_index in self.node_type_to_index.values():
             mask = (self.node_types == node_type_index)
-            embeddings[mask] = node_embeddings[node_type_index][self.global_to_local_indices[mask]]
+            embeddings[mask] = self.node_embeddings[node_type_index][self.global_to_local_indices[mask]]
         
         return embeddings
     
