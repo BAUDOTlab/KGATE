@@ -147,7 +147,7 @@ def load_knowledge_graph(pickle_filename: Path) -> KnowledgeGraph:
 
 def clean_knowledge_graph(  knowledge_graph: KnowledgeGraph,
                             config: dict
-                            ) -> KnowledgeGraph:
+                            ):
     """
     Clean and prepare the knowledge graph according to the configuration.
         
@@ -162,12 +162,6 @@ def clean_knowledge_graph(  knowledge_graph: KnowledgeGraph,
     ------
     ValueError
         One or more nodes are not covered in the training set after ensuring node coverage.
-        
-    Returns
-    -------
-    knowledge_graph: KnowledgeGraph
-        Cleaned knowledge graph.
-    
     """
     set_random_seeds(config["seed"])
 
@@ -214,7 +208,7 @@ def clean_knowledge_graph(  knowledge_graph: KnowledgeGraph,
     knowledge_graph.generate_masks(split_proportions = config["preprocessing"]["split"])
 
     # Verify the node coverage
-    knowledge_graph_ok, _ = verify_node_coverage(kg_train, kg)
+    knowledge_graph_ok, _ = verify_node_coverage(knowledge_graph)
     if not knowledge_graph_ok:
         logging.info("Node coverage verification failed...")  
     else:
@@ -224,31 +218,28 @@ def clean_knowledge_graph(  knowledge_graph: KnowledgeGraph,
     if config["preprocessing"]["clean_train_set"]:
         logging.info("Cleaning the train set to avoid data leakage...")
         logging.info("Step 1: with respect to validation set.")
-        kg_train = clean_datasets(knowledge_graph, known_reverses = duplicated_edges_list)
-        # TODO
-        kg_validation, kg_train = clean_cartesians(kg_validation, kg_train, known_cartesian = cartesian_edges)
-        kg_test, kg_train = clean_cartesians(kg_test, kg_train, known_cartesian = cartesian_edges)
+        clean_datasets(knowledge_graph, known_reverses = duplicated_edges_list)
+
+        clean_cartesians(knowledge_graph, known_cartesian = cartesian_edges)
 
     kg_train_ok, _ = verify_node_coverage(knowledge_graph)
     if not kg_train_ok:
         logging.info("Node coverage verification failed...")
+
+        ensure_node_coverage(knowledge_graph)
+
+        kg_train_ok, missing_nodes = verify_node_coverage(knowledge_graph)
+        if not kg_train_ok:
+            logging.info(f"Node coverage verification failed. {len(missing_nodes)} nodes are missing.")
+            logging.info(f"Missing nodes: {missing_nodes}")
+            raise ValueError("One or more nodes are not covered in the training set after ensuring node coverage...")
+        else:
+            logging.info("Node coverage verified successfully.")
     else:
         logging.info("Node coverage verified successfully.")
 
-    new_kg_train, new_kg_validation, new_kg_test = ensure_node_coverage(kg_train, kg_validation, kg_test)
-
-    kg_train_ok, missing_nodes = verify_node_coverage(new_kg_train, kg)
-    if not kg_train_ok:
-        logging.info(f"Node coverage verification failed. {len(missing_nodes)} nodes are missing.")
-        logging.info(f"Missing nodes: {missing_nodes}")
-        raise ValueError("One or more nodes are not covered in the training set after ensuring node coverage...")
-    else:
-        logging.info("Node coverage verified successfully.")
-
-    logging.info("Computing triplet proportions...")
-    logging.info(compute_triplet_proportions(kg_train, kg_test, kg_validation))
-
-    return new_kg_train, new_kg_validation, new_kg_test
+    # logging.info("Computing triplet proportions...")
+    # logging.info(compute_triplet_proportions(knowledge_graph))
 
 
 def verify_node_coverage(knowledge_graph: KnowledgeGraph
@@ -287,101 +278,46 @@ def verify_node_coverage(knowledge_graph: KnowledgeGraph
         return True, []
     
 
-def ensure_node_coverage(kg_train: KnowledgeGraph,
-                        kg_validation: KnowledgeGraph,
-                        kg_test: KnowledgeGraph
-                        ) -> Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph]:
+def ensure_node_coverage(knowledge_graph: KnowledgeGraph
+                        ) -> None:
     """
     Ensure that all nodes in kg_train.node_to_index are present in kg_train as head or tail.
     If a node is missing, move a triplet involving that node from kg_validation or kg_test to kg_train.
 
     Arguments
     ---------
-    kg_train: KnowledgeGraph
-        The training knowledge graph subset to ensure node coverage of.
-    kg_validation: KnowledgeGraph
-        The validation knowledge graph subset from which to move triplets if needed.
-    kg_test: KnowledgeGraph
-        The test knowledge graph subset from which to move triplets if needed.
-
-    Returns
-    -------
-    kg_train: KnowledgeGraph
-        The updated training knowledge graph with all nodes covered.
-    kg_validation: KnowledgeGraph
-        The updated validation knowledge graph.
-    kg_test: KnowledgeGraph
-        The updated test knowledge graph.
-    
+    knowledge_graph: KnowledgeGraph
+        The knowledge graph to ensure the node coverage of the different splits.    
     """
-    # Get the indices of all nodes in kg_train 
-    train_nodes = set(kg_train.node_to_index.values())
+    # Get the indices of all nodes in kg_train
+    all_nodes: torch.Tensor = knowledge_graph.graphindices[:2].unique()
 
+    train_set = knowledge_graph.train_set
     # Get the indices of all nodes in kg_train as heads or tails
-    present_heads = set(kg_train.head_indices.tolist())
-    present_tails = set(kg_train.tail_indices.tolist())
-    present_nodes = present_heads.union(present_tails)
+    present_nodes = train_set[:2].unique()
 
     # Identify nodes missing from kg_train
-    missing_nodes = train_nodes - present_nodes
+    missing_nodes = all_nodes[torch.isin(all_nodes, present_nodes).neg()]
 
-    logging.info(f"Total nodes in full kg: {len(train_nodes)}")
+    logging.info(f"Total nodes in full kg: {len(all_nodes)}")
     logging.info(f"Nodes present in kg_train: {len(present_nodes)}")
     logging.info(f"Missing nodes in kg_train: {len(missing_nodes)}")
 
+    _, inverse_indices, counts = missing_nodes.unique(return_inverse=True, return_counts=True)
+    indices_sorted = inverse_indices.argsort(stable=True)
+    group_start_indices = counts.cumsum(0).roll(1) # The last value is not an indice, so we don't need it
+    group_start_indices[0] = 0
+    first_indices = indices_sorted[group_start_indices]
 
-    def find_and_move_triplets( kg_source: KnowledgeGraph,
-                                nodes: Set[int]):
-        
-        nonlocal kg_train, kg_validation, kg_test
-
-        # Convert `nodes` set to a `Tensor` for compatibility with `torch.isin`
-        nodes_tensor = torch.tensor(list(nodes), dtype = kg_source.head_indices.dtype)
-
-        # Create masks for all triplets where the missing node is present
-        mask_heads = torch.isin(kg_source.head_indices, nodes_tensor)
-        mask_tails = torch.isin(kg_source.tail_indices, nodes_tensor)
-        mask = mask_heads | mask_tails
-
-        if mask.any():
-            # Extract the indices and corresponding triplets
-            indices = torch.nonzero(mask, as_tuple = True)[0]
-            triplets = kg_source.graphindices[:, indices]
-            logging.info(triplets)
-            # Add the found triplets to kg_train
-            kg_train = kg_train.add_triplets(triplets)
-
-            # Remove the triplets from source_kg
-            kg_cleaned = kg_source.remove_triplets_from_training(indices)
-            if kg_source == kg_validation:
-                kg_validation = kg_cleaned
-            else:
-                kg_test = kg_cleaned
-
-            # Update the list of missing nodes
-            nodes_in_triplets = set(triplets[0].tolist() + triplets[1].tolist())
-            remaining_nodes = nodes - set(nodes_in_triplets)
-            
-            return remaining_nodes
-        
-        return nodes
-
-    # Move triplets from kg_validation then from kg_test
-    missing_nodes = find_and_move_triplets(kg_validation, missing_nodes)
-    if len(missing_nodes) > 0:
-        missing_nodes = find_and_move_triplets(kg_test, missing_nodes)
-
-    # Log the missing nodes that could not be connected
-    if len(missing_nodes) > 0:
-        for node in missing_nodes:
-            logging.info(f"Warning: No triplet found involving node '{node}' in kg_validation or kg_test. Node remains unconnected in kg_train.")
-
-    return kg_train, kg_validation, kg_test
+    knowledge_graph.train_mask[first_indices] = True
+    knowledge_graph.validation_mask[first_indices] = False
+    knowledge_graph.test_mask[first_indices] = False
+    
 
 
 def clean_datasets( knowledge_graph: KnowledgeGraph,
                     known_reverses: List[Tuple[int, int]]
-                    ) -> KnowledgeGraph:
+                    ) -> None:
     """
     Clean the train knowledge graph by removing reverse duplicate triplets contained
     in the second knowledge graph (test or validation).
@@ -452,11 +388,10 @@ def clean_datasets( knowledge_graph: KnowledgeGraph,
     
 
 def clean_cartesians(
-        first_kg: KnowledgeGraph, 
-        second_kg: KnowledgeGraph, 
+        knowledge_graph: KnowledgeGraph, 
         known_cartesian: List[int], 
         node_position: Literal["head", "tail"] = "head"
-        ) -> Tuple[KnowledgeGraph, KnowledgeGraph]:
+        ) -> None:
     """
     Transfer cartesian product triplets from train set to test set to prevent data leakage.
     For each node (head or tail) involved in a cartesian product edge in the test set,
@@ -464,12 +399,8 @@ def clean_cartesians(
     
     Arguments
     ---------
-    kg_train: KnowledgeGraph
-        Train set knowledge graph to be cleaned.
-        Will be modified by removing cartesian product triplets.
-    kg_test: KnowledgeGraph
-        Test set knowledge graph to be augmented.
-        Will receive the transferred cartesian product triplets.
+    knowledge_graph: KnowledgeGraph
+        The knowledge graph that will be cleaned. It needs to have the split masks already generated.
     known_cartesian: list
         List of edge indices that represent cartesian product relationships.
         These are edges where if (head, edge, tail_1) exists, then (head, edge, tail_2) likely exists
@@ -488,25 +419,28 @@ def clean_cartesians(
     #TODO: improve this method by adding split proportion
     assert node_position in ["head", "tail"], "node_position must be either 'head' or 'tail'"
     
+    validation_test_mask = knowledge_graph.validation_mask | knowledge_graph.test_mask
+    train_set = knowledge_graph.train_set
+
     for edge_index in known_cartesian:
         # Find all nodes in test set that participate in the cartesian edge
-        mask = (second_kg.edge_indices == edge_index)
+        edge_mask = (knowledge_graph[2, validation_test_mask] == edge_index)
         if node_position == "head":
-            cartesian_nodes = second_kg.head_indices[mask].view(-1,1)
+            cartesian_nodes = knowledge_graph[0, validation_test_mask & edge_mask].view(-1,1)
             # Find matching triplets in train set with same head and edge
             all_triplet_indices_to_move = []
             for node in cartesian_nodes:
-                mask = (first_kg.head_indices == node) & (first_kg.edge_indices == edge_index)
-                triplet_indices = mask.nonzero().squeeze()
+                triplet_mask = (train_set[0] == node) & (train_set[2] == edge_index)
+                triplet_indices = triplet_mask.nonzero().squeeze()
                 if triplet_indices.dim() == 0:
                     triplet_indices = triplet_indices.unsqueeze(0)
                 all_triplet_indices_to_move.extend(triplet_indices.tolist())
         else:  # tail
-            cartesian_nodes = second_kg.tail_indices[mask].view(-1,1)
+            cartesian_nodes = knowledge_graph[1, validation_test_mask & edge_mask].view(-1,1)
             # Find matching triplets in train set with same tail and edge
             all_triplet_indices_to_move = []
             for node in cartesian_nodes:
-                mask = (first_kg.tail_indices == node) & (first_kg.edge_indices == edge_index)
+                mask = (train_set[1] == node) & (train_set[2] == edge_index)
                 triplet_indices = mask.nonzero().squeeze()
                 if triplet_indices.dim() == 0:
                     triplet_indices = triplet_indices.unsqueeze(0)
@@ -514,11 +448,10 @@ def clean_cartesians(
             
         if all_triplet_indices_to_move:
             # Extract the triplets to be transferred
-            triplets_to_move = first_kg.graphindices[:,all_triplet_indices_to_move]
+            triplets_to_move = train_set[all_triplet_indices_to_move]
             
             # Remove identified triplets from train set
-            first_kg = first_kg.remove_triplets_from_training(torch.tensor(all_triplet_indices_to_move, dtype = torch.long))
+            knowledge_graph.remove_triplets_from_training(all_triplet_indices_to_move)
             
-            second_kg = second_kg.add_triplets(triplets_to_move)
-            
-    return first_kg, second_kg
+            knowledge_graph.add_triplets(triplets_to_move, "test")
+

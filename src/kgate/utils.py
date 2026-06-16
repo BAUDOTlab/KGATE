@@ -228,9 +228,7 @@ def set_random_seeds(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def compute_triplet_proportions(kg_train: "KnowledgeGraph",
-                                kg_test: "KnowledgeGraph",
-                                kg_validation: "KnowledgeGraph"
+def compute_triplet_proportions(knowledge_graph: KnowledgeGraph
                                 ) -> dict:
     """
     Computes the proportion of triplets for each edge in each of the KnowledgeGraphs
@@ -238,12 +236,8 @@ def compute_triplet_proportions(kg_train: "KnowledgeGraph",
 
     Arguments
     ---------
-    kg_train: KnowledgeGraph
-        Train split from the knowledge graph.
-    kg_test: KnowledgeGraph
-        Test split from the knowledge graph.
-    kg_validation: KnowledgeGraph
-        Validation split from the knowledge graph.
+    knowledge_graph: KnowledgeGraph
+        The knowledge graph processed and split
 
     Returns
     -------
@@ -252,20 +246,15 @@ def compute_triplet_proportions(kg_train: "KnowledgeGraph",
         with the respective proportions of each edge in kg_train, kg_test, and kg_validation.
         
     """
-    # Concatenate edges from all knowledge graphs
-    all_edges = torch.cat(( kg_train.triplets,
-                            kg_test.triplets,
-                            kg_validation.triplets))
-
     # Compute the number of triplets for all edges
-    total_counts = torch.bincount(all_edges)
+    total_counts = torch.bincount(knowledge_graph.triplets)
 
     # Compute occurences of each edge
-    train_count = torch.bincount(kg_train.triplets,
+    train_count = torch.bincount(knowledge_graph.graphindices[3, knowledge_graph.train_mask],
                                 minlength = len(total_counts))
-    test_count = torch.bincount(kg_test.triplets,
+    test_count = torch.bincount(knowledge_graph.graphindices[3, knowledge_graph.test_mask],
                                 minlength = len(total_counts))
-    validation_count = torch.bincount(kg_validation.triplets,
+    validation_count = torch.bincount(knowledge_graph.graphindices[3, knowledge_graph.validation_mask],
                                     minlength = len(total_counts))
 
     # Compute proportions for each knowledge graph
@@ -273,9 +262,9 @@ def compute_triplet_proportions(kg_train: "KnowledgeGraph",
     for edge_index in range(len(total_counts)):
         if total_counts[edge_index] > 0:
             proportions[edge_index] = {
-                "train": train_count[edge_index].item() / total_counts[edge_index].item(),
-                "test": test_count[edge_index].item() / total_counts[edge_index].item(),
-                "validation": validation_count[edge_index].item() / total_counts[edge_index].item()
+                "train": (train_count[edge_index] / total_counts[edge_index]).item(),
+                "test": (test_count[edge_index] / total_counts[edge_index]).item(),
+                "validation": (validation_count[edge_index] / total_counts[edge_index]).item()
             }
 
     return proportions
