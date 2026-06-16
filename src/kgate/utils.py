@@ -182,7 +182,7 @@ def save_config(config: dict,
 
 
 def load_knowledge_graph(pickle_filename: Path
-                        ) -> Tuple["KnowledgeGraph", "KnowledgeGraph", "KnowledgeGraph"]:
+                        ) -> "KnowledgeGraph":
     """
     Load the knowledge graph from pickle files.
     
@@ -193,21 +193,14 @@ def load_knowledge_graph(pickle_filename: Path
 
     Returns
     -------
-    kg_train: KnowledgeGraph
-        Train split from the knowledge graph, directly loaded from the pickle file.
-    kg_validation: KnowledgeGraph
-        Validation split from the knowledge graph, directly loaded from the pickle file.
-    kg_test: KnowledgeGraph
-        Test split from the knowledge graph, directly loaded from the pickle file.
-    
+    knowledge_graph: KnowledgeGraph
+        The knowledge graph loaded from the pickle file.    
     """
     logging.info(f"Will not run the preparation step. Using knowledge graph stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:
-        kg_train = pickle.load(file)
-        kg_validation = pickle.load(file)
-        kg_test = pickle.load(file)
+        knowledge_graph = pickle.load(file)
         
-    return kg_train, kg_validation, kg_test
+    return knowledge_graph
 
 
 def set_random_seeds(seed: int) -> None:
@@ -228,7 +221,7 @@ def set_random_seeds(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def compute_triplet_proportions(knowledge_graph: KnowledgeGraph
+def compute_triplet_proportions(knowledge_graph: "KnowledgeGraph"
                                 ) -> dict:
     """
     Computes the proportion of triplets for each edge in each of the KnowledgeGraphs
@@ -511,9 +504,6 @@ def merge_kg(kg_list: List["KnowledgeGraph"],
     assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triplet_types."
 
     new_graphindices = cat([kg.graphindices for kg in kg_list], dim = 1)
-    if complete_graphindices:
-        removed_graphindices = cat([kg.removed_triplets for kg in kg_list], dim = 1)
-        new_graphindices = cat([new_graphindices, removed_graphindices], dim = 1)
     
     return first_kg.__class__(
         graphindices = new_graphindices,
