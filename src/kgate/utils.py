@@ -315,60 +315,6 @@ def concat_kgs( kg_train: "KnowledgeGraph",
     return head, tail, edge
 
 
-def count_triplets( kg1: "KnowledgeGraph",
-                    kg2: "KnowledgeGraph",
-                    duplicates: List[Tuple[int, int]],
-                    reverse_duplicates: List[Tuple[int, int]]
-                    ) -> Tuple[int, int]:
-    """
-    Give the number of triplets that have duplicates ([head,edge,tail] = [head,edge,tail])
-    and the number of triplets that have reverse duplicates ([head,edge,tail] = [tail,edge,head]).
-    
-    Arguments
-    ---------
-    kg1: KnowledgeGraph
-        First knowledge graph.
-    kg2: KnowledgeGraph
-        Second knowledge graph.
-    duplicates: List[Tuple[int, int]]
-        List returned by torchkge.utils.data_redundancy.duplicates.
-    reverse_duplicates: List[Tuple[int, int]]
-        List returned by torchkge.utils.data_redundancy.duplicates.
-
-    Returns
-    -------
-    duplicate_count: int
-        Number of triplets in kg2 that have their duplicate triplet in kg1.
-    reverse_duplicate_count: int
-        Number of triplets in kg2 that have their reverse duplicate triplet in kg1.
-        
-    """
-    duplicate_count = 0
-    for first_edge_type, second_edge_type in duplicates:
-        head_tail_train = kg1.get_pairs(second_edge_type, type = "head_tail")
-        head_tail_test = kg2.get_pairs(first_edge_type, type = "head_tail")
-
-        duplicate_count += len(head_tail_test.intersection(head_tail_train))
-
-        head_tail_train = kg1.get_pairs(first_edge_type, type = "head_tail")
-        head_tail_test = kg2.get_pairs(second_edge_type, type = "head_tail")
-
-        duplicate_count += len(head_tail_test.intersection(head_tail_train))
-
-    reverse_duplicate_count = 0
-    for first_edge_type, second_edge_type in reverse_duplicates:
-        tail_head_train = kg1.get_pairs(second_edge_type, type = "tail_head")
-        head_tail_test = kg2.get_pairs(first_edge_type, type = "head_tail")
-
-        reverse_duplicate_count += len(head_tail_test.intersection(tail_head_train))
-
-        tail_head_train = kg1.get_pairs(first_edge_type, type = "tail_head")
-        head_tail_test = kg2.get_pairs(second_edge_type, type = "head_tail")
-
-        reverse_duplicate_count += len(head_tail_test.intersection(tail_head_train))
-
-    return duplicate_count, reverse_duplicate_count
-
 
 def find_best_model(directory: Path) -> Path | None:
     """
