@@ -270,52 +270,6 @@ def compute_triplet_proportions(knowledge_graph: KnowledgeGraph
     return proportions
 
 
-def concat_kgs( kg_train: "KnowledgeGraph",
-                kg_validation: "KnowledgeGraph",
-                kg_test: "KnowledgeGraph"
-                ) -> Tuple[Tensor, Tensor, Tensor]:
-    """
-    Merge the 3 splits of a knowledge graph into the original knowledge graph.
-
-    Arguments
-    ---------
-    kg_train: KnowledgeGraph
-        Train split from the knowledge graph.
-    kg_test: KnowledgeGraph
-        Test split from the knowledge graph.
-    kg_validation: KnowledgeGraph
-        Validation split from the knowledge graph.
-
-    Returns
-    -------
-    head: torch.Tensor, shape: [merged_kg.node_count]
-        List of head indices.
-    tail: torch.Tensor, shape: [merged_kg.node_count]
-        List of tail indices.
-    edge: torch.Tensor, shape: [merged_kg.node_count]
-        List of edge indices.
-    
-    Notes
-    -----
-    (merged_kg.node_count) is the number of nodes of the newly merged knowledge graph.
-    
-    """
-    head = cat((kg_train.head_indices,
-                kg_validation.head_indices,
-                kg_test.head_indices))
-    
-    tail = cat((kg_train.tail_indices,
-                kg_validation.tail_indices,
-                kg_test.tail_indices))
-    
-    edge = cat((kg_train.edge_indices,
-                kg_validation.edge_indices,
-                kg_test.edge_indices))
-    
-    return head, tail, edge
-
-
-
 def find_best_model(directory: Path) -> Path | None:
     """
     Find all files having a model and compare their `validation_metrics` score
