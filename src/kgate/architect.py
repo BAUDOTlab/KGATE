@@ -66,17 +66,14 @@ class Architect(Module):
     """
     Architect class for knowledge graph embedding training.
     
-    The Architect class contains the kg and manages every step from the training to the inference.
+    The Architect class contains the knowledge graph and manages every step from the training to the inference.
     
     Arguments
     ---------
     config_path: str, optional
         Path to the configuration file
-    kg: Tuple of KnowledgeGraph or KnowledgeGraph, optional
-        Either a knowledge graph that has already been preprocessed by KGATE and split accordingly, or an unprocessed KnowledgeGraph object.
-        In the first case, the knowledge graph won't be preprocessed even if `config.run_kg_preprocessing` is set to True.
-        In the second case, an error is thrown if the `config.run_kg_preprocessing` is set to False.
-        The KnowledgeGraph object can also be a torchKGE KnowledgeGraph if it has been transformed by the kgate.KnowledgeGraph.from_torchkge() method beforehand.
+    knowledge_graph: KnowledgeGraph, optional
+        A knowledge graph that may have already been preprocessed by KGATE and split accordingly, or an unprocessed KnowledgeGraph object.
     dataframe: pd.DataFrame, optional
         The knowledge graph as a pandas dataframe containing at least the columns head, tail and edge,
         and where each row corresponds to a triplet.
@@ -96,12 +93,8 @@ class Architect(Module):
     ----------
     config: dict
         The parsed configuration as a python dictionnary.
-    kg_train: KnowledgeGraph
-        Train split from the knowledge graph.
-    kg_validation: KnowledgeGraph
-        Validation split from the knowledge graph.
-    kg_test: KnowledgeGraph
-        Test split from the knowledge graph.
+    knowledge_graph: KnowledgeGraph
+        The associated Knowledge Graph
     metadata: pd.DataFrame
         The metadata dataframe to associate to the knowledge graph.
     node_embedding_dimensions: int
@@ -179,8 +172,7 @@ class Architect(Module):
     """
     def __init__(self,
                 config_path: str = "",
-                kg: Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph] 
-                        | KnowledgeGraph 
+                knowledge_graph: KnowledgeGraph 
                         | None = None,
                 dataframe: pd.DataFrame
                         | None = None,
@@ -234,18 +226,12 @@ class Architect(Module):
 
         if run_kg_preprocessing:
             logging.info(f"Preparing KG...")
-            self.kg_train, self.kg_validation, self.kg_test = prepare_knowledge_graph(self.config, kg, dataframe, self.metadata)
+            self.knowledge_graph = prepare_knowledge_graph(self.config, knowledge_graph, dataframe, self.metadata)
             logging.info("KG preprocessed.")
         else:
-            if kg is not None:
-                logging.info("Using given KG...")
-                if isinstance(kg, tuple):
-                    self.kg_train, self.kg_validation, self.kg_test = kg
-                else:
-                    raise ValueError("The KG needs to be preprocessed and given as a tuple of training, validation and test KG. Otherwise, set `run_kg_preprocessing` to True in the config file.")
-            else:
+            if knowledge_graph is None:
                 logging.info("Loading KG...")
-                self.kg_train, self.kg_validation, self.kg_test = load_knowledge_graph(Path(self.config["kg_pkl"]))
+                self.knowledge_graph = load_knowledge_graph(Path(self.config["kg_pkl"]))
                 logging.info("Done")
 
         super().__init__()
@@ -257,8 +243,6 @@ class Architect(Module):
         self.sampler: NegativeSampler = None
         self.scheduler: optim.lr_scheduler.LRScheduler | None = None
         self.evaluator: LinkPredictionEvaluator | TripletClassificationEvaluator = None
-        self.node_embeddings: nn.ParameterList
-        self.edge_embeddings: nn.Embedding
 
 
     @property
