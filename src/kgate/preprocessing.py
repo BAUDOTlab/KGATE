@@ -223,11 +223,16 @@ def clean_knowledge_graph(  knowledge_graph: KnowledgeGraph,
         clean_cartesians(knowledge_graph, known_cartesian = cartesian_edges)
 
     kg_train_ok, _ = verify_node_coverage(knowledge_graph)
+    train_nodes = knowledge_graph.graphindices[:2, knowledge_graph.train_mask].unique()
     if not kg_train_ok:
         logging.info("Node coverage verification failed...")
 
+        # Issue: mask modification is not done in place somehow
         ensure_node_coverage(knowledge_graph)
 
+        train2_nodes = knowledge_graph.graphindices[:2, knowledge_graph.train_mask].unique()
+
+        logging.warning((train_nodes == train2_nodes).all())
         kg_train_ok, missing_nodes = verify_node_coverage(knowledge_graph)
         if not kg_train_ok:
             logging.info(f"Node coverage verification failed. {len(missing_nodes)} nodes are missing.")
@@ -264,14 +269,15 @@ def verify_node_coverage(knowledge_graph: KnowledgeGraph
     node_indices_full = knowledge_graph.graphindices[:2].unique()
     
     # Missing nodes in the train graph
-    missing_node_indices = node_indices_full - node_indices_train
+    missing_node_indices = node_indices_full[~torch.isin(node_indices_full, node_indices_train)]
     
-    if missing_node_indices:
+    if len(missing_node_indices) > 0:
+        logging.warning(missing_node_indices)
         # Invert node_to_index dictionnary to get index_to_node
         index_to_node = {value: key for key, value in knowledge_graph.node_to_index.items()}
         
         # Get missing node names from their indices
-        missing_node_names = [index_to_node[index] for index in missing_node_indices if index in index_to_node]
+        missing_node_names = [index_to_node[index.item()] for index in missing_node_indices]
         return False, missing_node_names
     
     else:
@@ -297,7 +303,7 @@ def ensure_node_coverage(knowledge_graph: KnowledgeGraph
     present_nodes = train_set[:2].unique()
 
     # Identify nodes missing from kg_train
-    missing_nodes = all_nodes[torch.isin(all_nodes, present_nodes).neg()]
+    missing_nodes = all_nodes[~torch.isin(all_nodes, present_nodes)]
 
     logging.info(f"Total nodes in full kg: {len(all_nodes)}")
     logging.info(f"Nodes present in kg_train: {len(present_nodes)}")
@@ -352,7 +358,8 @@ def clean_datasets( knowledge_graph: KnowledgeGraph,
         encoded_validation_indices = first_edge_type_pairs_in_validation_split[0] * knowledge_graph.node_count \
                                     + first_edge_type_pairs_in_validation_split[1]
         encoded_test_indices = first_edge_type_pairs_in_test_split[0] * knowledge_graph.node_count \
-                                + first_edge_type_pairs_in_test_split
+                                + first_edge_type_pairs_in_test_split[1]
+
         pair_mask = torch.isin(encoded_indices, torch.cat((encoded_validation_indices, encoded_test_indices)))
         edge_mask = knowledge_graph.edge_indices == second_edge_type
         indices_to_remove_from_train = torch.nonzero(pair_mask & edge_mask & knowledge_graph.train_mask).squeeze(1)
@@ -379,7 +386,7 @@ def clean_datasets( knowledge_graph: KnowledgeGraph,
         encoded_validation_indices = second_edge_type_pairs_in_validation_split[0] * knowledge_graph.node_count \
                                     + second_edge_type_pairs_in_validation_split[1]
         encoded_test_indices = second_edge_type_pairs_in_test_split[0] * knowledge_graph.node_count \
-                                + second_edge_type_pairs_in_test_split
+                                + second_edge_type_pairs_in_test_split[1]
         pair_mask = torch.isin(encoded_indices, torch.cat((encoded_validation_indices, encoded_test_indices)))
         edge_mask = knowledge_graph.edge_indices == first_edge_type
         indices_to_remove_from_train = torch.nonzero(pair_mask & edge_mask & knowledge_graph.train_mask).squeeze(1)

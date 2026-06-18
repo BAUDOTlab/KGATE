@@ -101,8 +101,6 @@ class EncoderInput:
 
         return message
 
-
-
 class KnowledgeGraph(Dataset):
     """
     KGATE representation of a Knowledge Graph.
@@ -849,13 +847,13 @@ class KnowledgeGraph(Dataset):
                 # that both (A, edge, B), (B, edge, A), (A, edge_rev, B) and (B, edge_rev, A)
                 # appear in the ground truth. So far this is only the case for (A, edge, B) so
                 # we add the rest
-                new_heads = subset[1].unsqueeze(0)
-                new_tails = subset[0].unsqueeze(0)
+                new_heads = subset[1]
+                new_tails = subset[0]
                 new_triplets = torch.stack([
-                        torch.cat([new_heads.repeat(subset.size(1)), new_tails]),
-                        torch.cat([new_tails.repeat(subset.size(1)), new_heads]),
-                        torch.cat([subset[2], tensor(reverse_edge_index).repeat(subset.size(1) * 2).unsqueeze(0)]),
-                        torch.cat([subset[3], tensor(reverse_triplet_index).repeat(subset.size(1) * 2).unsqueeze(0)])
+                        torch.cat([new_heads.repeat(2), new_tails]),
+                        torch.cat([new_tails.repeat(2), new_heads]),
+                        torch.cat([subset[2], tensor(reverse_edge_index).repeat(subset.size(1) * 2)]),
+                        torch.cat([subset[3], tensor(reverse_triplet_index).repeat(subset.size(1) * 2)])
                     ])
 
                 new_graphindices.append(new_triplets)
@@ -954,7 +952,7 @@ class KnowledgeGraph(Dataset):
             split_mapping = {
                 "train": self.train_mask,
                 "validation": self.validation_mask,
-                "test": self.test_set
+                "test": self.test_mask
             }
             mask = (self.edge_indices == edge_type_index) & split_mapping[split]
         else:

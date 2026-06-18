@@ -32,7 +32,7 @@ from torch import tensor, Tensor
 from torch.nn import Parameter, Module
 import torch.optim as optim
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from ignite.engine import Events, Engine
 from ignite.handlers import EarlyStopping, ModelCheckpoint, Checkpoint, DiskSaver, ProgressBar
@@ -397,7 +397,7 @@ class Architect(Module):
         if gnn_layers == 0:
             gnn_layers = encoder_config["gnn_layer_number"]
 
-        edge_types = self.kg_train.triplet_types
+        edge_types = self.knowledge_graph.triplet_types
 
         match encoder_name:
             case "Default":
@@ -407,7 +407,7 @@ class Architect(Module):
             case "GAT":
                 encoder = GATEncoder(edge_types, self.encoder_node_embedding_dimensions, gnn_layers)
             case "Node2Vec":
-                encoder = Node2VecEncoder(self.kg_train.edge_list, self.encoder_node_embedding_dimensions, device = self.device, **encoder_config["params"])
+                encoder = Node2VecEncoder(self.knowledge_graph.edge_list[:, self.knowledge_graph.train_mask], self.encoder_node_embedding_dimensions, device = self.device, **encoder_config["params"])
             case _:
                 encoder = DefaultEncoder()
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
@@ -493,33 +493,33 @@ class Architect(Module):
                 decoder_loss = MarginLoss(margin)
             case "TransH":
                 decoder = TransH(embedding_dimensions = self.node_embedding_dimensions,
-                                node_count = self.kg_train.node_count,
-                                edge_count = self.kg_train.edge_count)
+                                node_count = self.knowledge_graph.node_count,
+                                edge_count = self.knowledge_graph.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransR":
                 decoder = TransR(node_embedding_dimensions = self.node_embedding_dimensions,
                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
-                                node_count = self.kg_train.node_count, 
-                                edge_count = self.kg_train.edge_count)
+                                node_count = self.knowledge_graph.node_count, 
+                                edge_count = self.knowledge_graph.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TransD":
                 decoder = TransD(node_embedding_dimensions = self.node_embedding_dimensions,
                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
-                                node_count = self.kg_train.node_count, 
-                                edge_count = self.kg_train.edge_count)
+                                node_count = self.knowledge_graph.node_count, 
+                                edge_count = self.knowledge_graph.edge_count)
                 decoder_loss = MarginLoss(margin)
             case "TorusE":
                 decoder = TorusE(dissimilarity_type = dissimilarity)
                 decoder_loss = MarginLoss(margin)
             case "RESCAL":
                 decoder = RESCAL(embedding_dimensions = self.node_embedding_dimensions,
-                                node_count = self.kg_train.node_count,
-                                edge_count = self.kg_train.edge_count)
+                                node_count = self.knowledge_graph.node_count,
+                                edge_count = self.knowledge_graph.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "DistMult":
                 decoder = DistMult(embedding_dimensions = self.node_embedding_dimensions,
-                                node_count = self.kg_train.node_count,
-                                edge_count = self.kg_train.edge_count)
+                                node_count = self.knowledge_graph.node_count,
+                                edge_count = self.knowledge_graph.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "ComplEx":
                 decoder = ComplEx(embedding_dimensions = self.node_embedding_dimensions)
@@ -527,8 +527,8 @@ class Architect(Module):
             case "ConvKB":
                 decoder = ConvKB(embedding_dimensions = self.node_embedding_dimensions, 
                                 filter_count = filter_count, 
-                                node_count = self.kg_train.node_count, 
-                                edge_count = self.kg_train.edge_count)
+                                node_count = self.knowledge_graph.node_count, 
+                                edge_count = self.knowledge_graph.edge_count)
                 decoder_loss = BinaryCrossEntropyLoss()
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
@@ -606,13 +606,13 @@ class Architect(Module):
 
         match negative_sampler_name:
             case "Positional":
-                negative_sampler = PositionalNegativeSampler(self.kg_train)
+                negative_sampler = PositionalNegativeSampler(self.knowledge_graph)
             case "Uniform":
-                negative_sampler = UniformNegativeSampler(self.kg_train, negative_triplet_count)
+                negative_sampler = UniformNegativeSampler(self.knowledge_graph, negative_triplet_count)
             case "Bernoulli":
-                negative_sampler = BernoulliNegativeSampler(self.kg_train, negative_triplet_count)
+                negative_sampler = BernoulliNegativeSampler(self.knowledge_graph, negative_triplet_count)
             case "Mixed":
-                negative_sampler = MixedNegativeSampler(self.kg_train, negative_triplet_count)
+                negative_sampler = MixedNegativeSampler(self.knowledge_graph, negative_triplet_count)
             case _:
                 raise NotImplementedError(f"Sampler type '{negative_sampler_name}' is not supported. Please check the configuration.")
             
@@ -699,20 +699,11 @@ class Architect(Module):
         """
         match self.config["evaluation"]["objective"]:
             case "Link Prediction":
-                full_graphindices = torch.cat([
-                    self.kg_train.graphindices,
-                    self.kg_train.removed_triplets,
-                    self.kg_validation.graphindices,
-                    self.kg_validation.removed_triplets,
-                    self.kg_test.graphindices,
-                    self.kg_test.removed_triplets
-                ], dim=1)
-                evaluator = LinkPredictionEvaluator(full_graphindices = full_graphindices, embedding_dimensions = self.node_embedding_dimensions)
+                evaluator = LinkPredictionEvaluator(graphindices = self.knowledge_graph.graphindices, embedding_dimensions = self.node_embedding_dimensions)
                 self.validation_metric = "MRR"
             case "Triplet Classification":
                 evaluator = TripletClassificationEvaluator(architect = self,
-                                                        kg_validation = self.kg_validation,
-                                                        kg_test = self.kg_test)
+                                                        knowledge_graph = self.knowledge_graph)
                 self.validation_metric = "Accuracy"
             case _:
                 raise NotImplementedError(f"The requested evaluator {self.config["evaluation"]["objective"]} is not implemented.")
@@ -774,23 +765,23 @@ class Architect(Module):
         if pretrained is not None and pretrained.exists():
             self.node_embeddings = torch.load(pretrained)
         else:
-            assert isinstance(self.encoder, GNN) or len(self.kg_train.node_type_to_index) == 1, "When not using a GNN as encoder, the node_type shouldn't be supplied."
+            assert isinstance(self.encoder, GNN) or len(self.knowledge_graph.node_type_to_index) == 1, "When not using a GNN as encoder, the node_type shouldn't be supplied."
 
             # create initial embeddings
             self.node_embeddings = nn.ParameterList()
-            index_to_node_type = {value: key for key,value in self.kg_train.node_type_to_index.items()}
-            for node_type in self.kg_train.node_type_to_global:
-                node_count = self.kg_train.node_type_to_global[node_type].size(0)
+            index_to_node_type = {value: key for key,value in self.knowledge_graph.node_type_to_index.items()}
+            for node_type in self.knowledge_graph.node_type_to_global:
+                node_count = self.knowledge_graph.node_type_to_global[node_type].size(0)
                 if node_type in attributes:
                     # if feature attributes given, initialization based on them
                     current_attribute: pd.DataFrame = attributes[node_type]
                     assert current_attribute.shape[0] == node_count, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({node_count})."
                     input_features = torch.zeros((node_count,current_attribute.shape[1]), dtype = torch.float)
                     for node in current_attribute.index:
-                        node_index = self.kg_train.node_to_index[node]
-                        node_type_index = self.kg_train.node_types[node_index]
-                        local_index = self.kg_train.global_to_local_indices[node_index]
-                        assert node_type_index == self.kg_train.node_type_to_index[node_type], f"The node {node} is given as {node_type} but registered as {index_to_node_type[str(node_type_index)]} in the KG."
+                        node_index = self.knowledge_graph.node_to_index[node]
+                        node_type_index = self.knowledge_graph.node_types[node_index]
+                        local_index = self.knowledge_graph.global_to_local_indices[node_index]
+                        assert node_type_index == self.knowledge_graph.node_type_to_index[node_type], f"The node {node} is given as {node_type} but registered as {index_to_node_type[str(node_type_index)]} in the KG."
 
                         input_features[local_index] = tensor(current_attribute.loc[node], dtype = torch.float)
                     
@@ -806,7 +797,7 @@ class Architect(Module):
                 # The input features are not supposed to change if we use an encoder
                 self.node_embeddings.requires_grad_(False)
 
-        self.edge_embeddings = initialize_embedding(self.kg_train.edge_count, self.encoder_edge_embedding_dimensions, self.device)
+        self.edge_embeddings = initialize_embedding(self.knowledge_graph.edge_count, self.encoder_edge_embedding_dimensions, self.device)
 
         logging.info("Initializing optimizer...")
         self.optimizer = self.optimizer or self.initialize_optimizer()
@@ -884,7 +875,8 @@ class Architect(Module):
         self.validation_metric_value: List[float] = []
         self.learning_rates: List[float] = []
 
-        data_loader: DataLoader = DataLoader(self.kg_train, self.train_batch_size)
+        train_subset = Subset(self.knowledge_graph, self.knowledge_graph.train_mask.nonzero(as_tuple = True)[0])
+        data_loader: DataLoader = DataLoader(train_subset, self.train_batch_size)
         logging.info(f"Number of training batches: {len(data_loader)}")
 
         trainer: Engine = Engine(self.process_batch)
@@ -992,7 +984,7 @@ class Architect(Module):
         if checkpoint_file is not None:
             if Path(checkpoint_file).is_file():
                 logging.info(f"Resuming training from checkpoint: {checkpoint_file}")
-                logging.info(f"edge_embeddings size: {self.edge_embeddings.weight.size()}")
+                logging.info(f"edge_embeddings size: {self.knowledge_graph.edge_embeddings.weight.size()}")
                 checkpoint = torch.load(checkpoint_file, weights_only = False)
                 Checkpoint.load_objects(to_load = to_save, checkpoint = checkpoint)
 
@@ -1127,23 +1119,21 @@ class Architect(Module):
 
         do_heads_inference, do_tails_inference, do_edges_inference = len(heads) == 0, len(tails) == 0, len(edges) == 0
 
-        full_kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test], True)
-
         if do_heads_inference:
-            first_known_triplet_part = tensor([self.kg_train.node_to_index[tail] for tail in tails]).long()
-            second_known_triplet_part = tensor([self.kg_train.edge_to_index[edge] for edge in edges]).long()
+            first_known_triplet_part = tensor([self.knowledge_graph.node_to_index[tail] for tail in tails]).long()
+            second_known_triplet_part = tensor([self.knowledge_graph.edge_to_index[edge] for edge in edges]).long()
             missing_triplet_part = "head"
-            inference = NodeInference(full_kg)
+            inference = NodeInference(self.knowledge_graph)
         elif do_tails_inference:
-            first_known_triplet_part = tensor([self.kg_train.node_to_index[head] for head in heads]).long()
-            second_known_triplet_part = tensor([self.kg_train.edge_to_index[edge] for edge in edges]).long()
+            first_known_triplet_part = tensor([self.knowledge_graph.node_to_index[head] for head in heads]).long()
+            second_known_triplet_part = tensor([self.knowledge_graph.edge_to_index[edge] for edge in edges]).long()
             missing_triplet_part = "tail"
-            inference = NodeInference(full_kg)
+            inference = NodeInference(self.knowledge_graph)
         elif do_edges_inference:
-            first_known_triplet_part = tensor([self.kg_train.node_to_index[head] for head in heads]).long()
-            second_known_triplet_part = tensor([self.kg_train.node_to_index[tail] for tail in tails]).long()
+            first_known_triplet_part = tensor([self.knowledge_graph.node_to_index[head] for head in heads]).long()
+            second_known_triplet_part = tensor([self.knowledge_graph.node_to_index[tail] for tail in tails]).long()
             missing_triplet_part = "edge"
-            inference = EdgeInference(full_kg)
+            inference = EdgeInference(self.knowledge_graph)
             
         predictions, scores = inference.evaluate(
             first_known_triplet_part,
@@ -1153,11 +1143,11 @@ class Architect(Module):
             top_k = top_k,
             missing_triplet_part = missing_triplet_part,
             batch_size = self.evaluation_batch_size,
-            node_embeddings = self.node_embeddings,   
-            edge_embeddings = self.edge_embeddings
+            node_embeddings = self.knowledge_graph.node_embeddings,   
+            edge_embeddings = self.knowledge_graph.edge_embeddings
         )
 
-        index_to_node = {value: key for key, value in self.kg_train.node_to_index.items()}
+        index_to_node = {value: key for key, value in self.knowledge_graph.node_to_index.items()}
         prediction_index = predictions.reshape(-1)
         prediction_names = np.vectorize(index_to_node.get)(prediction_index)
 
@@ -1195,12 +1185,12 @@ class Architect(Module):
         checkpoint = torch.load(path, map_location = self.device, weights_only = False)
 
         # Check node and edge dictionnary size
-        assert len(checkpoint["edges"]["weight"]) == self.kg_train.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint["edges"]["weight"])}) and the current configuration ({self.kg_train.edge_count})!"
+        assert len(checkpoint["edges"]["weight"]) == self.knowledge_graph.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint["edges"]["weight"])}) and the current configuration ({self.knowledge_graph.edge_count})!"
 
         if isinstance(self.encoder, GNN):
-            assert len(checkpoint["nodes"]) == len(self.kg_train.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint["nodes"])}) and the current configuration ({len(self.kg_train.node_type_to_index)})!"
+            assert len(checkpoint["nodes"]) == len(self.knowledge_graph.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint["nodes"])}) and the current configuration ({len(self.knowledge_graph.node_type_to_index)})!"
         else:
-            assert len(checkpoint["nodes"]["0"]) == self.kg_train.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint["nodes"]["0"])}) and the current configuration ({self.kg_train.node_count})!"
+            assert len(checkpoint["nodes"]["0"]) == self.knowledge_graph.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint["nodes"]["0"])}) and the current configuration ({self.knowledge_graph.node_count})!"
 
         if "encoder" in checkpoint:
             assert checkpoint["encoder"].keys() == self.encoder.state_dict().keys(), "Mismatch between the checkpoint convolution layers and the current configuration's."
@@ -1221,7 +1211,7 @@ class Architect(Module):
         """
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
-        self.edge_embeddings = initialize_embedding(self.kg_train.edge_count, self.encoder_edge_embedding_dimensions, self.device)
+        self.edge_embeddings = initialize_embedding(self.knowledge_graph.edge_count, self.encoder_edge_embedding_dimensions, self.device)
 
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_directory)
@@ -1249,8 +1239,9 @@ class Architect(Module):
 
 
     def forward(self,
-                positive_triplets_batch,
-                negative_triplets_batch
+                positive_triplets_batch: Tensor,
+                negative_triplets_batch: Tensor,
+                mask: Tensor
                 ) -> Tuple[Tensor, Tensor]:
         """
         Forward pass of the Architect.
@@ -1263,6 +1254,8 @@ class Architect(Module):
         negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
             Tensor containing the integer key of negatively sampled triplets of
             the edges in the current batch.
+        mask: torch.Tensor, dtype: torch.long, shape: [triplet_count]
+            Mask tensor corresponding to a split of the knowledge graph
 
         Returns
         -------
@@ -1272,13 +1265,13 @@ class Architect(Module):
             Tensor containing the score of each negative triplet within the batch.
         
         """
-        positive_triplet: Tensor = self.scoring_function(positive_triplets_batch, self.kg_train)
+        positive_triplet: Tensor = self.scoring_function(positive_triplets_batch, self.knowledge_graph, mask)
         # The loss function requires the positive and negative tensors to be of the same size,
         # Thus we duplicate the positive tensor as needed to match the negative.
         negative_triplet_count = negative_triplets_batch.size(1) // positive_triplets_batch.size(1)
         positive_triplet = positive_triplet.repeat(negative_triplet_count)
 
-        negative_triplet: Tensor = self.scoring_function(negative_triplets_batch, self.kg_train)
+        negative_triplet: Tensor = self.scoring_function(negative_triplets_batch, self.knowledge_graph, mask)
 
         return positive_triplet, negative_triplet
 
@@ -1313,7 +1306,7 @@ class Architect(Module):
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triplets
-        positive_triplet, negative_triplet = self(batch, batch_count)
+        positive_triplet, negative_triplet = self(batch, batch_count, self.knowledge_graph.train_mask)
         loss = self.decoder_loss(positive_triplet, negative_triplet)
         loss.backward()
 
@@ -1326,7 +1319,8 @@ class Architect(Module):
 
     def scoring_function(self,
                         batch: Tensor,
-                        kg: KnowledgeGraph
+                        knowledge_graph: KnowledgeGraph,
+                        mask: Tensor
                         ) -> Tensor:
         """
         Runs the encoder and decoder pass on a batch for a given KG.
@@ -1336,16 +1330,18 @@ class Architect(Module):
         
         Arguments
         ---------
-        batch: torch.Tensor, shape: [4, batch_size]
+        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
             Batch of triplets. The rows correspond to:
             - head_index
             - tail_index
             - edge_index
             - triplet_index
             Here, batch_size is batch.shape[1].
-        kg: KnowledgeGraph
+        knowledge_graph: KnowledgeGraph
             The knowledge graph corresponding to the batch identifiers.
-            
+        mask: torch.Tensor, dtype: torch.long, shape: [triplet_count]
+            Mask tensor corresponding to a split of the knowledge graph
+
         Returns
         -------
         score: torch.Tensor
@@ -1357,7 +1353,7 @@ class Architect(Module):
         if isinstance(self.encoder, GNN):
             seed_nodes: Tensor = batch[:2].unique()
             hop_count: int = self.encoder.layer_count
-            edge_list: Tensor = kg.edge_list
+            edge_list: Tensor = knowledge_graph.edge_list
             
             _,_,_, edge_mask = k_hop_subgraph(
                 node_idx = seed_nodes,
@@ -1365,7 +1361,7 @@ class Architect(Module):
                 edge_index = edge_list
                 )
                 
-            input = kg.get_encoder_input(kg.graphindices[:, edge_mask].to(self.device), self.node_embeddings)
+            input = knowledge_graph.get_encoder_input(knowledge_graph.graphindices[:, edge_mask].to(self.device), self.node_embeddings)
 
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
@@ -1373,7 +1369,7 @@ class Architect(Module):
             # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
             # which corresponds to the indices that are filled here.
             # TODO: See if making it a sparse tensor can spare memory
-            embeddings: torch.Tensor = torch.zeros((kg.node_count, self.encoder_node_embedding_dimensions),
+            embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count, self.encoder_node_embedding_dimensions),
                                                     device = self.device,
                                                     dtype = torch.float)
 
@@ -1408,13 +1404,12 @@ class Architect(Module):
         self.normalize_parameters()
         
         if isinstance(self.encoder, GNN):
-            node_embeddings: torch.Tensor = torch.zeros((self.kg_train.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
-            full_kg = merge_kg([self.kg_train, self.kg_val, self.kg_test])
+            node_embeddings: torch.Tensor = torch.zeros((self.knowledge_graph.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
 
             with torch.no_grad():
                 # TODO: use not the whole graphindices but the unique nodes instead
-                for i in range(full_kg.graphindices.shape[1] // self.train_batch_size + 1):
-                    input = self.kg_train.get_encoder_input(full_kg.graphindices[:, i * self.train_batch_size : (i + 1) * self.train_batch_size].to(self.device), self.node_embeddings)
+                for i in range(self.knowledge_graph.graphindices.shape[1] // self.train_batch_size + 1):
+                    input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.graphindices[:, i * self.train_batch_size : (i + 1) * self.train_batch_size].to(self.device), self.node_embeddings)
 
                     encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
@@ -1512,14 +1507,18 @@ class Architect(Module):
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
+            validation_subset = Subset(self.knowledge_graph, self.knowledge_graph.validation_mask)
+
             if isinstance(self.evaluator,LinkPredictionEvaluator):
-                validation_score = self.link_prediction(self.kg_validation) 
+                validation_score = self.link_prediction(validation_subset) 
                 engine.state.metrics["validation_metric_value"] = validation_score 
                 logging.info(f"Validation MRR: {validation_score}")
+
             elif isinstance(self.evaluator, TripletClassificationEvaluator):
-                validation_score = self.triplet_classification(self.kg_validation, self.kg_test)
+                validation_score = self.triplet_classification()
                 engine.state.metrics["validation_metric_value"] = validation_score
                 logging.info(f"Validation Accuracy: {validation_score}")
+        
         if self.scheduler and isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
             self.scheduler.step(validation_score)
             logging.info("Stepping scheduler ReduceLROnPlateau.")
@@ -1571,73 +1570,8 @@ class Architect(Module):
         plot_learning_curves(self.train_metrics_file, self.config["output_directory"], self.validation_metric)
 
 
-    # TODO: create a script to isolate prediction functions. Maybe a Predictor class?
-    def categorize_test_nodes(self,
-                            edge_name: str,
-                            threshold: int
-                            ) -> Tuple[List[int], List[int]]:
-        """
-        Categorizes test triplets with the specified edge in the test set 
-        based on whether their nodes have been seen with that edge in the training set,
-        and separates them into two groups based on a threshold for occurrences.
-
-        Arguments
-        ---------
-        edge_name: str
-            The name of the edge to check (e.g., "indication").
-        threshold: int
-            The minimum number of occurrences of the edge for a node to be considered as "frequent".
-
-        Raises
-        ------
-        ValueError
-            An edge from `edge_name` does not exist in the training knowledge graph.
-
-        Returns
-        -------
-        frequent_indices: List[int]
-            Indices of triplets in the test set with the specified edge where
-            nodes have been seen more than `threshold` times with that edge in the training set.
-        infrequent_indices: List[int]
-            Indices of triplets in the test set with the specified edge where
-            nodes have been seen fewer than or equal to `threshold` times with that edge in the training set.
-        
-        """
-        # Get the index of the specified edge in the training graph
-        if edge_name not in self.kg_train.edge_to_index:
-            raise ValueError(f"The edge '{edge_name}' does not exist in the training knowledge graph.")
-        edge_index = self.kg_train.edge_to_index[edge_name]
-
-        # Count occurrences of nodes with the specified edge in the training set
-        train_node_counts = {}
-        for i in range(self.kg_train.triplet_count):
-            if self.kg_train.edge_indices[i].item() == edge_index:
-                head = self.kg_train.head_indices[i].item()
-                tail = self.kg_train.tail_indices[i].item()
-                train_node_counts[head] = train_node_counts.get(head, 0) + 1
-                train_node_counts[tail] = train_node_counts.get(tail, 0) + 1
-
-        # Separate test triplets with the specified edge based on the threshold
-        frequent_indices = []
-        infrequent_indices = []
-        for i in range(self.kg_test.triplet_count):
-            if self.kg_test.edge_indices[i].item() == edge_index:  # Only consider triplets with the specified edge
-                head = self.kg_test.head_indices[i].item()
-                tail = self.kg_test.tail_indices[i].item()
-                head_count = train_node_counts.get(head, 0)
-                tail_count = train_node_counts.get(tail, 0)
-
-                # Categorize based on threshold
-                if head_count > threshold or tail_count > threshold:
-                    frequent_indices.append(i)
-                else:
-                    infrequent_indices.append(i)
-
-        return frequent_indices, infrequent_indices
-    
-    
     def calculate_metrics_for_edges(self,
-                                        kg: KnowledgeGraph,
+                                        knowledge_graph: KnowledgeGraph | Subset[KnowledgeGraph],
                                         edge_indices: List[str]
                                         ) -> Tuple[float, int, Dict[str, float], float]:
         """
@@ -1647,8 +1581,9 @@ class Architect(Module):
 
         Arguments
         ---------
-        kg: KnowledgeGraph
+        knowledge_graph: KnowledgeGraph or Subset[KnowledgeGraph]
             Knowledge graph on which the metrics will be calculated.
+            Can be a subset of a full knowledge graph when run on test split.
         edge_indices: List[str]
             Indices of edges.
 
@@ -1672,22 +1607,28 @@ class Architect(Module):
         # Mean Reciprocal Rank (MRR) computed by ponderating for each edge
         metrics_sum = 0.0
         triplet_count = 0
-        individual_metrics = {} 
+        individual_metrics = {}
+        if isinstance(knowledge_graph, Subset):
+            graphindices = knowledge_graph[:]
+            edge_to_index = knowledge_graph.dataset.edge_to_index
+        elif isinstance(knowledge_graph, KnowledgeGraph):
+            graphindices = knowledge_graph.graphindices
+            edge_to_index = knowledge_graph.edge_to_index
 
         for edge_name in edge_indices:
             # Get triplets associated with index
-            edge_index = kg.edge_to_index.get(edge_name)
-            indices_to_keep = torch.nonzero(kg.edge_indices == edge_index, as_tuple = False).squeeze()
+            edge_index = edge_to_index.get(edge_name)
+            indices_to_keep = torch.nonzero(graphindices[2] == edge_index, as_tuple = False).squeeze()
 
             if indices_to_keep.numel() == 0:
                 continue  # Skip to next edge if no triplet found
             
-            new_kg = kg.remove_triplets_from_training(~indices_to_keep)
+            edge_subset = graphindices[:, indices_to_keep]
 
             if isinstance(self.evaluator, LinkPredictionEvaluator):
-                test_metrics = self.link_prediction(new_kg)
+                test_metrics = self.link_prediction(Subset(knowledge_graph, indices_to_keep))
             elif isinstance(self.evaluator, TripletClassificationEvaluator):
-                test_metrics = self.triplet_classification(kg_validation = self.kg_validation, kg_test = new_kg)
+                test_metrics = self.triplet_classification() # TODO
             
             # Save each edge's MRR
             individual_metrics[edge_name] = test_metrics
@@ -1738,14 +1679,14 @@ class Architect(Module):
         return frequent_metrics, infrequent_metrics
 
 
-    def link_prediction(self, kg: KnowledgeGraph) -> float:
+    def link_prediction(self, knowledge_graph_subset: Subset[KnowledgeGraph]) -> float:
         """
         Link prediction evaluation on test set, validation set or inference set.
 
         Arguments
         ---------
-        kg: KnowledgeGraph
-            Knowledge graph on which the link prediction evaluation will be done.
+        knowledge_graph_subset: Subset[KnowledgeGraph]
+            Subset of the knowledge graph on which the link prediction evaluation will be done.
 
         Raises
         -----
@@ -1769,8 +1710,7 @@ class Architect(Module):
         head_predictions, tail_predictions = self.evaluator.evaluate(batch_size = self.evaluation_batch_size,
                                 encoder = self.encoder,
                                 decoder = self.decoder,
-                                knowledge_graph = self.kg_train,
-                                evaluated_knowledge_graph = kg,
+                                evaluated_subset = knowledge_graph_subset,
                                 node_embeddings = self.node_embeddings, 
                                 edge_embeddings = self.edge_embeddings,
                                 verbose = True)
@@ -1780,19 +1720,9 @@ class Architect(Module):
         return test_mrr
     
     
-    def triplet_classification( self,
-                                kg_validation: KnowledgeGraph,
-                                kg_test: KnowledgeGraph
-                                ) -> float:
+    def triplet_classification(self) -> float:
         """
         Triplet Classification evaluation.
-
-        Arguments
-        ---------
-        kg_validation: KnowledgeGraph
-            Validation split from the knowledge graph.
-        kg_test: KnowledgeGraph
-            Test split from the knowledge graph.
 
         Raises
         ------
@@ -1808,43 +1738,45 @@ class Architect(Module):
         """
         if not isinstance(self.evaluator, TripletClassificationEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Triplet Classification method for {type(self.evaluator)} evaluator.")
-        
+
+        validation_subset = Subset(self.knowledge_graph, self.knowledge_graph.validation_mask.nonzero(as_tuple = True)[0])
+        test_subset = Subset(self.knowledge_graph, self.knowledge_graph.test_mask.nonzero(as_tuple = True)[0])
+
         self.evaluator.evaluate(batch_size = self.evaluation_batch_size,
-                                kg = kg_validation)
+                                knowledge_graph_subset = validation_subset)
         
         return self.evaluator.accuracy( batch_size = self.evaluation_batch_size,
-                                        kg_test = kg_test,
-                                        kg_validation = kg_validation)
+                                        kg_to_evaluate = test_subset) # TO REWORK
 
-
-    def run_data_leakage(self, attributes: Dict[str, pd.DataFrame] = {}):
-        """
-        Data leakage evaluation.
+#TODO
+    # def run_data_leakage(self, attributes: Dict[str, pd.DataFrame] = {}):
+    #     """
+    #     Data leakage evaluation.
         
-        TODO: detail the data leakage procedure
+    #     TODO: detail the data leakage procedure
         
-        Arguments
-        ---------
-        attributes: Dict[str, pd.DataFrame], optional
-            dict(node_type, embedding) containing the embedding for each type of node.
+    #     Arguments
+    #     ---------
+    #     attributes: Dict[str, pd.DataFrame], optional
+    #         dict(node_type, embedding) containing the embedding for each type of node.
 
-        Raises
-        ------
-        ValueError
-            An edge was not found in the knowledge graph.
+    #     Raises
+    #     ------
+    #     ValueError
+    #         An edge was not found in the knowledge graph.
         
-        """
-        logging.info("Preparing KG for data leakage evaluation procedure...")
-        data_leakage_config = self.config["data_leakage"]
+    #     """
+    #     logging.info("Preparing KG for data leakage evaluation procedure...")
+    #     data_leakage_config = self.config["data_leakage"]
 
-        kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test])
+    #     kg = merge_kg([self.kg_train, self.kg_validation, self.kg_test])
 
-        for edge_type in data_leakage_config["permuted_edges"]:
-            if edge_type not in self.kg_train.edge_to_index:
-                raise ValueError(f"Edge type {edge_type} was not found in the knowledge graph.")
-            logging.info(f"Permuting tails of edge type {edge_type}")
-            self.kg_train = permute_tails(self.kg_train, edge_type)
+    #     for edge_type in data_leakage_config["permuted_edges"]:
+    #         if edge_type not in self.kg_train.edge_to_index:
+    #             raise ValueError(f"Edge type {edge_type} was not found in the knowledge graph.")
+    #         logging.info(f"Permuting tails of edge type {edge_type}")
+    #         self.kg_train = permute_tails(self.kg_train, edge_type)
 
-        self.kg_train, self.kg_validation, self.kg_test = kg.generate_masks(split_proportions = self.config["preprocessing"]["split"])
+    #     self.kg_train, self.kg_validation, self.kg_test = kg.generate_masks(split_proportions = self.config["preprocessing"]["split"])
 
-        self.train_model(attributes = attributes)
+    #     self.train_model(attributes = attributes)
