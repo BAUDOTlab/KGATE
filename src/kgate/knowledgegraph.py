@@ -206,9 +206,6 @@ class KnowledgeGraph(Dataset):
                     edge_to_index is not None and \
                     triplet_types is not None and \
                     node_type_to_index is not None, "If `dataframe` is not given, `graphindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided."
-            self.triplet_count = graphindices.size(1)
-        else:
-            self.triplet_count = len(dataframe)
 
         if graphindices is not None:
             assert graphindices.size(0) == 4, "The `graphindices` parameter must be a 2D tensor of size [4, triplet_count]."
@@ -222,9 +219,6 @@ class KnowledgeGraph(Dataset):
         self.node_to_index = node_to_index or get_dictionary_mapping(dataframe, nodes = True)
         self.node_type_to_index: Dict[str, int] = node_type_to_index or {"Node": 0}
         self.edge_to_index = edge_to_index or get_dictionary_mapping(dataframe, nodes = False)
-
-        self.node_count = max(self.node_to_index.values()) + 1
-        self.edge_count = max(self.edge_to_index.values()) + 1
 
         self.metadata = None
         if metadata is not None:
@@ -322,6 +316,7 @@ class KnowledgeGraph(Dataset):
 
         self.train_mask = self.validation_mask = self.test_mask = torch.zeros(self.triplet_count, dtype = torch.bool)
 
+        
         self._node_embeddings: nn.ParameterList
         self._edge_embeddings: nn.Parameter
 
@@ -447,13 +442,25 @@ class KnowledgeGraph(Dataset):
         return self.graphindices[:, self.test_mask]
     
     @property
-    def n_facts(self) -> int:
+    def triplet_count(self) -> int:
         """
-        TorchKGE alias for `triplet_count`. Property for compatibility.
-            
+        The number of triplets in the knowledge graph
         """
-        return self.triplet_count
+        return self.graphindices.size(1)
 
+    @property
+    def node_count(self) -> int:
+        """
+        The number of nodes in the knowledge graph
+        """
+        return max(self.node_to_index.values()) + 1
+
+    @property
+    def edge_count(self) -> int:
+        """
+        The number of edges in the knowledge graph
+        """
+        return max(self.edge_to_index.values()) + 1
 
     @property
     def identity(self) -> pd.DataFrame:

@@ -233,6 +233,8 @@ class Architect(Module):
                 logging.info("Loading KG...")
                 self.knowledge_graph = load_knowledge_graph(Path(self.config["kg_pkl"]))
                 logging.info("Done")
+            else:
+                self.knowledge_graph = knowledge_graph
 
         super().__init__()
         # Initialize attributes
@@ -1163,7 +1165,7 @@ class Architect(Module):
         Arguments
         ---------
         path: pathlib.Path
-            The path to the checkpoint that will be loaded.
+            The complete path to the checkpoint that will be loaded.
         
         Raises
         ------
@@ -1198,7 +1200,7 @@ class Architect(Module):
         return checkpoint
 
 
-    def load_best_model(self):
+    def load_best_model(self) -> None:
         """
         Load into memory the checkpoint corresponding to the highest-performing model on the validation set.
 
@@ -1211,7 +1213,7 @@ class Architect(Module):
         """
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
-        self.edge_embeddings = initialize_embedding(self.knowledge_graph.edge_count, self.encoder_edge_embedding_dimensions, self.device)
+        temp_edge_embeddings = initialize_embedding(self.knowledge_graph.edge_count, self.encoder_edge_embedding_dimensions, self.device)
 
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_directory)
@@ -1222,17 +1224,17 @@ class Architect(Module):
         logging.info(f"Best model is {self.checkpoints_directory.joinpath(best_model)}")
         checkpoint = self.load_checkpoint(self.checkpoints_directory.joinpath(best_model))
 
-        self.node_embeddings = nn.ParameterList()
+        temp_node_embeddings = nn.ParameterList()
         for node_type in checkpoint["nodes"]:
-            self.node_embeddings.append(checkpoint["nodes"][node_type].to(self.device))
+            temp_node_embeddings.append(checkpoint["nodes"][node_type].to(self.device))
         
-        self.edge_embeddings.load_state_dict(checkpoint["edges"])
+        temp_edge_embeddings.load_state_dict(checkpoint["edges"])
         self.decoder.load_state_dict(checkpoint["decoder"], strict=False)
         if "encoder" in checkpoint:
             self.encoder.load_state_dict(checkpoint["encoder"])
         
-        self.node_embeddings.to(self.device)
-        self.edge_embeddings.to(self.device)
+        self.knowledge_graph.node_embeddings = temp_node_embeddings.to(self.device)
+        self.knowledge_graph.edge_embeddings = temp_edge_embeddings.weight.to(self.device)
         self.decoder.to(self.device)
         self.encoder.to(self.device)
         logging.info("Best model successfully loaded.")
@@ -1369,18 +1371,19 @@ class Architect(Module):
             # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
             # which corresponds to the indices that are filled here.
             # TODO: See if making it a sparse tensor can spare memory
-            embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count, self.encoder_node_embedding_dimensions),
+            embeddings: nn.Parameter = nn.Parameter(torch.zeros((knowledge_graph.node_count, self.encoder_node_embedding_dimensions),
                                                     device = self.device,
                                                     dtype = torch.float)
+                                                    )
 
             for node_type, index in input.mapping.items():
                 embeddings[index] = encoder_output[node_type]
 
         else:
-            embeddings = self.node_embeddings[0]
+            embeddings = self.knowledge_graph.node_embeddings[0]
         
         head_embeddings = embeddings[head_indices]
-        edge_embeddings = self.edge_embeddings(edge_indices)  # Edges are unchanged
+        edge_embeddings = self.knowledge_graph.edge_embeddings[edge_indices]  # Edges are unchanged
         tail_embeddings = embeddings[tail_indices]
 
         return self.decoder.score(  head_embeddings = head_embeddings,
@@ -1507,7 +1510,7 @@ class Architect(Module):
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
         self.eval()  # Set the model to evaluation mode
         with torch.no_grad():
-            validation_subset = Subset(self.knowledge_graph, self.knowledge_graph.validation_mask)
+            validation_subset = Subset(self.knowledge_graph, self.knowledge_graph.validation_mask.nonzero(as_tuple = True)[0])
 
             if isinstance(self.evaluator,LinkPredictionEvaluator):
                 validation_score = self.link_prediction(validation_subset) 
@@ -1711,8 +1714,8 @@ class Architect(Module):
                                 encoder = self.encoder,
                                 decoder = self.decoder,
                                 evaluated_subset = knowledge_graph_subset,
-                                node_embeddings = self.node_embeddings, 
-                                edge_embeddings = self.edge_embeddings,
+                                node_embeddings = self.knowledge_graph.node_embeddings, 
+                                edge_embeddings = self.knowledge_graph.edge_embeddings,
                                 verbose = True)
         
         test_mrr = (head_predictions.mrr[1] + tail_predictions.mrr[1]) / 2

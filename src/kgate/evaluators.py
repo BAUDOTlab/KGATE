@@ -226,7 +226,7 @@ class LinkPredictionEvaluator:
                 decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
                 evaluated_subset: Subset[KnowledgeGraph],
                 node_embeddings: nn.ParameterList,
-                edge_embeddings: nn.Embedding,
+                edge_embeddings: nn.Parameter,
                 verbose: bool = True
                 ) -> Tuple[Predictions, Predictions]:
         """
@@ -260,7 +260,7 @@ class LinkPredictionEvaluator:
             Predictions for tails.
         
         """
-        device = edge_embeddings.weight.device
+        device = edge_embeddings.device
 
         knowledge_graph: KnowledgeGraph = evaluated_subset.dataset
 

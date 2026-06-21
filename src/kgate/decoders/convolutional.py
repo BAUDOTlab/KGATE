@@ -84,8 +84,8 @@ class ConvolutionalDecoder(Module):
 
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+                            edge_embeddings: nn.Parameter
+                            ) -> Tuple[nn.ParameterList, nn.Parameter] | None:
         """
         Interface method for the decoder's parameters normalization function.
 
@@ -96,15 +96,15 @@ class ConvolutionalDecoder(Module):
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The edge embedding as a nn.Embedding containing one Parameter by edge type,
+        edge_embeddings: torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
+            The edge embedding as a nn.Parameter containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
         -------
         node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
             The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
+        edge_embeddings: torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
             The normalized edge embedding object.
         
         Notes
@@ -146,7 +146,7 @@ class ConvolutionalDecoder(Module):
                                     tail_indices: Tensor, 
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -168,7 +168,7 @@ class ConvolutionalDecoder(Module):
             The indices of the edges (from KG).
         node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
+        edge_embeddings: torch.nn.Parameter, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
             Embeddings of all edges.
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
@@ -348,7 +348,7 @@ class ConvKB(ConvolutionalDecoder):
                                     tail_indices: Tensor, 
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -366,7 +366,7 @@ class ConvKB(ConvolutionalDecoder):
             The indices of the edges (from KG).
         node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
+        edge_embeddings: torch.nn.Parameter, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only
             Embeddings of all edges.
         node_inference: bool, optional, default to True, keyword-only
             If True, prepare candidate nodes; otherwise, prepare candidate edges.

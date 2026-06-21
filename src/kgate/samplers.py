@@ -425,8 +425,8 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
 
 
     def find_possibilities(self) -> Tuple[
-                                Dict[int, List[int]],
-                                Dict[int, List[int]], 
+                                Dict[int, torch.Tensor],
+                                Dict[int, torch.Tensor], 
                                 Tensor, 
                                 Tensor]:
         """
@@ -437,10 +437,10 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
 
         Returns
         -------
-        possible_heads: Dict[int, List[int]]
-            keys : edge index, values : list of possible heads
-        possible tails: Dict[int, List[int]]
-            keys : edge index, values : list of possible tails
+        possible_heads: Dict[int, torch.Tensor]
+            keys : edge index, values : tensor of possible heads
+        possible tails: Dict[int, torch.Tensor]
+            keys : edge index, values : tensor of possible tails
         possible_heads_count: torch.Tensor, dtype: torch.long, shape: (edge_count)
             Number of possible heads for each edge.
         possible_tails_count: torch.Tensor, dtype: torch.long, shape: (edge_count)
@@ -449,24 +449,16 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         """
         possible_heads = defaultdict(set)
         possible_tails = defaultdict(set)
-        for triplet_index in range(self.knowledge_graph.triplet_count):
-            possible_heads[self.knowledge_graph.edge_indices[triplet_index].item()].add(self.knowledge_graph.head_indices[triplet_index].item())
-            possible_tails[self.knowledge_graph.edge_indices[triplet_index].item()].add(self.knowledge_graph.tail_indices[triplet_index].item())
-
         possible_heads_count = []
         possible_tails_count = []
-
         for edge_index in range(self.knowledge_graph.edge_count):
-            if edge_index in possible_heads.keys():
-                possible_heads_count.append(len(possible_heads[edge_index]))
-                possible_tails_count.append(len(possible_tails[edge_index]))
-                possible_heads[edge_index] = list(possible_heads[edge_index])
-                possible_tails[edge_index] = list(possible_tails[edge_index])
-            else:
-                possible_heads_count.append(0)
-                possible_tails_count.append(0)
-                possible_heads[edge_index] = list(possible_heads[edge_index])
-                possible_tails[edge_index] = list(possible_tails[edge_index])
+            heads_of_edge = self.knowledge_graph.head_indices[self.knowledge_graph.edge_indices == edge_index]
+            tails_of_edge = self.knowledge_graph.tail_indices[self.knowledge_graph.edge_indices == edge_index]
+            possible_heads[edge_index].add(heads_of_edge)
+            possible_tails[edge_index].add(tails_of_edge)
+            possible_heads_count.append(heads_of_edge.size(0))
+            possible_tails_count.append(tails_of_edge.size(0))
+
 
         return possible_heads, possible_tails, torch.tensor(possible_heads_count), torch.tensor(possible_tails_count)
 

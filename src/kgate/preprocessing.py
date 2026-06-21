@@ -80,19 +80,19 @@ def prepare_knowledge_graph(config: dict,
         if kg_dataframe is None:
             raise ValueError(f"The knowledge graph csv file was not found or uses a non supported separator. Supported separators are '{'\', \''.join(SUPPORTED_SEPARATORS)}'.")
 
-        kg = KnowledgeGraph(dataframe = kg_dataframe, metadata = metadata)
+        knowledge_graph = KnowledgeGraph(dataframe = kg_dataframe, metadata = metadata)
 
     else:
         if kg is not None:
             if isinstance(kg, torchkge.KnowledgeGraph):
-                kg = KnowledgeGraph.from_torchkge(kg, metadata)
+                knowledge_graph = KnowledgeGraph.from_torchkge(kg, metadata)
             elif not isinstance(kg, KnowledgeGraph):
                 raise NotImplementedError(f"Knowledge graph type {type(kg)} is not supported. Supported knowledge graph types are KGATE's and TorchKGE's.")
         elif dataframe is not None:
-            kg = KnowledgeGraph(dataframe = dataframe, metadata = metadata)
+            knowledge_graph = KnowledgeGraph(dataframe = dataframe, metadata = metadata)
                 
     # Clean and process knowledge graph
-    knowledge_graph = clean_knowledge_graph(kg, config)
+    clean_knowledge_graph(knowledge_graph, config)
 
     # Save results
     save_knowledge_graph(config, knowledge_graph)
@@ -147,7 +147,7 @@ def load_knowledge_graph(pickle_filename: Path) -> KnowledgeGraph:
 
 def clean_knowledge_graph(  knowledge_graph: KnowledgeGraph,
                             config: dict
-                            ):
+                            ) -> None:
     """
     Clean and prepare the knowledge graph according to the configuration.
         
@@ -232,7 +232,6 @@ def clean_knowledge_graph(  knowledge_graph: KnowledgeGraph,
 
         train2_nodes = knowledge_graph.graphindices[:2, knowledge_graph.train_mask].unique()
 
-        logging.warning((train_nodes == train2_nodes).all())
         kg_train_ok, missing_nodes = verify_node_coverage(knowledge_graph)
         if not kg_train_ok:
             logging.info(f"Node coverage verification failed. {len(missing_nodes)} nodes are missing.")
@@ -272,7 +271,7 @@ def verify_node_coverage(knowledge_graph: KnowledgeGraph
     missing_node_indices = node_indices_full[~torch.isin(node_indices_full, node_indices_train)]
     
     if len(missing_node_indices) > 0:
-        logging.warning(missing_node_indices)
+        #logging.warning(missing_node_indices)
         # Invert node_to_index dictionnary to get index_to_node
         index_to_node = {value: key for key, value in knowledge_graph.node_to_index.items()}
         
@@ -303,22 +302,22 @@ def ensure_node_coverage(knowledge_graph: KnowledgeGraph
     present_nodes = train_set[:2].unique()
 
     # Identify nodes missing from kg_train
-    missing_nodes = all_nodes[~torch.isin(all_nodes, present_nodes)]
+    missing_nodes_indices = all_nodes[~torch.isin(all_nodes, present_nodes)]
 
     logging.info(f"Total nodes in full kg: {len(all_nodes)}")
     logging.info(f"Nodes present in kg_train: {len(present_nodes)}")
-    logging.info(f"Missing nodes in kg_train: {len(missing_nodes)}")
+    logging.info(f"Missing nodes in kg_train: {len(missing_nodes_indices.unique())}")
 
-    _, inverse_indices, counts = missing_nodes.unique(return_inverse=True, return_counts=True)
-    indices_sorted = inverse_indices.argsort(stable=True)
-    group_start_indices = counts.cumsum(0).roll(1) # The last value is not an indice, so we don't need it
-    group_start_indices[0] = 0
-    first_indices = indices_sorted[group_start_indices]
+    first_indices: List[torch.Tensor] = []
+
+    for node_index in missing_nodes_indices:
+        triplets_of_node: torch.Tensor = ((knowledge_graph.head_indices == node_index) | (knowledge_graph.tail_indices == node_index)).nonzero(as_tuple = True)[0]
+        first_indices.append(triplets_of_node[0])
+    first_indices: torch.Tensor = torch.tensor(first_indices)
 
     knowledge_graph.train_mask[first_indices] = True
     knowledge_graph.validation_mask[first_indices] = False
     knowledge_graph.test_mask[first_indices] = False
-    
 
 
 def clean_datasets( knowledge_graph: KnowledgeGraph,
@@ -454,11 +453,7 @@ def clean_cartesians(
                 all_triplet_indices_to_move.extend(triplet_indices.tolist())
             
         if all_triplet_indices_to_move:
-            # Extract the triplets to be transferred
-            triplets_to_move = train_set[all_triplet_indices_to_move]
-            
-            # Remove identified triplets from train set
-            knowledge_graph.remove_triplets_from_training(all_triplet_indices_to_move)
-            
-            knowledge_graph.add_triplets(triplets_to_move, "test")
+            knowledge_graph.train_mask[all_triplet_indices_to_move] = False
+            knowledge_graph.validation_mask[all_triplet_indices_to_move] = False
+            knowledge_graph.test_mask[all_triplet_indices_to_move] = True
 

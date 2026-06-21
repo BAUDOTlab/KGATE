@@ -292,8 +292,21 @@ def find_best_model(directory: Path) -> Path | None:
                     default = None
                     )
     if best_model is None:
-        logging.error(f"No best model found in directory {directory}. Make sure to run the training before calling this method.")
-        return None
+        logging.warning(f"No best model found in directory {directory}, falling back to the latest checkpoint.")
+        best_model = max(
+                    (filename
+                    for filename
+                    in os.listdir(directory)
+                    if filename.startswith("checkpoint_")
+                    and filename.endswith(".pt")),
+
+                    key = lambda filename: float(filename.split("checkpoint_")[1].rstrip(".pt")),
+
+                    default = None
+                )
+        if best_model is None:
+            logging.error(f"No best model found in directory {directory}. Make sure to run the training before calling this method.")
+            return None
 
     best_model_path = Path(best_model)
     
