@@ -181,6 +181,7 @@ class Architect(Module):
                 cudnn_benchmark: bool = True,
                 number_of_cores: int = 0,
                 **kwargs):
+        super().__init__()
         # kg should be of type KnowledgeGraph, if exists use it instead of the one in config
         # dataframe should have columns head, tail and edge
         self.config: dict = parse_config(config_path, kwargs)
@@ -236,7 +237,6 @@ class Architect(Module):
             else:
                 self.knowledge_graph = knowledge_graph
 
-        super().__init__()
         # Initialize attributes
         self.encoder: DefaultEncoder | GNN = None
         self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
@@ -350,9 +350,8 @@ class Architect(Module):
             case _:
                 return
             
-        if self.metadata is not None and hasattr(self, "kg_train"):
-            for knowledge_graph in (self.kg_train, self.kg_val, self.kg_test):
-                knowledge_graph.add_metadata(self.metadata)
+        if self.metadata is not None:
+            self.knowledge_graph.add_metadata(self.metadata)
             
 
     def initialize_encoder( self,
@@ -420,8 +419,8 @@ class Architect(Module):
     def initialize_decoder( self,
                             decoder_name: str = "",
                             dissimilarity: Literal["L1", "L2", "torus_L1", "torus_L2", "torus_eL2", ""] = "",
-                            margin: int = 0,
-                            filter_count: int = 0
+                            margin: int = None,
+                            filter_count: int = None
                             ) -> Tuple[
                                         BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
                                         MarginLoss | BinaryCrossEntropyLoss
@@ -483,9 +482,9 @@ class Architect(Module):
             decoder_name = decoder_config["name"]
         if dissimilarity == "":
             dissimilarity = decoder_config["dissimilarity"]
-        if margin == 0:
+        if margin is None:
             margin = decoder_config["margin"]
-        if filter_count == 0:
+        if filter_count is None:
             filter_count = decoder_config["filter_count"]
 
         # Translational models
@@ -998,7 +997,7 @@ class Architect(Module):
                 if trainer.state.epoch < self.max_epochs:
                     logging.info(f"Starting from epoch {trainer.state.epoch}")
                     if not dry_run:
-                        trainer.run(data_loader)
+                        trainer.run(data_loader, max_epochs = self.max_epochs)
                 else:
                     logging.info(f"Training already completed. Last epoch is {trainer.state.epoch} and max_epochs is set to {self.max_epochs}")
             else:
@@ -1054,7 +1053,7 @@ class Architect(Module):
 
         total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(self.kg_test, remaining_edges)
 
-        global_metrics = (group_metrics_remaining + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
+        global_metrics = (metrics_sum_target_edges + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
 
         logging.info(f"Final Test metrics with best model: {global_metrics}")
 
@@ -1302,13 +1301,13 @@ class Architect(Module):
         """
         batch = batch.T.to(self.device)
 
-        batch_count = self.sampler.corrupt_batch(batch)
-        batch_count = batch_count.to(self.device)
+        negative_batch = self.sampler.corrupt_batch(batch)
+        negative_batch = negative_batch.to(self.device)
         
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triplets
-        positive_triplet, negative_triplet = self(batch, batch_count, self.knowledge_graph.train_mask)
+        positive_triplet, negative_triplet = self(batch, negative_batch, self.knowledge_graph.train_mask)
         loss = self.decoder_loss(positive_triplet, negative_triplet)
         loss.backward()
 
@@ -1353,17 +1352,13 @@ class Architect(Module):
         head_indices, tail_indices, edge_indices = batch[0], batch[1], batch[2]
         
         if isinstance(self.encoder, GNN):
-            seed_nodes: Tensor = batch[:2].unique()
+            seed_nodes: Tensor = batch[:2].unique().cpu()
             hop_count: int = self.encoder.layer_count
-            edge_list: Tensor = knowledge_graph.edge_list
-            
-            _,_,_, edge_mask = k_hop_subgraph(
-                node_idx = seed_nodes,
-                num_hops = hop_count,
-                edge_index = edge_list
+
+            input = knowledge_graph.get_encoder_input(
+                seed_nodes = seed_nodes,
+                hop_count = hop_count
                 )
-                
-            input = knowledge_graph.get_encoder_input(knowledge_graph.graphindices[:, edge_mask].to(self.device), self.node_embeddings)
 
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
@@ -1376,7 +1371,7 @@ class Architect(Module):
                                                     dtype = torch.float)
                                                     )
 
-            for node_type, index in input.mapping.items():
+            for node_type, index in input.node_mapping.items():
                 embeddings[index] = encoder_output[node_type]
 
         else:
@@ -1410,25 +1405,33 @@ class Architect(Module):
             node_embeddings: torch.Tensor = torch.zeros((self.knowledge_graph.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
 
             with torch.no_grad():
+                all_nodes = self.knowledge_graph.graphindices[:2].unique()
                 # TODO: use not the whole graphindices but the unique nodes instead
                 for i in range(self.knowledge_graph.graphindices.shape[1] // self.train_batch_size + 1):
-                    input = self.knowledge_graph.get_encoder_input(self.knowledge_graph.graphindices[:, i * self.train_batch_size : (i + 1) * self.train_batch_size].to(self.device), self.node_embeddings)
+                    seed_nodes = all_nodes[i * self.train_batch_size : (i + 1) * self.train_batch_size]
+                    
+                    input = self.knowledge_graph.get_encoder_input(
+                        seed_nodes = seed_nodes,
+                        hop_count = self.encoder.layer_count
+                        )
 
                     encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
-                    for node_type, indices in input.mapping.items():
-                        node_embeddings[indices] = encoder_output[node_type].cpu()
+                    for node_type, indices in input.seed_mapping.items():
+                        node_type_index = self.knowledge_graph.node_type_to_index[node_type]
+                        node_type_mask = (self.knowledge_graph.node_types[seed_nodes] == node_type_index)
+                        node_embeddings[seed_nodes[node_type_mask]] = encoder_output[node_type][indices].cpu()
         else:
-            node_embeddings = self.node_embeddings[0].data.cpu()
+            node_embeddings = self.knowledge_graph.node_embeddings[0].data.cpu()
 
-        edge_embeddings = self.edge_embeddings.weight.data.cpu()
+        edge_embeddings = self.knowledge_grpah.edge_embeddings.data.cpu()
 
         decoder_embeddings = self.decoder.get_embeddings()
 
         embedding_dictionnary = {"nodes": node_embeddings, 
-                                 "node_mapping": {v: k for k,v in self.kg_train.node_to_index.items()},
+                                 "node_mapping": {v: k for k,v in self.knowledge_graph.node_to_index.items()},
                                  "edges": edge_embeddings,
-                                 "edge_mapping": {v: k for k,v in self.kg_train.edge_to_index.items()}}
+                                 "edge_mapping": {v: k for k,v in self.knowledge_graph.edge_to_index.items()}}
 
         if decoder_embeddings is not None:
             embedding_dictionnary.update({"decoder": decoder_embeddings})
