@@ -573,9 +573,15 @@ class Architect(Module):
             raise NotImplementedError(f"Optimizer type '{optimizer_name}' is not supported. Please check the configuration. Supported optimizers are:\n{'\n'.join(optimizer_mapping.keys())}")
 
         optimizer_class = optimizer_mapping[optimizer_name]
-    
+
+        parameters = [node_embedding for node_embedding in self.knowledge_graph.node_embeddings]
+        parameters.append(self.knowledge_graph.edge_embeddings)
+        parameters.extend(self.decoder.parameters())
+        if self.encoder is not None:
+            parameters.extend(self.encoder.parameters())
+
         # Initialize the optimizer with given parameters
-        optimizer: optim.Optimizer = optimizer_class(self.parameters(), **optimizer_params)
+        optimizer: optim.Optimizer = optimizer_class(parameters, **optimizer_params)
 
         logging.info(f"Optimizer '{optimizer_name}' initialized with parameters: {optimizer_params}")
         
@@ -764,12 +770,12 @@ class Architect(Module):
         
         # If given a pretrained embedding file (such as the output of a Node2Vec), we use that in priority
         if pretrained is not None and pretrained.exists():
-            self.node_embeddings = torch.load(pretrained)
+            self.knowledge_graph.node_embeddings = torch.load(pretrained)
         else:
             assert isinstance(self.encoder, GNN) or len(self.knowledge_graph.node_type_to_index) == 1, "When not using a GNN as encoder, the node_type shouldn't be supplied."
 
             # create initial embeddings
-            self.node_embeddings = nn.ParameterList()
+            node_embeddings = nn.ParameterList()
             index_to_node_type = {value: key for key,value in self.knowledge_graph.node_type_to_index.items()}
             for node_type in self.knowledge_graph.node_type_to_global:
                 node_count = self.knowledge_graph.node_type_to_global[node_type].size(0)
@@ -786,19 +792,22 @@ class Architect(Module):
 
                         input_features[local_index] = tensor(current_attribute.loc[node], dtype = torch.float)
                     
-                    self.node_embeddings.append(Parameter(input_features).to(self.device))
+                    node_embeddings.append(Parameter(input_features).to(self.device))
                     
                 else:
                     # if no feature attribute given, random initialization
                     node_embedding_dimensions = self.node_embedding_dimensions if isinstance(self.encoder, GNN) else self.encoder_node_embedding_dimensions
                     embeddings = initialize_embedding(node_count, node_embedding_dimensions, self.device)
-                    self.node_embeddings.append(embeddings.weight)
+                    node_embeddings.append(embeddings.weight)
+
+            self.knowledge_graph.node_embeddings = node_embeddings
 
             if isinstance(self.encoder, GNN):     
                 # The input features are not supposed to change if we use an encoder
-                self.node_embeddings.requires_grad_(False)
+                # TODO: make it an hyperparameter
+                self.knowledge_graph.node_embeddings.requires_grad_(False)
 
-        self.edge_embeddings = initialize_embedding(self.knowledge_graph.edge_count, self.encoder_edge_embedding_dimensions, self.device)
+        self.knowledge_graph.edge_embeddings = initialize_embedding(self.knowledge_graph.edge_count, self.encoder_edge_embedding_dimensions, self.device).weight
 
         logging.info("Initializing optimizer...")
         self.optimizer = self.optimizer or self.initialize_optimizer()
@@ -910,8 +919,7 @@ class Architect(Module):
         trainer.add_event_handler(Events.COMPLETED, self.on_training_completed)
 
         to_save = {
-            "edges": self.edge_embeddings,
-            "nodes": self.node_embeddings,
+            "embeddings": self.knowledge_graph.embeddings,
             "decoder": self.decoder,
             "optimizer": self.optimizer,
             "trainer": trainer,
@@ -945,8 +953,7 @@ class Architect(Module):
             if isinstance(self.encoder, GNN):
                 self.encoder.to("cpu")
             self.decoder.to("cpu")
-            self.edge_embeddings.to("cpu")
-            self.node_embeddings.to("cpu")
+            self.knowledge_graph.embeddings.to("cpu")
 
             # Save the checkpoint
             checkpoint_handler(engine)
@@ -955,8 +962,7 @@ class Architect(Module):
             if isinstance(self.encoder, GNN):
                 self.encoder.to(self.device)
             self.decoder.to(self.device)
-            self.edge_embeddings.to(self.device)
-            self.node_embeddings.to(self.device)
+            self.knowledge_graph.embeddings.to(self.device)
 
         # Attach checkpoint handler to trainer and call save_checkpoint_to_cpu
         trainer.add_event_handler(Events.EPOCH_COMPLETED(every = self.save_interval), save_checkpoint_to_cpu)
@@ -985,7 +991,7 @@ class Architect(Module):
         if checkpoint_file is not None:
             if Path(checkpoint_file).is_file():
                 logging.info(f"Resuming training from checkpoint: {checkpoint_file}")
-                logging.info(f"edge_embeddings size: {self.knowledge_graph.edge_embeddings.weight.size()}")
+                logging.info(f"edge_embeddings size: {self.knowledge_graph.edge_embeddings.size()}")
                 checkpoint = torch.load(checkpoint_file, weights_only = False)
                 Checkpoint.load_objects(to_load = to_save, checkpoint = checkpoint)
 
@@ -1186,12 +1192,12 @@ class Architect(Module):
         checkpoint = torch.load(path, map_location = self.device, weights_only = False)
 
         # Check node and edge dictionnary size
-        assert len(checkpoint["edges"]["weight"]) == self.knowledge_graph.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint["edges"]["weight"])}) and the current configuration ({self.knowledge_graph.edge_count})!"
+        assert len(checkpoint["embeddings"]["edge_embeddings"]) == self.knowledge_graph.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint["embeddings"]["edge_embeddings"])}) and the current configuration ({self.knowledge_graph.edge_count})!"
 
         if isinstance(self.encoder, GNN):
-            assert len(checkpoint["nodes"]) == len(self.knowledge_graph.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint["nodes"])}) and the current configuration ({len(self.knowledge_graph.node_type_to_index)})!"
+            assert len(checkpoint["embeddings"]["node_embeddings"]) == len(self.knowledge_graph.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint["nodes"])}) and the current configuration ({len(self.knowledge_graph.node_type_to_index)})!"
         else:
-            assert len(checkpoint["nodes"]["0"]) == self.knowledge_graph.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint["nodes"]["0"])}) and the current configuration ({self.knowledge_graph.node_count})!"
+            assert len(checkpoint["embeddings"]["node_embeddings.0"]) == self.knowledge_graph.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint["embeddings"]["node_embeddings.0"])}) and the current configuration ({self.knowledge_graph.node_count})!"
 
         if "encoder" in checkpoint:
             assert checkpoint["encoder"].keys() == self.encoder.state_dict().keys(), "Mismatch between the checkpoint convolution layers and the current configuration's."
@@ -1212,7 +1218,6 @@ class Architect(Module):
         """
         self.decoder, _ = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
-        temp_edge_embeddings = initialize_embedding(self.knowledge_graph.edge_count, self.encoder_edge_embedding_dimensions, self.device)
 
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_directory)
@@ -1223,17 +1228,13 @@ class Architect(Module):
         logging.info(f"Best model is {self.checkpoints_directory.joinpath(best_model)}")
         checkpoint = self.load_checkpoint(self.checkpoints_directory.joinpath(best_model))
 
-        temp_node_embeddings = nn.ParameterList()
-        for node_type in checkpoint["nodes"]:
-            temp_node_embeddings.append(checkpoint["nodes"][node_type].to(self.device))
-        
-        temp_edge_embeddings.load_state_dict(checkpoint["edges"])
+        self.knowledge_graph.embeddings.load_state_dict(checkpoint["embeddings"])
+
         self.decoder.load_state_dict(checkpoint["decoder"], strict=False)
         if "encoder" in checkpoint:
             self.encoder.load_state_dict(checkpoint["encoder"])
         
-        self.knowledge_graph.node_embeddings = temp_node_embeddings.to(self.device)
-        self.knowledge_graph.edge_embeddings = temp_edge_embeddings.weight.to(self.device)
+        self.knowledge_graph.embeddings.to(self.device)
         self.decoder.to(self.device)
         self.encoder.to(self.device)
         logging.info("Best model successfully loaded.")
@@ -1260,21 +1261,21 @@ class Architect(Module):
 
         Returns
         -------
-        positive_triplet: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
+        positive_score: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
             Tensor containing the score of each true triplet within the batch.
-        negative_triplet: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+        negative_score: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
             Tensor containing the score of each negative triplet within the batch.
         
         """
-        positive_triplet: Tensor = self.scoring_function(positive_triplets_batch, self.knowledge_graph, mask)
+        positive_score: Tensor = self.scoring_function(positive_triplets_batch, self.knowledge_graph, mask)
         # The loss function requires the positive and negative tensors to be of the same size,
         # Thus we duplicate the positive tensor as needed to match the negative.
         negative_triplet_count = negative_triplets_batch.size(1) // positive_triplets_batch.size(1)
-        positive_triplet = positive_triplet.repeat(negative_triplet_count)
+        positive_triplet = positive_score.repeat(negative_triplet_count)
 
-        negative_triplet: Tensor = self.scoring_function(negative_triplets_batch, self.knowledge_graph, mask)
+        negative_score: Tensor = self.scoring_function(negative_triplets_batch, self.knowledge_graph, mask)
 
-        return positive_triplet, negative_triplet
+        return positive_triplet, negative_score
 
 
     def process_batch(self,
@@ -1307,8 +1308,8 @@ class Architect(Module):
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triplets
-        positive_triplet, negative_triplet = self(batch, negative_batch, self.knowledge_graph.train_mask)
-        loss = self.decoder_loss(positive_triplet, negative_triplet)
+        positive_score, negative_score = self(batch, negative_batch, self.knowledge_graph.train_mask)
+        loss = self.decoder_loss(positive_score, negative_score)
         loss.backward()
 
         self.optimizer.step()
@@ -1457,9 +1458,9 @@ class Architect(Module):
         normalize_function: Callable[..., Tuple[nn.ParameterList, nn.Embedding]] | None = getattr(self.decoder, "normalize_params", None)
 
         if callable(normalize_function):
-            normalized_embeddings = normalize_function(node_embeddings = self.node_embeddings, edge_embeddings = self.edge_embeddings)
+            normalized_embeddings = normalize_function(node_embeddings = self.knowledge_graph.node_embeddings, edge_embeddings = self.knowledge_graph.edge_embeddings)
             assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the node embedding and the edge embedding."
-            self.node_embeddings, self.edge_embeddings = normalized_embeddings
+            self.knowledge_graph.node_embeddings, self.knowledge_graph.edge_embeddings = normalized_embeddings
             
         logging.debug(f"Normalized all embeddings.")
 

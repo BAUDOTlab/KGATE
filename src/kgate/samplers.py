@@ -525,18 +525,18 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         corrupted_heads = []
         triplets = [0] * corrupted_head_count if len(self.knowledge_graph.node_type_to_index) == 1 else []
         for i in range(corrupted_head_count):
-            edge_index = corrupted_head_batch[2][i].item()
-            choices: Dict[Number, Set[Number]] = self.possible_heads[edge_index]
+            edge_index = corrupted_head_batch[2][i]
+            choices: Tensor = self.possible_heads[edge_index]
             if len(choices) == 0:
                 # In this case the edge i has never been used with any head
                 # Choose one node at random
                 corrupted_head_index = randint(low = 0, high = self.knowledge_graph.node_count, size = (1,)).item()
             else:
-                corrupted_head_index = choices[chosen_head[i].item()]
+                corrupted_head_index = choices[chosen_head[i]]
             corrupted_heads.append(corrupted_head_index)
             # If we don't use metadata, there is only 1 node type
             if len(self.knowledge_graph.node_type_to_index) > 1:
-                tail_index = corrupted_head_batch[1][i].item()
+                tail_index = corrupted_head_batch[1][i]
                 # Find the corrupted triplet index
                 corrupted_triplet_index = (
                             self.index_to_node_type[node_types[corrupted_head_index].item()],
@@ -563,17 +563,17 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         corrupted_tails = []
         triplets = [0] * (batch_size - corrupted_head_count) if len(self.knowledge_graph.node_type_to_index) == 1 else []
         for i in range(batch_size - corrupted_head_count):
-            edge_index = corrupted_tail_batch[2][i].item()
-            choices: Dict[Number, Set[Number]] = self.possible_tails[edge_index]
+            edge_index = corrupted_tail_batch[2][i]
+            choices: Tensor = self.possible_tails[edge_index]
             if len(choices) == 0:
                 # In this case the edge i has never been used with any tail
                 # Choose one node at random
-                corrupted_tail_index = randint(low = 0, high = self.knowledge_graph.node_count, size = (1,)).item()
+                corrupted_tail_index = randint(low = 0, high = self.knowledge_graph.node_count, size = (1,))
             else:
-                corrupted_tail_index = choices[chosen_tail[i].item()]
+                corrupted_tail_index = choices[chosen_tail[i]]
             # If we don't use metadata, there is only 1 node type
             if len(self.knowledge_graph.node_type_to_index) > 1:
-                head_index = corrupted_tail_batch[0][i].item()
+                head_index = corrupted_tail_batch[0][i]
                 corrupted_triplet_index = (
                             self.index_to_node_type[node_types[head_index].item()],
                             self.edge_types[edge_index],

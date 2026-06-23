@@ -430,9 +430,9 @@ def clean_cartesians(
 
     for edge_index in known_cartesian:
         # Find all nodes in test set that participate in the cartesian edge
-        edge_mask = (knowledge_graph[2, validation_test_mask] == edge_index)
+        edge_mask = knowledge_graph.edge_indices == edge_index
         if node_position == "head":
-            cartesian_nodes = knowledge_graph[0, validation_test_mask & edge_mask].view(-1,1)
+            cartesian_nodes = knowledge_graph.graphindices[0, validation_test_mask & edge_mask].view(-1,1)
             # Find matching triplets in train set with same head and edge
             all_triplet_indices_to_move = []
             for node in cartesian_nodes:
@@ -442,7 +442,7 @@ def clean_cartesians(
                     triplet_indices = triplet_indices.unsqueeze(0)
                 all_triplet_indices_to_move.extend(triplet_indices.tolist())
         else:  # tail
-            cartesian_nodes = knowledge_graph[1, validation_test_mask & edge_mask].view(-1,1)
+            cartesian_nodes = knowledge_graph.graphindices[1, validation_test_mask & edge_mask].view(-1,1)
             # Find matching triplets in train set with same tail and edge
             all_triplet_indices_to_move = []
             for node in cartesian_nodes:

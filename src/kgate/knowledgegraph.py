@@ -107,6 +107,11 @@ class EncoderInput:
 
         return message
 
+class KnowledgeGraphEmbeddings(nn.Module):
+    node_embeddings: nn.ParameterList
+    edge_embeddings: nn.Parameter
+    
+
 class KnowledgeGraph(Dataset):
     """
     KGATE representation of a Knowledge Graph.
@@ -322,9 +327,7 @@ class KnowledgeGraph(Dataset):
 
         self.train_mask = self.validation_mask = self.test_mask = torch.zeros(self.triplet_count, dtype = torch.bool)
 
-        
-        self._node_embeddings: nn.ParameterList
-        self._edge_embeddings: nn.Parameter
+        self._embeddings = KnowledgeGraphEmbeddings()
 
     def __len__(self):
         return self.triplet_count
@@ -334,18 +337,29 @@ class KnowledgeGraph(Dataset):
         return self.graphindices[:, index]
     
     @property
+    def embeddings(self) -> KnowledgeGraphEmbeddings:
+        return self._embeddings
+
+    @embeddings.setter
+    def embeddings(self, new_embeddings: Tuple[nn.ParameterList, nn.Parameter]) -> None:
+        node_embeddings, edge_embeddings = new_embeddings
+        self.node_embeddings = node_embeddings
+        self.edge_embeddings = edge_embeddings
+
+    @property
     def node_embeddings(self) -> nn.ParameterList:
         """
         The latent representation of the knowledge graph, learned during training. 
         Each node is associated with a vector.
         """
-        return self._node_embeddings
+        return self.embeddings.node_embeddings
 
     @node_embeddings.setter
     def node_embeddings(self, new_embeddings: nn.ParameterList) -> None:
-        assert len(new_embeddings) == len(self.node_type_to_index.keys()), f"The node embedding list must have as many entries as there are node types."
+        assert isinstance(new_embeddings, nn.ParameterList), f"Node embeddings must be torch.nn.ParameterList, but got {type(new_embeddings)}"
+        assert len(new_embeddings) == len(self.node_type_to_index.keys()), f"The node embedding list must have as many entries as there are node types, but found {len(new_embeddings)} entries for {len(self.node_type_to_index.keys())} node types."
         # also validate that there are the same number of vectors in each type
-        self._node_embeddings = new_embeddings
+        self.embeddings.node_embeddings = new_embeddings
 
     @property
     def edge_embeddings(self) -> nn.Parameter:
@@ -353,13 +367,14 @@ class KnowledgeGraph(Dataset):
         The latent representation of the knowledge graph, learned during training. 
         Each edge type is associated with a vector.
         """
-        return self._edge_embeddings
+        return self.embeddings.edge_embeddings
 
     @edge_embeddings.setter
     def edge_embeddings(self, new_embeddings: nn.Parameter) -> None:
+        assert isinstance(new_embeddings, nn.Parameter), f"Edge embeddings must be torch.nn.Parameter, but got {type(new_embeddings)}"
         assert len(new_embeddings) == len(self.edge_to_index.keys()), f"The edge embeddings must have as many entries as there are edge types."
 
-        self._edge_embeddings = new_embeddings
+        self.embeddings.edge_embeddings = new_embeddings
 
     @property
     def tail_idx(self) -> Tensor:
