@@ -312,38 +312,6 @@ def find_best_model(directory: Path) -> Path | None:
     
     return best_model_path
     
-    
-def initialize_embedding(embedding_count: int,
-                        embedding_dimensions: int,
-                        device: str = "cpu"
-                        ) -> nn.Embedding:
-    """
-    Initialize embeddings with number of nodes/edges and embedding dimensions.
-    
-    Use of a Xavier uniform distribution.
-    See PyTorch documentation: https://docs.pytorch.org/docs/stable/nn.init.html#torch.nn.init.xavier_uniform_
-    
-    Arguments
-    ---------
-    embedding_count: int
-        Number of nodes/edges in the embedding.
-    embedding_dimensions: int
-        Dimensions of embeddings.
-    device: str, "cuda" or "cpu", default to "cpu"
-        Indicate if data should be sent to GPU or CPU.
-        GPU is referenced to as Cuda.
-        
-    Returns
-    -------
-    embedding: nn.Embedding
-        Embedding object with given parameters.
-    
-    """
-    embedding = nn.Embedding(embedding_count, embedding_dimensions, device = device)
-    nn.init.xavier_uniform_(embedding.weight.data)
-    
-    return embedding
-
 
 def read_train_metrics(train_metrics_file: Path
                         ) -> pd.DataFrame:

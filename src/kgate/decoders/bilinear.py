@@ -17,8 +17,7 @@ from torch import matmul, Tensor, nn, tensor_split
 from torch.nn.functional import normalize
 from torch.nn import Module
 
-from ..utils import initialize_embedding
-
+from ..initializers import Initializer
 
 
 class BilinearDecoder(Module):
@@ -295,7 +294,8 @@ class RESCAL(BilinearDecoder):
         self.edge_count = edge_count
         self.embedding_dimensions = embedding_dimensions
 
-        self.edge_embeddings_matrix = initialize_embedding(self.edge_count, self.embedding_dimensions * self.embedding_dimensions)
+        initializer = Initializer()
+        self.edge_embeddings_matrix = initializer.initialize_embedding(self.edge_count, self.embedding_dimensions * self.embedding_dimensions)
 
 
     def score(  self,

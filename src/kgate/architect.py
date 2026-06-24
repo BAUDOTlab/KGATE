@@ -2,6 +2,10 @@
 Architect class and methods to run a KGE model training, testing and inference from end to end.
 """
 
+from kgate.initializers import Node2VecInitializer
+from torch_geometric.nn import Node2Vec
+from kgate.initializers import FeatureInitializer
+from kgate import Initializer
 import csv
 import gc
 import logging
@@ -13,7 +17,7 @@ from collections.abc import Callable
 from glob import glob
 from inspect import signature
 from pathlib import Path
-from typing import Tuple, Dict, List, Any, Set, Literal, Optional
+from typing import Tuple, Dict, List, Any, Set, Literal
 from collections.abc import Callable
 
 import pandas as pd
@@ -21,15 +25,11 @@ import numpy as np
 import tomli_w
 
 from torchkge import KnowledgeGraph
-from torchkge.models import Model
-import torchkge.sampling as sampling
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
-
-from torch_geometric.utils import k_hop_subgraph
 
 import torch
 from torch import tensor, Tensor
-from torch.nn import Parameter, Module
+from torch.nn import Module
 import torch.optim as optim
 
 from torch.utils.data import DataLoader, Subset
@@ -38,11 +38,11 @@ from ignite.engine import Events, Engine
 from ignite.handlers import EarlyStopping, ModelCheckpoint, Checkpoint, DiskSaver, ProgressBar
 from ignite.metrics import RunningAverage
 
-from torch_geometric.utils import k_hop_subgraph
 
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
 
 from .data_leakage import permute_tails
+from .initializers import *
 from .decoders import *
 from .encoders import *
 from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
@@ -50,7 +50,7 @@ from .inference import NodeInference, EdgeInference
 from .knowledgegraph import KnowledgeGraph
 from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .samplers import NegativeSampler, PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
-from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, initialize_embedding, plot_learning_curves, save_config
+from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, plot_learning_curves, save_config
 
 
 # Configure logging
@@ -109,7 +109,7 @@ class Architect(Module):
         values: tensors of shape [node_count, node_embedding_dimensions]
     edge_embeddings: nn.Embedding, shape: [edge_type_count, edge_embedding_dimensions]
         Embeddings for each edge type.
-    encoder: DefaultEncoder or GNN
+    encoder: GNN or None
         Encoder model of the autoencoder.
         For more details, refer to the `initialize_encoder` function.
     decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
@@ -242,7 +242,8 @@ class Architect(Module):
                 self.knowledge_graph = knowledge_graph
 
         # Initialize attributes
-        self.encoder: DefaultEncoder | GNN = None
+        self.initializer: Initializer = None
+        self.encoder: GNN | None = None
         self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
         self.decoder_loss: MarginLoss | BinaryCrossEntropyLoss = None
         self.skip_normalization: bool = False
@@ -362,12 +363,12 @@ class Architect(Module):
     def initialize_encoder( self,
                             encoder_name: Literal["Default", "GCN", "GAT", "Node2Vec", ""] = "",
                             gnn_layers: int = 0
-                            ) -> DefaultEncoder | GCNEncoder | GATEncoder:
+                            ) -> GCNEncoder | GATEncoder | None:
         """
         Create and initialize the encoder object according to the configuration or arguments.
 
         The encoder is created from PyG encoding layers. Currently, the implemented encoders 
-        are a random initialization, **GCN** [1]_, **GAT** [2]_ and **Node2Vec** [3]_. See the encoder class for a detailed
+        are a random initialization, **GCN** [1]_, **GAT** [2]_. See the encoder class for a detailed
         explanation of the encoders.
 
         If both configuration and arguments are given, the arguments take priority.
@@ -377,7 +378,6 @@ class Architect(Module):
         TODO: proper links to the references
         .. [1] Kipf, Thomas and Max Welling. “Semi-Supervised Classification with Graph Convolutional Networks.” ArXiv abs/1609.02907 (2016): n. pag.
         .. [2] Brody, Shaked et al. “How Attentive are Graph Attention Networks?” ArXiv abs/2105.14491 (2021): n. pag.
-        .. [3] TODO: add reference to Node2Vec
 
         Arguments
         ---------
@@ -392,8 +392,8 @@ class Architect(Module):
 
         Returns
         -------
-        encoder: DefaultEncoder or GCNEncoder or GATEncoder or Node2VecEncoder
-            The encoder object.
+        encoder: GCNEncoder or GATEncoder or None
+            The encoder object, or None if there is no encoder.
         
         """
         encoder_config: dict = self.config["model"]["encoder"]
@@ -406,16 +406,14 @@ class Architect(Module):
         edge_types = self.knowledge_graph.triplet_types
 
         match encoder_name:
-            case "Default":
-                encoder = DefaultEncoder()
+            case "None":
+                encoder = None
             case "GCN": 
                 encoder = GCNEncoder(edge_types, self.encoder_node_embedding_dimensions, gnn_layers)
             case "GAT":
                 encoder = GATEncoder(edge_types, self.encoder_node_embedding_dimensions, gnn_layers)
-            case "Node2Vec":
-                encoder = Node2VecEncoder(self.knowledge_graph.edge_list[:, self.knowledge_graph.train_mask], self.encoder_node_embedding_dimensions, device = self.device, **encoder_config["params"])
             case _:
-                encoder = DefaultEncoder()
+                encoder = None
                 logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
         
         return encoder
@@ -727,6 +725,31 @@ class Architect(Module):
         
         return evaluator
     
+    def initialize_initializer(self) -> Initializer:
+        """
+        Set the method used to generate initial embeddings
+        
+        Options are random initialization, which is equivalent to just a lookup embedding,
+        user-supplied features that can be learnt with a deep encoder, and Node2Vec."""
+        match self.config["initializer"]["name"]:
+            case "Random":
+                initializer = Initializer()
+            case "Feature":
+                initializer = FeatureInitializer() #TODO
+            case "Node2Vec":
+                initializer = Node2VecInitializer(
+                    edge_indices = self.knowledge_graph.edge_list[:, self.knowledge_graph.train_mask],
+                    embedding_dimensions = self.node_embedding_dimensions,
+                    walk_length = self.config["initializer"]["walk_length"],
+                    context_size = self.config["initializer"]["context_size"],
+                    output_directory = self.checkpoints_directory,
+                    device = self.device
+                )
+            case _:
+                raise NotImplementedError(f"The requested initializer {self.config["initializer"]["name"]} is not implemented.")
+            
+        logging.info(f"Using the {self.config["initializer"]["name"]} initializer")
+        return initializer
 
     def initialize_model(self,
                         attributes: Dict[str, pd.DataFrame] = {},
@@ -775,47 +798,23 @@ class Architect(Module):
         self.encoder = self.encoder or self.initialize_encoder()
 
         logging.info("Initializing embeddings...")
-        
+        self.initializer = self.initializer or self.initialize_initializer()
+
         # If given a pretrained embedding file (such as the output of a Node2Vec), we use that in priority
         if pretrained is not None and pretrained.exists():
             self.knowledge_graph.node_embeddings = torch.load(pretrained)
         else:
-            assert isinstance(self.encoder, GNN) or len(self.knowledge_graph.node_type_to_index) == 1, "When not using a GNN as encoder, the node_type shouldn't be supplied."
+            self.initializer.initialize_all_embeddings(self.knowledge_graph,
+                                                        node_embedding_dimensions = self.node_embedding_dimensions,
+                                                        edge_embedding_dimensions = self.edge_embedding_dimensions,
+                                                        device = self.device,
+                                                        inplace = True)
 
-            # create initial embeddings
-            node_embeddings = nn.ParameterList()
-            index_to_node_type = {value: key for key,value in self.knowledge_graph.node_type_to_index.items()}
-            for node_type in self.knowledge_graph.node_type_to_global:
-                node_count = self.knowledge_graph.node_type_to_global[node_type].size(0)
-                if node_type in attributes:
-                    # if feature attributes given, initialization based on them
-                    current_attribute: pd.DataFrame = attributes[node_type]
-                    assert current_attribute.shape[0] == node_count, f"The length of the given attribute ({len(current_attribute)}) must match the number of nodes of this type ({node_count})."
-                    input_features = torch.zeros((node_count,current_attribute.shape[1]), dtype = torch.float)
-                    for node in current_attribute.index:
-                        node_index = self.knowledge_graph.node_to_index[node]
-                        node_type_index = self.knowledge_graph.node_types[node_index]
-                        local_index = self.knowledge_graph.global_to_local_indices[node_index]
-                        assert node_type_index == self.knowledge_graph.node_type_to_index[node_type], f"The node {node} is given as {node_type} but registered as {index_to_node_type[str(node_type_index)]} in the KG."
-
-                        input_features[local_index] = tensor(current_attribute.loc[node], dtype = torch.float)
-                    
-                    node_embeddings.append(Parameter(input_features).to(self.device))
-                    
-                else:
-                    # if no feature attribute given, random initialization
-                    node_embedding_dimensions = self.node_embedding_dimensions if isinstance(self.encoder, GNN) else self.encoder_node_embedding_dimensions
-                    embeddings = initialize_embedding(node_count, node_embedding_dimensions, self.device)
-                    node_embeddings.append(embeddings.weight)
-
-            self.knowledge_graph.node_embeddings = node_embeddings
-
-            if isinstance(self.encoder, GNN):     
+            if self.encoder is not None:     
                 # The input features are not supposed to change if we use an encoder
                 # TODO: make it an hyperparameter
                 self.knowledge_graph.node_embeddings.requires_grad_(False)
 
-        self.knowledge_graph.edge_embeddings = initialize_embedding(self.knowledge_graph.edge_count, self.encoder_edge_embedding_dimensions, self.device).weight
 
         logging.info("Initializing optimizer...")
         self.optimizer = self.optimizer or self.initialize_optimizer()
@@ -933,7 +932,7 @@ class Architect(Module):
             "trainer": trainer,
         }
 
-        if isinstance(self.encoder, GNN):
+        if self.encoder is not None:
             to_save.update({"encoder": self.encoder})
         if self.scheduler is not None:
             to_save.update({"scheduler": self.scheduler})
@@ -958,7 +957,7 @@ class Architect(Module):
 
             """
             # Move models to CPU before saving
-            if isinstance(self.encoder, GNN):
+            if self.encoder is not None:
                 self.encoder.to("cpu")
             self.decoder.to("cpu")
             self.knowledge_graph.embeddings.to("cpu")
@@ -967,7 +966,7 @@ class Architect(Module):
             checkpoint_handler(engine)
 
             # Move models back to GPU
-            if isinstance(self.encoder, GNN):
+            if self.encoder is not None:
                 self.encoder.to(self.device)
             self.decoder.to(self.device)
             self.knowledge_graph.embeddings.to(self.device)
@@ -1202,7 +1201,7 @@ class Architect(Module):
         # Check node and edge dictionnary size
         assert len(checkpoint["embeddings"]["edge_embeddings"]) == self.knowledge_graph.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint["embeddings"]["edge_embeddings"])}) and the current configuration ({self.knowledge_graph.edge_count})!"
 
-        if isinstance(self.encoder, GNN):
+        if self.encoder is not None:
             assert len(checkpoint["embeddings"]["node_embeddings"]) == len(self.knowledge_graph.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint["nodes"])}) and the current configuration ({len(self.knowledge_graph.node_type_to_index)})!"
         else:
             assert len(checkpoint["embeddings"]["node_embeddings.0"]) == self.knowledge_graph.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint["embeddings"]["node_embeddings.0"])}) and the current configuration ({self.knowledge_graph.node_count})!"
@@ -1248,7 +1247,7 @@ class Architect(Module):
         logging.info("Best model successfully loaded.")
 
 
-    def get_batch_embeddings(self, knowledge_graph: KnowledgeGraph, batch: Tensor, mask: Tensor | None = None) -> Tensor:
+    def get_batch_embeddings(self, knowledge_graph: KnowledgeGraph, batch: Tensor, mask: Tensor | None = None) -> nn.Parameter:
         if isinstance(self.encoder, GNN):
             seed_nodes: Tensor = batch[:2].unique().cpu()
             hop_count: int = self.encoder.layer_count
@@ -1264,9 +1263,9 @@ class Architect(Module):
             # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
             # which corresponds to the indices that are filled here.
             # TODO: See if making it a sparse tensor can spare memory
-            node_embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count, self.encoder_node_embedding_dimensions),
+            node_embeddings: nn.Parameter = nn.Parameter(torch.zeros((knowledge_graph.node_count, self.encoder_node_embedding_dimensions),
                                                     device = self.device,
-                                                    dtype = torch.float)
+                                                    dtype = torch.float))
 
             for node_type, index in input.node_mapping.items():
                 node_embeddings[index] = encoder_output[node_type]
@@ -1410,7 +1409,7 @@ class Architect(Module):
         """
         self.normalize_parameters()
         
-        if isinstance(self.encoder, GNN):
+        if self.encoder is not None:
             node_embeddings: torch.Tensor = torch.zeros((self.knowledge_graph.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
 
             with torch.no_grad():
