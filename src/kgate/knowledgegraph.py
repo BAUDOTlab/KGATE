@@ -229,7 +229,7 @@ class KnowledgeGraph(Dataset):
             self.removed_triplets = tensor([], dtype = torch.long)
 
         self.triplet_types: List[Tuple[str, str, str]] = triplet_types or []
-
+        self.triplet_type_to_index: Dict[Tuple[int, int, int], int] = {}
         self.node_to_index = node_to_index or get_dictionary_mapping(dataframe, nodes = True)
         self.node_type_to_index: Dict[str, int] = node_type_to_index or {"Node": 0}
         self.edge_to_index = edge_to_index or get_dictionary_mapping(dataframe, nodes = False)
@@ -317,11 +317,14 @@ class KnowledgeGraph(Dataset):
                             triplets
                         ], dim = 1)
 
-                        self.node_types[source] = self.node_type_to_index[source_type]
-                        self.node_types[target] = self.node_type_to_index[target_type]
+                        source_type_index = self.node_type_to_index[source_type]
+                        tail_type_index = self.node_type_to_index[target_type]
+                        self.node_types[source] = source_type_index
+                        self.node_types[target] = tail_type_index
 
                         edge_type = (source_type, edge_name, target_type)
                         self.triplet_types.append(edge_type)
+                        self.triplet_type_to_index[(source_type_index, edge_index, tail_type_index)] = triplet_type_counter
                         triplet_type_counter += 1
         
         self.node_type_to_global: Dict[str, Tensor] = {}

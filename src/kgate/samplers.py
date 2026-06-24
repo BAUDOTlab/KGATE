@@ -173,23 +173,45 @@ class UniformNegativeSampler(NegativeSampler):
             heads = negative_triplet_heads[i * negative_triplet_count, (i+1) * negative_triplet_count]
             tails = negative_triplet_tails[i * negative_triplet_count, (i+1) * negative_triplet_count]
             edges = negative_triplet_edges[i * negative_triplet_count, (i+1) * negative_triplet_count]
+
+            head_types = node_types[heads]
+            tail_types = node_types[tails]
+
+            corrupted_triplet_type = torch.stack(
+                [head_types, edges, tail_types],
+                dim = 1
+            )
+
+            triplet_indices = torch.empty(
+                corrupted_triplet_type.shape[0],
+                dtype=torch.long,
+                device=corrupted_triplet_type.device
+            )
+
+            for i, triplet in enumerate(corrupted_triplet_type.tolist()):
+                triplet = tuple(triplet)
+
+                if triplet not in self.knowledge_graph.triplet_type_to_index:
+                    self.knowledge_graph.triplet_type_to_index[triplet] = len(self.knowledge_graph.triplet_type_to_index)
+
+                triplet_indices[i] = self.knowledge_graph.triplet_type_to_index[triplet]
             
-            corrupted_triplet = (
-                        self.index_to_node_type[node_types[head].item()],
-                        self.edge_types[edge],
-                        self.index_to_node_type[node_types[tail].item()]
-                    )
-            if not corrupted_triplet in triplet_types:
-                triplet_types.append(corrupted_triplet)
-                triplet = len(triplet_types)
-            else:
-                triplet = triplet_types.index(corrupted_triplet)
+            # corrupted_triplet = (
+            #             self.index_to_node_type[node_types[head].item()],
+            #             edges,
+            #             self.index_to_node_type[node_types[tail].item()]
+            #         )
+            # if not corrupted_triplet in triplet_types:
+            #     triplet_types.append(corrupted_triplet)
+            #     triplet = len(triplet_types)
+            # else:
+            #     triplet = triplet_types.index(corrupted_triplet)
                 
             corrupted_triplets.append(tensor([
-                head,
-                tail,
-                edge,
-                triplet
+                heads,
+                tails,
+                edges,
+                triplet_indices
             ]))
 
         return torch.stack(corrupted_triplets, dim = 1).long().to(device)
@@ -276,7 +298,7 @@ class BernoulliNegativeSampler(NegativeSampler):
 
     
     def corrupt_batch(  self,
-                        batch: torch.LongTensor,
+                        batch: Tensor,
                         negative_triplet_count: int | None = None):
         """
         For each true triplet, produce a corrupted one not different from
@@ -492,7 +514,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         return possible_heads, possible_tails, possible_heads_count, possible_tails_count
 
     def corrupt_batch(  self,
-                        batch: LongTensor,
+                        batch: Tensor,
                         negative_triplet_count: Optional[int] = None
                         ) -> Tensor:
         """
@@ -680,7 +702,7 @@ class MixedNegativeSampler(NegativeSampler):
         
         
     def corrupt_batch(  self,
-                        batch: torch.LongTensor,
+                        batch: Tensor,
                         negative_triplet_count: int = 1):
         """
         For each true triplet, produce `negative_triplet_count` corrupted ones from the
