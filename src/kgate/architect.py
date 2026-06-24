@@ -118,6 +118,10 @@ class Architect(Module):
     decoder_loss: MarginLoss or BinaryCrossEntropyLoss
         The loss object associated with the proper decoder, but may be overwritten.
         Either `MarginLoss(margin)` or `BinaryCrossEntropyLoss()`.
+    skip_normalization: bool, default to False
+        Some decoders should not normalize their parameters. To avoid unnecessary calls during training,
+        this flag allows the trainer to skip the normalization step completely. This is done automatically by detecting whether
+        the decoder has a "normalize_parameters" method, but can be overwritten if needed.
     sampler: NegativeSampler
         Negative sampler.
         For more details, refer to the `initialize_sampler` function.
@@ -241,6 +245,7 @@ class Architect(Module):
         self.encoder: DefaultEncoder | GNN = None
         self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
         self.decoder_loss: MarginLoss | BinaryCrossEntropyLoss = None
+        self.skip_normalization: bool = False
         self.optimizer: optim.Optimizer = None
         self.sampler: NegativeSampler = None
         self.scheduler: optim.lr_scheduler.LRScheduler | None = None
@@ -533,6 +538,9 @@ class Architect(Module):
                 decoder_loss = BinaryCrossEntropyLoss()
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
+
+        if not callable(getattr(decoder, "normalize_parameters", None)):
+            self.skip_normalization = True
 
         return decoder, decoder_loss
 
@@ -1240,43 +1248,33 @@ class Architect(Module):
         logging.info("Best model successfully loaded.")
 
 
-    def forward(self,
-                positive_triplets_batch: Tensor,
-                negative_triplets_batch: Tensor,
-                mask: Tensor
-                ) -> Tuple[Tensor, Tensor]:
-        """
-        Forward pass of the Architect.
+    def get_batch_embeddings(self, knowledge_graph: KnowledgeGraph, batch: Tensor, mask: Tensor | None = None) -> Tensor:
+        if isinstance(self.encoder, GNN):
+            seed_nodes: Tensor = batch[:2].unique().cpu()
+            hop_count: int = self.encoder.layer_count
 
-        Arguments
-        ---------
-        positive_triplets_batch: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
-            Tensor containing the integer key of true sampled triplets of
-            the edges in the current batch.
-        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the integer key of negatively sampled triplets of
-            the edges in the current batch.
-        mask: torch.Tensor, dtype: torch.long, shape: [triplet_count]
-            Mask tensor corresponding to a split of the knowledge graph
+            input = knowledge_graph.get_encoder_input(
+                seed_nodes = seed_nodes,
+                hop_count = hop_count,
+                mask = mask)
 
-        Returns
-        -------
-        positive_score: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
-            Tensor containing the score of each true triplet within the batch.
-        negative_score: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the score of each negative triplet within the batch.
-        
-        """
-        positive_score: Tensor = self.scoring_function(positive_triplets_batch, self.knowledge_graph, mask)
-        # The loss function requires the positive and negative tensors to be of the same size,
-        # Thus we duplicate the positive tensor as needed to match the negative.
-        negative_triplet_count = negative_triplets_batch.size(1) // positive_triplets_batch.size(1)
-        positive_triplet = positive_score.repeat(negative_triplet_count)
+            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
-        negative_score: Tensor = self.scoring_function(negative_triplets_batch, self.knowledge_graph, mask)
+            # As I understand it, this tensor is larger than needs to be because it needs to account for every possible
+            # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
+            # which corresponds to the indices that are filled here.
+            # TODO: See if making it a sparse tensor can spare memory
+            node_embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count, self.encoder_node_embedding_dimensions),
+                                                    device = self.device,
+                                                    dtype = torch.float)
 
-        return positive_triplet, negative_score
+            for node_type, index in input.node_mapping.items():
+                node_embeddings[index] = encoder_output[node_type]
 
+        else:
+            node_embeddings = self.node_embeddings[0]
+
+        return node_embeddings
 
     def process_batch(self,
                     engine: Engine,
@@ -1297,32 +1295,70 @@ class Architect(Module):
         Returns
         -------
         loss_value: torch.types.Number
-            Training loss value of the model for this epoch.
-        
+            Training loss value of the model for this epoch.        
         """
         batch = batch.T.to(self.device)
 
+        node_embeddings = self.get_batch_embeddings(self.knowledge_graph, batch, self.knowledge_graph.train_mask)
         negative_batch = self.sampler.corrupt_batch(batch)
         negative_batch = negative_batch.to(self.device)
         
         self.optimizer.zero_grad()
 
         # Compute loss with positive and negative triplets
-        positive_score, negative_score = self(batch, negative_batch, self.knowledge_graph.train_mask)
-        loss = self.decoder_loss(positive_score, negative_score)
+        positive_scores, negative_scores = self(batch, negative_batch, node_embeddings)
+        loss = self.decoder_loss(positive_scores, negative_scores)
         loss.backward()
 
         self.optimizer.step()
 
-        self.normalize_parameters()
+        if not self.skip_normalization:
+            self.normalize_parameters()
 
         return loss.item()
 
 
+    def forward(self,
+                positive_triplets_batch: torch.Tensor,
+                negative_triplets_batch: torch.Tensor,
+                node_embeddings: torch.Tensor
+                ) -> Tuple[Tensor, Tensor]:
+        """
+        Forward pass of the Architect.
+
+        Arguments
+        ---------
+        positive_triplets_batch: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
+            Tensor containing the integer key of true sampled triplets of
+            the edges in the current batch.
+        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the integer key of negatively sampled triplets of
+            the edges in the current batch.
+        node_embeddings: torch.Tensor, dtype: torch.long, shape: [batch_size]
+            Mask tensor corresponding to a split of the knowledge graph
+
+        Returns
+        -------
+        positive_score: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
+            Tensor containing the score of each true triplet within the batch.
+        negative_score: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the score of each negative triplet within the batch.
+        
+        """
+        positive_score: Tensor = self.scoring_function(positive_triplets_batch, node_embeddings)
+        # The loss function requires the positive and negative tensors to be of the same size,
+        # Thus we duplicate the positive tensor as needed to match the negative.
+        negative_triplet_count = negative_triplets_batch.size(1) // positive_triplets_batch.size(1)
+        positive_score = positive_score.repeat(negative_triplet_count)
+
+        negative_score: Tensor = self.scoring_function(negative_triplets_batch, node_embeddings)
+
+        return positive_score, negative_score
+
+
     def scoring_function(self,
                         batch: Tensor,
-                        knowledge_graph: KnowledgeGraph,
-                        mask: Tensor
+                        node_embeddings: Tensor
                         ) -> Tensor:
         """
         Runs the encoder and decoder pass on a batch for a given KG.
@@ -1339,10 +1375,8 @@ class Architect(Module):
             - edge_index
             - triplet_index
             Here, batch_size is batch.shape[1].
-        knowledge_graph: KnowledgeGraph
-            The knowledge graph corresponding to the batch identifiers.
-        mask: torch.Tensor, dtype: torch.long, shape: [triplet_count]
-            Mask tensor corresponding to a split of the knowledge graph
+        node_embeddings: torch.Tensor, dtype: torch.long, shape: [node_count]
+            Embedding tensor corresponding to the nodes of a split of the knowledge graph
 
         Returns
         -------
@@ -1352,35 +1386,9 @@ class Architect(Module):
         """
         head_indices, tail_indices, edge_indices = batch[0], batch[1], batch[2]
         
-        if isinstance(self.encoder, GNN):
-            seed_nodes: Tensor = batch[:2].unique().cpu()
-            hop_count: int = self.encoder.layer_count
-
-            input = knowledge_graph.get_encoder_input(
-                seed_nodes = seed_nodes,
-                hop_count = hop_count
-                )
-
-            encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
-
-            # As I understand it, this tensor is larger than needs to be because it needs to account for every possible
-            # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
-            # which corresponds to the indices that are filled here.
-            # TODO: See if making it a sparse tensor can spare memory
-            embeddings: nn.Parameter = nn.Parameter(torch.zeros((knowledge_graph.node_count, self.encoder_node_embedding_dimensions),
-                                                    device = self.device,
-                                                    dtype = torch.float)
-                                                    )
-
-            for node_type, index in input.node_mapping.items():
-                embeddings[index] = encoder_output[node_type]
-
-        else:
-            embeddings = self.knowledge_graph.node_embeddings[0]
-        
-        head_embeddings = embeddings[head_indices]
+        head_embeddings = node_embeddings[head_indices]
         edge_embeddings = self.knowledge_graph.edge_embeddings[edge_indices]  # Edges are unchanged
-        tail_embeddings = embeddings[tail_indices]
+        tail_embeddings = node_embeddings[tail_indices]
 
         return self.decoder.score(  head_embeddings = head_embeddings,
                                     tail_embeddings = tail_embeddings,
@@ -1513,6 +1521,7 @@ class Architect(Module):
         """
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
         self.eval()  # Set the model to evaluation mode
+        validation_score = 0
         with torch.no_grad():
             validation_subset = Subset(self.knowledge_graph, self.knowledge_graph.validation_mask.nonzero(as_tuple = True)[0])
 

@@ -548,4 +548,4 @@ class TripletClassificationEvaluator:
         negative_scores = (negative_scores < self.thresholds[edge_indices])
 
         return (scores.sum().item() +
-                negative_scores.sum().item()) / (2 * self.kg_test.triplet_count)
+                negative_scores.sum().item()) / (2 * kg_test.triplet_count)
