@@ -1136,7 +1136,8 @@ class KnowledgeGraph(Dataset):
     def get_encoder_input(  self, 
                             *,
                             seed_nodes: Tensor,
-                            hop_count: int
+                            hop_count: int,
+                            mask: Tensor | None = None
                             ) -> EncoderInput:
         """
         From a `graphindices`-like tensor and node embeddings, build the `EncoderInput` object that will be fed to the GNN encoder.
@@ -1147,6 +1148,8 @@ class KnowledgeGraph(Dataset):
             Tensor containing the unique nodes that will be the source of the encoder input.
         hop_count: int
             How far the subgraph will be sampled. Must correspond to the number of GNN layers.
+        mask: torch.Tensor, dtype: bool, size: [triplet_count], optional
+            Mask to limit the subgraph to a given sample of the original KG.
 
         Raises
         ------
@@ -1161,11 +1164,16 @@ class KnowledgeGraph(Dataset):
         
         """
         device = self.node_embeddings[0].device
-        
+
+        if mask is not None:
+            edge_list = self.edge_list[:, mask]
+        else:
+            edge_list = self.edge_list
+
         subset, edge_index, mapping, edge_mask = k_hop_subgraph(
             node_idx = seed_nodes,
             num_hops = hop_count,
-            edge_index = self.edge_list
+            edge_index = edge_list
         )
 
         subgraph = self.graphindices[:, edge_mask]
