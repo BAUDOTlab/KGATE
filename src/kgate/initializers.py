@@ -3,7 +3,7 @@ from kgate import KnowledgeGraph
 import pandas as pd
 import torch
 import torch.nn as nn
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Any
 import logging
 from pathlib import Path
 from torch_geometric.nn import Node2Vec

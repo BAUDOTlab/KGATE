@@ -86,7 +86,9 @@ def prepare_knowledge_graph(config: dict,
         if kg is not None:
             if isinstance(kg, torchkge.KnowledgeGraph):
                 knowledge_graph = KnowledgeGraph.from_torchkge(kg, metadata)
-            elif not isinstance(kg, KnowledgeGraph):
+            elif isinstance(kg, KnowledgeGraph):
+                knowledge_graph = kg
+            else:
                 raise NotImplementedError(f"Knowledge graph type {type(kg)} is not supported. Supported knowledge graph types are KGATE's and TorchKGE's.")
         elif dataframe is not None:
             knowledge_graph = KnowledgeGraph(dataframe = dataframe, metadata = metadata)

@@ -603,7 +603,7 @@ class KnowledgeGraph(Dataset):
     def generate_masks(self,
                 split_proportions: Tuple[float, float, float] = (0.8, 0.1, 0.1), 
                 sizes: Tuple[int, int, int] | None = None
-                ) -> Tuple[Self, Self, Self]:
+                ) -> None:
         """
         Generate the masks corresponding to three subsets of the knowledge graph: train, validation, test
 
@@ -858,7 +858,7 @@ class KnowledgeGraph(Dataset):
             edge_triplets = self.graphindices[:, self.graphindices[2] == edge_index]
             triplets_indices = edge_triplets[3].unique()
             # Create a new ID for the reverse edge
-            reverse_edge_index = len(self.edge_to_index)
+            reverse_edge_index = self.edge_count
             
             self.edge_to_index[reverse_edge] = reverse_edge_index
 
@@ -1166,17 +1166,17 @@ class KnowledgeGraph(Dataset):
         device = self.node_embeddings[0].device
 
         if mask is not None:
-            edge_list = self.edge_list[:, mask]
+            graphindices = self.graphindices[:, mask]
         else:
-            edge_list = self.edge_list
+            graphindices = self.graphindices
 
         subset, edge_index, mapping, edge_mask = k_hop_subgraph(
             node_idx = seed_nodes,
             num_hops = hop_count,
-            edge_index = edge_list
+            edge_index = graphindices[:2]
         )
 
-        subgraph = self.graphindices[:, edge_mask]
+        subgraph = graphindices[:, edge_mask]
 
         # All seed nodes not present in the subgraph are put in this dictionary 
         # to be used in the self-loop addition at the end of this function        

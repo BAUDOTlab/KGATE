@@ -2,10 +2,6 @@
 Architect class and methods to run a KGE model training, testing and inference from end to end.
 """
 
-from kgate.initializers import Node2VecInitializer
-from torch_geometric.nn import Node2Vec
-from kgate.initializers import FeatureInitializer
-from kgate import Initializer
 import csv
 import gc
 import logging
@@ -731,7 +727,7 @@ class Architect(Module):
         
         Options are random initialization, which is equivalent to just a lookup embedding,
         user-supplied features that can be learnt with a deep encoder, and Node2Vec."""
-        match self.config["initializer"]["name"]:
+        match self.config["model"]["initializer"]["name"]:
             case "Random":
                 initializer = Initializer()
             case "Feature":
@@ -740,15 +736,15 @@ class Architect(Module):
                 initializer = Node2VecInitializer(
                     edge_indices = self.knowledge_graph.edge_list[:, self.knowledge_graph.train_mask],
                     embedding_dimensions = self.node_embedding_dimensions,
-                    walk_length = self.config["initializer"]["walk_length"],
-                    context_size = self.config["initializer"]["context_size"],
+                    walk_length = self.config["model"]["initializer"]["walk_length"],
+                    context_size = self.config["model"]["initializer"]["context_size"],
                     output_directory = self.checkpoints_directory,
                     device = self.device
                 )
             case _:
-                raise NotImplementedError(f"The requested initializer {self.config["initializer"]["name"]} is not implemented.")
+                raise NotImplementedError(f"The requested initializer {self.config["model"]["initializer"]["name"]} is not implemented.")
             
-        logging.info(f"Using the {self.config["initializer"]["name"]} initializer")
+        logging.info(f"Using the {self.config["model"]["initializer"]["name"]} initializer")
         return initializer
 
     def initialize_model(self,
@@ -1238,17 +1234,17 @@ class Architect(Module):
         self.knowledge_graph.embeddings.load_state_dict(checkpoint["embeddings"])
 
         self.decoder.load_state_dict(checkpoint["decoder"], strict=False)
-        if "encoder" in checkpoint:
+        if "encoder" in checkpoint and self.encoder is not None:
             self.encoder.load_state_dict(checkpoint["encoder"])
+            self.encoder.to(self.device)
         
         self.knowledge_graph.embeddings.to(self.device)
         self.decoder.to(self.device)
-        self.encoder.to(self.device)
         logging.info("Best model successfully loaded.")
 
 
     def get_batch_embeddings(self, knowledge_graph: KnowledgeGraph, batch: Tensor, mask: Tensor | None = None) -> nn.Parameter:
-        if isinstance(self.encoder, GNN):
+        if self.encoder is not None:
             seed_nodes: Tensor = batch[:2].unique().cpu()
             hop_count: int = self.encoder.layer_count
 
@@ -1259,19 +1255,28 @@ class Architect(Module):
 
             encoder_output: Dict[str, Tensor] = self.encoder(input.x_dict, input.edge_index)
 
+            all_indices = torch.cat([
+                index for index in input.node_mapping.values()
+            ])
+
+            all_embeddings = torch.cat([
+                encoder_output[node_type] for node_type in input.node_mapping.keys()
+            ])
+
             # As I understand it, this tensor is larger than needs to be because it needs to account for every possible
             # idx of the embeddings. It's not a logic problem as only the indices from the batch will be selected for the decoder,
             # which corresponds to the indices that are filled here.
             # TODO: See if making it a sparse tensor can spare memory
-            node_embeddings: nn.Parameter = nn.Parameter(torch.zeros((knowledge_graph.node_count, self.encoder_node_embedding_dimensions),
-                                                    device = self.device,
-                                                    dtype = torch.float))
-
-            for node_type, index in input.node_mapping.items():
-                node_embeddings[index] = encoder_output[node_type]
-
+            node_embeddings = torch.zeros(
+                (knowledge_graph.node_count, self.encoder_node_embedding_dimensions),
+                device = self.device,
+                dtype = torch.float
+            ).index_put_(
+                (all_indices,),
+                all_embeddings
+            )
         else:
-            node_embeddings = self.node_embeddings[0]
+            node_embeddings = self.knowledge_graph.node_embeddings[0]
 
         return node_embeddings
 
@@ -1314,7 +1319,7 @@ class Architect(Module):
         if not self.skip_normalization:
             self.normalize_parameters()
 
-        return loss.item()
+        return loss
 
 
     def forward(self,
