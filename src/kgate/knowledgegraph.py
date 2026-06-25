@@ -1298,8 +1298,8 @@ class KnowledgeGraph(Dataset):
         """
         self.triplet_types = [triplet for triplet in self.triplet_types if triplet[1] != "self"]
 
-    @staticmethod
-    def from_hetero_data(hetero_data: HeteroData) -> KnowledgeGraph:
+    @classmethod
+    def from_hetero_data(cls, hetero_data: HeteroData) -> "KnowledgeGraph":
         """
         Create a new KGATE KnowledgeGraph instance from the PyTorch Geometric HeteroData object.
         
@@ -1317,10 +1317,11 @@ class KnowledgeGraph(Dataset):
         # TODO for PyTorch Geometric compatibility
         pass
 
-    @staticmethod
-    def from_torchkge(  torchkge_kg: torchkge.KnowledgeGraph,
+    @classmethod
+    def from_torchkge(  cls,
+                        torchkge_kg: torchkge.KnowledgeGraph,
                         metadata: pd.DataFrame | None = None
-                        ) -> KnowledgeGraph:
+                        ) -> "KnowledgeGraph":
         """
         Create a new KGATE KnowledgeGraph instance from the TorchKGE KnowledgeGraph object.
         
