@@ -1044,14 +1044,18 @@ class Architect(Module):
 
         target_edges_result = {}
 
-        all_edges: Set[Any] = set(self.kg_test.edge_to_index.keys())
+        all_edges: Set[Any] = set(self.knowledge_graph.edge_to_index.keys())
         remaining_edges = all_edges - set(target_edges)
         remaining_edges = list(remaining_edges)
         
         triplet_count_target_edges = 0
+        test_knowledge_graph = Subset(self.knowledge_graph, self.knowledge_graph.test_mask.nonzero(as_tuple = True)[0])
+        
+        metrics_sum_target_edges = 0.0
+        triplet_count_target_edges = 0
 
         if len(remaining_edges) != len(all_edges):
-            metrics_sum_target_edges, triplet_count_target_edges, individual_metrics_target_edges, group_metrics_target_edges = self.calculate_metrics_for_edges(self.kg_test, target_edges)
+            metrics_sum_target_edges, triplet_count_target_edges, individual_metrics_target_edges, group_metrics_target_edges = self.calculate_metrics_for_edges(test_knowledge_graph, target_edges)
             
             target_edges_result = {
                 "target_edges": {
@@ -1060,7 +1064,7 @@ class Architect(Module):
                 },
             }
 
-        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(self.kg_test, remaining_edges)
+        total_metrics_sum_remaining, triplet_count_remaining, individual_metrics_remaining, group_metrics_remaining = self.calculate_metrics_for_edges(test_knowledge_graph, remaining_edges)
 
         global_metrics = (metrics_sum_target_edges + total_metrics_sum_remaining) / (triplet_count_target_edges + triplet_count_remaining)
 
@@ -1643,8 +1647,6 @@ class Architect(Module):
             if indices_to_keep.numel() == 0:
                 continue  # Skip to next edge if no triplet found
             
-            edge_subset = graphindices[:, indices_to_keep]
-
             if isinstance(self.evaluator, LinkPredictionEvaluator):
                 test_metrics = self.link_prediction(Subset(knowledge_graph, indices_to_keep))
             elif isinstance(self.evaluator, TripletClassificationEvaluator):
@@ -1685,8 +1687,8 @@ class Architect(Module):
         
         """
         # Create subgraph for frequent and infrequent categories
-        kg_frequent = self.kg_test.remove_triplets_from_training(~frequent_indices)
-        kg_infrequent = self.kg_test.remove_triplets_from_training(~infrequent_indices)
+        kg_frequent = self.knowledge_graph.remove_triplets_from_training(~frequent_indices)
+        kg_infrequent = self.knowledge_graph.remove_triplets_from_training(~infrequent_indices)
         
         # Compute each category's MRR
         if isinstance(self.evaluator, LinkPredictionEvaluator):

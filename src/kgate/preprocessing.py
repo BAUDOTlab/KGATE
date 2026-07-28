@@ -455,7 +455,6 @@ def clean_cartesians(
                 all_triplet_indices_to_move.extend(triplet_indices.tolist())
             
         if all_triplet_indices_to_move:
-            knowledge_graph.train_mask[all_triplet_indices_to_move] = False
-            knowledge_graph.validation_mask[all_triplet_indices_to_move] = False
-            knowledge_graph.test_mask[all_triplet_indices_to_move] = True
+            knowledge_graph.remove_triplets_from_training(all_triplet_indices_to_move)
+
 
