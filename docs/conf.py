@@ -14,12 +14,17 @@ release = '0.1.13'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["autodoc2",
+extensions = [
+              "sphinx.ext.doctest",
+              "sphinx.ext.napoleon",
+              "sphinx.ext.apidoc",
               "sphinx.ext.coverage",
               "sphinx.ext.doctest",
               "sphinx.ext.mathjax",
               "sphinx.ext.napoleon",
-              "myst_parser"]
+              "sphinx.ext.autosummary",
+              "myst_parser",
+              "autodoc2"]
 
 myst_enable_extensions = [
     "colon_fence",
