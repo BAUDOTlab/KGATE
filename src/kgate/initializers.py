@@ -176,48 +176,64 @@ class FeatureInitializer(Initializer):
 
 class Node2VecInitializer(Initializer):
     """
-    Implementation of node2vec model detailed in the paper referenced below.
+        Implementation of node2vec model detailed in the paper referenced below.
 
-    References
-    ----------
-    Aditya Grover, Jure Leskovec
-    `node2vec: Scalable Feature Learning for Networks`
-    https://arxiv.org/pdf/1607.00653
-    In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 2016.
+        References
+        ----------
+        * Aditya Grover, Jure Leskovec
+            
+            `node2vec: Scalable Feature Learning for Networks`
+            
+            <https://arxiv.org/pdf/1607.00653>
+            
+            In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 2016.
 
-    Arguments
-    ---------
-    edge_indices: torch.Tensor
-        Indices of edges.
-    embedding_dimensions: int
-        Dimensions of embedding, both of nodes and edges.
-    walk_length: int
-        The walk length.
-    context_size: int
-        The actual context size which is considered for positive samples.
-        This parameter increases the effective sampling rate by reusing samples across different source nodes.
-    device: torch.device or Literal["cuda", "cpu"]
-        Indicate if data should be sent to GPU or CPU.
-        GPU is referenced to as Cuda.
-    output_directory: Path
-        Path to the directory where files will be created.
+        Arguments
+        ---------
+        
+        **edge_indices** *(torch.Tensor)*
+        : Indices of edges.
+        
+        **embedding_dimensions** *(int)*
+        : Dimensions of embedding, both of nodes and edges.
+        
+        **walk_length** *(int)*
+        : The walk length.
+        
+        **context_size** *(int)*
+        : The actual context size which is considered for positive samples.
+        : This parameter increases the effective sampling rate by reusing samples across different source nodes.
+        
+        **device** *(torch.device or Literal["cuda", "cpu"])*
+        : Indicate if data should be sent to GPU or CPU.
+        : GPU is referenced to as Cuda.
+        
+        **output_directory** *(Path)*
+        : Path to the directory where files will be created.
 
-    Attributes
-    ----------
-    device: torch.device or Literal["cuda", "cpu"]
-        Indicate if data should be sent to GPU or CPU.
-        GPU is referenced to as Cuda.
-    output_directory: Path
-        Path to the directory where files will be created.
-    model: torch_geometric.nn.Node2Vec
-        The Node2Vec model object.
-        Node2Vec documentation: https://pytorch-geometric.readthedocs.io/en/2.5.1/generated/torch_geometric.nn.models.Node2Vec.html
-    loader: TODO.type
-        TODO.What_that_variable_is_or_does
-    optimizer: TODO.type
-        TODO.What_that_variable_is_or_does
-    
-    """
+        Attributes
+        ----------
+        
+        **device** *(torch.device or Literal["cuda", "cpu"])*
+        : Indicate if data should be sent to GPU or CPU.
+        : GPU is referenced to as Cuda.
+        
+        **output_directory** *(Path)*
+        : Path to the directory where files will be created.
+        
+        **model** *(torch_geometric.nn.Node2Vec)*
+        : The Node2Vec model object.
+        : Node2Vec documentation: <https://pytorch-geometric.readthedocs.io/en/2.5.1/generated/torch_geometric.nn.models.Node2Vec.html>
+        
+        **loader** *(torch.utils.data.DataLoader)*
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
+        
+        **optimizer** *(torch.optim.SparseAdam)*
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
+
+        """
     def __init__(self,
                 edge_indices: torch.Tensor,
                 embedding_dimensions: int,

@@ -6,7 +6,7 @@ For the rest of this document, we will consider some terms to be equivalent (in 
 
 - A **node**, or **entity**, is a point in the knowledge graph. Nodes may be of different type or not, depending on the input graph.
 - An **edge**, or **relation**, is a connection between two **nodes** and holds semantic meaning. One edge always connect one node to one node (both nodes may be the same, in which case it is called a *self-loop*), and two nodes may be connected by more than one edge.
-- A **triple**, or **fact**, represents a **head** node, also called **source** node or **subject** node to a **tail** node, also called **target** node or **object** node, connected by an **edge** or **relation**. A single node can be involved in many triples, as *head* and *tail*, but one edge always belongs to only one triple.
+- A **triplet**, or **fact**, represents a **head** node, also called **source** node or **subject** node to a **tail** node, also called **target** node or **object** node, connected by an **edge** or **relation**. A single node can be involved in many triples, as *head* and *tail*, but one edge always belongs to only one triplet.
 
 Training a KGE model is very easy with KGATE. Using the `Architect` class, KGATE takes care of the data loading, preprocessing and training using mini batches.
 
@@ -25,8 +25,8 @@ Let's say you want to train a simple TransE model for 200 epochs, with no encode
 ```python
 from kgate import Architect
 
+# Use kwargs to overwrite the default config
 kg_path = "/path/to/your/kg.csv"
-
 model = {"decoder": {"name":"TransE"}} # Default value, explicitly set for the demonstration.
 training = {"max_epochs":200}
 
@@ -66,7 +66,7 @@ architect = Architect(config_path=config_path)
 architect.load_best_model()
 
 # Find the most probable tail to complete the triplet (p53,INTERACTS,?)
-result_df = architect.infer(heads="p53",rels="INTERACTS", top_k=5)
+result_df = architect.infer(heads="p53",edges="INTERACTS", top_k=5)
 result_df.to_csv("inference_results.csv")
 
 # The output dataframe has 2 columns: "Prediction" with the predicted missing element's name and "Score" with its confidence score.
@@ -86,8 +86,8 @@ architect.load_best_model()
 embeddings = architect.get_embeddings()
 
 # Get mapping dictionaries to keep track of which embedding corresponds to what
-mapping_ix2ent = {v: k for k,v in architect.kg_train.ent2ix.items()}
-mapping_ix2rel = {v: k for k,v in architect.kg_train.ent2ix.items()}
+mapping_index_to_node = {v: k for k,v in architect.kg_train.node_to_index.items()}
+mapping_index_to_edge = {v: k for k,v in architect.kg_train.edge_to_index.items()}
 
 # And run downstream tasks with the pretrained embeddings
 ```
@@ -96,12 +96,12 @@ mapping_ix2rel = {v: k for k,v in architect.kg_train.ent2ix.items()}
 
 The object returned by `architect.get_embeddings()` is a python dictionary with at least two elements:
 
-- `entities` containing the entity embeddings as a pytorch tensor of size (n_ent, ent_emb_dim)
-- `relations` containing the relation embeddings as a pytorch tensor of size (n_rel, rel_emb_dim)
+- `nodes` containing the entity embeddings as a pytorch tensor of size (node_count, node_embedding_dimensions)
+- `edges` containing the relation embeddings as a pytorch tensor of size (edge_count, edge_embedding_dimensions)
 - `decoder`, containing any additionnal embedding that is required for a decoder, such as RESCAL's relation matrix.
 
 ```{warning}
 When using decoders with more than one embedding space (such as ComplEx which uses a real space and an imaginary space), they will
-both be concatenated in the `entities` tensor, which will then be of size *(n_ent, ent_emb_dim * n_embedding_spaces)*. To retrieve them
-separately, split the tensor in part of equal size using `torch.tensor_split(embedding_tensor, n_embedding_spaces, dim=1)`.
+both be concatenated in the `nodes` tensor, which will then be of size *(node_count, node_embedding_dimensions * embedding_spaces_count)*. To retrieve them
+separately, split the tensor in part of equal size using `torch.tensor_split(embedding_tensor, embedding_spaces_count, dim=1)`.
 ```

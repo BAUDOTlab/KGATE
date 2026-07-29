@@ -2,15 +2,14 @@
 
 KGATE implements several encoders and allows you to use any model using [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric)'s models. In KGATE, an **encoder** is a module that takes any kind of numeric features as input and transform it into embeddings of the desired size that the **decoder** uses to reconstruct the graph. If you are looking for models to learn an initial representation of the graph before launching the autoencoder training, head over to the **[preprocessors](./preprocessors.md)** page.
 
-```{currentmodule} kgate.encoders
-```
+Currently implemented encoders:
+* [DefaultEncoder](./reference/api_encoders.md#defaultencoder)
+* [GNN](./reference/api_encoders.md#gnn)
+* [GATEncoder](./reference/api_encoders.md#gatencoder)
+* [GCNEncoder](./reference/api_encoders.md#gcnencoder)
+* [Node2VecEncoder](./reference/api_encoders.md#node2vecencoder)
+<!--[NewEncoderName](./reference/api_encoders.md#newencodername)-->
 
-```{autosummary}
-   :nosignatures:
-   :toctree: ../generated
-
-   ConvKB
-```
 
 ## Building your own encoder
 
