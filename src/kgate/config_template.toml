@@ -48,12 +48,26 @@ theta_second_edge_type = 0.8
 node_embedding_dimensions = 256
 edge_embedding_dimensions = -1
 
+[model.initializer]
+# The initializer generates the initial embeddings for nodes and edges.
+# Depending on the initializer used, the dimensions of the initial embeddings
+# may not be the same as model.node_embedding_dimension and model.edge_embedding_dimension,
+# in which case using an encoder is mandatory
+# Supported options are:
+# - Random: all nodes and edges have random initial embeddings based on a xavier uniform function.
+# - Feature: the initial embeddings will be supplied by the user as node and edge features. If a node type doesn't have a feature, it will be randomly initialized as above.
+# - Node2Vec: use the Node2Vec random walk algorithm to initialize embeddings.
+name = "Random"
+
+# The following parameters are only used with Node2Vec
+walk_length = 10
+context_size = 8
+
 [model.encoder]
-# The encoder transforms the nodes and edges into embedding vectors
-# of size model.emb_dim and model.rel_emb_dim respectively.
+# The encoder aggregates the information from the initial embedding vectors
+# and outputs a new representation of size model.node_embedding_dimension and model.edge_embedding_dimension.
 # Read the documentation for more information about the different encoders.
 # Supported options are:
-# - Default: a simple lookup table, similar to a random initialization.
 # - GCN: Graph Convolutional Network proposed by Kipf & Welling 2017
 # - GAT: Graph Attention Network improvment proposed by Brody et al. 2021
 name = "Default" #Lookup table

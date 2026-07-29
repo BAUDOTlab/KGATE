@@ -578,7 +578,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         # Needs padding each tensors to the same length though
         for i in range(corrupted_head_count):
             edge_index = corrupted_head_batch[2][i]
-            choices: Tensor = self.possible_heads[edge_index]
+            choices: Tensor = self.possible_heads[edge_index.item()]
             if len(choices) == 0:
                 # In this case the edge i has never been used with any head
                 # Choose one node at random
@@ -616,7 +616,7 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         triplets = [0] * (batch_size - corrupted_head_count) if len(self.knowledge_graph.node_type_to_index) == 1 else []
         for i in range(batch_size - corrupted_head_count):
             edge_index = corrupted_tail_batch[2][i]
-            choices: Tensor = self.possible_tails[edge_index]
+            choices: Tensor = self.possible_tails[edge_index.item()]
             if len(choices) == 0:
                 # In this case the edge i has never been used with any tail
                 # Choose one node at random

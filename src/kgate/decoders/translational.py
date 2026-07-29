@@ -26,7 +26,7 @@ from torchkge.utils.dissimilarities import  l1_dissimilarity, \
                                             l2_torus_dissimilarity, \
                                             el2_torus_dissimilarity
 
-from ..utils import initialize_embedding
+from ..initializers import Initializer
 
 
 
@@ -506,7 +506,8 @@ class TransH(TranslationalDecoder):
                 node_count: int,
                 edge_count: int):
         super().__init__()
-        self.normal_vector = initialize_embedding(edge_count, embedding_dimensions)
+        initializer = Initializer()
+        self.normal_vector = initializer.initialize_embedding(edge_count, embedding_dimensions)
         self.dissimilarity = l2_dissimilarity
 
         self.evaluated_projections = False
@@ -795,7 +796,8 @@ class TransR(TranslationalDecoder):
         self.node_embedding_dimensions = node_embedding_dimensions
         self.edge_embedding_dimensions = edge_embedding_dimensions
 
-        self.projection_matrix = initialize_embedding(node_count, edge_embedding_dimensions * node_embedding_dimensions)
+        initializer = Initializer()
+        self.projection_matrix = initializer.initialize_embedding(node_count, edge_embedding_dimensions * node_embedding_dimensions)
 
         self.dissimilarity = l2_dissimilarity
 
@@ -1097,10 +1099,11 @@ class TransD(TranslationalDecoder):
         self.edge_count = edge_count
         self.node_embedding_dimensions = node_embedding_dimensions
         self.edge_embedding_dimensions = edge_embedding_dimensions
-
+        
+        initializer = Initializer()
         # TODO: Might be changed to have 2 embedding spaces instead (meaning it will be encoded by a GNN if present)
-        self.node_projection_vector = initialize_embedding(self.node_count, self.node_embedding_dimensions)
-        self.edge_projection_vector = initialize_embedding(self.edge_count, self.edge_embedding_dimensions)
+        self.node_projection_vector = initializer.initialize_embedding(self.node_count, self.node_embedding_dimensions)
+        self.edge_projection_vector = initializer.initialize_embedding(self.edge_count, self.edge_embedding_dimensions)
 
         self.dissimilarity = l2_dissimilarity
 

@@ -27,7 +27,7 @@ from torchkge.data_structures import SmallKG
 if TYPE_CHECKING:
     from .architect import Architect
 from .decoders import BilinearDecoder, ConvolutionalDecoder, TranslationalDecoder
-from .encoders import GNN, DefaultEncoder
+from .encoders import GNN
 from .knowledgegraph import KnowledgeGraph
 from .samplers import NegativeSampler, PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .utils import filter_scores
@@ -222,7 +222,7 @@ class LinkPredictionEvaluator:
 
     def evaluate(self,
                 batch_size: int,
-                encoder: DefaultEncoder | GNN,
+                encoder: GNN | None,
                 decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
                 evaluated_subset: Subset[KnowledgeGraph],
                 node_embeddings: nn.ParameterList,
@@ -236,7 +236,7 @@ class LinkPredictionEvaluator:
         ---------
         batch_size: int
             Size of the current batch.
-        encoder: DefaultEncoder or GNN
+        encoder: GNN, optional
             Encoder model to embed the nodes. Deactivated with DefaultEncoder.
         decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
             Decoder model to evaluate.
@@ -270,14 +270,13 @@ class LinkPredictionEvaluator:
         self.filtered_rank_true_tails = empty(size = (len(evaluated_subset),)).long().to(device)
 
         dataloader = DataLoader(evaluated_subset, batch_size = batch_size)
-        graphindices = knowledge_graph.graphindices.to(device) # this is the training graphindices
         if decoder is not None and hasattr(decoder,"embedding_spaces"):
             encoder_node_embedding_dimensions: int = self.embedding_dimensions * decoder.embedding_spaces
         else:
             encoder_node_embedding_dimensions: int = self.embedding_dimensions
 
         # Aggregate information for all nodes
-        if isinstance(encoder, GNN):
+        if encoder is not None:
 
             evaluation_node_embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count,
                                                             encoder_node_embedding_dimensions),
