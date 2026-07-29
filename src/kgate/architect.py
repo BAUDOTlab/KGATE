@@ -63,120 +63,6 @@ logging.basicConfig(
 
 
 class Architect(Module):
-    """
-    Architect class for knowledge graph embedding training.
-    
-    The Architect class contains the kg and manages every step from the training to the inference.
-    
-    Arguments
-    ---------
-    config_path: str, optional
-        Path to the configuration file
-    kg: Tuple of KnowledgeGraph or KnowledgeGraph, optional
-        Either a knowledge graph that has already been preprocessed by KGATE and split accordingly, or an unprocessed KnowledgeGraph object.
-        In the first case, the knowledge graph won't be preprocessed even if `config.run_kg_preprocessing` is set to True.
-        In the second case, an error is thrown if the `config.run_kg_preprocessing` is set to False.
-        The KnowledgeGraph object can also be a torchKGE KnowledgeGraph if it has been transformed by the kgate.KnowledgeGraph.from_torchkge() method beforehand.
-    dataframe: pd.DataFrame, optional
-        The knowledge graph as a pandas dataframe containing at least the columns head, tail and edge,
-        and where each row corresponds to a triplet.
-    metadata: pd.DataFrame, optional
-        The metadata as a pandas dataframe, with at least the columns id and type, where id is the name of the node as it is in the
-        knowledge graph. If this argument is not provided, the metadata will be read from config.metadata if it exists. If both are absent,
-        all nodes will be considered to be the same node type.
-    cuddn_benchmark: bool, optional, default to True
-        Benchmark different convolution algorithms to chose the optimal one.
-        Initialization is slightly longer when it is enabled, and only if cuda is available.
-    number_of_cores: int, optional, default to 0
-        Set the number of cpu cores used by KGATE. If set to 0, the maximum number of available cores is used.
-    kwargs: dict
-        Inline configuration parameters. The name of the arguments must match the parameters found in `config_template.toml`.
-    
-    Attributes
-    ----------
-    config: dict
-        The parsed configuration as a python dictionnary.
-    kg_train: KnowledgeGraph
-        Train split from the knowledge graph.
-    kg_validation: KnowledgeGraph
-        Validation split from the knowledge graph.
-    kg_test: KnowledgeGraph
-        Test split from the knowledge graph.
-    metadata: pd.DataFrame
-        The metadata dataframe to associate to the knowledge graph.
-    node_embedding_dimensions: int
-        Dimensions of node embeddings, or both node and edge embeddings if they are confounded.
-    edge_embedding_dimensions: int
-        Dimensions of edge embeddings.
-        For most decoders, node and edge embeddings must be identical.
-        If not explicitly different than `node_embedding_dimensions`, it is the same. Most models only support the same value for both hyperparameters.
-    node_embeddings: nn.ParameterList
-        A list containing all embeddings for each node type.
-        keys: node type index
-        values: tensors of shape [node_count, node_embedding_dimensions]
-    edge_embeddings: nn.Embedding, shape: [edge_type_count, edge_embedding_dimensions]
-        Embeddings for each edge type.
-    encoder: DefaultEncoder or GNN
-        Encoder model of the autoencoder.
-        For more details, refer to the `initialize_encoder` function.
-    decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
-        Decoder model of the autoencoder.
-        For more details, refer to the `initialize_decoder` function.
-    decoder_loss: MarginLoss or BinaryCrossEntropyLoss
-        The loss object associated with the proper decoder, but may be overwritten.
-        Either `MarginLoss(margin)` or `BinaryCrossEntropyLoss()`.
-    sampler: NegativeSampler
-        Negative sampler.
-        For more details, refer to the `initialize_sampler` function.
-    optimizer: optim.Optimizer
-        Optimizer.
-        For more details, refer to the `initialize_optimizer` function.
-    scheduler: learning_rate_scheduler.LRScheduler or None
-        Learning rate scheduler of KGATE.
-        Modules that alter the learning rate throughout the training.
-        For more details, refer to the `initialize_scheduler` function.
-    evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
-        The evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
-        For more details, refer to the `initialize_evaluator` function.
-        GPU is referenced to as Cuda.
-    device: torch.device
-        Indicate if data should be sent to GPU ("cuda") or CPU ("cpu").
-    checkpoints_directory: Path
-        Path to the directory containing checkpoint files.
-    evaluation_batch_size: int
-        Size of an evaluation and inference batch.
-    TODO: add_missing_attributes_not_declared_in_init
-    
-    Raises
-    ------
-    InvalidColumnName
-        Pandas error.
-        The metadata dataframe must have columns named "id" and "type".
-    ValueError #1
-        If the file referenced as `metadata_csv` in the config file exists but cannot be parsed.
-    ValueError #2
-        The metadata csv file uses a non supported separator.
-        Supported separators are comma (,), tabulation (    ) and semi-colon (;).
-    ValueError #3
-        If the `run_kg_preprocessing` setting in the config file is set to False,
-        but the knowledge graph `kg` is given but not as a tuple.
-        The knowledge graph must either be preprocessed and given as a tuple (training, validation and test),
-        or `run_kg_preprocessing` must be set to True.
-
-    Examples
-    --------
-    Inline hyperparameter declaration
-    >>> model_params = {"node_embedding_dimensions": 100, "decoder": {"name":"DistMult"}}
-    >>> sampler_params = {"negative_triplet_count":5}
-    >>> run_preprocessing = True
-    >>> architect = Architect("/path/to/configuration", model = model_params, sampler = sampler_params, run_kg_preprocessing = run_preprocessing)
-
-    Notes
-    -----
-    While it is possible to give any part of the configuration as kwargs, even everything, it is strongly recommended
-    to use a separated configuration file to ensure reproducibility of training.
-    
-    """
     def __init__(self,
                 config_path: str = "",
                 kg: Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph] 
@@ -189,6 +75,153 @@ class Architect(Module):
                 cudnn_benchmark: bool = True,
                 number_of_cores: int = 0,
                 **kwargs):
+        """
+        Architect class for knowledge graph embedding training.
+
+        The Architect class contains the kg and manages every step from the training to the inference.
+
+        Arguments
+        ---------
+        
+        **config_path** *(str, optional)*
+        : Path to the configuration file
+        
+        **kg** *(Tuple of KnowledgeGraph or KnowledgeGraph, optional)*
+        : Either a knowledge graph that has already been preprocessed by KGATE and split accordingly, or an unprocessed KnowledgeGraph object.
+        : In the first case, the knowledge graph won't be preprocessed even if `config.run_kg_preprocessing` is set to True.
+        : In the second case, an error is thrown if the `config.run_kg_preprocessing` is set to False.
+        : The KnowledgeGraph object can also be a torchKGE KnowledgeGraph if it has been transformed by the kgate.KnowledgeGraph.from_torchkge() method beforehand.
+        
+        **dataframe** *(pd.DataFrame, optional)*
+        : The knowledge graph as a pandas dataframe containing at least the columns head, tail and edge, 
+        and where each row corresponds to a triplet.
+        
+        **metadata** *(pd.DataFrame, optional)*
+        : The metadata as a pandas dataframe, with at least the columns id and type, where id is the name of the node as it is in the 
+        knowledge graph. If this argument is not provided, the metadata will be read from config.metadata if it exists. If both are absent, 
+        all nodes will be considered to be the same node type.
+        
+        **cuddn_benchmark** *(bool, optional, default to True)*
+        : Benchmark different convolution algorithms to chose the optimal one.
+        : Initialization is slightly longer when it is enabled, and only if cuda is available.
+        
+        **number_of_cores** *(int, optional, default to 0)*
+        : Set the number of cpu cores used by KGATE. If set to 0, the maximum number of available cores is used.
+        
+        **kwargs** *(dict)*
+        : Inline configuration parameters. The name of the arguments must match the parameters found in `config_template.toml`.
+
+        Attributes
+        ----------
+        
+        **config** *(dict)*
+        : The parsed configuration as a python dictionnary.
+        
+        **kg_train** *(KnowledgeGraph)*
+        : Train split from the knowledge graph.
+        
+        **kg_validation** *(KnowledgeGraph)*
+        : Validation split from the knowledge graph.
+        
+        **kg_test** *(KnowledgeGraph)*
+        : Test split from the knowledge graph.
+        
+        **metadata** *(pd.DataFrame)*
+        : The metadata dataframe to associate to the knowledge graph.
+        
+        **node_embedding_dimensions** *(int)*
+        : Dimensions of node embeddings, or both node and edge embeddings if they are confounded.
+        
+        **edge_embedding_dimensions** *(int)*
+        : Dimensions of edge embeddings.
+        : For most decoders, node and edge embeddings must be identical.
+        : If not explicitly different than `node_embedding_dimensions`, it is the same. Most models only support the same value for both hyperparameters.
+        
+        **node_embeddings** *(nn.ParameterList)*
+        : A list containing all embeddings for each node type.
+        : keys: node type index
+        : values: tensors of shape [node_count, node_embedding_dimensions]
+        
+        **edge_embeddings** *(nn.Embedding, shape: [edge_type_count, edge_embedding_dimensions])*
+        : Embeddings for each edge type.
+        
+        **encoder** *(DefaultEncoder or GNN)*
+        : Encoder model of the autoencoder.
+        : For more details, refer to the `initialize_encoder` function.
+        
+        **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder)*
+        : Decoder model of the autoencoder.
+        : For more details, refer to the `initialize_decoder` function.
+        
+        **decoder_loss** *(MarginLoss or BinaryCrossEntropyLoss)*
+        : The loss object associated with the proper decoder, but may be overwritten.
+        : Either `MarginLoss(margin)` or `BinaryCrossEntropyLoss()`.
+        
+        **sampler** *(NegativeSampler)*
+        : Negative sampler.
+        : For more details, refer to the `initialize_sampler` function.
+        
+        **optimizer** *(torch.optim.Optimizer)*
+        : Optimizer.
+        : For more details, refer to the `initialize_optimizer` function.
+        
+        **scheduler** *(learning_rate_scheduler.LRScheduler or None)*
+        : Learning rate scheduler of KGATE.
+        : Modules that alter the learning rate throughout the training.
+        : For more details, refer to the `initialize_scheduler` function.
+        
+        **evaluator** *(LinkPredictionEvaluator or TripletClassificationEvaluator)*
+        : The evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
+        : For more details, refer to the `initialize_evaluator` function.
+        : GPU is referenced to as Cuda.
+        
+        **device** *(torch.device)*
+        : Indicate if data should be sent to GPU ("cuda") or CPU ("cpu").
+        
+        **checkpoints_directory** *(Path)*
+        : Path to the directory containing checkpoint files.
+        
+        **evaluation_batch_size** *(int)*
+        : Size of an evaluation and inference batch.
+        
+        % TODO: add_missing_attributes_not_declared_in_init
+
+        Raises
+        ------
+        
+        **InvalidColumnName**
+        : Pandas error.
+        : The metadata dataframe must have columns named "id" and "type".
+        
+        **ValueError #1**
+        : If the file referenced as `metadata_csv` in the config file exists but cannot be parsed.
+        
+        **ValueError #2**
+        : The metadata csv file uses a non supported separator.
+        : Supported separators are comma (,), tabulation (    ) and semi-colon (;).
+        
+        **ValueError #3**
+        : If the `run_kg_preprocessing` setting in the config file is set to False, 
+        but the knowledge graph `kg` is given but not as a tuple.
+        : The knowledge graph must either be preprocessed and given as a tuple (training, validation and test), 
+        or `run_kg_preprocessing` must be set to True.
+
+        Examples
+        --------
+        
+        Inline hyperparameter declaration
+        >>> model_params = {"node_embedding_dimensions": 100, "decoder": {"name":"DistMult"}}
+        >>> sampler_params = {"negative_triplet_count":5}
+        >>> run_preprocessing = True
+        >>> architect = Architect("/path/to/configuration", model = model_params, sampler = sampler_params, run_kg_preprocessing = run_preprocessing)
+
+        Notes
+        -----
+        
+        While it is possible to give any part of the configuration as kwargs, even everything, it is strongly recommended 
+        to use a separated configuration file to ensure reproducibility of training.
+
+        """
         # kg should be of type KnowledgeGraph, if exists use it instead of the one in config
         # dataframe should have columns head, tail and edge
         self.config: dict = parse_config(config_path, kwargs)
@@ -266,17 +299,18 @@ class Architect(Module):
         """
         The embedding dimensions in the output of the encoder (or initialized if there is no encoder).
 
-        For most decoders, it is the same as `self.node_embedding_dimensions`. But for decoders which use multiple
+        For most decoders, it is the same as `self.node_embedding_dimensions`. But for decoders which use multiple 
         embedding spaces, the latent space has `[embedding_spaces_count] * node_embedding_dimensions` embedding dimensions.
 
-        For example, ComplEx uses two embedding spaces: a real one and an imaginary one. Thus, its methods take as input
-        embedding vectors that have `2 * node_embedding_dimensions` embedding dimensions. They are then split and
+        For example, ComplEx uses two embedding spaces: a real one and an imaginary one. Thus, its methods take as input 
+        embedding vectors that have `2 * node_embedding_dimensions` embedding dimensions. They are then split and 
         handled correctly from within the encoder.
 
         Returns
         -------
-        node_embedding_dimensions: int
-            Dimensions of node embeddings in the output of the encoder.
+        
+        **node_embedding_dimensions** *(int)*
+        : Dimensions of node embeddings in the output of the encoder.
         
         """
         if self.decoder is not None and hasattr(self.decoder, "embedding_spaces"):
@@ -290,17 +324,18 @@ class Architect(Module):
         """
         The embedding dimensions in the output of the encoder (or initialized if there is no encoder).
 
-        For most decoders, it is the same as `self.edge_embedding_dimensions`. But for decoders which use multiple
+        For most decoders, it is the same as `self.edge_embedding_dimensions`. But for decoders which use multiple 
         embedding spaces, the latent space has `[embedding_spaces_count] * edge_embedding_dimensions` embedding dimensions.
 
-        For example, ComplEx uses two embedding spaces: a real one and an imaginary one. Thus, its methods take as input
-        embedding vectors that have `2 * edge_embedding_dimensions` embedding dimensions. They are then split and
+        For example, ComplEx uses two embedding spaces: a real one and an imaginary one. Thus, its methods take as input 
+        embedding vectors that have `2 * edge_embedding_dimensions` embedding dimensions. They are then split and 
         handled correctly from within the encoder.
 
         Returns
         -------
-        edge_embedding_dimensions: int
-            Dimensions of edge embeddings in the output of the encoder.
+        
+        **edge_embedding_dimensions** *(int)*
+        : Dimensions of edge embeddings in the output of the encoder.
         
         """
         if self.decoder is not None and hasattr(self.decoder, "embedding_spaces"):
@@ -308,39 +343,45 @@ class Architect(Module):
         
         return self.edge_embedding_dimensions
 
+
     def set_metadata(self, metadata: pd.DataFrame | os.PathLike):
         """
         Set the node metadata of the knowledge graph.
 
         This function accepts either a pandas DataFrame or the path to a CSV file as input.
-        It must have at least columns:
-        - "id" which uses the same identifiers as the knowledge graph;
-        - "type" which records the type of the corresponding node.
         
-        In addition, the metadata can have any number of supplementary columns that can be
+        The dataframe must have at least columns:
+            * "id" which uses the same identifiers as the knowledge graph;
+            * "type" which records the type of the corresponding node.
+        
+        In addition, the metadata can have any number of supplementary columns that can be 
         used to set the identity of the nodes for the associated :class:`~kgate.knowledgegraph.KnowledgeGraph`.
 
-        If there is no knowledge graph associated with the Architect, the `architect.metadata` property will be used
-        to initialize them. If there is already a knowledge graph, it will update the knowledge graph with
+        If there is no knowledge graph associated with the Architect, the `architect.metadata` property will be used 
+        to initialize them. If there is already a knowledge graph, it will update the knowledge graph with 
         the new metadata.
 
-        Alternatively, you can directly run the :func:`~kgate.knowledgegraph.KnowledgeGraph.add_metadata` method for a
+        Alternatively, you can directly run the :func:`~kgate.knowledgegraph.KnowledgeGraph.add_metadata` method for a 
         more fine-grained metadata management.
         
         Arguments
         ---------
-        metadata: pd.DataFrame or os.PathLike
-            The metadata object, either as a pandas DataFrame or a path to a CSV file.
+        
+        **metadata** *(pd.DataFrame or os.PathLike)*
+        : The metadata object, either as a pandas DataFrame or a path to a CSV file.
 
         Raises
         ------
-        pd.errors.InvalidColumnName
-            If the columns 'id' and 'type' are not present.
-        ValueError
-            If the CSV file uses an unsupported separator.
-        TypeError
-            If the metadata object is not of the correct type.
-            
+        
+        **pd.errors.InvalidColumnName**
+        : If the columns 'id' and 'type' are not present.
+        
+        **ValueError**
+        : If the CSV file uses an unsupported separator.
+        
+        **TypeError**
+        : If the metadata object is not of the correct type.
+        
         """
         match type(metadata):
             case pd.DataFrame:
@@ -377,33 +418,36 @@ class Architect(Module):
         Create and initialize the encoder object according to the configuration or arguments.
 
         The encoder is created from PyG encoding layers. Currently, the implemented encoders 
-        are a random initialization, **GCN** [1]_, **GAT** [2]_ and **Node2Vec** [3]_. See the encoder class for a detailed
+        are a random initialization, **GCN** [1]_, **GAT** [2]_ and **Node2Vec** [3]_. See the encoder class for a detailed 
         explanation of the encoders.
 
         If both configuration and arguments are given, the arguments take priority.
 
         References
         ----------
-        TODO: proper links to the references
-        .. [1] Kipf, Thomas and Max Welling. “Semi-Supervised Classification with Graph Convolutional Networks.” ArXiv abs/1609.02907 (2016): n. pag.
-        .. [2] Brody, Shaked et al. “How Attentive are Graph Attention Networks?” ArXiv abs/2105.14491 (2021): n. pag.
-        .. [3] TODO: add reference to Node2Vec
+        .. [1] <https://arxiv.org/pdf/1609.02907>. Kipf, Thomas and Max Welling. “Semi-Supervised Classification with Graph Convolutional Networks.” (2016)
+        .. [2] <https://arxiv.org/pdf/2105.14491>. Brody, Shaked et al. “How Attentive are Graph Attention Networks?” (2021)
+        .. [3] <https://arxiv.org/pdf/1607.00653>. Aditya Grover, Jure Leskovec. “node2vec: Scalable Feature Learning for Networks” (2016)
 
         Arguments
         ---------
-        encoder_name: {"Default", "GCN", "GAT", "Node2Vec"}, optional
-            Name of the encoder.
-        gnn_layers: int, optional, default to 0
-            Number of hidden layers for the encoder. Only used for deep learning encoders.
+        
+        **encoder_name** *({"Default", "GCN", "GAT", "Node2Vec"}, optional)*
+        : Name of the encoder.
+        
+        **gnn_layers** *(int, optional, default to 0)*
+        : Number of hidden layers for the encoder. Only used for deep learning encoders.
 
         Warns
         -----
+        
         If the provided encoder name is not supported, it will default to a random initialization and warn the user.
 
         Returns
         -------
-        encoder: DefaultEncoder or GCNEncoder or GATEncoder or Node2VecEncoder
-            The encoder object.
+        
+        **encoder** *(DefaultEncoder or GCNEncoder or GATEncoder or Node2VecEncoder)*
+        : The encoder object.
         
         """
         encoder_config: dict = self.config["model"]["encoder"]
@@ -443,9 +487,9 @@ class Architect(Module):
         """
         Create and initialize the decoder object according to the configuration or arguments.
 
-        The decoders are adapted and inherit from torchKGE decoders to be able to handle heterogeneous data.
+        The decoders are adapted and inherit from torchKGE decoders to be able to handle heterogeneous data. 
         Not all torchKGE decoders are already implemented, but all of them and more will eventually be. Currently, 
-        the available decoders are **TransE** [1]_, **TransH** [2]_, **TransR** [3]_, **TransD** [4]_, **TorusE** [5]_,
+        the available decoders are **TransE** [1]_, **TransH** [2]_, **TransR** [3]_, **TransD** [4]_, **TorusE** [5]_, 
         **RESCAL** [6]_, **DistMult** [7]_, **ComplEx** [8]_ and **ConvKB** [9]_. See the description of decoder classes for details about 
         their implementation, or read their original papers.
 
@@ -456,41 +500,51 @@ class Architect(Module):
 
         References
         ----------
-        TODO: proper links to the references
+        
         .. [1] Bordes, Antoine et al. “Translating Embeddings for Modeling Multi-relational Data.” Neural Information Processing Systems (2013).
         .. [2] Wang, Zhen et al. “Knowledge Graph Embedding by Translating on Hyperplanes.” AAAI Conference on Artificial Intelligence (2014).
         .. [3] Lin, Yankai et al. “Learning Entity and Relation Embeddings for Knowledge Graph Completion.” AAAI Conference on Artificial Intelligence (2015).
         .. [4] Ji, Guoliang et al. “Knowledge Graph Embedding via Dynamic Mapping Matrix.” Annual Meeting of the Association for Computational Linguistics (2015).
-        .. [5] TODO: add reference to TorusE
+        .. [5] *Missing documentation for TorusE*
         .. [6] Nickel, Maximilian et al. “A Three-Way Model for Collective Learning on Multi-Relational Data.” International Conference on Machine Learning (2011).
         .. [7] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2014).
-        .. [8] TODO: add reference to ComplEx
+        .. [8] *Missing documentation for ComplEx*
         .. [9] Nguyen, Dai Quoc et al. “A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network.” North American Chapter of the Association for Computational Linguistics (2017).
 
+        % TODO: add reference to TorusE and ComplEx
+        % TODO: proper links to the references
+        
         Arguments
         ----------
-        decoder_name: str, optional
-            Name of the decoder.
-        dissimilarity: {"L1", "L2"}, optional
-            Type of the dissimilarity metric.
-        margin: int, optional, default to 0
-            Margin to be used with MarginLoss. Unused with bilinear models.
-        filter_count: int, optional, default to 0
-            Number of convolution filters.
+        
+        **decoder_name** *(str, optional)*
+        : Name of the decoder.
+        
+        **dissimilarity** *({"L1", "L2"}, optional)*
+        : Type of the dissimilarity metric.
+        
+        **margin** *(int, optional, default to 0)*
+        : Margin to be used with MarginLoss. Unused with bilinear models.
+        
+        **filter_count** *(int, optional, default to 0)*
+        : Number of convolution filters.
 
         Raises
         ------
-        NotImplementedError
-            If the provided decoder name is not supported.
+        
+        **NotImplementedError**
+        : If the provided decoder name is not supported.
 
         Returns
         -------
-        decoder: BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder
-            The decoder object.
-        decoder_loss: MarginLoss or BinaryCrossEntropyLoss
-            The loss object.
-        """
         
+        **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder)*
+        : The decoder object.
+        
+        **decoder_loss** *(MarginLoss or BinaryCrossEntropyLoss)*
+        : The loss object.
+        
+        """
         decoder_config: dict = self.config["model"]["decoder"]
 
         if decoder_name == "":
@@ -556,19 +610,21 @@ class Architect(Module):
         """
         Initialize the optimizer based on the configuration provided.
         
-        Available optimizers are Adam, SGD and RMSprop. See Pytorch.optim 
-        documentation for optimizer parameters.
+        Available optimizers are Adam, SGD and RMSprop. See torch.optim 
+        documentation for optimizer parameters: <https://docs.pytorch.org/docs/stable/optim.html>
 
         Raises
         ------
-        NotImplementedError
-            If the optimizer is not supported.
+        
+        **NotImplementedError**
+        : If the optimizer is not supported.
 
         Returns
         -------
-        optimizer: optim.Optimizer
-            Initialized optimizer.
-            
+        
+        **optimizer** *(torch.optim.Optimizer)*
+        : Initialized optimizer.
+        
         """
         optimizer_name: str = self.config["optimizer"]["name"]
 
@@ -601,19 +657,21 @@ class Architect(Module):
         """
         Initialize the sampler according to the configuration.
         
-        Supported samplers are Positional, Uniform, Bernoulli and Mixed.
+        Supported samplers are Positional, Uniform, Bernoulli and Mixed. 
         They are adapted from torchKGE's samplers to be compatible with the 
         graphindices format.
 
         Raises
         ------
-        NotImplementedError
-            If the name of the sampler is not supported.
+        
+        **NotImplementedError**
+        : If the name of the sampler is not supported.
 
         Returns
         -------
-        negative_sampler: NegativeSampler
-            The initialized sampler.
+        
+        **negative_sampler** *(NegativeSampler)*
+        : The initialized sampler.
         
         """
         negative_sampler_config: dict = self.config["sampler"]
@@ -641,17 +699,20 @@ class Architect(Module):
         
         Raises
         ------
-        ValueError
-            If the scheduler type is unsupported or required parameters are missing.
+        
+        **ValueError**
+        : If the scheduler type is unsupported or required parameters are missing.
         
         Warns
         -----
+        
         If no learning rate scheduler is specified in the configuration, none will be used.
         
         Returns
         -------
-        learning_rate_scheduler: torch.optim.lr_scheduler._LRScheduler or None:
-            Instance of the specified scheduler or None if no scheduler is configured.
+        
+        **learning_rate_scheduler** *(torch.optim.lr_scheduler._LRScheduler or None)*
+        : Instance of the specified scheduler or None if no scheduler is configured.
         
         """
         learning_rate_scheduler_config: dict = self.config["learning_rate_scheduler"]
@@ -696,7 +757,7 @@ class Architect(Module):
         """
         Set the task for which the model will be evaluated on using the validation set.
         
-        Options are Link Prediction or Triplet Classification.
+        Options are Link Prediction or Triplet Classification. 
         Link Prediction evaluate the ability of a model to predict correctly the head or tail of a triple given the other 
         node and edge. 
         Triplet Classification evaluate the ability of a model to discriminate between existing and 
@@ -704,13 +765,15 @@ class Architect(Module):
         
         Raises
         ------
-        NotImplementedError
-            If the name of the task is not supported.
-            
+        
+        **NotImplementedError**
+        : If the name of the task is not supported.
+        
         Returns
         -------
-        evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
-            The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
+        
+        **evaluator** *(LinkPredictionEvaluator or TripletClassificationEvaluator)*
+        : The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
         
         """
         match self.config["evaluation"]["objective"]:
@@ -747,32 +810,38 @@ class Architect(Module):
         This is done automatically by running the `train_model` method.
         
         The initialization is done in this order:
-        - Decoder
-        - Encoder
-        - Node Embeddings (either at random, or using given node features)
-        - Edge Embeddings (either at random, or using given edge features)
-        - Optimizer
-        - Negative Sampler
-        - Scheduler
-        - Evaluator
+            * Decoder
+            * Encoder
+            * Node Embeddings (either at random, or using given node features)
+            * Edge Embeddings (either at random, or using given edge features)
+            * Optimizer
+            * Negative Sampler
+            * Scheduler
+            * Evaluator
+        
         For each of these elements, if something is already set (i.e. the attribute is not None), it is not re-initialized.
         
         Arguments
         ---------
-        attributes: dict[str, pd.DataFrame]
-            dict(node_type, embedding) containing the embedding for each type of node.
-        pretrained: Path, optional
-            Path to the pretrained node embeddings.
-            TODO: add support for pretrained edge embeddings
+        
+        **attributes** *(dict[str, pd.DataFrame])*
+        : dict(node_type, embedding) containing the embedding for each type of node.
+        
+        **pretrained** *(Path, optional)*
+        : Path to the pretrained node embeddings.
+        % TODO: add support for pretrained edge embeddings
 
         Raises
         ------
-        AssertionError #1
-            When not using a GNN as encoder, the `node_type` should not be supplied.
-        AssertionError #2
-            The length of the given attribute must match the number of nodes of this type.
-        AssertionError #3
-            The node type of each node must correspond to the one registered in the knowledge graph.
+        
+        **AssertionError #1**
+        : When not using a GNN as encoder, the `node_type` should not be supplied.
+        
+        **AssertionError #2**
+        : The length of the given attribute must match the number of nodes of this type.
+        
+        **AssertionError #3**
+        : The node type of each node must correspond to the one registered in the knowledge graph.
         
         """
         # Cannot use short-circuit syntax with tuples
@@ -844,30 +913,34 @@ class Architect(Module):
         """
         Launch the training procedure of the Architect.
         
-        This function runs the whole training from end to end, leaving out only the evaluation on the test set.
+        This function runs the whole training from end to end, leaving out only the evaluation on the test set. 
         It uses the `initialize_model` function to prepare the autoencoder as well as the optimizer, negative sampler,
         learning rate scheduler and evaluator.
+        
         The training is executed through a `PyTorch Ignite` `Engine` with a collection of events and parameters:
-        - `RunningAverage` to compute the running loss across the batches of the same epoch.
-        - `EarlyStopping` to stop the training if the validation MRR does not progress after a number of epochs
-            set in the configuration parameters.
-        - `Checkpoint` save at a configured interval.
-        - Evaluation on the validation set at a configured interval.
-        - Metrics logging at each epoch, in the `training_metrics.csv` output file.
+            * `RunningAverage` to compute the running loss across the batches of the same epoch.
+            * `EarlyStopping` to stop the training if the validation MRR does not progress after a number of epochs
+                set in the configuration parameters.
+            * `Checkpoint` save at a configured interval.
+            * Evaluation on the validation set at a configured interval.
+            * Metrics logging at each epoch, in the `training_metrics.csv` output file.
 
         Arguments
         ---------
-        checkpoint_file: Path, optional
-            The path to the checkpoint file to load and resume a previous training. If None, the training will start from scratch.
-        attributes: Dict[str, pd.DataFrame]
-            dict(node_type, embedding) containing the embedding for each type of node.
-        dry_run: bool, optional, default to False
-            Initialize every variable and the trainer, but doesn't start the training.
+        
+        **checkpoint_file** *(Path, optional)*
+        : The path to the checkpoint file to load and resume a previous training. If None, the training will start from scratch.
+        
+        **attributes** *(Dict[str, pd.DataFrame])*
+        : dict(node_type, embedding) containing the embedding for each type of node.
+        
+        **dry_run** *(bool, optional, default to False)*
+        : Initialize every variable and the trainer, but doesn't start the training.
 
         Notes
         -----
-        If there already is a configuration file in the output folder identical to the current configuration, KGATE will
-        automatically attempt to restart the training from the most recent checkpoint in the `checkpoints/` folder. Otherwise,
+        If there already is a configuration file in the output folder identical to the current configuration, KGATE will 
+        automatically attempt to restart the training from the most recent checkpoint in the `checkpoints/` folder. Otherwise, 
         the output folder will be cleaned and the current configuration will be written as `kgate_config.toml`
         
         """
@@ -1037,12 +1110,14 @@ class Architect(Module):
         """
         Run the test procedure, evaluate the metrics on the test set and return the dictionary of the results.
         
-        TODO: will be changed with https://github.com/BAUDOTlab/KGATE/pull/22
+        % TODO: will be changed with <https://github.com/BAUDOTlab/KGATE/pull/22>
 
         Returns
         -------
-        results: Dict[str, float | Dict[str, float]]
-            TODO.What_that_variable_is_or_does
+        
+        **results** *(Dict[str, float | Dict[str, float]])*
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
         
         """
         torch.cuda.empty_cache()
@@ -1108,30 +1183,36 @@ class Architect(Module):
         """
         Infer missing nodes or edges, depending on the given parameters.
         
-        Only two of heads, tails and edges must be given, and the other one will be inferred. For example, when inferring tails,
-        for each couple `heads[n]` and `edges[n]`, `top_k` tails will be predicted. The values in those list must correspond to
+        Only two of heads, tails and edges must be given, and the other one will be inferred. For example, when inferring tails, 
+        for each couple `heads[n]` and `edges[n]`, `top_k` tails will be predicted. The values in those list must correspond to 
         the `identity` of the metadata, by default the current identity. If there is no metadata, the node ID is used.
         
         Arguments
         ---------
-        heads: List[str], optional
-            List of known head nodes.
-        tails: List[str], optional
-            List of known tail nodes.
-        edges: List[str], optional
-            List of known edges.
-        top_k: int, optional, Default to 100
-            Number of prediction to return for each couple in the list.
+        
+        **heads** *(List[str], optional)*
+        : List of known head nodes.
+        
+        **tails** *(List[str], optional)*
+        : List of known tail nodes.
+        
+        **edges** *(List[str], optional)*
+        : List of known edges.
+        
+        **top_k** *(int, optional, Default to 100)*
+        : Number of prediction to return for each couple in the list.
         
         Raises
         ------
-        ValueError
-            To infer missing elements, exactly 2 lists must be given between heads, tails or edges.
+        
+        **ValueError**
+        : To infer missing elements, exactly 2 lists must be given between heads, tails or edges.
         
         Returns
         -------
-        predictions: pd.DataFrame
-            A DataFrame containing the prediction alongside their score.
+        
+        **predictions** *(pd.DataFrame)*
+        : A DataFrame containing the prediction alongside their score.
         
         """
         if not sum([len(arr) > 0 for arr in [heads, edges, tails]]) == 2:
@@ -1188,24 +1269,30 @@ class Architect(Module):
         
         Arguments
         ---------
-        path: pathlib.Path
-            The path to the checkpoint that will be loaded.
+        
+        **path** *(pathlib.Path)*
+        : The path to the checkpoint that will be loaded.
         
         Raises
         ------
-        AssertionError #1
-            The number of edges must be the same in the checkpoint and in the current configuration.
-        AssertionError #2
-            The number of node types must be the same in the checkpoint and in the current configuration.
-        AssertionError #3
-            The number of nodes must be the same in the checkpoint and in the current configuration.
-        AssertionError #4
-            The convolution layers must be the same in the checkpoint and in the current configuration.
+        
+        **AssertionError #1**
+        : The number of edges must be the same in the checkpoint and in the current configuration.
+        
+        **AssertionError #2**
+        : The number of node types must be the same in the checkpoint and in the current configuration.
+        
+        **AssertionError #3**
+        : The number of nodes must be the same in the checkpoint and in the current configuration.
+        
+        **AssertionError #4**
+        : The convolution layers must be the same in the checkpoint and in the current configuration.
         
         Returns
         -------
-        checkpoint: dict
-            The loaded checkpoint as a dictionnary.
+        
+        **checkpoint** *(dict)*
+        : The loaded checkpoint as a dictionnary.
         
         """
         checkpoint = torch.load(path, map_location = self.device, weights_only = False)
@@ -1230,9 +1317,9 @@ class Architect(Module):
 
         Raises
         ------
-        ValueError
-            No best model was found in the checkpoint directory.
-            Make sure to run the training first and not rename checkpoint files before running evaluation.
+        **ValueError**
+        : No best model was found in the checkpoint directory.
+        : Make sure to run the training first and not rename checkpoint files before running evaluation.
         
         """
         self.decoder, _ = self.initialize_decoder()
@@ -1273,19 +1360,23 @@ class Architect(Module):
 
         Arguments
         ---------
-        positive_triplets_batch: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
-            Tensor containing the integer key of true sampled triplets of
-            the edges in the current batch.
-        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the integer key of negatively sampled triplets of
-            the edges in the current batch.
+        
+        **positive_triplets_batch** *(torch.Tensor, dtype: torch.float, shape: [4, batch_size])*
+        : Tensor containing the integer key of true sampled triplets of 
+        the edges in the current batch.
+        
+        **negative_triplets_batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
+        : Tensor containing the integer key of negatively sampled triplets of 
+        the edges in the current batch.
 
         Returns
         -------
-        positive_triplet: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
-            Tensor containing the score of each true triplet within the batch.
-        negative_triplet: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the score of each negative triplet within the batch.
+        
+        **positive_triplet** *(torch.Tensor, dtype: torch.float, shape: [4, batch_size])*
+        : Tensor containing the score of each true triplet within the batch.
+        
+        **negative_triplet** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
+        : Tensor containing the score of each negative triplet within the batch.
         
         """
         positive_triplet: Tensor = self.scoring_function(positive_triplets_batch, self.kg_train)
@@ -1306,19 +1397,21 @@ class Architect(Module):
         """
         Function called by the trainer to run the training loop on a mini-batch.
 
-        TODO: may be merged with the forward function
+        % TODO: may be merged with the forward function
 
         Arguments
         ---------
-        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the integer key of heads, tails, edges and triplets
-            of the edges in the current batch.
-            Here, batch_size is batch.shape[1].
+        
+        **batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
+        : Tensor containing the integer key of heads, tails, edges and triplets 
+        of the edges in the current batch.
+        : Here, batch_size is batch.shape[1].
 
         Returns
         -------
-        loss_value: torch.types.Number
-            Training loss value of the model for this epoch.
+        
+        **loss_value** *(torch.types.Number)*
+        : Training loss value of the model for this epoch.
         
         """
         batch = batch.T.to(self.device)
@@ -1347,25 +1440,28 @@ class Architect(Module):
         """
         Runs the encoder and decoder pass on a batch for a given KG.
         
-        If the encoder is not a GNN, directly runs and update the embeddings.
+        If the encoder is not a GNN, directly runs and update the embeddings. 
         Otherwise, samples a subgraph from the given batch nodes and runs the encoder before.
         
         Arguments
         ---------
-        batch: torch.Tensor, shape: [4, batch_size]
-            Batch of triplets. The rows correspond to:
-            - head_index
-            - tail_index
-            - edge_index
-            - triplet_index
-            Here, batch_size is batch.shape[1].
-        kg: KnowledgeGraph
-            The knowledge graph corresponding to the batch identifiers.
-            
+        
+        **batch** *(torch.Tensor, shape: [4, batch_size])*
+        : Batch of triplets. The rows correspond to: 
+            * head_index
+            * tail_index
+            * edge_index
+            * triplet_index
+        : Here, batch_size is batch.shape[1].
+        
+        **kg** *(KnowledgeGraph)*
+        : The knowledge graph corresponding to the batch identifiers.
+        
         Returns
         -------
-        score: torch.Tensor
-            The score given by the decoder for the batch.
+        
+        **score** *(torch.Tensor)*
+        : The score given by the decoder for the batch.
         
         """
         head_indices, tail_indices, edge_indices = batch[0], batch[1], batch[2]
@@ -1455,13 +1551,14 @@ class Architect(Module):
         """
         Normalize all parameters of the model.
         
-        Each decoder has a specific normalization routine, so this function doesn't do anything by itself,
+        Each decoder has a specific normalization routine, so this function doesn't do anything by itself, 
         except calling the `decoder.normalize_parameters` function if it exists.
 
         Raises
         ------
-        AssertionError
-            The `decoder.normalize_params` method should return exactly two elements: the node embedding and the edge embedding.
+        
+        **AssertionError**
+        : The `decoder.normalize_params` method should return exactly two elements: the node embedding and the edge embedding.
         
         """
         # Some decoders should not normalize parameters or do so in a different way.
@@ -1482,9 +1579,10 @@ class Architect(Module):
 
         Arguments
         ---------
-        engine: Engine
-            Runner managing the training.
-            
+        
+        **engine** *(Engine)*
+        : Runner managing the training.
+        
         """
         epoch = engine.state.epoch
         train_loss = engine.state.metrics["loss_running_average"]
@@ -1518,8 +1616,9 @@ class Architect(Module):
 
         Arguments
         ---------
-        engine: Engine
-            Runner managing the training.
+        
+        **engine** *(Engine)*
+        : Runner managing the training.
         
         """
         logging.info(f"Evaluating on validation set at epoch {engine.state.epoch}...")
@@ -1555,13 +1654,16 @@ class Architect(Module):
 
         Arguments
         ---------
-        engine: Engine
+        
+        **engine** *(Engine)*
             Runner managing the training.
 
         Returns
         -------
-        validation_metric_value: float
-            TODO.What_that_variable_is_or_does
+        
+        **validation_metric_value** *(float)*
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
         
         """
         return engine.state.metrics.get("validation_metric_value", 0)
@@ -1575,8 +1677,9 @@ class Architect(Module):
 
         Arguments
         ---------
-        engine: Engine
-            Runner managing the training.
+        
+        **engine** *(Engine)*
+        : Runner managing the training.
         
         """
         logging.info(f"Training completed after {engine.state.epoch} epochs.")
@@ -1591,29 +1694,34 @@ class Architect(Module):
                             ) -> Tuple[List[int], List[int]]:
         """
         Categorizes test triplets with the specified edge in the test set 
-        based on whether their nodes have been seen with that edge in the training set,
+        based on whether their nodes have been seen with that edge in the training set, 
         and separates them into two groups based on a threshold for occurrences.
 
         Arguments
         ---------
-        edge_name: str
-            The name of the edge to check (e.g., "indication").
-        threshold: int
-            The minimum number of occurrences of the edge for a node to be considered as "frequent".
+        
+        **edge_name** *(str)*
+        : The name of the edge to check (e.g., "indication").
+        
+        **threshold** *(int)*
+        : The minimum number of occurrences of the edge for a node to be considered as "frequent".
 
         Raises
         ------
-        ValueError
-            An edge from `edge_name` does not exist in the training knowledge graph.
+        
+        **ValueError**
+        : An edge from `edge_name` does not exist in the training knowledge graph.
 
         Returns
         -------
-        frequent_indices: List[int]
-            Indices of triplets in the test set with the specified edge where
-            nodes have been seen more than `threshold` times with that edge in the training set.
-        infrequent_indices: List[int]
-            Indices of triplets in the test set with the specified edge where
-            nodes have been seen fewer than or equal to `threshold` times with that edge in the training set.
+        
+        **frequent_indices** *(List[int])*
+        : Indices of triplets in the test set with the specified edge where 
+        nodes have been seen more than `threshold` times with that edge in the training set.
+        
+        **infrequent_indices** *(List[int])*
+        : Indices of triplets in the test set with the specified edge where 
+        nodes have been seen fewer than or equal to `threshold` times with that edge in the training set.
         
         """
         # Get the index of the specified edge in the training graph
@@ -1654,31 +1762,39 @@ class Architect(Module):
                                         edge_indices: List[str]
                                         ) -> Tuple[float, int, Dict[str, float], float]:
         """
-        TODO: must be rewritten
-        
         Compute the metrics for each individual edge.
 
+        % TODO: must be rewritten
+        
         Arguments
         ---------
-        kg: KnowledgeGraph
-            Knowledge graph on which the metrics will be calculated.
-        edge_indices: List[str]
-            Indices of edges.
+        
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the metrics will be calculated.
+        
+        **edge_indices** *(List[str])*
+        : Indices of edges.
 
         Returns
         -------
-        metrics_sum: float
-            Sum of all individual metrics.
-        triplet_count: int
-            Number of triplets considered.
-        individual_metrics: Dict[str, float]
-            Metrics computed for a single edge.
-        group_metrics: float
-            Global metrics computed for the edge group.
+        
+        **metrics_sum** *(float)*
+        : Sum of all individual metrics.
+        
+        **triplet_count** *(int)*
+        : Number of triplets considered.
+        
+        **individual_metrics** *(Dict[str, float])*
+        : Metrics computed for a single edge.
+        
+        **group_metrics** *(float)*
+        : Global metrics computed for the edge group.
         
         Notes
         -----
+        
         The metrics calculated here are only the Mean Reciprocal Rank (MRR).
+        
         More could be implemented in the future.
         
         """
@@ -1721,19 +1837,23 @@ class Architect(Module):
         """
         Calculate the MRR for frequent and infrequent categories based on given indices.
         
-        Parameters
-        ----------
-        frequent_indices: List[int]
-            Indices of test triplets considered as frequent.
-        infrequent_indices: List[int]
-            Indices of test triplets considered as infrequent.
+        Arguments
+        ---------
+        
+        **frequent_indices** *(List[int])*
+        : Indices of test triplets considered as frequent.
+        
+        **infrequent_indices** *(List[int])*
+        : Indices of test triplets considered as infrequent.
 
         Returns
         -------
-        frequent_metrics: float
-            MRR for the frequent category.
-        infrequent_metrics: float
-            MRR for the infrequent category.
+        
+        **frequent_metrics** *(float)*
+        : MRR for the frequent category.
+        
+        **infrequent_metrics** *(float)*
+        : MRR for the infrequent category.
         
         """
         # Create subgraph for frequent and infrequent categories
@@ -1757,22 +1877,24 @@ class Architect(Module):
 
         Arguments
         ---------
-        kg: KnowledgeGraph
-            Knowledge graph on which the link prediction evaluation will be done.
+        
+        **kg** *(KnowledgeGraph)*
+        : Knowledge graph on which the link prediction evaluation will be done.
 
         Raises
         -----
-        ValueError
-            Wrong evaluator called.
-            The evaluator is initialized beforehand and may be incompatible with link prediction.
-            This error is raised when an evaluator incompatible with link prediction is initialized.
-            TODO: this may be improved by resetting the evaluator or creating it on the fly, though that may be problematic on some level?
+        
+        **ValueError**
+        : Wrong evaluator called.
+        : The evaluator is initialized beforehand and may be incompatible with link prediction.
+        : This error is raised when an evaluator incompatible with link prediction is initialized.
+        % TODO: this may be improved by resetting the evaluator or creating it on the fly, though that may be problematic on some level?
 
         Returns
         -------
-        test_mrr: float
-            The filtered MRR resulting from the evaluation on given knowledge graph.
-            TODO: might be better to return the Prediction object altogether, and let the calling function deal with it
+        **test_mrr** (*float)*
+        : The filtered MRR resulting from the evaluation on given knowledge graph.
+        % TODO: might be better to return the Prediction object altogether, and let the calling function deal with it
         
         """
         # Test MRR measure
@@ -1801,21 +1923,25 @@ class Architect(Module):
 
         Arguments
         ---------
-        kg_validation: KnowledgeGraph
-            Validation split from the knowledge graph.
-        kg_test: KnowledgeGraph
-            Test split from the knowledge graph.
+        
+        **kg_validation** *(KnowledgeGraph)*
+        : Validation split from the knowledge graph.
+        
+        **kg_test** *(KnowledgeGraph)*
+        : Test split from the knowledge graph.
 
         Raises
         ------
-        ValueError
-            Wrong evaluator called.
-            TODO.detail
+        
+        **ValueError**
+        : Wrong evaluator called.
+        % TODO.detail
 
         Returns
         -------
-        accuracy: float
-            Accuracy of the triplet classification.
+        
+        **accuracy** *(float)*
+        : Accuracy of the triplet classification.
         
         """
         if not isinstance(self.evaluator, TripletClassificationEvaluator):
@@ -1833,17 +1959,19 @@ class Architect(Module):
         """
         Data leakage evaluation.
         
-        TODO: detail the data leakage procedure
+        % TODO: detail the data leakage procedure
         
         Arguments
         ---------
-        attributes: Dict[str, pd.DataFrame], optional
-            dict(node_type, embedding) containing the embedding for each type of node.
-
+        
+        **attributes** *(Dict[str, pd.DataFrame], optional)*
+        : dict(node_type, embedding) containing the embedding for each type of node.
+        
         Raises
         ------
-        ValueError
-            An edge was not found in the knowledge graph.
+        
+        **ValueError**
+        : An edge was not found in the knowledge graph.
         
         """
         logging.info("Preparing KG for data leakage evaluation procedure...")
