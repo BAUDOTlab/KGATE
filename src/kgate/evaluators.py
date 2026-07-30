@@ -17,7 +17,7 @@ from tqdm import tqdm
 import torch
 from torch import empty, zeros, cat, Tensor
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from torch_geometric.utils import k_hop_subgraph
 
@@ -27,7 +27,7 @@ from torchkge.data_structures import SmallKG
 if TYPE_CHECKING:
     from .architect import Architect
 from .decoders import BilinearDecoder, ConvolutionalDecoder, TranslationalDecoder
-from .encoders import GNN, DefaultEncoder
+from .encoders import GNN
 from .knowledgegraph import KnowledgeGraph
 from .samplers import NegativeSampler, PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .utils import filter_scores
@@ -171,7 +171,7 @@ class Predictions:
 
 
 class LinkPredictionEvaluator:
-    def __init__(self, full_graphindices: Tensor, embedding_dimensions: int):
+    def __init__(self, graphindices: Tensor, embedding_dimensions: int):
         """
         Evaluate performance of given embedding using link prediction method.
 
@@ -225,18 +225,18 @@ class LinkPredictionEvaluator:
         case. See referenced paper by Bordes et al. for more information.
 
         """
-        self.full_graphindices = full_graphindices
+        self.graphindices = graphindices
         self.embedding_dimensions = embedding_dimensions
         self.evaluated = False
 
 
     def evaluate(self,
                 batch_size: int,
-                encoder: DefaultEncoder | GNN,
+                encoder: GNN | None,
                 decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
-                knowledge_graph: KnowledgeGraph,
+                evaluated_subset: Subset[KnowledgeGraph],
                 node_embeddings: nn.ParameterList,
-                edge_embeddings: nn.Embedding,
+                edge_embeddings: nn.Parameter,
                 verbose: bool = True
                 ) -> Tuple[Predictions, Predictions]:
         """
@@ -248,8 +248,8 @@ class LinkPredictionEvaluator:
         **batch_size** *(int)*
         : Size of the current batch.
         
-        **encoder** *(DefaultEncoder or GNN)*
-        : Encoder model to embed the nodes. Deactivated with DefaultEncoder.
+        **encoder** *(GNN or None)*
+        : Encoder model to embed the nodes.
         
         **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder)*
         : Decoder model to evaluate.
@@ -279,19 +279,46 @@ class LinkPredictionEvaluator:
         : Predictions for tails.
         
         """
-        device = edge_embeddings.weight.device
+        device = edge_embeddings.device
 
-        self.rank_true_heads = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
-        self.rank_true_tails = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
-        self.filtered_rank_true_heads = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
-        self.filtered_rank_true_tails = empty(size = (knowledge_graph.triplet_count,)).long().to(device)
+        knowledge_graph: KnowledgeGraph = evaluated_subset.dataset
 
-        dataloader = DataLoader(knowledge_graph, batch_size = batch_size)
-        graphindices = knowledge_graph.graphindices.to(device)
+        self.rank_true_heads = empty(size = (len(evaluated_subset),)).long().to(device)
+        self.rank_true_tails = empty(size = (len(evaluated_subset),)).long().to(device)
+        self.filtered_rank_true_heads = empty(size = (len(evaluated_subset),)).long().to(device)
+        self.filtered_rank_true_tails = empty(size = (len(evaluated_subset),)).long().to(device)
+
+        dataloader = DataLoader(evaluated_subset, batch_size = batch_size)
         if decoder is not None and hasattr(decoder,"embedding_spaces"):
             encoder_node_embedding_dimensions: int = self.embedding_dimensions * decoder.embedding_spaces
         else:
             encoder_node_embedding_dimensions: int = self.embedding_dimensions
+
+        # Aggregate information for all nodes
+        if encoder is not None:
+
+            evaluation_node_embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count,
+                                                            encoder_node_embedding_dimensions),
+                                                            device = device,
+                                                            dtype = torch.float)
+
+            all_nodes = knowledge_graph.graphindices[:2].unique()
+            for i in range((len(all_nodes) // batch_size) + 1):
+                seed_nodes: Tensor = all_nodes[i * batch_size: (i + 1) * batch_size]
+                input = knowledge_graph.get_encoder_input(
+                        seed_nodes = seed_nodes,
+                        hop_count = encoder.layer_count
+                        )
+
+                encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
+
+                for node_type, indices in input.seed_mapping.items():
+                    node_type_index = knowledge_graph.node_type_to_index[node_type]
+                    node_type_mask = (knowledge_graph.node_types[seed_nodes] == node_type_index)
+                    evaluation_node_embeddings[seed_nodes[node_type_mask]] = encoder_output[node_type][indices]
+
+        else:
+                evaluation_node_embeddings = node_embeddings[0].data
 
         for i, batch in tqdm(enumerate(dataloader),
                             total = len(dataloader),
@@ -300,30 +327,6 @@ class LinkPredictionEvaluator:
                             desc = "Link prediction evaluation"):
             batch: Tensor = batch.T.to(device)
             head_index, tail_index, edge_index = batch[0], batch[1], batch[2]
-
-            if isinstance(encoder, GNN):
-                seed_nodes: Tensor = batch[:2].unique()
-                hop_count: int = encoder.layer_count
-                edge_list: Tensor = knowledge_graph.edge_list
-
-                _, _, _, edge_mask = k_hop_subgraph(
-                    node_idx = seed_nodes,
-                    num_hops = hop_count,
-                    edge_index = edge_list
-                    )
-                
-                input = knowledge_graph.get_encoder_input(graphindices[:, edge_mask], node_embeddings)
-                encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
-                
-                evaluation_node_embeddings: torch.Tensor = torch.zeros((knowledge_graph.node_count,
-                                                            encoder_node_embedding_dimensions),
-                                                            device = device,
-                                                            dtype = torch.float)
-
-                for node_type, index in input.mapping.items():
-                    evaluation_node_embeddings[index] = encoder_output[node_type]
-            else:
-                evaluation_node_embeddings = node_embeddings[0].data
 
             head_embeddings, tail_embeddings, inference_edge_embeddings, candidates = decoder.inference_prepare_candidates(head_indices = head_index, 
                                                                                                                 tail_indices = tail_index, 
@@ -339,7 +342,7 @@ class LinkPredictionEvaluator:
                 )
             filtered_scores = filter_scores(
                 scores = scores, 
-                graphindices = self.full_graphindices.to(device),
+                graphindices = self.graphindices.to(device),
                 missing = "tail",
                 first_index = head_index,
                 second_index = edge_index,
@@ -354,7 +357,7 @@ class LinkPredictionEvaluator:
                 edge_embeddings = inference_edge_embeddings)
             filtered_scores = filter_scores(
                 scores = scores, 
-                graphindices = self.full_graphindices.to(device),
+                graphindices = self.graphindices.to(device),
                 missing = "head",
                 first_index = tail_index,
                 second_index = edge_index,
@@ -375,8 +378,7 @@ class LinkPredictionEvaluator:
 class TripletClassificationEvaluator:
     def __init__(self,
                 architect: "Architect",
-                kg_validation: KnowledgeGraph,
-                kg_test: KnowledgeGraph):
+                knowledge_graph: KnowledgeGraph):
         """
         Evaluates performance of given embedding using triplet classification 
         method.
@@ -398,11 +400,9 @@ class TripletClassificationEvaluator:
         **architect** *(Architect)*
         : Embedding model inheriting from the right interface.
         
-        **kg_validation** *(torchkge.data_structures.KnowledgeGraph)*
-        : Knowledge graph on which the validation thresholds will be computed.
-        
-        **kg_test** *(torchkge.data_structures.KnowledgeGraph)*
-        : Knowledge graph on which the testing evaluation will be done.
+        **knowledge_graph** *(KnowledgeGraph)*
+        : Knowledge graph to evaluate.
+    
 
         Attributes
         ----------
@@ -410,11 +410,8 @@ class TripletClassificationEvaluator:
         **architect** *(Architect)*
         : Embedding model inheriting from the right interface.
         
-        **kg_validation** *(KnowledgeGraph)*
-        : Knowledge graph on which the validation thresholds will be computed.
-        
-        **kg_test** *(KnowledgeGraph)*
-        : Knowledge graph on which the evaluation will be done.
+        **knowledge_graph** *(KnowledgeGraph)*
+        : Knowledge graph to evaluate.
         
         **device** *(str, "cuda" or "cpu", default to "cuda")*
         : Indicate if data should be sent to GPU or CPU.
@@ -432,8 +429,7 @@ class TripletClassificationEvaluator:
 
         """
         self.architect = architect
-        self.kg_validation = kg_validation
-        self.kg_test = kg_test
+        self.knowledge_graph = knowledge_graph
         self.device = self.architect.device.type == "cuda"
 
         self.evaluated = False
@@ -441,7 +437,7 @@ class TripletClassificationEvaluator:
 
         # PositionalNegativeSampler specifically as done in TorchKGE
         # following the original paper: https://nlp.stanford.edu/pubs/SocherChenManningNg_NIPS2013.pdf
-        self.sampler = PositionalNegativeSampler(self.kg_validation)
+        self.sampler = PositionalNegativeSampler(self.knowledge_graph)
 
 
     def get_scores( self,
@@ -488,15 +484,14 @@ class TripletClassificationEvaluator:
                                     batch_size = batch_size)
 
         for _, batch in enumerate(dataloader):
-            head_index, tail_index, edge_index = batch[0].to(self.architect.device), batch[1].to(self.architect.device), batch[2].to(self.architect.device)
-            scores.append(self.architect.scoring_function(head_index, tail_index, edge_index, train = False))
+            scores.append(self.architect.scoring_function(batch.to(self.architect.device)))
 
         return cat(scores, dim = 0)
 
 
     def evaluate(self,
                 batch_size: int,
-                kg: KnowledgeGraph):
+                knowledge_graph_subset: Subset[KnowledgeGraph]):
         """
         Find edge thresholds using the validation set. As described in 
         the paper by Socher et al., for an edge, the threshold is a value t 
@@ -510,12 +505,12 @@ class TripletClassificationEvaluator:
         **batch_size** *(int)*
         : Size of the current batch.
         
-        **kg** *(KnowledgeGraph)*
-        : Knowledge graph on which the evaluation will be done.
+        **knowledge_graph_subset** *(Subset[KnowledgeGraph])*
+        : Knowledge graph subset on which the evaluation will be done.
         
         """
-        sampler = PositionalNegativeSampler(kg)
-        edge_indices = kg.edge_indices
+        sampler = PositionalNegativeSampler(knowledge_graph_subset)
+        edge_indices = knowledge_graph_subset[:2]
 
         negative_heads, negative_tails = sampler.corrupt_kg(batch_size,
                                                             self.is_cuda,
@@ -525,9 +520,9 @@ class TripletClassificationEvaluator:
                                         edge_indices,
                                         batch_size)
 
-        self.thresholds = zeros(self.kg_validation.n_rel)
+        self.thresholds = zeros(self.knowledge_graph.edge_count)
 
-        for i in range(self.kg_validation.n_rel):
+        for i in range(self.knowledge_graph.edge_count):
             mask = (edge_indices == i).bool()
             if mask.sum() > 0:
                 self.thresholds[i] = negative_scores[mask].max()
@@ -540,8 +535,7 @@ class TripletClassificationEvaluator:
 
     def accuracy(self,
                 batch_size: int,
-                kg_test: KnowledgeGraph,
-                kg_validation: KnowledgeGraph | None = None
+                kg_to_evaluate: Subset[KnowledgeGraph]
                 ) -> float:
         
         """
@@ -555,11 +549,8 @@ class TripletClassificationEvaluator:
         **batch_size** *(int)*
         : Size of the current batch.
         
-        **kg_test** *(KnowledgeGraph)*
-        : Test split from the knowledge graph.
-        
-        **kg_validation** *(KnowledgeGraph, optional)*
-        : Validation split from the knowledge graph.
+        **kg_to_evaluate** *(Subset[KnowledgeGraph])*
+        : Knowledge graph subset to be evaluated.
 
         Returns
         -------
@@ -570,17 +561,17 @@ class TripletClassificationEvaluator:
 
         """
         if not self.evaluated:
-            kg_to_evaluate = kg_validation if kg_validation is not None else kg_test
-            self.evaluate(batch_size = batch_size, kg = kg_to_evaluate)
+            self.evaluate(batch_size = batch_size, knowledge_graph_subset = kg_to_evaluate)
 
-        sampler = PositionalNegativeSampler(kg_test)
-        edge_indices = kg_test.edge_indices
+        sampler = PositionalNegativeSampler(kg_to_evaluate.dataset)
+        graphindices = kg_to_evaluate[:]
+        edge_indices = graphindices[2]
 
         negative_heads, negative_tails = sampler.corrupt_kg(batch_size,
                                                             self.is_cuda,
                                                             which = "main")
-        scores = self.get_scores(kg_test.head_indices,
-                                kg_test.tail_indices,
+        scores = self.get_scores(graphindices[0],
+                                graphindices[1],
                                 edge_indices,
                                 batch_size)
         negative_scores = self.get_scores(negative_heads,
@@ -595,4 +586,4 @@ class TripletClassificationEvaluator:
         negative_scores = (negative_scores < self.thresholds[edge_indices])
 
         return (scores.sum().item() +
-                negative_scores.sum().item()) / (2 * self.kg_test.triplet_count)
+                negative_scores.sum().item()) / (2 * len(kg_to_evaluate))

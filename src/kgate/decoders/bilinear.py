@@ -17,8 +17,7 @@ from torch import matmul, Tensor, nn, tensor_split
 from torch.nn.functional import normalize
 from torch.nn import Module
 
-from ..utils import initialize_embedding
-
+from ..initializers import Initializer
 
 
 class BilinearDecoder(Module):
@@ -347,7 +346,8 @@ class RESCAL(BilinearDecoder):
         self.edge_count = edge_count
         self.embedding_dimensions = embedding_dimensions
 
-        self.edge_embeddings_matrix = initialize_embedding(self.edge_count, self.embedding_dimensions * self.embedding_dimensions)
+        initializer = Initializer()
+        self.edge_embeddings_matrix = initializer.initialize_embedding(self.edge_count, self.embedding_dimensions * self.embedding_dimensions)
 
 
     def score(  self,
@@ -450,6 +450,7 @@ class RESCAL(BilinearDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
+                                    edge_embeddings: Tensor,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
@@ -581,7 +582,7 @@ class RESCAL(BilinearDecoder):
             assert (len(head_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 3), \
                 "When inferring tails, the tensors `head_embeddings` must have 2 dimensions and `edge_embeddings` must have 3 dimensions."
             
-            head_edge_embeddings = matmul(head_embeddings.view(batch_size, 1, self.embedding_dimensions)).view(batch_size, 1, self.embedding_dimensions)
+            head_edge_embeddings = matmul(head_embeddings.view(batch_size, 1, self.embedding_dimensions), edge_embeddings)
             
             return (head_edge_embeddings * tail_embeddings).sum(dim = 2)
         

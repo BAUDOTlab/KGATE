@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from torch_geometric.utils import k_hop_subgraph
 
-from .encoders import DefaultEncoder, GNN
+from .encoders import GNN
 from .decoders import TranslationalDecoder, BilinearDecoder, ConvolutionalDecoder
 from .knowledgegraph import KnowledgeGraph
 from .utils import filter_scores
@@ -99,7 +99,7 @@ class EdgeInference:
                 *,
                 top_k: int,
                 batch_size: int,
-                encoder: DefaultEncoder | GNN,
+                encoder: GNN | None,
                 decoder: TranslationalDecoder | BilinearDecoder | ConvolutionalDecoder,
                 node_embeddings: nn.ParameterList, 
                 edge_embeddings: nn.Embedding, 
@@ -124,9 +124,8 @@ class EdgeInference:
         **batch_size** *(int, keyword-only)*
         : Size of the current batch.
         
-        **encoder** *(DefaultEncoder or GNN, keyword-only)*
-        : Encoder model to embed the nodes. Deactivated with DefaultEncoder.
-        
+        **encoder** *( GNN, keyword-only)*
+        : Encoder model to embed the nodes.     
         **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder)*
         : Decoder model to evaluate.
         
@@ -170,7 +169,7 @@ class EdgeInference:
                 head_indices, tail_indices = batch[0], batch[1]
                 embeddings = torch.zeros(len(head_indices), node_embeddings[0].shape[1], device=device, dtype=torch.float)
 
-                if isinstance(encoder, GNN):
+                if encoder is not None:
                     seed_nodes = batch.unique()
                     hop_count = encoder.n_layers
                     edge_list = self.kg.edge_list
@@ -182,7 +181,7 @@ class EdgeInference:
                         )
                     
                     input = self.kg.get_encoder_input(self.kg.graphindices[:, edge_mask].to(device), node_embeddings)
-                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
+                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
             
                     for node_type, index in input.mapping.items():
                         node_embeddings[index] = encoder_output[node_type]
@@ -242,7 +241,7 @@ class NodeInference:
                 top_k: int,
                 missing_triplet_part: Literal["head", "tail"],
                 batch_size: int,
-                encoder: DefaultEncoder | GNN,
+                encoder: GNN | None,
                 decoder: TranslationalDecoder | BilinearDecoder | ConvolutionalDecoder,
                 node_embeddings: nn.ParameterList, 
                 edge_embeddings: nn.Embedding,
@@ -269,9 +268,8 @@ class NodeInference:
         **batch_size** *(int, keyword-only)*
         : Size of the current batch.
         
-        **encoder** *(DefaultEncoder or GNN, keyword-only)*
-        : Encoder model to embed the nodes. Deactivated with DefaultEncoder.
-        
+        **encoder** *( GNN, keyword-only)*
+        : Encoder model to embed the nodes. Deactivated with        
         **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder, keyword-only)*
         : Decoder model to evaluate.
         
@@ -333,7 +331,7 @@ class NodeInference:
                                                                 dtype = torch.float)
 
                     input = self.kg.get_encoder_input(self.kg.graphindices[:, edge_mask], node_embeddings)
-                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_list)
+                    encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
             
                     for node_type, index in input.mapping.items():
                         node_embeddings[index] = encoder_output[node_type]

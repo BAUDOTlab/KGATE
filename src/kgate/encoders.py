@@ -15,28 +15,14 @@ from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torch_geometric.nn import GATv2Conv, HeteroConv, Node2Vec, SAGEConv
-
+from torch_geometric.nn import GATv2Conv, HeteroConv, SAGEConv
+""
 
 logging_level = logging.INFO
 logging.basicConfig(
     level = logging_level,  
     format = "%(asctime)s - %(levelname)s - %(message)s" 
 )
-
-
-class DefaultEncoder(nn.Module):
-    def __init__(self):
-        """
-        Encoder used by default if none is precised in the config file.
-
-        This class inherits from the PyTorch `nn.module` class, without any addition: 
-        <https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html>
-
-        """
-        super().__init__()
-
-
 
 class GNN(nn.Module):
     def __init__(self,
@@ -130,9 +116,10 @@ class GNN(nn.Module):
         : PyTorch Geometric equivalent to node_embeddings.
             
         """
-        for _, conv in enumerate(self.convolutions):
+        for i, conv in enumerate(self.convolutions):
             x_dict = conv(x_dict = x_dict, edge_index_dict = edge_index_dict)
-            x_dict = {key: F.leaky_relu(x) for key, x in x_dict.items()}
+            if i < len(self.convolutions) - 1:
+                x_dict = {key: F.leaky_relu(x) for key, x in x_dict.items()}
 
         return x_dict
     
@@ -300,112 +287,8 @@ class GCNEncoder(GNN):
             convolution = HeteroConv(
                 {edge_type: SAGEConv(   in_channels = -1,
                                         out_channels = embedding_dimensions,
-                                        aggregation = "mean")
+                                        )
                     for edge_type in self.edge_types},
                 aggr = self.aggregation
                 ).to(device)
             self.convolutions.append(convolution)
-
-
-
-class Node2VecEncoder:
-    def __init__(self,
-                edge_indices: Tensor,
-                embedding_dimensions: int,
-                walk_length: int,
-                context_size: int,
-                output_directory: Path,
-                device: torch.device | Literal["cuda", "cpu"] = "cuda",
-                **node2vec_kwargs):
-        """
-        Implementation of node2vec model detailed in the paper referenced below.
-
-        References
-        ----------
-        * Aditya Grover, Jure Leskovec
-            
-            `node2vec: Scalable Feature Learning for Networks`
-            
-            <https://arxiv.org/pdf/1607.00653>
-            
-            In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 2016.
-
-        Arguments
-        ---------
-        
-        **edge_indices** *(torch.Tensor)*
-        : Indices of edges.
-        
-        **embedding_dimensions** *(int)*
-        : Dimensions of embedding, both of nodes and edges.
-        
-        **walk_length** *(int)*
-        : The walk length.
-        
-        **context_size** *(int)*
-        : The actual context size which is considered for positive samples.
-        : This parameter increases the effective sampling rate by reusing samples across different source nodes.
-        
-        **device** *(torch.device or Literal["cuda", "cpu"])*
-        : Indicate if data should be sent to GPU or CPU.
-        : GPU is referenced to as Cuda.
-        
-        **output_directory** *(Path)*
-        : Path to the directory where files will be created.
-
-        Attributes
-        ----------
-        
-        **device** *(torch.device or Literal["cuda", "cpu"])*
-        : Indicate if data should be sent to GPU or CPU.
-        : GPU is referenced to as Cuda.
-        
-        **output_directory** *(Path)*
-        : Path to the directory where files will be created.
-        
-        **model** *(torch_geometric.nn.Node2Vec)*
-        : The Node2Vec model object.
-        : Node2Vec documentation: <https://pytorch-geometric.readthedocs.io/en/2.5.1/generated/torch_geometric.nn.models.Node2Vec.html>
-        
-        **loader** *(torch.utils.data.DataLoader)*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
-        
-        **optimizer** *(torch.optim.SparseAdam)*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
-
-        """
-        self.device = device
-        self.output_directory = output_directory
-        self.model = Node2Vec(
-            edge_index = edge_indices,
-            embedding_dim = embedding_dimensions,
-            walk_length = walk_length,
-            context_size = context_size,
-            **node2vec_kwargs
-            ).to(device)
-
-        workers_count = 4 if sys.platform == 'linux' else 0
-        self.loader = self.model.loader(batch_size = 128, shuffle = True, num_workers = workers_count)
-        self.optimizer = torch.optim.SparseAdam(list(self.model.parameters()), lr = 0.01)
-    
-    
-    def generate_embeddings(self):
-        """
-        Generate initial embeddings from knowledge graph topology, and save the result in a checkpoint file.    
-        
-        """
-        for epoch in range(1,101):
-            epoch_loss = 0
-            for positive_random_walk, negative_random_walk in tqdm(self.loader):
-                self.optimizer.zero_grad()
-                loss = self.model.loss(positive_random_walk.to(self.device), negative_random_walk.to(self.device))
-                loss.backward()
-                self.optimizer.step()
-                epoch_loss += loss.item()
-            
-            logging.info(f"Epoch {epoch: 03d}, Embedding Loss: {loss: .4f}")
-
-        torch.save(self.model.embedding, self.output_directory.joinpath("embeddings_node2vec.pt"))
-        logging.info(f"Embedding fully generated, saved in {self.output_directory}")

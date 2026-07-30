@@ -94,8 +94,8 @@ class ConvolutionalDecoder(Module):
 
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+                            edge_embeddings: nn.Parameter
+                            ) -> Tuple[nn.ParameterList, nn.Parameter] | None:
         """
         Interface method for the decoder's parameters normalization function.
 
@@ -164,7 +164,7 @@ class ConvolutionalDecoder(Module):
                                     tail_indices: Tensor, 
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor, 
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
@@ -399,7 +399,7 @@ class ConvKB(ConvolutionalDecoder):
                                     tail_indices: Tensor, 
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     node_inference: bool = True
                                     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """

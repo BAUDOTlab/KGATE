@@ -26,7 +26,7 @@ from torchkge.utils.dissimilarities import  l1_dissimilarity, \
                                             l2_torus_dissimilarity, \
                                             el2_torus_dissimilarity
 
-from ..utils import initialize_embedding
+from ..initializers import Initializer
 
 
 
@@ -115,47 +115,47 @@ class TranslationalDecoder(Module):
         """
         raise NotImplementedError("The `score` method must be implemented by the translational decoder.")
 
+    #TODO: either remove completely from the interface or add a normalisation flag
+    # def normalize_parameters(self,
+    #                         node_embeddings: nn.ParameterList,
+    #                         edge_embeddings: nn.Embedding
+    #                         ) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+    #     """
+    #     Interface method for the decoder's parameters normalization function.
 
-    def normalize_parameters(self,
-                            node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding] | None:
-        """
-        Interface method for the decoder's parameters normalization function.
-
-        Refer to the specific decoder for details on this function's implementation.
+    #     Refer to the specific decoder for details on this function's implementation.
         
-        Arguments
-        ---------
+        # Arguments
+        # ---------
         
-        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
-        : The node embedding as a ParameterList containing one Parameter by node type, 
-        or only one if there is no node type.
+        # **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
+        # : The node embedding as a ParameterList containing one Parameter by node type, 
+        # or only one if there is no node type.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
-        : The edge embedding as a nn.Embedding containing one Parameter by edge type, 
-        or only one if there is no node type.
+        # **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        # : The edge embedding as a nn.Embedding containing one Parameter by edge type, 
+        # or only one if there is no node type.
         
-        Returns
-        -------
+        # Returns
+        # -------
         
-        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
-        : The normalized node embedding object.
+        # **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
+        # : The normalized node embedding object.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
-        : The normalized edge embedding object.
+        # **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        # : The normalized edge embedding object.
         
-        Notes
-        -----
+        # Notes
+        # -----
         
-        The `normalize_parameters` method can be implemented by a translational decoder inheriting from this class 
-        if it has specific parameters to normalize.
+        # The `normalize_parameters` method can be implemented by a translational decoder inheriting from this class 
+        # if it has specific parameters to normalize.
         
-        If the decoder doesn't have dedicated normalization, nothing is returned. In 
-        this case, it is not necessary to implement this method from the interface.
+        # If the decoder doesn't have dedicated normalization, nothing is returned. In 
+        # this case, it is not necessary to implement this method from the interface.
         
-        """
-        return None
+    #     """
+    #     return None
 
 
     def get_embeddings(self) -> Dict[str, Tensor] | None:
@@ -185,7 +185,7 @@ class TranslationalDecoder(Module):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
@@ -422,8 +422,8 @@ class TransE(TranslationalDecoder):
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding]:
+                            edge_embeddings: nn.Parameter
+                            ) -> Tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the TransE model.
         
@@ -458,7 +458,7 @@ class TransE(TranslationalDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
@@ -511,14 +511,14 @@ class TransE(TranslationalDecoder):
         # Get head, tail and edge embeddings
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
-        edge_embeddings_inferred = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings[edge_indices]
 
         if node_inference:
             # Prepare candidates for every node
             candidates = node_embeddings
         else:
             # Prepare candidates for every edge
-            candidates = edge_embeddings.weight.data
+            candidates = edge_embeddings.data
         
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
 
@@ -581,7 +581,8 @@ class TransH(TranslationalDecoder):
 
         """
         super().__init__()
-        self.normal_vector = initialize_embedding(edge_count, embedding_dimensions)
+        initializer = Initializer()
+        self.normal_vector = initializer.initialize_embedding(edge_count, embedding_dimensions)
         self.dissimilarity = l2_dissimilarity
 
         self.evaluated_projections = False
@@ -667,8 +668,8 @@ class TransH(TranslationalDecoder):
 
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding]:
+                            edge_embeddings: nn.Parameter
+                            ) -> Tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the TransH model.
         
@@ -698,7 +699,7 @@ class TransH(TranslationalDecoder):
         """
         for embedding in node_embeddings:
             embedding.data = normalize(embedding.data, p = 2, dim = 1)
-        edge_embeddings.weight.data = normalize(edge_embeddings.weight.data, p = 2, dim = 1)
+        edge_embeddings.data = normalize(edge_embeddings.data, p = 2, dim = 1)
         self.normal_vector.weight.data = normalize(self.normal_vector.weight.data, p = 2, dim = 1)
         
         return node_embeddings, edge_embeddings
@@ -722,7 +723,7 @@ class TransH(TranslationalDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
@@ -775,7 +776,7 @@ class TransH(TranslationalDecoder):
         if not self.evaluated_projections:
             self.evaluate_projections(node_embeddings)
 
-        edge_embeddings_inferred = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings[edge_indices]
 
         if node_inference:
             head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: [batch_size, self.embedding_dimensions]
@@ -784,7 +785,7 @@ class TransH(TranslationalDecoder):
         else:
             head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
             tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
-            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, self.edge_count, self.embedding_dimensions)  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
+            candidates = edge_embeddings.data.unsqueeze(0).expand(batch_size, self.edge_count, self.embedding_dimensions)  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
 
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
 
@@ -912,7 +913,8 @@ class TransR(TranslationalDecoder):
         self.node_embedding_dimensions = node_embedding_dimensions
         self.edge_embedding_dimensions = edge_embedding_dimensions
 
-        self.projection_matrix = initialize_embedding(node_count, edge_embedding_dimensions * node_embedding_dimensions)
+        initializer = Initializer()
+        self.projection_matrix = initializer.initialize_embedding(node_count, edge_embedding_dimensions * node_embedding_dimensions)
 
         self.dissimilarity = l2_dissimilarity
 
@@ -1005,8 +1007,8 @@ class TransR(TranslationalDecoder):
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding]:
+                            edge_embeddings: nn.Parameter
+                            ) -> Tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the TransR model.
         
@@ -1037,7 +1039,7 @@ class TransR(TranslationalDecoder):
         for embedding in node_embeddings:
             embedding.data = normalize(embedding.data, p = 2, dim = 1)
 
-        edge_embeddings.weight.data = normalize(edge_embeddings.weight.data, p = 2, dim = 1)
+        edge_embeddings.data = normalize(edge_embeddings.data, p = 2, dim = 1)
         
         return node_embeddings, edge_embeddings
     
@@ -1062,7 +1064,7 @@ class TransR(TranslationalDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
@@ -1116,7 +1118,7 @@ class TransR(TranslationalDecoder):
             self.evaluate_projections(node_embeddings)
 
         # TODO: check that, below, all 'edge_embedding_dimensions' should not be 'node_embedding_dimensions'
-        edge_embeddings_inferred = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings[edge_indices]
         if node_inference:
             head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: [batch_size, self.edge_embedding_dimensions]
             tail_embeddings = self.projected_nodes[edge_indices, tail_indices]  # shape: [batch_size, self.edge_embedding_dimensions]
@@ -1124,7 +1126,7 @@ class TransR(TranslationalDecoder):
         else:
             head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
             tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
-            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, edge_embeddings.num_embeddings, edge_embeddings.embedding_dim)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
+            candidates = edge_embeddings.data.unsqueeze(0).expand(batch_size, edge_embeddings.num_embeddings, edge_embeddings.embedding_dim)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
 
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
     
@@ -1256,10 +1258,11 @@ class TransD(TranslationalDecoder):
         self.edge_count = edge_count
         self.node_embedding_dimensions = node_embedding_dimensions
         self.edge_embedding_dimensions = edge_embedding_dimensions
-
+        
+        initializer = Initializer()
         # TODO: Might be changed to have 2 embedding spaces instead (meaning it will be encoded by a GNN if present)
-        self.node_projection_vector = initialize_embedding(self.node_count, self.node_embedding_dimensions)
-        self.edge_projection_vector = initialize_embedding(self.edge_count, self.edge_embedding_dimensions)
+        self.node_projection_vector = initializer.initialize_embedding(self.node_count, self.node_embedding_dimensions)
+        self.edge_projection_vector = initializer.initialize_embedding(self.edge_count, self.edge_embedding_dimensions)
 
         self.dissimilarity = l2_dissimilarity
 
@@ -1372,8 +1375,8 @@ class TransD(TranslationalDecoder):
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding]:
+                            edge_embeddings: nn.Parameter
+                            ) -> Tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the TransD model.
         
@@ -1404,7 +1407,7 @@ class TransD(TranslationalDecoder):
         for embedding in node_embeddings:
             embedding.data = normalize(embedding.data, p = 2, dim = 1)
 
-        edge_embeddings.weight.data = normalize(edge_embeddings.weight.data, p = 2, dim = 1)
+        edge_embeddings.data = normalize(edge_embeddings.data, p = 2, dim = 1)
 
         self.node_projection_vector.weight.data = normalize(self.node_projection_vector.weight.data, p = 2, dim = 1)
         self.edge_projection_vector.weight.data = normalize(self.edge_projection_vector.weight.data, p = 2, dim = 1)
@@ -1431,7 +1434,7 @@ class TransD(TranslationalDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
@@ -1484,7 +1487,7 @@ class TransD(TranslationalDecoder):
         if not self.evaluated_projections:
             self.evaluate_projections(node_embeddings)
 
-        edge_embeddings_inferred = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings[edge_indices]
 
         if node_inference:
             head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: [batch_size, self.node_embedding_dimensions]
@@ -1493,7 +1496,7 @@ class TransD(TranslationalDecoder):
         else:
             head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
             tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
-            candidates = edge_embeddings.weight.data.unsqueeze(0).expand(batch_size, self.edge_count, self.edge_embedding_dimensions)  # shape: [batch_size, self.edge_count, self.node_embedding_dimensions]
+            candidates = edge_embeddings.data.unsqueeze(0).expand(batch_size, self.edge_count, self.edge_embedding_dimensions)  # shape: [batch_size, self.edge_count, self.node_embedding_dimensions]
 
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
 
@@ -1650,8 +1653,8 @@ class TorusE(TranslationalDecoder):
 
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding]:
+                            edge_embeddings: nn.Parameter
+                            ) -> Tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the TorusE model.
         
@@ -1682,7 +1685,7 @@ class TorusE(TranslationalDecoder):
         for embedding in node_embeddings:
             embedding.data.frac_() # Inplace fraction
 
-        edge_embeddings.weight.data.frac_()
+        edge_embeddings.data.frac_()
         self.normalized = True
 
         return node_embeddings, edge_embeddings
@@ -1691,7 +1694,7 @@ class TorusE(TranslationalDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
@@ -1704,6 +1707,33 @@ class TorusE(TranslationalDecoder):
 
         Arguments
         ---------
+<<<<<<< HEAD
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            Embeddings of all nodes.
+        edge_embeddings: torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+            Embeddings of all edges.
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes (from KG).
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes (from KG).
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the edges (from KG).
+        node_inference: bool, optional, default to True, keyword-only
+            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+||||||| dbd47f1
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
+            Embeddings of all nodes.
+        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+            Embeddings of all edges.
+        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the head nodes (from KG).
+        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the tail nodes (from KG).
+        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+            The indices of the edges (from KG).
+        node_inference: bool, optional, default to True, keyword-only
+            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+=======
         
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
@@ -1722,6 +1752,7 @@ class TorusE(TranslationalDecoder):
         
         **node_inference** *(bool, optional, default to True, keyword-only)*
         : If True, prepare candidate nodes; otherwise, prepare candidate edges.
+>>>>>>> dev
 
         Returns
         -------
@@ -1748,14 +1779,14 @@ class TorusE(TranslationalDecoder):
 
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
-        edge_embeddings_inferred = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings[edge_indices]
 
         if node_inference:
             # Prepare candidates for every node
             candidates = node_embeddings
         else:
             # Prepare candidates for every edge
-            candidates = edge_embeddings.weight.data
+            candidates = edge_embeddings.data
             
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         
