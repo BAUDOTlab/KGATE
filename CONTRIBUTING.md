@@ -58,7 +58,7 @@ All changes must be thoroughly documented in the appropriate docstrings, and in 
 TODO, add: when we have a test folder and suite
 
 A great way to develop an understanding of how the project works is to look at test cases (located in [the `test` folder](./tests/)).
-Tests show you both how things are supposed to work.
+Tests show you how things are supposed to work.
 -->
 
 
@@ -116,11 +116,9 @@ Most non-trivial changes (*especially bug fixes*) should come along with new tes
 
 ## ✅ Submitting a Pull Request
 
-Most information related to submitting a pull request is contained in comments within the pull request template that is shown when you open a new pull request,
-however full documentation on the pull request title format is here to best utilize the space available.
+Most information related to submitting a pull request is contained in comments within the pull request template that is shown when you open a new pull request, however full documentation on the pull request title format is here to best utilize the space available.
 
-The pull request title must follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format with a valid prefix and optionally a valid scope. \
-If a save migrator, version increase or other breaking change is part of the PR, a `!` must be added before the `:`.
+The pull request title must follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format with a valid prefix and optionally a valid scope.
 
 Try to keep the PR title to 72 characters or less (GitHub cuts off commit titles longer than this).
 
@@ -143,7 +141,7 @@ Try to keep the PR title to 72 characters or less (GitHub cuts off commit titles
 - "Chore" - Misc project upkeep (e.g. updating submodules, updating dependencies, reverting a bad commit) not covered by other prefixes
 - "Dev" - Improving the developer experience (such as by modifying lint rules or creating cli scripts)
 - "Docs" - Primarily adding/updating documentation
-- "feat" - Adding a new feature (e.g. adding a new implementation of a decoder) or redesigning an existing feature
+- "Feat" - Adding a new feature (e.g. adding a new implementation of a decoder) or redesigning an existing feature
 - "Fix" - Fixing a bug
 - "Github" - Updating the CI pipeline or otherwise modifying something in the `./github/**` directory
 - "Misc" - A change that doesn't fit any other prefix

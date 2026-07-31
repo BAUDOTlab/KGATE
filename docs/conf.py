@@ -14,20 +14,25 @@ release = '0.1.13'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["autodoc2",
+extensions = [
               "sphinx.ext.doctest",
               "sphinx.ext.napoleon",
               "sphinx.ext.apidoc",
               "sphinx.ext.coverage",
+              "sphinx.ext.doctest",
+              "sphinx.ext.mathjax",
               "sphinx.ext.napoleon",
               "sphinx.ext.autosummary",
-              "myst_parser"]
+              "myst_parser",
+              "autodoc2"]
 
 myst_enable_extensions = [
-   "colon_fence",
-    "substitution",
-    "replacements",
+    "colon_fence",
     "deflist",
+    "dollarmath",
+    "fieldlist",
+    "replacements",
+    "substitution",
     "tasklist",
     "fieldlist",
 ]
@@ -43,6 +48,12 @@ autodoc2_packages = [
     },
 ]
 autodoc2_render_plugin = "myst" # Create all files with the “.md” extension, and thus docstrings will be interpreted as MyST by default
+
+autodoc2_docstring_parser_regexes = [
+    # this will render all docstrings as Markdown
+    (r".*", "docstrings_parser"),
+]
+
 
 autosummary_generate = True  # Enable autosummary to generate pages
 #autodoc_default_flags = ['members']  # Automatically document class members
