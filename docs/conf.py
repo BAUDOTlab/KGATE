@@ -34,6 +34,7 @@ myst_enable_extensions = [
     "replacements",
     "substitution",
     "tasklist",
+    "fieldlist",
 ]
 
 templates_path = ['_templates']
@@ -43,7 +44,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 autodoc2_packages = [
     {
         "path": "../src/kgate",
-        "auto_mode": True,  # Enable manual mode, to manually specify which objects to document
+        "auto_mode": False,  # Enable manual mode, to manually specify which objects to document
     },
 ]
 autodoc2_render_plugin = "myst" # Create all files with the “.md” extension, and thus docstrings will be interpreted as MyST by default
@@ -54,6 +55,8 @@ autodoc2_docstring_parser_regexes = [
 ]
 
 
+autosummary_generate = True  # Enable autosummary to generate pages
+#autodoc_default_flags = ['members']  # Automatically document class members
 epub_show_urls = "footnote"
 
 

@@ -248,6 +248,10 @@ class NodeInference:
                 verbose: bool = True,
                 **_):
         """
+        <span style="color:#8B0000"> 
+        <strong>Description</strong>
+        </span>
+    
         Predict the missing node of a triplet where either head and edge or edge and tail are known.
 
         Arguments
@@ -268,8 +272,9 @@ class NodeInference:
         **batch_size** *(int, keyword-only)*
         : Size of the current batch.
         
-        **encoder** *( GNN, keyword-only)*
-        : Encoder model to embed the nodes. Deactivated with        
+        **encoder** *(GNN, keyword-only)*
+        : Encoder model to embed the nodes.
+             
         **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder, keyword-only)*
         : Decoder model to evaluate.
         
