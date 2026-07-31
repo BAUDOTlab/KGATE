@@ -16,10 +16,24 @@ preprocessors
 inference
 encoders
 decoders
+utils
 ```
 
 ```{toctree}
 :maxdepth: 1
 :caption: References:
 
-reference/architect
+reference/api_architect
+reference/api_data_leakage
+reference/api_encoders
+reference/decoders/api_bilinear
+reference/decoders/api_convolutional
+reference/decoders/api_translational
+reference/api_evaluators
+reference/api_grid_search
+reference/api_inference
+reference/api_knowledge_graph
+reference/api_preprocessing
+reference/api_samplers
+reference/api_utils
+```

@@ -29,21 +29,28 @@ def run_grid_search(config_path: str,
 
     To register a hyperparameter in the grid search optimization, set it as a list in the configuration.
 
-    Not all hyperparameters can be evaluated. The full list is:
-    TODO.hyperparameters_list
+    Not all hyperparameters can be evaluated.
+    
+    % The full list is: TODO.hyperparameters_list
     
     Arguments
     ---------
-    number_of_trials: int, default to 10
-        TODO.What_that_argument_is_or_does
-    kg: Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph] or KnowledgeGraph, optional
-        Knowledge graph on which a grid search hyperparameter optimization will be done.
-    dataframe: pd.DataFrame, optional
-        TODO.What_that_argument_is_or_does
+    
+    **number_of_trials** *(int, default to 10)*
+    : *Missing documentation*
+    % TODO.What_that_argument_is_or_does
+    
+    **kg** *(Tuple[KnowledgeGraph, KnowledgeGraph, KnowledgeGraph] or KnowledgeGraph, optional)*
+    : Knowledge graph on which a grid search hyperparameter optimization will be done.
+    
+    **dataframe** *(pd.DataFrame, optional)*
+    : *Missing documentation*
+    % TODO.What_that_argument_is_or_does
     
     Notes
     -----
-    If the configuration file has no hyperparameter list, this function is effectively the same
+    
+    If the configuration file has no hyperparameter list, this function is effectively the same 
     as running `Architect(config_path).train_model()`
     
     """
@@ -80,21 +87,29 @@ def suggest_value(  trial: optuna.trial.Trial,
                     value: int | float | list, # TODO check if the types are correct
                     ) -> int | float | list: # TODO check if the types are correct
     """
-    TODO.What_the_function_does_about_globally
+    *Missing documentation*
+    % TODO.What_the_function_does_about_globally
     
     Arguments
     ---------
-    trial: optuna.trial.Trial
-        TODO.What_that_argument_is_or_does
-    value_name: str
-        TODO.What_that_argument_is_or_does
-    value: int or float or list
-        TODO.What_that_argument_is_or_does
+    
+    **trial** *(optuna.trial.Trial)*
+    : *Missing documentation*
+    % TODO.What_that_argument_is_or_does
+    
+    **value_name** *(str)*
+    : *Missing documentation*
+    % TODO.What_that_argument_is_or_does
+    
+    **value** *(int or float or list)*
+    : *Missing documentation*
+    % TODO.What_that_argument_is_or_does
     
     Returns
     -------
-    suggested_value: int or float or list
-        The value suggested.
+    
+    **suggested_value** *(int or float or list)*
+    : The value suggested.
     
     """
     logging.info(value_name)
