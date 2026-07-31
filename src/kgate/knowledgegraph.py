@@ -68,7 +68,7 @@ class EncoderInput:
                 mapping: Dict[str, Tensor]):
         
         self.x_dict = x_dict
-        self.edge_list = edge_list
+        self.edge_index = edge_list
         self.mapping = mapping
 
 
@@ -79,7 +79,7 @@ class EncoderInput:
             ])
         edge_repr = "\n\t".join([
             f"{edge}: {edge_index}"
-            for edge, edge_index in self.edge_list.items()
+            for edge, edge_index in self.edge_index.items()
         ])
         mapping_repr = "\n\t".join([
             f"{node_type}: {index}"

@@ -121,9 +121,10 @@ class GNN(nn.Module):
             PyTorch Geometric equivalent to node_embeddings.
             
         """
-        for _, conv in enumerate(self.convolutions):
+        for i, conv in enumerate(self.convolutions):
             x_dict = conv(x_dict = x_dict, edge_index_dict = edge_index_dict)
-            x_dict = {key: F.leaky_relu(x) for key, x in x_dict.items()}
+            if i < len(self.convolutions) - 1:
+                x_dict = {key: F.leaky_relu(x) for key, x in x_dict.items()}
 
         return x_dict
     
@@ -266,7 +267,7 @@ class GCNEncoder(GNN):
             convolution = HeteroConv(
                 {edge_type: SAGEConv(   in_channels = -1,
                                         out_channels = embedding_dimensions,
-                                        aggregation = "mean")
+                                        )
                     for edge_type in self.edge_types},
                 aggr = self.aggregation
                 ).to(device)
