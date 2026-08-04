@@ -2,6 +2,16 @@
 
 The **Architect** class is the centerpiece when using **KGATE** as a framework. While it is possible to use KGATE as a general toolbox and separate each of its components, most use cases can be handled by the Architect, including the data preparation and model inference.
 
+## How to use the Architect
+
+The Architect makes it easy to run basic training. You can use one of the builtin knowledge graph or use your own in CSV format with the columns "head", "edge" and "relation".
+
+```
+from kgate import Architect
+
+architect = Architect()
+```
+
 ## Configuration
 
 A configuration file can be fed to the Architect's constructor. See [the configuration page]() for details on how to fill it and what each option does. You can also find a configuration template on the github repository, prefilled with default values. This configuration can also be given programmatically, by giving to the `Architect` a dictionary of kwargs with the same structure or building yourself a `Configuration` object. While not mandatory, it is highly recommended to use a configuration file to ensure reproductibility, and to carefully check the configuration hyperparameters before training a model.
@@ -56,13 +66,13 @@ KGATE encoders are built upon [PyTorch Geometric](https://github.com/pyg-team/py
 The `Decoder` takes the latent space as input and attempts to reconstruct the original graph from it. The latent space is either the output of the encoder or, if there is none, the knowledge graph's initial embeddings. To do so, the decoder is given the representation of a true triplet and a given number of false triplets, also called negative. It is then tasked with assigning a score to each of them. The objective is for the decoder to score the true triplet high and the false triplets low. The differences between different decoders lie in the way they compute these scores, and what property of the data they model. Comparing different decoders is highly recommended before going further in a project, as there is no telling which decoder will perform best on a specific graph without some benchmarking.
 
 There are three families of decoders:
-- **Translational**: sometimes called **geometric**, their objective function is always to make it so the head node's vector is roughly equal to the tail node's vector through a translation by the edge vector. It can be a regular euclidian translation (TransE 2013), a rotation (RotatE), using hyperplanes (TransH) or even more complex methods.
-- **Bilinear**: decoders of this family use tensor factorization methods to score the given triplets. The most well-known bilinear decoder is Distmult (Yang et al. 2014), as it is the decoder most deep learning encoders use by default thanks to its simple principle and fast execution.
+- **Translational**: sometimes called **geometric**, their objective function is always to make it so the head node's vector is roughly equal to the tail node's vector through a translation by the edge vector. It can be a regular euclidian translation ([TransE](https://papers.nips.cc/paper/5071-translating-embeddings-for-modeling-multi-relational-data)), a rotation ([RotatE](https://arxiv.org/pdf/1902.10197)), using hyperplanes ([TransH](https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531)) or even more complex methods.
+- **Bilinear**: decoders of this family use tensor factorization methods to score the given triplets. The most well-known bilinear decoder is [Distmult](https://arxiv.org/abs/1412.6575), as it is the decoder most deep learning encoders use by default thanks to its simple principle and fast execution.
 - **Convolutional**: these decoders use deep convolutional layers, and in turn are less explainable than the other families, but may yield stronger results in some situations.
 
 #### Evaluation Method
 
-Classically, predictions of a KGE models on the completion task are evaluated by ranking the score of all candidates and determining the position of the true triplet in the list. KGATE proposes a second method called **SpherE** which represents the nodes as spheres instead of vectors. Based on RotatE, this representation allows for a new evaluation method, where every sphere intersecting with the head sphere after rotation is considered true, with no ranking. While it removes the interrogation of when does the model consider a triplet to be true, it also have a loss of information resulting in some metrics being unusable. For more detail, read the original paper.
+Classically, predictions of a KGE models on the completion task are evaluated by ranking the score of all candidates and determining the position of the true triplet in the list. KGATE proposes a second method called **[SpherE](https://dl.acm.org/doi/10.1145/3626772.3657910)** which represents the nodes as spheres instead of vectors. Based on RotatE, this representation allows for a new evaluation method, where every sphere intersecting with the head sphere after rotation is considered true, with no ranking. While it removes the interrogation of when does the model consider a triplet to be true, it also have a loss of information resulting in some metrics being unusable. For more detail, read the original paper.
 
 ### Hyperparameter Layer
 
@@ -71,3 +81,4 @@ Once the model is built, the hyperparameters and utilities can be created. The A
 ### Evaluation Layer
 
 Finally, the objective of the training is set in this layer. Currently, the two available objectives in KGATE are Link Prediction and Triplet Classification. The first one is used to complete a triplet given two components, for example prediction the tail of a (head, edge, ?) triplet. The second one evaluates the plausibility of a complete triplet in the knowledge graph, in other word if this triplet may exist in the data. The metrics used will depend on the objective.
+

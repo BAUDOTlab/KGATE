@@ -38,6 +38,7 @@ from ignite.metrics import RunningAverage
 from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
 
 from .data_leakage import permute_tails
+from .datasets import load_FB15k_237, load_WN18RR, load_PrimeKG
 from .initializers import *
 from .decoders import *
 from .encoders import *
@@ -47,7 +48,6 @@ from .knowledgegraph import KnowledgeGraph
 from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
 from .samplers import NegativeSampler, PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
 from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, plot_learning_curves, save_config
-
 
 # Configure logging
 logging.captureWarnings(True)
@@ -62,6 +62,7 @@ class Architect(Module):
     def __init__(self,
                 config_path: str = "",
                 knowledge_graph: KnowledgeGraph 
+                        | Literal["FB15k-237", "WN18RR", "PrimeKG"]
                         | None = None,
                 dataframe: pd.DataFrame
                         | None = None,
@@ -253,6 +254,17 @@ class Architect(Module):
             metadata = self.config["metadata_csv"] if self.config["metadata_csv"] != "" else None
         self.set_metadata(metadata = metadata)
         
+        if isinstance(knowledge_graph, str):
+            match knowledge_graph:
+                case "FB15k-237":
+                    knowledge_graph = load_FB15k_237()
+                case "WN18RR":
+                    knowledge_graph = load_WN18RR()
+                case "PrimeKG":
+                    knowledge_graph = load_PrimeKG()
+                case _:
+                    raise ValueError(f"Unrecognized {knowledge_graph} knowledge graph specified.")
+
         run_kg_preprocessing: bool = self.config["run_kg_preprocessing"]
 
         if run_kg_preprocessing:
