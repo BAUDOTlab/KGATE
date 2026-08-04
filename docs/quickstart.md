@@ -86,8 +86,8 @@ architect.load_best_model()
 embeddings = architect.get_embeddings()
 
 # Get mapping dictionaries to keep track of which embedding corresponds to what
-mapping_index_to_node = {v: k for k,v in architect.kg_train.node_to_index.items()}
-mapping_index_to_edge = {v: k for k,v in architect.kg_train.edge_to_index.items()}
+mapping_index_to_node = {v: k for k,v in architect.knowledge_graph.node_to_index.items()}
+mapping_index_to_edge = {v: k for k,v in architect.knowledge_graph.edge_to_index.items()}
 
 # And run downstream tasks with the pretrained embeddings
 ```
