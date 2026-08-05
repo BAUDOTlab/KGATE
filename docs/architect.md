@@ -9,7 +9,24 @@ The Architect makes it easy to run basic training. You can use one of the builti
 ```
 from kgate import Architect
 
-architect = Architect()
+architect = Architect(knowledge_graph = "FB15k-237)
+
+architect.train_model()
+
+architect.test()
+```
+
+The code above trains a TransE model on the FB15k-237 dataset using only default parameters. Note that if you wish to compare your training on gold standard dataset with the literature, you have to either set the `run_kg_preprocessing` argument to False or load the knowledge graph beforehands like so :
+
+```
+from kgate.datasets import load_FB15k237
+from kgate import Architect
+
+# Load the graph with the original splits
+fb15k_knowledge_graph = load_FB15k237(keep_splits = True)
+
+# Or set run_kg_preprocessing = False here
+architect = Architect(knowledge_graph = fb15k_knowledge_graph, run_kg_preprocessing = False)
 ```
 
 ## Configuration
