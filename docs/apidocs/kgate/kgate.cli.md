@@ -4,6 +4,6 @@
 ```
 
 ```{autodoc2-docstring} kgate.cli
-:parser: docstrings_parser
+:parser: myst
 :allowtitles:
 ```

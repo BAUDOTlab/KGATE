@@ -4,7 +4,7 @@
 ```
 
 ```{autodoc2-docstring} kgate.grid_search
-:parser: docstrings_parser
+:parser: myst
 :allowtitles:
 ```
 
@@ -18,12 +18,12 @@
 
 * - {py:obj}`run_grid_search <kgate.grid_search.run_grid_search>`
   - ```{autodoc2-docstring} kgate.grid_search.run_grid_search
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`suggest_value <kgate.grid_search.suggest_value>`
   - ```{autodoc2-docstring} kgate.grid_search.suggest_value
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 ````
@@ -36,7 +36,7 @@
 
 * - {py:obj}`logging_level <kgate.grid_search.logging_level>`
   - ```{autodoc2-docstring} kgate.grid_search.logging_level
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 ````
@@ -49,7 +49,7 @@
    None
 
 ```{autodoc2-docstring} kgate.grid_search.logging_level
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -58,7 +58,7 @@
 :canonical: kgate.grid_search.run_grid_search
 
 ```{autodoc2-docstring} kgate.grid_search.run_grid_search
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -66,6 +66,6 @@
 :canonical: kgate.grid_search.suggest_value
 
 ```{autodoc2-docstring} kgate.grid_search.suggest_value
-:parser: docstrings_parser
+:parser: myst
 ```
 ````

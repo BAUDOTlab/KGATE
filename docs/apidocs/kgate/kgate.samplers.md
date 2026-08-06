@@ -4,7 +4,7 @@
 ```
 
 ```{autodoc2-docstring} kgate.samplers
-:parser: docstrings_parser
+:parser: myst
 :allowtitles:
 ```
 
@@ -18,27 +18,27 @@
 
 * - {py:obj}`NegativeSampler <kgate.samplers.NegativeSampler>`
   - ```{autodoc2-docstring} kgate.samplers.NegativeSampler
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`UniformNegativeSampler <kgate.samplers.UniformNegativeSampler>`
   - ```{autodoc2-docstring} kgate.samplers.UniformNegativeSampler
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`BernoulliNegativeSampler <kgate.samplers.BernoulliNegativeSampler>`
   - ```{autodoc2-docstring} kgate.samplers.BernoulliNegativeSampler
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`PositionalNegativeSampler <kgate.samplers.PositionalNegativeSampler>`
   - ```{autodoc2-docstring} kgate.samplers.PositionalNegativeSampler
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`MixedNegativeSampler <kgate.samplers.MixedNegativeSampler>`
   - ```{autodoc2-docstring} kgate.samplers.MixedNegativeSampler
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 ````
@@ -49,22 +49,22 @@
 :canonical: kgate.samplers.NegativeSampler
 
 ```{autodoc2-docstring} kgate.samplers.NegativeSampler
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ```{rubric} Initialization
 ```
 
 ```{autodoc2-docstring} kgate.samplers.NegativeSampler.__init__
-:parser: docstrings_parser
+:parser: myst
 ```
 
-````{py:method} corrupt_batch(batch: torch.Tensor, negative_triplet_count=None) -> torch.types.Tensor
+````{py:method} corrupt_batch(batch: torch.Tensor, negative_triplet_count: typing.Optional[int] = None) -> torch.types.Tensor
 :canonical: kgate.samplers.NegativeSampler.corrupt_batch
 :abstractmethod:
 
 ```{autodoc2-docstring} kgate.samplers.NegativeSampler.corrupt_batch
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -77,21 +77,21 @@
 Bases: {py:obj}`kgate.samplers.NegativeSampler`
 
 ```{autodoc2-docstring} kgate.samplers.UniformNegativeSampler
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ```{rubric} Initialization
 ```
 
 ```{autodoc2-docstring} kgate.samplers.UniformNegativeSampler.__init__
-:parser: docstrings_parser
+:parser: myst
 ```
 
-````{py:method} corrupt_batch(batch: torch.Tensor, negative_triplet_count=None) -> torch.types.Tensor
+````{py:method} corrupt_batch(batch: torch.Tensor, negative_triplet_count: typing.Optional[int] = None) -> torch.types.Tensor
 :canonical: kgate.samplers.UniformNegativeSampler.corrupt_batch
 
 ```{autodoc2-docstring} kgate.samplers.UniformNegativeSampler.corrupt_batch
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -104,30 +104,30 @@ Bases: {py:obj}`kgate.samplers.NegativeSampler`
 Bases: {py:obj}`kgate.samplers.NegativeSampler`
 
 ```{autodoc2-docstring} kgate.samplers.BernoulliNegativeSampler
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ```{rubric} Initialization
 ```
 
 ```{autodoc2-docstring} kgate.samplers.BernoulliNegativeSampler.__init__
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````{py:method} evaluate_bernoulli_probabilities() -> torch.Tensor
 :canonical: kgate.samplers.BernoulliNegativeSampler.evaluate_bernoulli_probabilities
 
 ```{autodoc2-docstring} kgate.samplers.BernoulliNegativeSampler.evaluate_bernoulli_probabilities
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} corrupt_batch(batch: torch.LongTensor, negative_triplet_count: int | None = None)
+````{py:method} corrupt_batch(batch: torch.types.Tensor, negative_triplet_count: int | None = None)
 :canonical: kgate.samplers.BernoulliNegativeSampler.corrupt_batch
 
 ```{autodoc2-docstring} kgate.samplers.BernoulliNegativeSampler.corrupt_batch
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -140,30 +140,30 @@ Bases: {py:obj}`kgate.samplers.NegativeSampler`
 Bases: {py:obj}`kgate.samplers.BernoulliNegativeSampler`
 
 ```{autodoc2-docstring} kgate.samplers.PositionalNegativeSampler
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ```{rubric} Initialization
 ```
 
 ```{autodoc2-docstring} kgate.samplers.PositionalNegativeSampler.__init__
-:parser: docstrings_parser
+:parser: myst
 ```
 
-````{py:method} find_possibilities() -> typing.Tuple[typing.Dict[int, typing.List[int]], typing.Dict[int, typing.List[int]], torch.types.Tensor, torch.types.Tensor]
+````{py:method} find_possibilities() -> typing.Tuple[typing.Dict[int, torch.Tensor], typing.Dict[int, torch.Tensor], torch.types.Tensor, torch.types.Tensor]
 :canonical: kgate.samplers.PositionalNegativeSampler.find_possibilities
 
 ```{autodoc2-docstring} kgate.samplers.PositionalNegativeSampler.find_possibilities
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} corrupt_batch(batch: torch.types.Tensor, _: int = 1) -> torch.types.Tensor
+````{py:method} corrupt_batch(batch: torch.types.Tensor, negative_triplet_count: typing.Optional[int] = None) -> torch.types.Tensor
 :canonical: kgate.samplers.PositionalNegativeSampler.corrupt_batch
 
 ```{autodoc2-docstring} kgate.samplers.PositionalNegativeSampler.corrupt_batch
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -176,21 +176,21 @@ Bases: {py:obj}`kgate.samplers.BernoulliNegativeSampler`
 Bases: {py:obj}`kgate.samplers.NegativeSampler`
 
 ```{autodoc2-docstring} kgate.samplers.MixedNegativeSampler
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ```{rubric} Initialization
 ```
 
 ```{autodoc2-docstring} kgate.samplers.MixedNegativeSampler.__init__
-:parser: docstrings_parser
+:parser: myst
 ```
 
-````{py:method} corrupt_batch(batch: torch.LongTensor, negative_triplet_count: int = 1)
+````{py:method} corrupt_batch(batch: torch.types.Tensor, negative_triplet_count: int = 1)
 :canonical: kgate.samplers.MixedNegativeSampler.corrupt_batch
 
 ```{autodoc2-docstring} kgate.samplers.MixedNegativeSampler.corrupt_batch
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````

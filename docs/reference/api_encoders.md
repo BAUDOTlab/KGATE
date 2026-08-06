@@ -33,12 +33,3 @@
 
 ---
 
-## Node2VecEncoder
-```{autodoc2-object} kgate.encoders.Node2VecEncoder.__init__
-
-```
-
-### generate_embeddings
-```{autodoc2-object} kgate.encoders.Node2VecEncoder.generate_embeddings
-
-```

@@ -17,6 +17,7 @@ inference
 encoders
 decoders
 utils
+apidocs/index.rst
 ```
 
 ```{toctree}

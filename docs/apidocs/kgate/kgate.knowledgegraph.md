@@ -4,7 +4,7 @@
 ```
 
 ```{autodoc2-docstring} kgate.knowledgegraph
-:parser: docstrings_parser
+:parser: myst
 :allowtitles:
 ```
 
@@ -18,27 +18,32 @@
 
 * - {py:obj}`EncoderInput <kgate.knowledgegraph.EncoderInput>`
   - ```{autodoc2-docstring} kgate.knowledgegraph.EncoderInput
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
-* - {py:obj}`KnowledgeGraph <kgate.knowledgegraph.KnowledgeGraph>`
+* - {py:obj}`KnowledgeGraphEmbeddings <kgate.knowledgegraph.KnowledgeGraphEmbeddings>`
   -
+* - {py:obj}`KnowledgeGraph <kgate.knowledgegraph.KnowledgeGraph>`
+  - ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph
+    :parser: myst
+    :summary:
+    ```
 ````
 
 ### API
 
-`````{py:class} EncoderInput(x_dict: typing.Dict[str, torch.Tensor], edge_list: typing.Dict[typing.Tuple[str, str, str], torch.Tensor], mapping: typing.Dict[str, torch.Tensor])
+`````{py:class} EncoderInput(x_dict: typing.Dict[str, torch.Tensor], edge_list: typing.Dict[typing.Tuple[str, str, str], torch.Tensor], node_mapping: typing.Dict[str, torch.Tensor], seed_mapping: typing.Dict[str, torch.Tensor])
 :canonical: kgate.knowledgegraph.EncoderInput
 
 ```{autodoc2-docstring} kgate.knowledgegraph.EncoderInput
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ```{rubric} Initialization
 ```
 
 ```{autodoc2-docstring} kgate.knowledgegraph.EncoderInput.__init__
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````{py:method} __repr__()
@@ -48,16 +53,58 @@
 
 `````
 
-`````{py:class} KnowledgeGraph(dataframe: pandas.DataFrame | None = None, graphindices: torch.Tensor | None = None, metadata: pandas.DataFrame | None = None, triplet_types: typing.List[typing.Tuple[str, str, str]] | None = None, node_to_index: typing.Dict[str, int] | None = None, edge_to_index: typing.Dict[str, int] | None = None, node_type_to_index: typing.Dict[str, int] | None = None, removed_triplets: torch.Tensor | None = None)
+`````{py:class} KnowledgeGraphEmbeddings(*args: typing.Any, **kwargs: typing.Any)
+:canonical: kgate.knowledgegraph.KnowledgeGraphEmbeddings
+
+Bases: {py:obj}`torch.nn.Module`
+
+````{py:attribute} node_embeddings
+:canonical: kgate.knowledgegraph.KnowledgeGraphEmbeddings.node_embeddings
+:type: torch.nn.ParameterList
+:value: >
+   None
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraphEmbeddings.node_embeddings
+:parser: myst
+```
+
+````
+
+````{py:attribute} edge_embeddings
+:canonical: kgate.knowledgegraph.KnowledgeGraphEmbeddings.edge_embeddings
+:type: torch.nn.Parameter
+:value: >
+   None
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraphEmbeddings.edge_embeddings
+:parser: myst
+```
+
+````
+
+`````
+
+`````{py:class} KnowledgeGraph(dataframe: pandas.DataFrame | None = None, graphindices: torch.Tensor | None = None, metadata: pandas.DataFrame | None = None, triplet_types: typing.List[typing.Tuple[str, str, str]] | None = None, node_to_index: typing.Dict[str, int] | None = None, edge_to_index: typing.Dict[str, int] | None = None, node_type_to_index: typing.Dict[str, int] | None = None)
 :canonical: kgate.knowledgegraph.KnowledgeGraph
 
 Bases: {py:obj}`torch.utils.data.Dataset`
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph
+:parser: myst
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.__init__
+:parser: myst
+```
 
 ````{py:method} __len__()
 :canonical: kgate.knowledgegraph.KnowledgeGraph.__len__
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.__len__
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -66,17 +113,37 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :canonical: kgate.knowledgegraph.KnowledgeGraph.__getitem__
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.__getitem__
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:property} head_idx
-:canonical: kgate.knowledgegraph.KnowledgeGraph.head_idx
-:type: torch.Tensor
+````{py:property} embeddings
+:canonical: kgate.knowledgegraph.KnowledgeGraph.embeddings
+:type: kgate.knowledgegraph.KnowledgeGraphEmbeddings
 
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.head_idx
-:parser: docstrings_parser
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.embeddings
+:parser: myst
+```
+
+````
+
+````{py:property} node_embeddings
+:canonical: kgate.knowledgegraph.KnowledgeGraph.node_embeddings
+:type: torch.nn.ParameterList
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.node_embeddings
+:parser: myst
+```
+
+````
+
+````{py:property} edge_embeddings
+:canonical: kgate.knowledgegraph.KnowledgeGraph.edge_embeddings
+:type: torch.nn.Parameter
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.edge_embeddings
+:parser: myst
 ```
 
 ````
@@ -86,7 +153,7 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :type: torch.Tensor
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.tail_idx
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -96,7 +163,7 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :type: torch.Tensor
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.relations
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -106,7 +173,7 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :type: torch.Tensor
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.head_indices
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -116,7 +183,7 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :type: torch.Tensor
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.tail_indices
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -126,7 +193,7 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :type: torch.Tensor
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.edge_indices
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -136,7 +203,7 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :type: torch.Tensor
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.triplets
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -146,17 +213,67 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :type: torch.Tensor
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.edge_list
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:property} n_facts
-:canonical: kgate.knowledgegraph.KnowledgeGraph.n_facts
+````{py:property} train_set
+:canonical: kgate.knowledgegraph.KnowledgeGraph.train_set
+:type: torch.Tensor
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.train_set
+:parser: myst
+```
+
+````
+
+````{py:property} validation_set
+:canonical: kgate.knowledgegraph.KnowledgeGraph.validation_set
+:type: torch.Tensor
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.validation_set
+:parser: myst
+```
+
+````
+
+````{py:property} test_set
+:canonical: kgate.knowledgegraph.KnowledgeGraph.test_set
+:type: torch.Tensor
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.test_set
+:parser: myst
+```
+
+````
+
+````{py:property} triplet_count
+:canonical: kgate.knowledgegraph.KnowledgeGraph.triplet_count
 :type: int
 
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.n_facts
-:parser: docstrings_parser
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.triplet_count
+:parser: myst
+```
+
+````
+
+````{py:property} node_count
+:canonical: kgate.knowledgegraph.KnowledgeGraph.node_count
+:type: int
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.node_count
+:parser: myst
+```
+
+````
+
+````{py:property} edge_count
+:canonical: kgate.knowledgegraph.KnowledgeGraph.edge_count
+:type: int
+
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.edge_count
+:parser: myst
 ```
 
 ````
@@ -166,43 +283,43 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :type: pandas.DataFrame
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.identity
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} set_identity(new_identity: str)
+````{py:method} set_identity(new_identity: str) -> None
 :canonical: kgate.knowledgegraph.KnowledgeGraph.set_identity
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.set_identity
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} add_metadata(metadata: pandas.DataFrame)
+````{py:method} add_metadata(metadata: pandas.DataFrame) -> None
 :canonical: kgate.knowledgegraph.KnowledgeGraph.add_metadata
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.add_metadata
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} get_dataframe()
+````{py:method} get_dataframe(include_splits: bool = False) -> pandas.DataFrame
 :canonical: kgate.knowledgegraph.KnowledgeGraph.get_dataframe
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.get_dataframe
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} split_kg(split_proportions: typing.Tuple[float, float, float] = (0.8, 0.1, 0.1), sizes: typing.Tuple[int, int, int] | None = None) -> typing.Tuple[typing.Self, typing.Self, typing.Self]
-:canonical: kgate.knowledgegraph.KnowledgeGraph.split_kg
+````{py:method} generate_masks(split_proportions: typing.Tuple[float, float, float] = (0.8, 0.1, 0.1), sizes: typing.Tuple[int, int, int] | None = None) -> None
+:canonical: kgate.knowledgegraph.KnowledgeGraph.generate_masks
 
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.split_kg
-:parser: docstrings_parser
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.generate_masks
+:parser: myst
 ```
 
 ````
@@ -211,61 +328,61 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :canonical: kgate.knowledgegraph.KnowledgeGraph.get_mask
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.get_mask
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} keep_triplets(indices_to_keep: typing.List[int] | torch.Tensor) -> typing.Self
-:canonical: kgate.knowledgegraph.KnowledgeGraph.keep_triplets
+````{py:method} delete_triplets(indices_to_delete: typing.List[int] | torch.Tensor) -> None
+:canonical: kgate.knowledgegraph.KnowledgeGraph.delete_triplets
 
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.keep_triplets
-:parser: docstrings_parser
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.delete_triplets
+:parser: myst
 ```
 
 ````
 
-````{py:method} remove_triplets(indices_to_remove: typing.List[int] | torch.Tensor) -> typing.Self
-:canonical: kgate.knowledgegraph.KnowledgeGraph.remove_triplets
+````{py:method} remove_triplets_from_training(indices_to_remove: typing.List[int] | torch.Tensor) -> None
+:canonical: kgate.knowledgegraph.KnowledgeGraph.remove_triplets_from_training
 
-```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.remove_triplets
-:parser: docstrings_parser
+```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.remove_triplets_from_training
+:parser: myst
 ```
 
 ````
 
-````{py:method} add_triplets(new_triplets: torch.Tensor) -> typing.Self
+````{py:method} add_triplets(new_triplets: torch.Tensor, split: typing.Literal[train, validation, test] | None = None) -> None
 :canonical: kgate.knowledgegraph.KnowledgeGraph.add_triplets
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.add_triplets
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} add_reverse_edges(undirected_edges: typing.List[int]) -> typing.Tuple[typing.Self, typing.List[int]]
+````{py:method} add_reverse_edges(undirected_edges: typing.List[int]) -> typing.List[int]
 :canonical: kgate.knowledgegraph.KnowledgeGraph.add_reverse_edges
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.add_reverse_edges
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} remove_duplicate_triplets() -> typing.Self
+````{py:method} remove_duplicate_triplets() -> None
 :canonical: kgate.knowledgegraph.KnowledgeGraph.remove_duplicate_triplets
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.remove_duplicate_triplets
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} get_pairs(edge_type_index: int, type: typing.Literal[head_tail, tail_head] = 'head_tail') -> typing.Set[typing.Tuple[torch.types.Number, torch.types.Number]]
+````{py:method} get_pairs(edge_type_index: int, split: typing.Literal[train, validation, test] | None = None) -> torch.Tensor
 :canonical: kgate.knowledgegraph.KnowledgeGraph.get_pairs
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.get_pairs
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -274,7 +391,7 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :canonical: kgate.knowledgegraph.KnowledgeGraph.duplicates
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.duplicates
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -283,54 +400,54 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :canonical: kgate.knowledgegraph.KnowledgeGraph.cartesian_product_edges
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.cartesian_product_edges
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} get_encoder_input(data: torch.Tensor, node_embedding: torch.nn.ParameterList) -> kgate.knowledgegraph.EncoderInput
+````{py:method} get_encoder_input(*, seed_nodes: torch.Tensor, hop_count: int, mask: torch.Tensor | None = None) -> kgate.knowledgegraph.EncoderInput
 :canonical: kgate.knowledgegraph.KnowledgeGraph.get_encoder_input
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.get_encoder_input
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} flatten_embeddings(node_embeddings: torch.nn.ParameterList) -> torch.Tensor
+````{py:method} flatten_embeddings() -> torch.Tensor
 :canonical: kgate.knowledgegraph.KnowledgeGraph.flatten_embeddings
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.flatten_embeddings
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} clean()
+````{py:method} clean() -> None
 :canonical: kgate.knowledgegraph.KnowledgeGraph.clean
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.clean
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} from_hetero_data(hetero_data: torch_geometric.data.HeteroData)
+````{py:method} from_hetero_data(hetero_data: torch_geometric.data.HeteroData) -> kgate.knowledgegraph.KnowledgeGraph
 :canonical: kgate.knowledgegraph.KnowledgeGraph.from_hetero_data
-:staticmethod:
+:classmethod:
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.from_hetero_data
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} from_torchkge(torchkge_kg: torchkge.KnowledgeGraph, metadata: pandas.DataFrame | None = None) -> typing.Self
+````{py:method} from_torchkge(torchkge_kg: torchkge.KnowledgeGraph, metadata: pandas.DataFrame | None = None) -> kgate.knowledgegraph.KnowledgeGraph
 :canonical: kgate.knowledgegraph.KnowledgeGraph.from_torchkge
-:staticmethod:
+:classmethod:
 
 ```{autodoc2-docstring} kgate.knowledgegraph.KnowledgeGraph.from_torchkge
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````

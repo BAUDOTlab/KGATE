@@ -4,7 +4,7 @@
 ```
 
 ```{autodoc2-docstring} kgate.decoders
-:parser: docstrings_parser
+:parser: myst
 :allowtitles:
 ```
 
@@ -14,7 +14,7 @@
 :titlesonly:
 :maxdepth: 1
 
-kgate.decoders.convolutional
-kgate.decoders.translational
 kgate.decoders.bilinear
+kgate.decoders.translational
+kgate.decoders.convolutional
 ```

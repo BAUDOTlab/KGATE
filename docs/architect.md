@@ -62,21 +62,22 @@ Once you have your `Architect` object with its knowledge graph, you can build th
 
 The `Initializer` is responsible for generating initial embeddings for all nodes and edges in the graph. The most common form of initialization is a random one, though giving more informed features can help the models to learn and converge faster if not better.
 
-- The default `Initializer` generates random embeddings using the `xavier_uniform` function. It is also the fallback when another method doesn't generate embeddings for a set of nodes.
-- The `FeatureInitializer` uses user-provided features in the form of a dictionary where the keys are node types and values a pytorch tensor. The tensor must be of the same size of the node type, and entries must match the order of the graph in order to work. The dictionary `KnowledgeGraph.node_to_index` can help to ensure correct mapping. If a node type is not specified, it will be randomly initialized.
+* The default `Initializer` generates random embeddings using the `xavier_uniform` function. It is also the fallback when another method doesn't generate embeddings for a set of nodes.
+* The `FeatureInitializer` uses user-provided features in the form of a dictionary where the keys are node types and values a pytorch tensor. The tensor must be of the same size of the node type, and entries must match the order of the graph in order to work. The dictionary `KnowledgeGraph.node_to_index` can help to ensure correct mapping. If a node type is not specified, it will be randomly initialized.
+
 ```warning
 If you don't use an [encoder](#Encoder), all given features must have the same dimensions, otherwise the decoder will be unable to process them.
 ```
 
-- The `Node2VecInitializer` runs a [Node2Vec (Grover & Leskovec 2016)](https://arxiv.org/pdf/1607.00653) algorithm on the knowledge graph. For each node, the initial embedding is the result of a 100-epoch random walk with that node as seed. The edges are then randomly initialized.
+* The `Node2VecInitializer` runs a [Node2Vec (Grover & Leskovec 2016)](https://arxiv.org/pdf/1607.00653) algorithm on the knowledge graph. For each node, the initial embedding is the result of a 100-epoch random walk with that node as seed. The edges are then randomly initialized.
 
-The initializer can be independantly created with the `initialize_initializer` method. To learn how to implement your own intializer, go to [Build your own model: Initializer](./BYOM.md#initializer)
+The initializer can be independantly created with the `initialize_initializer` method. To learn how to implement your own intializer, go to [Build your own Initializer](./initializers.md#build-your-own-initializer)
 
 #### Encoder
 
 The `Encoder` is an optional part of the model, able to learn from complex features at a much higher computational cost and training duration. Encoders are able to learn the latent representation of heterogeneous features per node type and homogenize their dimensions in order for the decoder to easily be applied on the whole graph. If you do not have complex features, it is recommended to avoid using an encoder unless you know why you are doing so, as the performance gained from an encoder on a randomly initialized knowledge graph is minimal compared to the increase in training cost.
 
-KGATE encoders are built upon [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric)'s GNN. Builtin encoders are simple, using the same convolution for each triplet type, but more advanced architecture can easily be built. See [Build your own model: Encoder](./BYOM.md#encoder) for more details.
+KGATE encoders are built upon [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric)'s GNN. Builtin encoders are simple, using the same convolution for each triplet type, but more advanced architecture can easily be built. See [Build your own Encoder](./encoders.md#build-your-own-encoder) for more details.
 
 #### Decoder
 
@@ -86,6 +87,8 @@ There are three families of decoders:
 - **Translational**: sometimes called **geometric**, their objective function is always to make it so the head node's vector is roughly equal to the tail node's vector through a translation by the edge vector. It can be a regular euclidian translation ([TransE](https://papers.nips.cc/paper/5071-translating-embeddings-for-modeling-multi-relational-data)), a rotation ([RotatE](https://arxiv.org/pdf/1902.10197)), using hyperplanes ([TransH](https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531)) or even more complex methods.
 - **Bilinear**: decoders of this family use tensor factorization methods to score the given triplets. The most well-known bilinear decoder is [Distmult](https://arxiv.org/abs/1412.6575), as it is the decoder most deep learning encoders use by default thanks to its simple principle and fast execution.
 - **Convolutional**: these decoders use deep convolutional layers, and in turn are less explainable than the other families, but may yield stronger results in some situations.
+
+Just like the rest, you can add in your implementation of a decoder and build upon the existing ones. See [build your own Decoder](./decoders.md#build-your-own-decoder) for detailed information.
 
 #### Evaluation Method
 

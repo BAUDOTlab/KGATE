@@ -9,7 +9,7 @@ Currently implemented encoders:
 <!--[NewEncoderName](./reference/api_encoders.md#newencodername)-->
 
 
-## Building your own encoder
+## Build your own encoder
 
 KGATE encoders inherits from the (GNN)[#GNN] class, which holds the convolution layer in the `convs` property, adds self-loops on all node types and implements the `forward` method. The encoders simply create the architecture of the encoder. While the out-of-the-box encoders are rather simple, you can easily create a more complex model fitting your needs.
 

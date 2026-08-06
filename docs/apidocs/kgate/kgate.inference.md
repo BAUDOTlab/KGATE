@@ -4,7 +4,7 @@
 ```
 
 ```{autodoc2-docstring} kgate.inference
-:parser: docstrings_parser
+:parser: myst
 :allowtitles:
 ```
 
@@ -20,12 +20,12 @@
   -
 * - {py:obj}`EdgeInference <kgate.inference.EdgeInference>`
   - ```{autodoc2-docstring} kgate.inference.EdgeInference
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`NodeInference <kgate.inference.NodeInference>`
   - ```{autodoc2-docstring} kgate.inference.NodeInference
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 ````
@@ -41,7 +41,7 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :canonical: kgate.inference.Inference_KG.__len__
 
 ```{autodoc2-docstring} kgate.inference.Inference_KG.__len__
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -50,7 +50,7 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :canonical: kgate.inference.Inference_KG.__getitem__
 
 ```{autodoc2-docstring} kgate.inference.Inference_KG.__getitem__
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -61,21 +61,21 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :canonical: kgate.inference.EdgeInference
 
 ```{autodoc2-docstring} kgate.inference.EdgeInference
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ```{rubric} Initialization
 ```
 
 ```{autodoc2-docstring} kgate.inference.EdgeInference.__init__
-:parser: docstrings_parser
+:parser: myst
 ```
 
-````{py:method} evaluate(head_indices: torch.Tensor, tail_indices: torch.Tensor, *, top_k: int, batch_size: int, encoder: kgate.encoders.DefaultEncoder | kgate.encoders.GNN, decoder: kgate.decoders.TranslationalDecoder | kgate.decoders.BilinearDecoder | kgate.decoders.ConvolutionalDecoder, node_embeddings: torch.nn.ParameterList, edge_embeddings: torch.nn.Embedding, verbose: bool = True, **_)
+````{py:method} evaluate(head_indices: torch.Tensor, tail_indices: torch.Tensor, *, top_k: int, batch_size: int, encoder: kgate.encoders.GNN | None, decoder: kgate.decoders.TranslationalDecoder | kgate.decoders.BilinearDecoder | kgate.decoders.ConvolutionalDecoder, node_embeddings: torch.nn.ParameterList, edge_embeddings: torch.nn.Embedding, verbose: bool = True, **_)
 :canonical: kgate.inference.EdgeInference.evaluate
 
 ```{autodoc2-docstring} kgate.inference.EdgeInference.evaluate
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -86,21 +86,21 @@ Bases: {py:obj}`torch.utils.data.Dataset`
 :canonical: kgate.inference.NodeInference
 
 ```{autodoc2-docstring} kgate.inference.NodeInference
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ```{rubric} Initialization
 ```
 
 ```{autodoc2-docstring} kgate.inference.NodeInference.__init__
-:parser: docstrings_parser
+:parser: myst
 ```
 
-````{py:method} evaluate(node_indices: torch.Tensor, edge_indices: torch.Tensor, *, top_k: int, missing_triplet_part: typing.Literal[head, tail], batch_size: int, encoder: kgate.encoders.DefaultEncoder | kgate.encoders.GNN, decoder: kgate.decoders.TranslationalDecoder | kgate.decoders.BilinearDecoder | kgate.decoders.ConvolutionalDecoder, node_embeddings: torch.nn.ParameterList, edge_embeddings: torch.nn.Embedding, verbose: bool = True, **_)
+````{py:method} evaluate(node_indices: torch.Tensor, edge_indices: torch.Tensor, *, top_k: int, missing_triplet_part: typing.Literal[head, tail], batch_size: int, encoder: kgate.encoders.GNN | None, decoder: kgate.decoders.TranslationalDecoder | kgate.decoders.BilinearDecoder | kgate.decoders.ConvolutionalDecoder, node_embeddings: torch.nn.ParameterList, edge_embeddings: torch.nn.Embedding, verbose: bool = True, **_)
 :canonical: kgate.inference.NodeInference.evaluate
 
 ```{autodoc2-docstring} kgate.inference.NodeInference.evaluate
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````

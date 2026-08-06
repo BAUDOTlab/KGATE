@@ -4,7 +4,7 @@
 ```
 
 ```{autodoc2-docstring} kgate.utils
-:parser: docstrings_parser
+:parser: myst
 :allowtitles:
 ```
 
@@ -18,92 +18,77 @@
 
 * - {py:obj}`parse_config <kgate.utils.parse_config>`
   - ```{autodoc2-docstring} kgate.utils.parse_config
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`set_config_key <kgate.utils.set_config_key>`
   - ```{autodoc2-docstring} kgate.utils.set_config_key
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`save_config <kgate.utils.save_config>`
   - ```{autodoc2-docstring} kgate.utils.save_config
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`load_knowledge_graph <kgate.utils.load_knowledge_graph>`
   - ```{autodoc2-docstring} kgate.utils.load_knowledge_graph
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`set_random_seeds <kgate.utils.set_random_seeds>`
   - ```{autodoc2-docstring} kgate.utils.set_random_seeds
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`compute_triplet_proportions <kgate.utils.compute_triplet_proportions>`
   - ```{autodoc2-docstring} kgate.utils.compute_triplet_proportions
-    :parser: docstrings_parser
-    :summary:
-    ```
-* - {py:obj}`concat_kgs <kgate.utils.concat_kgs>`
-  - ```{autodoc2-docstring} kgate.utils.concat_kgs
-    :parser: docstrings_parser
-    :summary:
-    ```
-* - {py:obj}`count_triplets <kgate.utils.count_triplets>`
-  - ```{autodoc2-docstring} kgate.utils.count_triplets
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`find_best_model <kgate.utils.find_best_model>`
   - ```{autodoc2-docstring} kgate.utils.find_best_model
-    :parser: docstrings_parser
-    :summary:
-    ```
-* - {py:obj}`initialize_embedding <kgate.utils.initialize_embedding>`
-  - ```{autodoc2-docstring} kgate.utils.initialize_embedding
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`read_train_metrics <kgate.utils.read_train_metrics>`
   - ```{autodoc2-docstring} kgate.utils.read_train_metrics
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`plot_learning_curves <kgate.utils.plot_learning_curves>`
   - ```{autodoc2-docstring} kgate.utils.plot_learning_curves
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`filter_scores <kgate.utils.filter_scores>`
   - ```{autodoc2-docstring} kgate.utils.filter_scores
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`merge_kg <kgate.utils.merge_kg>`
   - ```{autodoc2-docstring} kgate.utils.merge_kg
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`get_dictionary_mapping <kgate.utils.get_dictionary_mapping>`
   - ```{autodoc2-docstring} kgate.utils.get_dictionary_mapping
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`get_average_heads_per_tail <kgate.utils.get_average_heads_per_tail>`
   - ```{autodoc2-docstring} kgate.utils.get_average_heads_per_tail
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`get_average_tails_per_head <kgate.utils.get_average_tails_per_head>`
   - ```{autodoc2-docstring} kgate.utils.get_average_tails_per_head
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 * - {py:obj}`get_bernoulli_probabilities <kgate.utils.get_bernoulli_probabilities>`
   - ```{autodoc2-docstring} kgate.utils.get_bernoulli_probabilities
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 ````
@@ -116,7 +101,7 @@
 
 * - {py:obj}`logging_level <kgate.utils.logging_level>`
   - ```{autodoc2-docstring} kgate.utils.logging_level
-    :parser: docstrings_parser
+    :parser: myst
     :summary:
     ```
 ````
@@ -129,7 +114,7 @@
    None
 
 ```{autodoc2-docstring} kgate.utils.logging_level
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -138,7 +123,7 @@
 :canonical: kgate.utils.parse_config
 
 ```{autodoc2-docstring} kgate.utils.parse_config
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -146,7 +131,7 @@
 :canonical: kgate.utils.set_config_key
 
 ```{autodoc2-docstring} kgate.utils.set_config_key
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -154,15 +139,15 @@
 :canonical: kgate.utils.save_config
 
 ```{autodoc2-docstring} kgate.utils.save_config
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
-````{py:function} load_knowledge_graph(pickle_filename: pathlib.Path) -> typing.Tuple[kgate.knowledgegraph.KnowledgeGraph, kgate.knowledgegraph.KnowledgeGraph, kgate.knowledgegraph.KnowledgeGraph]
+````{py:function} load_knowledge_graph(pickle_filename: pathlib.Path) -> kgate.knowledgegraph.KnowledgeGraph
 :canonical: kgate.utils.load_knowledge_graph
 
 ```{autodoc2-docstring} kgate.utils.load_knowledge_graph
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -170,31 +155,15 @@
 :canonical: kgate.utils.set_random_seeds
 
 ```{autodoc2-docstring} kgate.utils.set_random_seeds
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
-````{py:function} compute_triplet_proportions(kg_train: kgate.knowledgegraph.KnowledgeGraph, kg_test: kgate.knowledgegraph.KnowledgeGraph, kg_validation: kgate.knowledgegraph.KnowledgeGraph) -> dict
+````{py:function} compute_triplet_proportions(knowledge_graph: kgate.knowledgegraph.KnowledgeGraph) -> dict
 :canonical: kgate.utils.compute_triplet_proportions
 
 ```{autodoc2-docstring} kgate.utils.compute_triplet_proportions
-:parser: docstrings_parser
-```
-````
-
-````{py:function} concat_kgs(kg_train: kgate.knowledgegraph.KnowledgeGraph, kg_validation: kgate.knowledgegraph.KnowledgeGraph, kg_test: kgate.knowledgegraph.KnowledgeGraph) -> typing.Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-:canonical: kgate.utils.concat_kgs
-
-```{autodoc2-docstring} kgate.utils.concat_kgs
-:parser: docstrings_parser
-```
-````
-
-````{py:function} count_triplets(kg1: kgate.knowledgegraph.KnowledgeGraph, kg2: kgate.knowledgegraph.KnowledgeGraph, duplicates: typing.List[typing.Tuple[int, int]], reverse_duplicates: typing.List[typing.Tuple[int, int]]) -> typing.Tuple[int, int]
-:canonical: kgate.utils.count_triplets
-
-```{autodoc2-docstring} kgate.utils.count_triplets
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -202,15 +171,7 @@
 :canonical: kgate.utils.find_best_model
 
 ```{autodoc2-docstring} kgate.utils.find_best_model
-:parser: docstrings_parser
-```
-````
-
-````{py:function} initialize_embedding(embedding_count: int, embedding_dimensions: int, device: str = 'cpu') -> torch.nn.Embedding
-:canonical: kgate.utils.initialize_embedding
-
-```{autodoc2-docstring} kgate.utils.initialize_embedding
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -218,7 +179,7 @@
 :canonical: kgate.utils.read_train_metrics
 
 ```{autodoc2-docstring} kgate.utils.read_train_metrics
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -226,7 +187,7 @@
 :canonical: kgate.utils.plot_learning_curves
 
 ```{autodoc2-docstring} kgate.utils.plot_learning_curves
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -234,7 +195,7 @@
 :canonical: kgate.utils.filter_scores
 
 ```{autodoc2-docstring} kgate.utils.filter_scores
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -242,7 +203,7 @@
 :canonical: kgate.utils.merge_kg
 
 ```{autodoc2-docstring} kgate.utils.merge_kg
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -250,7 +211,7 @@
 :canonical: kgate.utils.get_dictionary_mapping
 
 ```{autodoc2-docstring} kgate.utils.get_dictionary_mapping
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -258,7 +219,7 @@
 :canonical: kgate.utils.get_average_heads_per_tail
 
 ```{autodoc2-docstring} kgate.utils.get_average_heads_per_tail
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -266,7 +227,7 @@
 :canonical: kgate.utils.get_average_tails_per_head
 
 ```{autodoc2-docstring} kgate.utils.get_average_tails_per_head
-:parser: docstrings_parser
+:parser: myst
 ```
 ````
 
@@ -274,6 +235,6 @@
 :canonical: kgate.utils.get_bernoulli_probabilities
 
 ```{autodoc2-docstring} kgate.utils.get_bernoulli_probabilities
-:parser: docstrings_parser
+:parser: myst
 ```
 ````

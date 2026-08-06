@@ -4,7 +4,7 @@
 ```
 
 ```{autodoc2-docstring} kgate
-:parser: docstrings_parser
+:parser: myst
 :allowtitles:
 ```
 
@@ -23,15 +23,17 @@ kgate.decoders
 :titlesonly:
 :maxdepth: 1
 
-kgate.cli
-kgate.encoders
-kgate.grid_search
-kgate.data_leakage
-kgate.architect
-kgate.utils
-kgate.samplers
-kgate.knowledgegraph
 kgate.evaluators
+kgate.samplers
+kgate.initializers
+kgate.data_leakage
+kgate.knowledgegraph
+kgate.grid_search
+kgate.architect
+kgate.cli
 kgate.preprocessing
+kgate.datasets
 kgate.inference
+kgate.utils
+kgate.encoders
 ```

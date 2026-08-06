@@ -24,17 +24,17 @@ class Initializer:
         
         Arguments
         ---------
-        sample_count: int
+        **sample_count** *(int)*
             Number of nodes/edges in the embedding.
-        embedding_dimensions: int
+        **embedding_dimensions** *(int)*
             Dimensions of embeddings.
-        device: torch.device or str, default to "cpu"
+        **device** *(torch.device or str, default = "cpu")*
             Indicate if data should be sent to GPU or CPU.
             GPU is referenced to as Cuda.
             
         Returns
         -------
-        embedding: nn.Embedding
+        **embedding** *(nn.Embedding)*
             Embedding object with given parameters.
         
         """
@@ -58,27 +58,26 @@ class Initializer:
 
         Arguments
         ---------
-        knowledge_graph: KnowledgeGraph
+        **knowledge_graph** *(KnowledgeGraph)*
             The knowledge graph for which the embeddings are initialized.
-        node_embedding_dimensions: int
+        **node_embedding_dimensions** *(int)*
             The embedding dimensions of the nodes.
-        edge_embedding_dimensions: int
+        **edge_embedding_dimensions** *(int)*
             The embedding dimensions of the edges. For most models, this is the same as above.
-        device: torch.device or str, optional, defaults to "cpu"
+        **device** *(torch.device or str, optional, defaults = "cpu")*
             The PyTorch device where the embeddings should be created in.
-        inplace: bool, optional, defaults to False
+        **inplace** *(bool, optional, defaults = False)*
             Whether the embeddings should be returned or directly applied to the knowledge graph.
 
         Returns
         -------
         Only if inplace = False
-        node_embeddings: nn.ParameterList
+        **node_embeddings** *(nn.ParameterList)*
             The generated node embeddings
-        edge_embeddings: nn.Parameter
+        **edge_embeddings** *(nn.Parameter)*
             The generated edge embeddings
         """
         node_embeddings = nn.ParameterList()
-        index_to_node_type = {value: key for key,value in knowledge_graph.node_type_to_index.items()}
         for node_type in knowledge_graph.node_type_to_global:
             node_count = knowledge_graph.node_type_to_global[node_type].size(0)
 
@@ -100,6 +99,50 @@ class FeatureInitializer(Initializer):
         self.node_features = node_features
         self.edge_features = edge_features
 
+    def initialize_embeddings(  self,
+                                features: torch.Tensor,
+                                knowledge_graph: KnowledgeGraph,
+                                node_type: str,
+                                device: torch.device | str) -> nn.Parameter:
+        """
+        Initialize the embeddings of a node type given a set of input features.
+
+        Arguments
+        ---------
+        **features** *(torch.Tensor)*
+        : The feature vector. Its shape must match the node count of the node_type.
+
+        **knowledge_graph** *(KnowledgeGraph)*
+        : The knowledge graph containing the embeddings to be initialized.
+
+        **node_type** *(str)*
+        : The name of the node_type corresponding to the features.
+
+        **device** *(torch.device or str, optional, default = "cpu")**
+        : The PyTorch device where the embeddings should be created in.
+
+        Returns
+        -------
+        **embeddings** *(nn.Parameter)*
+        : The embedding vector
+        """
+        node_count = knowledge_graph.node_type_to_global[node_type].size(0)
+        assert features.shape[0] == node_count, f"The length of the given attribute ({features.shape[0]}) must match the number of nodes of this type ({node_count})."
+        input_features = torch.empty((node_count, features.shape[1]), dtype = torch.float, device = device)
+        
+        index_to_node_type = {value: key for key,value in knowledge_graph.node_type_to_index.items()}
+
+        for node in features.index:
+            node_index = knowledge_graph.node_to_index[node]
+            node_type_index = knowledge_graph.node_types[node_index]
+            local_index = knowledge_graph.global_to_local_indices[node_index]
+            assert node_type_index == knowledge_graph.node_type_to_index[node_type], f"The node {node} is given as {node_type} but registered as {index_to_node_type[str(node_type_index)]} in the KG."
+
+            input_features[local_index] = torch.tensor(features.loc[node], dtype = torch.float, device = device)
+
+        return nn.Parameter(input_features)
+        
+
     def initialize_all_embeddings(self,
                                     knowledge_graph: KnowledgeGraph,
                                     *,
@@ -116,48 +159,39 @@ class FeatureInitializer(Initializer):
 
         Arguments
         ---------
-        knowledge_graph: KnowledgeGraph
+        **knowledge_graph** *(KnowledgeGraph)*
             The knowledge graph for which the embeddings are initialized.
-        node_embedding_dimensions: int
+        **node_embedding_dimensions** *(int)*
             The embedding dimensions of the nodes.
-        edge_embedding_dimensions: int
+        **edge_embedding_dimensions** *(int)*
             The embedding dimensions of the edges. For most models, this is the same as above.
-        device: torch.device or str, optional, defaults to "cpu"
+        **device** *(torch.device or str, optional, defaults = "cpu")*
             The PyTorch device where the embeddings should be created in.
-        inplace: bool, optional, defaults to False
+        **inplace** *(bool, optional, defaults = False)*
             Whether the embeddings should be returned or directly applied to the knowledge graph.
 
         Returns
         -------
         Only if inplace = False
-        node_embeddings: nn.ParameterList
+        **node_embeddings** *(nn.ParameterList)*
             The generated node embeddings
-        edge_embeddings: nn.Parameter
+        **edge_embeddings** *(nn.Parameter)*
             The generated edge embeddings
         """
         node_embeddings = nn.ParameterList()
-        index_to_node_type = {value: key for key,value in knowledge_graph.node_type_to_index.items()}
+        
         for node_type in knowledge_graph.node_type_to_global:
             node_count = knowledge_graph.node_type_to_global[node_type].size(0)
 
             if node_type in self.node_features:
                 current_feature: pd.DataFrame = self.node_features[node_type]
                 
-                assert current_feature.shape[0] == node_count, f"The length of the given attribute ({current_feature.shape[0]}) must match the number of nodes of this type ({node_count})."
-                input_features = torch.empty((node_count, current_feature.shape[1]), dtype = torch.float, device = device)
+                node_type_embeddings = self.initialize_embeddings(current_feature, knowledge_graph, node_type, device = device)
                 
-                for node in current_feature.index:
-                    node_index = knowledge_graph.node_to_index[node]
-                    node_type_index = knowledge_graph.node_types[node_index]
-                    local_index = knowledge_graph.global_to_local_indices[node_index]
-                    assert node_type_index == knowledge_graph.node_type_to_index[node_type], f"The node {node} is given as {node_type} but registered as {index_to_node_type[str(node_type_index)]} in the KG."
-
-                    input_features[local_index] = torch.tensor(current_feature.loc[node], dtype = torch.float, device = device)
-                
-                node_embeddings.append(nn.Parameter(input_features))
+                node_embeddings.append(nn.Parameter(node_type_embeddings))
             else:
                 logging.warning(f"Node type {node_type} was not given any feature, will initialize random embeddings.")
-                embeddings: nn.Parameter = self.initialize_embedding(node_count, node_embedding_dimensions, device)
+                embeddings: nn.Parameter = super().initialize_embedding(node_count, node_embedding_dimensions, device)
                 node_embeddings.append(embeddings)
 
         if self.edge_features is not None:

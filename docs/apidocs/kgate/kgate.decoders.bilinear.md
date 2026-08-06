@@ -4,7 +4,7 @@
 ```
 
 ```{autodoc2-docstring} kgate.decoders.bilinear
-:parser: docstrings_parser
+:parser: myst
 :allowtitles:
 ```
 
@@ -38,7 +38,7 @@ Bases: {py:obj}`torch.nn.Module`
 :abstractmethod:
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.BilinearDecoder.score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -47,7 +47,7 @@ Bases: {py:obj}`torch.nn.Module`
 :canonical: kgate.decoders.bilinear.BilinearDecoder.normalize_parameters
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.BilinearDecoder.normalize_parameters
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -56,7 +56,7 @@ Bases: {py:obj}`torch.nn.Module`
 :canonical: kgate.decoders.bilinear.BilinearDecoder.get_embeddings
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.BilinearDecoder.get_embeddings
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -66,7 +66,7 @@ Bases: {py:obj}`torch.nn.Module`
 :abstractmethod:
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.BilinearDecoder.inference_prepare_candidates
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -76,7 +76,7 @@ Bases: {py:obj}`torch.nn.Module`
 :abstractmethod:
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.BilinearDecoder.inference_score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -92,7 +92,7 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.RESCAL.score
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.RESCAL.score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -101,7 +101,7 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.RESCAL.normalize_parameters
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.RESCAL.normalize_parameters
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -110,16 +110,16 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.RESCAL.get_embeddings
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.RESCAL.get_embeddings
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} inference_prepare_candidates(*, node_embeddings: torch.Tensor, head_indices: torch.Tensor, tail_indices: torch.Tensor, edge_indices: torch.Tensor, node_inference: bool = True) -> typing.Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+````{py:method} inference_prepare_candidates(*, node_embeddings: torch.Tensor, edge_embeddings: torch.Tensor, head_indices: torch.Tensor, tail_indices: torch.Tensor, edge_indices: torch.Tensor, node_inference: bool = True) -> typing.Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 :canonical: kgate.decoders.bilinear.RESCAL.inference_prepare_candidates
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.RESCAL.inference_prepare_candidates
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -128,7 +128,7 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.RESCAL.inference_score
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.RESCAL.inference_score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -144,7 +144,7 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.DistMult.score
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.DistMult.score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -153,7 +153,7 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.DistMult.normalize_parameters
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.DistMult.normalize_parameters
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -162,7 +162,7 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.DistMult.inference_prepare_candidates
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.DistMult.inference_prepare_candidates
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -171,7 +171,7 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.DistMult.inference_score
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.DistMult.inference_score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -187,7 +187,7 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.ComplEx.score
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.ComplEx.score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -196,7 +196,7 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.ComplEx.inference_prepare_candidates
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.ComplEx.inference_prepare_candidates
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -205,7 +205,7 @@ Bases: {py:obj}`kgate.decoders.bilinear.BilinearDecoder`
 :canonical: kgate.decoders.bilinear.ComplEx.inference_score
 
 ```{autodoc2-docstring} kgate.decoders.bilinear.ComplEx.inference_score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````

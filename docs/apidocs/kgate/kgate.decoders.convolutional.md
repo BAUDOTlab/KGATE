@@ -4,7 +4,7 @@
 ```
 
 ```{autodoc2-docstring} kgate.decoders.convolutional
-:parser: docstrings_parser
+:parser: myst
 :allowtitles:
 ```
 
@@ -34,16 +34,16 @@ Bases: {py:obj}`torch.nn.Module`
 :abstractmethod:
 
 ```{autodoc2-docstring} kgate.decoders.convolutional.ConvolutionalDecoder.score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} normalize_parameters(node_embeddings: torch.nn.ParameterList, edge_embeddings: torch.nn.Embedding) -> typing.Tuple[torch.nn.ParameterList, torch.nn.Embedding] | None
+````{py:method} normalize_parameters(node_embeddings: torch.nn.ParameterList, edge_embeddings: torch.nn.Parameter) -> typing.Tuple[torch.nn.ParameterList, torch.nn.Parameter] | None
 :canonical: kgate.decoders.convolutional.ConvolutionalDecoder.normalize_parameters
 
 ```{autodoc2-docstring} kgate.decoders.convolutional.ConvolutionalDecoder.normalize_parameters
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -52,17 +52,17 @@ Bases: {py:obj}`torch.nn.Module`
 :canonical: kgate.decoders.convolutional.ConvolutionalDecoder.get_embeddings
 
 ```{autodoc2-docstring} kgate.decoders.convolutional.ConvolutionalDecoder.get_embeddings
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} inference_prepare_candidates(*, head_indices: torch.Tensor, tail_indices: torch.Tensor, edge_indices: torch.Tensor, node_embeddings: torch.Tensor, edge_embeddings: torch.nn.Embedding, node_inference: bool = True) -> typing.Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+````{py:method} inference_prepare_candidates(*, head_indices: torch.Tensor, tail_indices: torch.Tensor, edge_indices: torch.Tensor, node_embeddings: torch.Tensor, edge_embeddings: torch.nn.Parameter, node_inference: bool = True) -> typing.Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 :canonical: kgate.decoders.convolutional.ConvolutionalDecoder.inference_prepare_candidates
 :abstractmethod:
 
 ```{autodoc2-docstring} kgate.decoders.convolutional.ConvolutionalDecoder.inference_prepare_candidates
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -72,7 +72,7 @@ Bases: {py:obj}`torch.nn.Module`
 :abstractmethod:
 
 ```{autodoc2-docstring} kgate.decoders.convolutional.ConvolutionalDecoder.inference_score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -88,16 +88,16 @@ Bases: {py:obj}`kgate.decoders.convolutional.ConvolutionalDecoder`
 :canonical: kgate.decoders.convolutional.ConvKB.score
 
 ```{autodoc2-docstring} kgate.decoders.convolutional.ConvKB.score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
 
-````{py:method} inference_prepare_candidates(head_indices: torch.Tensor, tail_indices: torch.Tensor, edge_indices: torch.Tensor, node_embeddings: torch.Tensor, edge_embeddings: torch.nn.Embedding, node_inference: bool = True) -> typing.Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+````{py:method} inference_prepare_candidates(head_indices: torch.Tensor, tail_indices: torch.Tensor, edge_indices: torch.Tensor, node_embeddings: torch.Tensor, edge_embeddings: torch.nn.Parameter, node_inference: bool = True) -> typing.Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 :canonical: kgate.decoders.convolutional.ConvKB.inference_prepare_candidates
 
 ```{autodoc2-docstring} kgate.decoders.convolutional.ConvKB.inference_prepare_candidates
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
@@ -106,7 +106,7 @@ Bases: {py:obj}`kgate.decoders.convolutional.ConvolutionalDecoder`
 :canonical: kgate.decoders.convolutional.ConvKB.inference_score
 
 ```{autodoc2-docstring} kgate.decoders.convolutional.ConvKB.inference_score
-:parser: docstrings_parser
+:parser: myst
 ```
 
 ````
