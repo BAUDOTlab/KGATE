@@ -99,7 +99,7 @@ class FeatureInitializer(Initializer):
         self.node_features = node_features
         self.edge_features = edge_features
 
-    def initialize_embeddings(  self,
+    def initialize_embedding(  self,
                                 features: torch.Tensor,
                                 knowledge_graph: KnowledgeGraph,
                                 node_type: str,
@@ -291,7 +291,7 @@ class Node2VecInitializer(Initializer):
         self.optimizer = torch.optim.SparseAdam(list(self.model.parameters()), lr = 0.01)
     
     
-    def generate_all_embeddings(self,
+    def initialize_all_embeddings(self,
                                 knowledge_graph: KnowledgeGraph,
                                 *,
                                 device: torch.device | str = "cpu",
