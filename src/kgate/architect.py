@@ -1400,7 +1400,7 @@ class Architect(Module):
                 all_embeddings
             )
         else:
-            node_embeddings = self.knowledge_graph.node_embeddings[0][batch]
+            node_embeddings = self.knowledge_graph.node_embeddings[0][batch[:2]]
 
         return node_embeddings
 
@@ -1482,7 +1482,7 @@ class Architect(Module):
         negative_triplet_count = negative_triplets_batch.size(1) // positive_triplets_batch.size(1)
         positive_score = positive_score.repeat(negative_triplet_count)
 
-        negative_score: Tensor = self.scoring_function(negative_triplets_batch, node_embeddings)
+        negative_score: Tensor = self.scoring_function(negative_triplets_batch, node_embeddings.repeat(1, negative_triplet_count, 1))
 
         return positive_score, negative_score
 
@@ -1520,9 +1520,9 @@ class Architect(Module):
         """
         head_indices, tail_indices, edge_indices = batch[0], batch[1], batch[2]
         
-        head_embeddings = node_embeddings[head_indices]
+        head_embeddings = node_embeddings[0]
         edge_embeddings = self.knowledge_graph.edge_embeddings[edge_indices]  # Edges are unchanged
-        tail_embeddings = node_embeddings[tail_indices]
+        tail_embeddings = node_embeddings[1]
 
         return self.decoder.score(  head_embeddings = head_embeddings,
                                     tail_embeddings = tail_embeddings,
