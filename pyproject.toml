@@ -1,6 +1,6 @@
 [project]
 name = "KGATE"
-version = "0.3.2"
+version = "0.4.0"
 
 description = "Knowledge Graph Autoencoder Training Environment, bridging PyG encoders and TorchKGE decoders."
 authors = [
