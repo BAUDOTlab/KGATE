@@ -1400,7 +1400,7 @@ class Architect(Module):
                 all_embeddings
             )
         else:
-            node_embeddings = self.knowledge_graph.node_embeddings[0][batch[:2]]
+            node_embeddings = self.knowledge_graph.node_embeddings[0]
 
         return node_embeddings
 
@@ -1430,9 +1430,12 @@ class Architect(Module):
         """
         batch = batch.T.to(self.device)
 
-        node_embeddings = self.get_batch_embeddings(self.knowledge_graph, batch, self.knowledge_graph.train_mask)
         negative_batch = self.sampler.corrupt_batch(batch)
         negative_batch = negative_batch.to(self.device)
+
+        full_batch_indices = torch.cat((batch, negative_batch), dim=1)
+        node_embeddings = self.get_batch_embeddings(self.knowledge_graph, full_batch_indices, self.knowledge_graph.train_mask)
+        
         
         self.optimizer.zero_grad()
 
@@ -1482,7 +1485,7 @@ class Architect(Module):
         negative_triplet_count = negative_triplets_batch.size(1) // positive_triplets_batch.size(1)
         positive_score = positive_score.repeat(negative_triplet_count)
 
-        negative_score: Tensor = self.scoring_function(negative_triplets_batch, node_embeddings.repeat(1, negative_triplet_count, 1))
+        negative_score: Tensor = self.scoring_function(negative_triplets_batch, node_embeddings)
 
         return positive_score, negative_score
 
@@ -1520,9 +1523,9 @@ class Architect(Module):
         """
         head_indices, tail_indices, edge_indices = batch[0], batch[1], batch[2]
         
-        head_embeddings = node_embeddings[0]
+        head_embeddings = node_embeddings[head_indices]
         edge_embeddings = self.knowledge_graph.edge_embeddings[edge_indices]  # Edges are unchanged
-        tail_embeddings = node_embeddings[1]
+        tail_embeddings = node_embeddings[tail_indices]
 
         return self.decoder.score(  head_embeddings = head_embeddings,
                                     tail_embeddings = tail_embeddings,
