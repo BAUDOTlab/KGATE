@@ -11,43 +11,50 @@ import shutil
 import warnings
 from collections.abc import Callable
 from glob import glob
-from inspect import signature
 from pathlib import Path
-from typing import Tuple, Dict, List, Any, Set, Literal
-from collections.abc import Callable
+from typing import Any, Dict, List, Literal, Set, Tuple
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import tomli_w
-
-from torchkge import KnowledgeGraph
-from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
-
 import torch
-from torch import tensor, Tensor
-from torch.nn import Module
-import torch.optim as optim
-
-from torch.utils.data import DataLoader, Subset
-
-from ignite.engine import Events, Engine
-from ignite.handlers import EarlyStopping, ModelCheckpoint, Checkpoint, DiskSaver, ProgressBar
+from ignite.engine import Engine, Events
+from ignite.handlers import (
+    Checkpoint,
+    DiskSaver,
+    EarlyStopping,
+    ModelCheckpoint,
+    ProgressBar,
+)
 from ignite.metrics import RunningAverage
+from torch import Tensor, optim, tensor
+from torch.nn import Module
+from torch.utils.data import DataLoader, Subset
+from torchkge.utils import BinaryCrossEntropyLoss, MarginLoss
 
-
-from torchkge.utils import MarginLoss, BinaryCrossEntropyLoss
-
-from .data_leakage import permute_tails
-from .datasets import load_FB15k_237, load_WN18RR, load_PrimeKG
-from .initializers import *
+from .datasets import load_FB15k_237, load_PrimeKG, load_WN18RR
 from .decoders import *
 from .encoders import *
 from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
-from .inference import NodeInference, EdgeInference
+from .inference import EdgeInference, NodeInference
+from .initializers import *
 from .knowledgegraph import KnowledgeGraph
-from .preprocessing import prepare_knowledge_graph, SUPPORTED_SEPARATORS
-from .samplers import NegativeSampler, PositionalNegativeSampler, BernoulliNegativeSampler, UniformNegativeSampler, MixedNegativeSampler
-from .utils import parse_config, load_knowledge_graph, set_random_seeds, find_best_model, merge_kg, plot_learning_curves, save_config
+from .preprocessing import SUPPORTED_SEPARATORS, prepare_knowledge_graph
+from .samplers import (
+    BernoulliNegativeSampler,
+    MixedNegativeSampler,
+    NegativeSampler,
+    PositionalNegativeSampler,
+    UniformNegativeSampler,
+)
+from .utils import (
+    find_best_model,
+    load_knowledge_graph,
+    parse_config,
+    plot_learning_curves,
+    save_config,
+    set_random_seeds,
+)
 
 # Configure logging
 logging.captureWarnings(True)
@@ -557,19 +564,22 @@ class Architect(Module):
             case "TransH":
                 decoder = TransH(embedding_dimensions = self.node_embedding_dimensions,
                                 node_count = self.knowledge_graph.node_count,
-                                edge_count = self.knowledge_graph.edge_count)
+                                edge_count = self.knowledge_graph.edge_count,
+                                device = self.device)
                 decoder_loss = MarginLoss(margin)
             case "TransR":
                 decoder = TransR(node_embedding_dimensions = self.node_embedding_dimensions,
                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
                                 node_count = self.knowledge_graph.node_count, 
-                                edge_count = self.knowledge_graph.edge_count)
+                                edge_count = self.knowledge_graph.edge_count,
+                                device = self.device)
                 decoder_loss = MarginLoss(margin)
             case "TransD":
                 decoder = TransD(node_embedding_dimensions = self.node_embedding_dimensions,
                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
                                 node_count = self.knowledge_graph.node_count, 
-                                edge_count = self.knowledge_graph.edge_count)
+                                edge_count = self.knowledge_graph.edge_count,
+                                device = self.device)
                 decoder_loss = MarginLoss(margin)
             case "TorusE":
                 decoder = TorusE(dissimilarity_type = dissimilarity)
@@ -577,7 +587,8 @@ class Architect(Module):
             case "RESCAL":
                 decoder = RESCAL(embedding_dimensions = self.node_embedding_dimensions,
                                 node_count = self.knowledge_graph.node_count,
-                                edge_count = self.knowledge_graph.edge_count)
+                                edge_count = self.knowledge_graph.edge_count,
+                                device = self.device)
                 decoder_loss = BinaryCrossEntropyLoss()
             case "DistMult":
                 decoder = DistMult(embedding_dimensions = self.node_embedding_dimensions,

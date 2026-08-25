@@ -10,8 +10,6 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 The modifications are licensed under the BSD license according to the source license.
 """
 
-from typing import Tuple, Dict
-
 from torch import Tensor, cat
 import torch.nn as nn
 from torch.nn import Module
@@ -95,7 +93,7 @@ class ConvolutionalDecoder(Module):
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
                             edge_embeddings: nn.Parameter
-                            ) -> Tuple[nn.ParameterList, nn.Parameter] | None:
+                            ) -> tuple[nn.ParameterList, nn.Parameter] | None:
         """
         Interface method for the decoder's parameters normalization function.
 
@@ -108,8 +106,8 @@ class ConvolutionalDecoder(Module):
         : The node embedding as a ParameterList containing one Parameter by node type, 
         or only one if there is no node type.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
-        : The edge embedding as a nn.Embedding containing one Parameter by edge type, 
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        : The edge embedding as a nn.Parameter containing one Parameter by edge type, 
         or only one if there is no node type.
         
         Returns
@@ -118,7 +116,7 @@ class ConvolutionalDecoder(Module):
         **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
         : The normalized node embedding object.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
         : The normalized edge embedding object.
         
         Notes
@@ -134,7 +132,7 @@ class ConvolutionalDecoder(Module):
         return None
 
 
-    def get_embeddings(self) -> Dict[str, Tensor] | None:
+    def get_embeddings(self) -> dict[str, Tensor] | None:
         """
         Get the decoder-specific embeddings.
 
@@ -166,7 +164,7 @@ class ConvolutionalDecoder(Module):
                                     node_embeddings: Tensor, 
                                     edge_embeddings: nn.Parameter,
                                     node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings 
         and edge embeddings. The output will be fed to the 
@@ -192,7 +190,7 @@ class ConvolutionalDecoder(Module):
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only)*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only)*
         : Embeddings of all edges.
         
         **node_inference** *(bool, optional, default to True, keyword-only)*
@@ -394,14 +392,14 @@ class ConvKB(ConvolutionalDecoder):
         return self.output(convolution)[:, 1]    
     
     
-    def inference_prepare_candidates(self, 
+    def inference_prepare_candidates(self,
                                     head_indices: Tensor,
                                     tail_indices: Tensor, 
                                     edge_indices: Tensor, 
                                     node_embeddings: Tensor,
                                     edge_embeddings: nn.Parameter,
                                     node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings 
         and edge embeddings. The output will be fed to the 
@@ -422,7 +420,7 @@ class ConvKB(ConvolutionalDecoder):
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only)*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions], keyword-only)*
         : Embeddings of all edges.
         
         **node_inference** *(bool, optional, default to True, keyword-only)*
@@ -449,14 +447,14 @@ class ConvKB(ConvolutionalDecoder):
         # Get head, tail and edge embeddings
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
-        edge_embeddings_inferred = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings[edge_indices]
 
         if node_inference:
             # Prepare candidates for every node
             candidates = node_embeddings
         else:
             # Prepare candidates for every edge
-            candidates = edge_embeddings.weight.data
+            candidates = edge_embeddings
         
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         candidates = candidates.view(batch_size, -1, 1, self.embedding_dimensions)

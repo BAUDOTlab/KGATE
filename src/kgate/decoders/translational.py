@@ -11,10 +11,11 @@ The modifications are licensed under the BSD license according to the source lic
 
 """
 
-from typing import Tuple, Dict, Literal
+from typing import Literal
 
 from tqdm import tqdm
 
+import torch
 from torch import nn, tensor, matmul, Tensor, empty
 from torch.cuda import empty_cache
 from torch.nn.functional import normalize
@@ -118,8 +119,8 @@ class TranslationalDecoder(Module):
     #TODO: either remove completely from the interface or add a normalisation flag
     # def normalize_parameters(self,
     #                         node_embeddings: nn.ParameterList,
-    #                         edge_embeddings: nn.Embedding
-    #                         ) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+    #                         edge_embeddings: nn.Parameter
+    #                         ) -> tuple[nn.ParameterList, nn.Parameter] | None:
     #     """
     #     Interface method for the decoder's parameters normalization function.
 
@@ -132,8 +133,8 @@ class TranslationalDecoder(Module):
         # : The node embedding as a ParameterList containing one Parameter by node type, 
         # or only one if there is no node type.
         
-        # **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
-        # : The edge embedding as a nn.Embedding containing one Parameter by edge type, 
+        # **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        # : The edge embedding as a nn.Parameter containing one Parameter by edge type, 
         # or only one if there is no node type.
         
         # Returns
@@ -142,7 +143,7 @@ class TranslationalDecoder(Module):
         # **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
         # : The normalized node embedding object.
         
-        # **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        # **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
         # : The normalized edge embedding object.
         
         # Notes
@@ -158,7 +159,7 @@ class TranslationalDecoder(Module):
     #     return None
 
 
-    def get_embeddings(self) -> Dict[str, Tensor] | None:
+    def get_embeddings(self) -> dict[str, Tensor] | None:
         """
         Get the decoder-specific embeddings.
 
@@ -166,7 +167,7 @@ class TranslationalDecoder(Module):
         
         Returns
         -------
-        **embeddings** *(Dict[str, torch.Tensor] or None)*
+        **embeddings** *(dict[str, torch.Tensor] or None)*
         : Decoder-specific embeddings, or None.
         
         Notes
@@ -190,7 +191,7 @@ class TranslationalDecoder(Module):
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings 
         and edge embeddings. The output will be fed to the 
@@ -207,7 +208,7 @@ class TranslationalDecoder(Module):
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
         : Embeddings of all edges.
         
         **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
@@ -423,7 +424,7 @@ class TransE(TranslationalDecoder):
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
                             edge_embeddings: nn.Parameter
-                            ) -> Tuple[nn.ParameterList, nn.Parameter]:
+                            ) -> tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the TransE model.
         
@@ -436,7 +437,7 @@ class TransE(TranslationalDecoder):
         : The node embedding as a ParameterList containing one Parameter by node type, 
         or only one if there is no node type.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
         : The edge embeddings, which are not normalized as per the paper's recommendation.
         
         Returns
@@ -445,7 +446,7 @@ class TransE(TranslationalDecoder):
         **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
         : The normalized node embedding object.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
         : The untouched edge embedding object.
         
         """
@@ -463,7 +464,7 @@ class TransE(TranslationalDecoder):
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings 
         and edge embeddings. The output will be fed to the 
@@ -475,7 +476,7 @@ class TransE(TranslationalDecoder):
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
         : Embeddings of all edges.
         
         **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
@@ -530,7 +531,8 @@ class TransH(TranslationalDecoder):
     def __init__(self,
                 embedding_dimensions: int,
                 node_count: int,
-                edge_count: int):
+                edge_count: int,
+                device: torch.device):
         """
         Implementation of TransH model detailed in the paper referenced below.
 
@@ -559,10 +561,13 @@ class TransH(TranslationalDecoder):
         **embedding_dimensions** *(int)*
         : Dimensions of node and edge embeddings.
 
+        **device** *(torch.device)*
+        : The device of the decoder-specific embeddings. Must be the same as the knowledge graph embeddings.
+
         Attributes
         ----------
         
-        **normal_vector** *(torch.nn.Embedding, shape: [edge_count, embedding_dimensions])*
+        **normal_vector** *(torch.nn.Parameter, shape: [edge_count, embedding_dimensions])*
         : Normal vectors associated to each edge and used to compute the edge-specific hyperplanes nodes are projected on.
         : See paper for more details: https://www.aaai.org/ocs/index.php/AAAI/AAAI14/paper/view/8531
         : Initialized with Xavier uniform distribution and then normalized.
@@ -582,7 +587,11 @@ class TransH(TranslationalDecoder):
         """
         super().__init__()
         initializer = Initializer()
-        self.normal_vector = initializer.initialize_embedding(edge_count, embedding_dimensions)
+        self.normal_vector = initializer.initialize_embedding(
+                    edge_count, 
+                    embedding_dimensions, 
+                    device)
+        
         self.dissimilarity = l2_dissimilarity
 
         self.evaluated_projections = False
@@ -630,7 +639,7 @@ class TransH(TranslationalDecoder):
         head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
         self.evaluated_projections = False
-        normal_vector = normalize(self.normal_vector(edge_indices), p = 2, dim = 1)
+        normal_vector = normalize(self.normal_vector[edge_indices], p = 2, dim = 1)
         
         batch_score = - self.dissimilarity( self.project(head_normalized_embeddings, normal_vector) + edge_embeddings,
                                             self.project(tail_normalized_embeddings, normal_vector))
@@ -669,7 +678,7 @@ class TransH(TranslationalDecoder):
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
                             edge_embeddings: nn.Parameter
-                            ) -> Tuple[nn.ParameterList, nn.Parameter]:
+                            ) -> tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the TransH model.
         
@@ -683,8 +692,8 @@ class TransH(TranslationalDecoder):
         : The node embedding as a ParameterList containing one Parameter by node type,
         or only one if there is no node type.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
-        : The edge embedding as a nn.Embedding containing one Parameter by edge type,
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The edge embedding as a nn.Parameter containing one Parameter by edge type,
         or only one if there is no node type.
         
         Returns
@@ -693,31 +702,31 @@ class TransH(TranslationalDecoder):
         **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
         : The normalized node embedding object.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
         : The normalized edge embedding object.
     
         """
         for embedding in node_embeddings:
             embedding.data = normalize(embedding.data, p = 2, dim = 1)
         edge_embeddings.data = normalize(edge_embeddings.data, p = 2, dim = 1)
-        self.normal_vector.weight.data = normalize(self.normal_vector.weight.data, p = 2, dim = 1)
+        self.normal_vector = normalize(self.normal_vector, p = 2, dim = 1)
         
         return node_embeddings, edge_embeddings
 
 
-    def get_embeddings(self) -> Dict[str, Tensor]:
+    def get_embeddings(self) -> dict[str, Tensor]:
         """
         Return the embeddings of nodes and edges along with edge normal vectors.
 
         Returns
         -------
         
-        **embeddings** *(Dict[str, torch.Tensor])*
+        **embeddings** *(dict[str, torch.Tensor])*
         : Key: "normal_vector"
         : Value: tensors representing nodes and edges in current model
         
         """
-        return {"normal_vector": self.normal_vector.weight.data}
+        return {"normal_vector": self.normal_vector.data}
     
     
     def inference_prepare_candidates(self,
@@ -728,7 +737,7 @@ class TransH(TranslationalDecoder):
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings 
         and edge embeddings. The output will be fed to the 
@@ -740,7 +749,7 @@ class TransH(TranslationalDecoder):
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
         : Embeddings of all edges.
         
         **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
@@ -779,13 +788,13 @@ class TransH(TranslationalDecoder):
         edge_embeddings_inferred = edge_embeddings[edge_indices]
 
         if node_inference:
-            head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: [batch_size, self.embedding_dimensions]
-            tail_embeddings = self.projected_nodes[edge_indices, tail_indices]  # shape: [batch_size, self.embedding_dimensions]
-            candidates = self.projected_nodes[edge_indices]  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
+            head_embeddings = self.projected_nodes[edge_indices, head_indices]  # shape: [batch_size, embedding_dimensions]
+            tail_embeddings = self.projected_nodes[edge_indices, tail_indices]  # shape: [batch_size, embedding_dimensions]
+            candidates = self.projected_nodes[edge_indices]  # shape: [batch_size, edge_count, embedding_dimensions]
         else:
-            head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
-            tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
-            candidates = edge_embeddings.data.unsqueeze(0).expand(batch_size, self.edge_count, self.embedding_dimensions)  # shape: [batch_size, self.edge_count, self.embedding_dimensions]
+            head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: [batch_size, edge_count, embedding_dimensions]
+            tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: [batch_size, edge_count, embedding_dimensions]
+            candidates = edge_embeddings.data.unsqueeze(0).expand(batch_size, -1, -1)  # shape: [batch_size, edge_count, embedding_dimensions]
 
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
 
@@ -814,9 +823,9 @@ class TransH(TranslationalDecoder):
         if self.evaluated_projections:
             return
 
-        for i in tqdm(range(self.node_count), unit = "nodes", desc = "Projecting nodes"):
+        for i in tqdm(range(node_embeddings.size(0)), unit = "nodes", desc = "Projecting nodes"):
 
-            normal_vector = self.normal_vector.weight.data.view(self.edge_count, self.embedding_dimensions)
+            normal_vector = self.normal_vector.view(self.normal_vector.size(1), self.normal_vector.size(2)) # edge_count, embedding_dimensions
             mask = tensor([i], device = normal_vector.device).long()
 
             if normal_vector.is_cuda:
@@ -841,7 +850,8 @@ class TransR(TranslationalDecoder):
                 node_count: int,
                 edge_count: int,
                 node_embedding_dimensions: int,
-                edge_embedding_dimensions: int):
+                edge_embedding_dimensions: int,
+                device: torch.device):
         """
         Implementation of TransR model detailed in the paper referenced below.
 
@@ -875,6 +885,9 @@ class TransR(TranslationalDecoder):
         **edge_embedding_dimensions** *(int)*
         : Dimensions of edge embeddings.
 
+        **device** *(torch.device)*
+        : The device of the decoder-specific embeddings. Must be the same as the knowledge graph embeddings.
+
         Attributes
         ----------
         
@@ -890,7 +903,7 @@ class TransR(TranslationalDecoder):
         **edge_embedding_dimensions** *(int)*
         : Dimensions of edge embeddings.
         
-        **projection_matrix** *(torch.nn.Embedding, shape: [edge_count, edge_embedding_dimensions * node_embedding_dimensions])*
+        **projection_matrix** *(torch.nn.Parameter, shape: [edge_count, edge_embedding_dimensions * node_embedding_dimensions])*
         : Edge-specific projection matrices. See paper for more details.
         
         **dissimilarity** *(function described in `torchkge.utils.dissimilarities`)*
@@ -914,7 +927,10 @@ class TransR(TranslationalDecoder):
         self.edge_embedding_dimensions = edge_embedding_dimensions
 
         initializer = Initializer()
-        self.projection_matrix = initializer.initialize_embedding(node_count, edge_embedding_dimensions * node_embedding_dimensions)
+        self.projection_matrix = initializer.initialize_embedding(
+                        node_count, 
+                        edge_embedding_dimensions * node_embedding_dimensions, 
+                        device)
 
         self.dissimilarity = l2_dissimilarity
 
@@ -965,7 +981,7 @@ class TransR(TranslationalDecoder):
         self.evaluated_projections = False
         batch_size = head_normalized_embeddings.shape[0]
 
-        projection_matrix = self.projection_matrix(edge_indices).view(batch_size,
+        projection_matrix = self.projection_matrix[edge_indices].view(batch_size,
                                                             self.edge_embedding_dimensions,
                                                             self.node_embedding_dimensions)
         
@@ -1008,7 +1024,7 @@ class TransR(TranslationalDecoder):
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
                             edge_embeddings: nn.Parameter
-                            ) -> Tuple[nn.ParameterList, nn.Parameter]:
+                            ) -> tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the TransR model.
         
@@ -1022,7 +1038,7 @@ class TransR(TranslationalDecoder):
         : The node embedding as a ParameterList containing one Parameter by node type, 
         or only one if there is no node type.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
         : The edge embedding as a ParameterList containing one Parameter by edge type, 
         or only one if there is no node type.
         
@@ -1032,7 +1048,7 @@ class TransR(TranslationalDecoder):
         **node_embeddings** *(torch.nn.ParameterList, shape: [batch_size, node_embedding_dimensions])*
         : The normalized node embedding object.
         
-        **edge_embeddings** *(torch.nn.Embedding, shape: [batch_size, edge_embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, shape: [batch_size, edge_embedding_dimensions])*
         : The normalized edge embedding object.
         
         """
@@ -1044,19 +1060,19 @@ class TransR(TranslationalDecoder):
         return node_embeddings, edge_embeddings
     
     
-    def get_embeddings(self) -> Dict[str, Tensor]:
+    def get_embeddings(self) -> dict[str, Tensor]:
         """
         Return the embeddings of nodes and edges along with edge normal vectors.
 
         Returns
         -------
         
-        **embeddings** *(Dict[str, torch.Tensor])*
+        **embeddings** *(dict[str, torch.Tensor])*
         : Key: "projection_matrix"
         : Value: tensors representing nodes and edges in current model
             
         """
-        return {"projection_matrix": self.projection_matrix.weight.data.view(-1,
+        return {"projection_matrix": self.projection_matrix.data.view(-1,
                                                         self.edge_embedding_dimensions,
                                                         self.node_embedding_dimensions)}
     
@@ -1069,7 +1085,7 @@ class TransR(TranslationalDecoder):
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings 
         and edge embeddings. The output will be fed to the 
@@ -1081,7 +1097,7 @@ class TransR(TranslationalDecoder):
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
         : Embeddings of all edges.
         
         **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
@@ -1126,7 +1142,7 @@ class TransR(TranslationalDecoder):
         else:
             head_embeddings = self.projected_nodes[:, head_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
             tail_embeddings = self.projected_nodes[:, tail_indices].transpose(0, 1)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
-            candidates = edge_embeddings.data.unsqueeze(0).expand(batch_size, edge_embeddings.num_embeddings, edge_embeddings.embedding_dim)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
+            candidates = edge_embeddings.data.unsqueeze(0).expand(batch_size, -1, -1)  # shape: [batch_size, self.edge_count, self.edge_embedding_dimensions]
 
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
     
@@ -1155,8 +1171,8 @@ class TransR(TranslationalDecoder):
             return
 
         for i in tqdm(range(self.node_count), unit = "nodes", desc = "Projecting nodes"):
-            projection_matrices = self.projection_matrix.weight.data
-            projection_matrices = projection_matrices.view(self.edge_count, self.edge_embedding_dimensions, self.node_embedding_dimension)
+            projection_matrices = self.projection_matrix
+            projection_matrices = projection_matrices.view(self.edge_count, self.edge_embedding_dimensions, self.node_embedding_dimensions)
 
             mask = tensor([i], device = projection_matrices.device).long()
 
@@ -1166,7 +1182,7 @@ class TransR(TranslationalDecoder):
             # TODO: find better name
             masked_node_embeddings = node_embeddings[mask]
             
-            projected_masked_node_embeddings = matmul(projection_matrices, masked_node_embeddings.view(self.node_embedding_dimension))
+            projected_masked_node_embeddings = matmul(projection_matrices, masked_node_embeddings.view(self.node_embedding_dimensions))
             projected_masked_node_embeddings = projected_masked_node_embeddings.view(self.edge_count, self.edge_embedding_dimensions, 1)
             self.projected_nodes[:, i, :] = projected_masked_node_embeddings.view(self.edge_count, self.edge_embedding_dimensions)
             # projected_nodes is an object equivalent to projected_masked_node_embeddings
@@ -1182,7 +1198,8 @@ class TransD(TranslationalDecoder):
                 node_count: int,
                 edge_count: int,
                 node_embedding_dimensions: int,
-                edge_embedding_dimensions: int):
+                edge_embedding_dimensions: int,
+                device: torch.device):
         """
         Implementation of TransD model detailed in the paper referenced below.
 
@@ -1216,6 +1233,9 @@ class TransD(TranslationalDecoder):
         **edge_embedding_dimensions** *(int)*
         : Dimensions of edge embeddings.
 
+        **device** *(torch.device)*
+        : The device of the decoder-specific embeddings. Must be the same as the knowledge graph embeddings.
+
         Attributes
         ----------
         
@@ -1231,11 +1251,11 @@ class TransD(TranslationalDecoder):
         **edge_embedding_dimensions** *(int)*
         : Dimensions of edge embeddings.
         
-        **node_projection_vector** *(torch.nn.Embedding, shape: [node_count, node_embedding_dimensions])*
+        **node_projection_vector** *(torch.nn.Parameter, shape: [node_count, node_embedding_dimensions])*
         : Node-specific vector used to build projection matrices. See paper for more details.
         : Initialized with Xavier uniform distribution and then normalized.
         
-        **edge_projection_vector** *(torch.nn.Embedding, shape: [edge_count, edge_embedding_dimensions])*
+        **edge_projection_vector** *(torch.nn.Parameter, shape: [edge_count, edge_embedding_dimensions])*
         : Edge-specific vector used to build projection matrices. See paper for more details.
         : Initialized with Xavier uniform distribution and then normalized.
         
@@ -1261,8 +1281,12 @@ class TransD(TranslationalDecoder):
         
         initializer = Initializer()
         # TODO: Might be changed to have 2 embedding spaces instead (meaning it will be encoded by a GNN if present)
-        self.node_projection_vector = initializer.initialize_embedding(self.node_count, self.node_embedding_dimensions)
-        self.edge_projection_vector = initializer.initialize_embedding(self.edge_count, self.edge_embedding_dimensions)
+        self.node_projection_vector = initializer.initialize_embedding(self.node_count,
+                                                                       self.node_embedding_dimensions,
+                                                                       device)
+        self.edge_projection_vector = initializer.initialize_embedding(self.edge_count, 
+                                                                       self.edge_embedding_dimensions, 
+                                                                       device)
 
         self.dissimilarity = l2_dissimilarity
 
@@ -1322,9 +1346,9 @@ class TransD(TranslationalDecoder):
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
         edge_normalized_embeddings = normalize(edge_embeddings, p = 2, dim = 1)
 
-        head_projected_vectors = normalize(self.node_projection_vector(head_indices), p = 2, dim = 1)
-        tail_projected_vectors = normalize(self.node_projection_vector(tail_indices), p = 2, dim = 1)
-        edge_projected_vectors = normalize(self.edge_projection_vector(edge_indices), p = 2, dim = 1)
+        head_projected_vectors = normalize(self.node_projection_vector[head_indices], p = 2, dim = 1)
+        tail_projected_vectors = normalize(self.node_projection_vector[tail_indices], p = 2, dim = 1)
+        edge_projected_vectors = normalize(self.edge_projection_vector[edge_indices], p = 2, dim = 1)
 
         projected_heads = self.project(head_normalized_embeddings, head_projected_vectors, edge_projected_vectors)
         projected_tails = self.project(tail_normalized_embeddings, tail_projected_vectors, edge_projected_vectors)
@@ -1376,7 +1400,7 @@ class TransD(TranslationalDecoder):
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
                             edge_embeddings: nn.Parameter
-                            ) -> Tuple[nn.ParameterList, nn.Parameter]:
+                            ) -> tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the TransD model.
         
@@ -1390,7 +1414,7 @@ class TransD(TranslationalDecoder):
         : The node embedding as a ParameterList containing one Parameter by node type, 
         or only one if there is no node type.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
         : The edge embedding as a ParameterList containing one Parameter by edge type, 
         or only one if there is no node type.
         
@@ -1400,7 +1424,7 @@ class TransD(TranslationalDecoder):
         **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
         : The normalized node embedding object.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
         : The normalized edge embedding object.
         
         """
@@ -1409,26 +1433,26 @@ class TransD(TranslationalDecoder):
 
         edge_embeddings.data = normalize(edge_embeddings.data, p = 2, dim = 1)
 
-        self.node_projection_vector.weight.data = normalize(self.node_projection_vector.weight.data, p = 2, dim = 1)
-        self.edge_projection_vector.weight.data = normalize(self.edge_projection_vector.weight.data, p = 2, dim = 1)
+        self.node_projection_vector = normalize(self.node_projection_vector, p = 2, dim = 1)
+        self.edge_projection_vector = normalize(self.edge_projection_vector, p = 2, dim = 1)
 
         return node_embeddings, edge_embeddings
 
 
-    def get_embeddings(self) -> Dict[str, Tensor]:
+    def get_embeddings(self) -> dict[str, Tensor]:
         """
         Return the embeddings of nodes and edges along with edge normal vectors.
         
         Returns
         -------
         
-        **embeddings** *(Dict[str, torch.Tensor])*
+        **embeddings** *(dict[str, torch.Tensor])*
         : Key: "node_projection_vector", "edge_projection_vector"
         : Value: tensors representing respectively nodes and edges in current model
         
         """
-        return {"node_projection_vector": self.node_projection_vector.weight.data,
-                "edge_projection_vector": self.edge_projection_vector.weight.data}
+        return {"node_projection_vector": self.node_projection_vector.data,
+                "edge_projection_vector": self.edge_projection_vector.data}
     
     
     def inference_prepare_candidates(self,
@@ -1439,7 +1463,7 @@ class TransD(TranslationalDecoder):
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings 
         and edge embeddings. The output will be fed to the 
@@ -1451,7 +1475,7 @@ class TransD(TranslationalDecoder):
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
         : Embeddings of all edges.
         
         **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
@@ -1526,14 +1550,14 @@ class TransD(TranslationalDecoder):
             return
 
         for i in tqdm(range(self.node_count), unit = "nodes", desc = "Projecting nodes"):
-            edge_projection_vector = self.edge_projection_vector.weight.data
+            edge_projection_vector = self.edge_projection_vector
 
             mask = tensor([i], device = edge_projection_vector.device).long()
 
             # TODO: find better name
             masked_node_embeddings = node_embeddings[mask]
 
-            node_projection_vector = self.node_projection_vector.weight[i]
+            node_projection_vector = self.node_projection_vector[i]
 
             scalar_product = (node_projection_vector * masked_node_embeddings).sum(dim = 0)
             projected_nodes = scalar_product * edge_projection_vector + masked_node_embeddings[:self.edge_embedding_dimensions].view(1, -1)
@@ -1654,7 +1678,7 @@ class TorusE(TranslationalDecoder):
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
                             edge_embeddings: nn.Parameter
-                            ) -> Tuple[nn.ParameterList, nn.Parameter]:
+                            ) -> tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the TorusE model.
         
@@ -1668,7 +1692,7 @@ class TorusE(TranslationalDecoder):
         : The node embedding as a ParameterList containing one Parameter by node type, 
         or only one if there is no node type.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
         : The edge embedding as a ParameterList containing one Parameter by edge type, 
         or only one if there is no node type.
         
@@ -1678,7 +1702,7 @@ class TorusE(TranslationalDecoder):
         **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
         : The normalized node embedding object.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
         : The normalized edge embedding object.
         
         """
@@ -1699,7 +1723,7 @@ class TorusE(TranslationalDecoder):
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Link prediction evaluation helper function. Get node embeddings 
         and edge embeddings. The output will be fed to the 
@@ -1723,7 +1747,7 @@ class TorusE(TranslationalDecoder):
 ||||||| dbd47f1
         node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
             Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
+        edge_embeddings: torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
             Embeddings of all edges.
         head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
             The indices of the head nodes (from KG).
@@ -1738,7 +1762,7 @@ class TorusE(TranslationalDecoder):
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
         
-        **edge_embeddings** *(torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
         : Embeddings of all edges.
         
         **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
