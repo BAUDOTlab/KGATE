@@ -134,5 +134,27 @@ def load_WN18RR(data_directory: os.PathLike = None, keep_split: bool = False) ->
     
     return knowledge_graph
 
-def load_PrimeKG():
-    pass
+def load_PrimeKG(data_directory: os.PathLike = None) -> KnowledgeGraph:
+    primekg_url = "https://dataverse.harvard.edu/api/access/datafile/6180620"
+    metadata_url = "https://dataverse.harvard.edu/api/access/datafile/6180617"
+
+    logging.info("Loading PrimeKG dataset into memory...")
+    output_directory: Path = data_directory or get_data_root_directory().joinpath("PrimeKG")
+
+    output_directory.mkdir(exist_ok = True)
+
+    knowledge_graph_path = output_directory.joinpath("primekg.csv")
+    metadata_path = output_directory.joinpath("primekg_metadata.csv")
+    urlretrieve(primekg_url, knowledge_graph_path)
+    urlretrieve(metadata_url, metadata_path)
+
+    knowledge_graph_df = pd.read_csv(knowledge_graph_path, sep = "\t", header = 0, usecols = ["rel", "x_id", "y_id"])
+    knowledge_graph_df.columns = ["edge", "head", "tail"]
+
+    metadata_df = pd.read_csv(metadata_path, sep = ",", header = 0)
+
+    knowledge_graph = KnowledgeGraph(dataframe = knowledge_graph_df, metadata = metadata_df)
+    knowledge_graph.set_identity("node_name")
+
+    logging.info("Dataset successfully loaded!")
+    return knowledge_graph
