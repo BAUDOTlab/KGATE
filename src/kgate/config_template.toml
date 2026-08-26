@@ -154,6 +154,10 @@ evaluation_batch_size = 32
 # Number of epochs after which a checkpoint is saved to retain the training state of a model.
 save_interval = 5
 
+# How many checkpoints should be kept. KGATE automatically deletes the most ancient training checkpoint to preserve space.
+# Set to -1 to keep all checkpoints. Note that this might take up a lot of space.
+keep_n_checkpoints = 2
+
 # Either the absolute path towards a pretrained checkpoint, or "auto" to let KGATE find automatically the latest
 # Embeddings in the output_directory.
 pretrained_embeddings = "auto"

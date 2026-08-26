@@ -1042,6 +1042,29 @@ class Training_Configuration:
         self._configuration["save_interval"]
 
     @property
+    def keep_n_checkpoints(self) -> int:
+        """
+        Number of checkpoint files on disk for a training. 
+        
+        KGATE automatically deletes the most ancient training checkpoint to preserve space.
+        
+        0 disables checkpointing.
+        -1 keep all checkpoints. Note that this might take up a lot of space.
+        """
+        return self._configuration["keep_n_checkpoints"]
+    
+    @keep_n_checkpoints.setter
+    def keep_n_checkpoints(self, new_number: int):
+        assert new_number == -1 or new_number >= 0, f"Cannot save a negative number of checkpoints."
+
+        if new_number == -1:
+            logging.warning("Keeping all checkpoint files. Be warned that it may use up a lot of disk space.")
+        elif new_number == 0:
+            logging.warning("Checkpointing is disabled.")
+        
+        self._configuration["keep_n_checkpoints"] = new_number
+
+    @property
     def pretrained_embeddings(self) -> str:
         """
         Either the absolute path towards a pretrained checkpoint, or "auto" to let KGATE find automatically the latest

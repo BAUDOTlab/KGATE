@@ -851,27 +851,32 @@ class Architect(Module):
 
         trainer.add_event_handler(Events.COMPLETED, self.on_training_completed)
 
-        to_save = {
-            "edges": self.edge_embeddings,
-            "nodes": self.node_embeddings,
-            "decoder": self.decoder,
-            "optimizer": self.optimizer,
-            "trainer": trainer,
-        }
+        checkpoints_count = self.configuration.training.keep_n_checkpoints
 
-        if isinstance(self.encoder, GNN):
-            to_save.update({"encoder": self.encoder})
-        if self.scheduler is not None:
-            to_save.update({"scheduler": self.scheduler})
-        
-        checkpoint_handler = Checkpoint(
-            to_save,   # Dictionnary of objects to save
-            DiskSaver(dirname = self.checkpoints_directory,
-                    require_empty = False,
-                    create_dir = True),   # Save manager
-                    n_saved = 2,   # Only keep last 2 checkpoints
-                    global_step_transform = lambda *_: trainer.state.epoch   # Include epoch number
-        )
+        if checkpoints_count != 0:
+            if checkpoints_count == -1: checkpoints_count = None
+
+            to_save = {
+                "edges": self.edge_embeddings,
+                "nodes": self.node_embeddings,
+                "decoder": self.decoder,
+                "optimizer": self.optimizer,
+                "trainer": trainer,
+            }
+
+            if isinstance(self.encoder, GNN):
+                to_save.update({"encoder": self.encoder})
+            if self.scheduler is not None:
+                to_save.update({"scheduler": self.scheduler})
+            
+            checkpoint_handler = Checkpoint(
+                to_save,   # Dictionnary of objects to save
+                DiskSaver(dirname = self.checkpoints_directory,
+                        require_empty = False,
+                        create_dir = True),   # Save manager
+                        n_saved = checkpoints_count,   # Only keep last [checkpoint_count] checkpoints
+                        global_step_transform = lambda *_: trainer.state.epoch   # Include epoch number
+            )
 
         def save_checkpoint_to_cpu(engine: Engine):
             """
