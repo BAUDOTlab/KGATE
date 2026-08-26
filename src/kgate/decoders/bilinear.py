@@ -10,29 +10,35 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 The modifications are licensed under the BSD license according to the source license.
 
 """
-
-from typing import Tuple, Dict          
-
+import torch
 from torch import matmul, Tensor, nn, tensor_split
 from torch.nn.functional import normalize
 from torch.nn import Module
 
-from ..utils import initialize_embedding
-
+from ..initializers import Initializer
 
 
 class BilinearDecoder(Module):
-    """
-    Interface for bilinear decoders of KGATE.
-
-    This interface is largely inspired by TorchKGE's BilinearModel, and exposes
-    the methods that all bilinear decoders must use to be compatible with KGATE.
-
-    Furthermore, this interface doesn't implement anything but is a type helper.
-    However, functions from this class returning None can be used directly from inheriting classes.
-    
-    """
     def __init__(self):
+        """
+        Interface for bilinear decoders of KGATE.
+
+        This interface is largely inspired by TorchKGE's BilinearModel, and exposes 
+        the methods that all bilinear decoders must use to be compatible with KGATE.
+
+        Furthermore, this interface doesn't implement anything but is a type helper. 
+        However, functions from this class returning None can be used directly from inheriting classes.
+
+    def score(  self,
+                *,
+                head_embeddings: Tensor,
+                tail_embeddings: Tensor,
+                edge_embeddings: Tensor,
+                head_indices: Tensor,
+                tail_indices: Tensor,
+                edge_indices: Tensor
+                ) -> Tensor:
+        """
         super().__init__()
 
     def score(  self,
@@ -48,38 +54,49 @@ class BilinearDecoder(Module):
         Interface method for the decoder's score function.
 
         Refer to the specific decoder for details on this function's implementation.
+        
         While all arguments are given when called from the Architect class, most 
         decoders only use some of them. 
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            The embeddings of the head nodes for the current batch.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            The embeddings of the tail nodes for the current batch.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            The embeddings of the edges for the current batch.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes for the current batch.
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes for the current batch.
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges for the current batch.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : The embeddings of the head nodes for the current batch.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : The embeddings of the tail nodes for the current batch.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        : The embeddings of the edges for the current batch.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes for the current batch.
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes for the current batch.
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges for the current batch.
         
         Raises
         ------
-        NotImplementedError
-            The score method must be implemented by a bilinear decoder
-            inheriting from this interface.
+        
+        **NotImplementedError**
+        : The score method must be implemented by a bilinear decoder 
+        inheriting from this interface.
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size]
-            The score for each triplet given as a tensor by the decoder for the batch.
+        
+        **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
+        : The score for each triplet given as a tensor by the decoder for the batch.
         
         Notes
         -----
+        
         The batch can be the whole graph if it fits in memory.
+        
         Here, [batch_size] is batch.shape[1].
         
         """
@@ -88,8 +105,8 @@ class BilinearDecoder(Module):
 
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding] | None:
+                            edge_embeddings: nn.Parameter
+                            ) -> tuple[nn.ParameterList, nn.Parameter] | None:
         """
         Interface method for the decoder's parameters normalization function.
 
@@ -97,24 +114,30 @@ class BilinearDecoder(Module):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            The node embedding as a ParameterList containing one Parameter by node type,
-            or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The edge embedding as a nn.Embedding containing one Parameter by edge type,
-            or only one if there is no node type.
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
+        : The node embedding as a ParameterList containing one Parameter by node type, 
+        or only one if there is no node type.
+        
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        : The edge embedding as a nn.Parameter containing one Parameter by edge type, 
+        or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList or None, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding or None, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            The normalized edge embedding object.
+        
+        **node_embeddings** *(torch.nn.ParameterList or None, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
+        : The normalized node embedding object.
+        
+        **edge_embeddings** *(torch.nn.Parameter or None, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        : The normalized edge embedding object.
         
         Notes
         -----
-        The normalize_parameters method can be implemented by a bilinear decoder inheriting from this class
+        
+        The normalize_parameters method can be implemented by a bilinear decoder inheriting from this class 
         if it has specific parameters to normalize.
+        
         If the decoder doesn't have dedicated normalization, nothing is returned. In 
         this case, it is not necessary to implement this method from the interface.
         
@@ -122,7 +145,7 @@ class BilinearDecoder(Module):
         return None
 
 
-    def get_embeddings(self) -> Dict[str, Tensor] | None:
+    def get_embeddings(self) -> dict[str, Tensor] | None:
         """
         Get the decoder-specific embeddings.
         
@@ -130,13 +153,16 @@ class BilinearDecoder(Module):
         
         Returns
         -------
-        edge_embeddings_matrix: Dict[str, torch.Tensor] or None
-            Decoder-specific embeddings, or None.
+        
+        **edge_embeddings_matrix** *(dict[str, torch.Tensor] or None)*
+        : Decoder-specific embeddings, or None.
         
         Notes
         -----
-        The get_embeddings method can be implemented by a bilinear decoder inheriting from this class
-        if it needed.
+        
+        The get_embeddings method can be implemented by a bilinear decoder inheriting from this class 
+        if needed.
+        
         If the decoder doesn't have dedicated embeddings, nothing is returned. In 
         this case, it is not necessary to implement this method from the interface.
         
@@ -147,57 +173,69 @@ class BilinearDecoder(Module):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
-                                    ) -> Tuple[
-                                                Tensor | Tuple,
-                                                Tensor | Tuple,
-                                                Tensor | Tuple,
-                                                Tensor | Tuple
+                                    ) -> tuple[
+                                                Tensor | tuple,
+                                                Tensor | tuple,
+                                                Tensor | tuple,
+                                                Tensor | tuple
                                                 ]:
         """
-        Link prediction evaluation helper function. Get node embeddings
-        and edge embeddings. The output will be fed to the
+        Link prediction evaluation helper function. Get node embeddings 
+        and edge embeddings. The output will be fed to the 
         `inference_score_function` method.
         
         Refer to the specific decoder for details on this function's implementation.
+        
         While all arguments are given when called from the Architect class, most 
         decoders only use some of them.
         
         Arguments
         ---------
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : Embeddings of all nodes.
+        
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        : Embeddings of all edges.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes (from KG).
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes (from KG).
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges (from KG).
+        
+        **node_inference** *(bool, optional, default to True, keyword-only)*
+        : If True, prepare candidate nodes; otherwise, prepare candidate edges.
         
         Raises
         ------
-        NotImplementedError
-            The inference_prepare_candidates method must be implemented by a bilinear decoder
-            inheriting from this interface.
+        
+        **NotImplementedError**
+        : The inference_prepare_candidates method must be implemented by a bilinear decoder 
+        inheriting from this interface.
         
         Returns
         -------
-        head_embeddings: torch.Tensor or Tuple, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            Head node embeddings.
-        tail_embeddings: torch.Tensor or Tuple, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            Tail node embeddings.
-        edge_embeddings_inferred: torch.Tensor or Tuple, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            Edge embeddings.
-        candidates: torch.Tensor or Tuple
-            Candidate embeddings for nodes or edges.
+        
+        **head_embeddings** *(torch.Tensor or tuple, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
+        : Head node embeddings.
+        
+        **tail_embeddings** *(torch.Tensor or tuple, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
+        : Tail node embeddings.
+        
+        **edge_embeddings_inferred** *(torch.Tensor or tuple, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        : Edge embeddings.
+        
+        **candidates** *(torch.Tensor or tuple)*
+        : Candidate embeddings for nodes or edges.
         
         """
         raise NotImplementedError("The `inference_prepare_candidates` method must be implemented by the bilinear decoder.")
@@ -205,43 +243,50 @@ class BilinearDecoder(Module):
 
     def inference_score(self, 
                         *,
-                        head_embeddings: Tensor | Tuple,
-                        tail_embeddings: Tensor | Tuple,
-                        edge_embeddings: Tensor | Tuple
+                        head_embeddings: Tensor | tuple,
+                        tail_embeddings: Tensor | tuple,
+                        edge_embeddings: Tensor | tuple
                         ) -> Tensor:
         """
-        Link prediction evaluation helper function. Compute the scores
+        Link prediction evaluation helper function. Compute the scores 
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        
         The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Refer to the specific decoder for details on this function's implementation.
+        
         While all arguments are given when called from the Architect class, most 
         decoders only use some of them.
         
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            Embeddings of the edges in the knowledge graph.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only)*
+        : Embeddings of the edges in the knowledge graph.
         
         Raises
         ------
-        NotImplementedError
-            The inference_score method must be implemented by a bilinear decoder
-            inheriting from this interface.
+        
+        **NotImplementedError**
+        : The inference_score method must be implemented by a bilinear decoder
+        inheriting from this interface.
 
         Returns
         -------
-        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            Tensor of score values.
-                First dimension: incomplete triplets tested
-                Second dimension: candidate indices
-            For example, if the function is called to infer the score of tails, so (head, candidate, edge):
-                First dimension: (head_indices, edge_indices)
-                Second dimension: tail_indices
+        
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : Tensor of score values.
+            : First dimension: incomplete triplets tested
+            : Second dimension: candidate indices
+        : For example, if the function is called to infer the score of tails, so (head, candidate, edge):
+            : First dimension: (head_indices, edge_indices)
+            : Second dimension: tail_indices
         
         """
         raise NotImplementedError("Bilinear decoders must implement the `inference_score` function themselves.")
@@ -249,53 +294,68 @@ class BilinearDecoder(Module):
 
 
 class RESCAL(BilinearDecoder):
-    """
-    Implementation of RESCAL model detailed in the paper referenced below. In the original paper, optimization
-    is done using Alternating Least Squares (ALS). Here we use iterative gradient descent optimization.
-    TODO: not sure this is entirely valid in this implementation, will have to look up the difference and where it's operated
-    
-    This class inherits from the BilinearDecoder interface. It inherits its attributes as well.
-
-    References
-    ----------
-    Maximilian Nickel, Volker Tresp, and Hans-Peter Kriegel.
-    `A Three-way Model for Collective Learning on Multi-relational Data.`
-    https://dl.acm.org/citation.cfm?id=3104584
-    In Proceedings of the 28th International Conference on Machine Learning, 2011.
-
-    Arguments
-    ---------
-    embedding_dimensions: int
-        Dimensions of embeddings.
-        This argument is only used for the matrix.
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
-        
-    Attributes
-    ----------
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
-    embedding_dimensions: int
-        Dimensions of embeddings.
-    edge_embeddings_matrix: Dict[str, Tensor]
-        TODO.What_that_variable_is_or_does
-    
-    """
     def __init__(self, 
                 node_count: int,
                 edge_count: int,
-                embedding_dimensions: int):
+                embedding_dimensions: int,
+                device: torch.device):
+        """
+        Implementation of RESCAL model detailed in the paper referenced below. In the original paper, optimization
+        is done using Alternating Least Squares (ALS). Here we use iterative gradient descent optimization.
+
+        % TODO: not sure this is entirely valid in this implementation, will have to look up the difference and where it's operated
+
+        This class inherits from the BilinearDecoder interface. It inherits its attributes as well.
+
+        References
+        ----------
+            
+        * Maximilian Nickel, Volker Tresp, and Hans-Peter Kriegel.
+            
+            `A Three-way Model for Collective Learning on Multi-relational Data.`
+            
+            <https://dl.acm.org/doi/10.5555/3104482.3104584>
+            
+            In Proceedings of the 28th International Conference on Machine Learning, 2011.
+
+        Arguments
+        ---------
+        
+        **embedding_dimensions** *(int)*
+        : Dimensions of embeddings.
+        : This argument is only used for the matrix.
+        
+        **node_count** *(int)*
+        : Number of nodes in the knowledge graph.
+        
+        **edge_count** *(int)*
+        : Number of edges in the knowledge graph.
+
+        Attributes
+        ----------
+        
+        **node_count** *(int)*
+        : Number of nodes in the knowledge graph.
+        
+        **edge_count** *(int)*
+        : Number of edges in the knowledge graph.
+        
+        **embedding_dimensions** *(int)*
+        : Dimensions of embeddings.
+        
+        **edge_embeddings_matrix** *(dict[str, Tensor])*
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
+
+        """
         super().__init__()
         
         self.node_count = node_count
         self.edge_count = edge_count
         self.embedding_dimensions = embedding_dimensions
 
-        self.edge_embeddings_matrix = initialize_embedding(self.edge_count, self.embedding_dimensions * self.embedding_dimensions)
+        initializer = Initializer()
+        self.edge_embeddings_matrix = initializer.initialize_embedding(self.edge_count, self.embedding_dimensions * self.embedding_dimensions, device=device)
 
 
     def score(  self,
@@ -308,32 +368,38 @@ class RESCAL(BilinearDecoder):
         """
         Compute the score function for the triplets given as argument.
         
-        See referenced paper for more details on the score:
+        See referenced paper for more details on the score: 
         https://dl.acm.org/citation.cfm?id=3104584
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            The embeddings of the head nodes for the current batch.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            The embeddings of the tail nodes for the current batch.
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges for the current batch.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : The embeddings of the head nodes for the current batch.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : The embeddings of the tail nodes for the current batch.
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges for the current batch.
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            The score for each triplet given as a tensor by the decoder for the batch.
+        
+        **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : The score for each triplet given as a tensor by the decoder for the batch.
         
         Notes
         -----
+        
         The batch can be the whole graph if it fits in memory.
+        
         Here, [batch_size] is batch.shape[1].
         
         """
         head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
-        edge_embeddings = self.edge_embeddings_matrix(edge_indices).view(-1, self.embedding_dimensions, self.embedding_dimensions)
+        edge_embeddings = self.edge_embeddings_matrix.data[edge_indices].view(-1, self.embedding_dimensions, self.embedding_dimensions)
         head_edge_embeddings = matmul(head_normalized_embeddings.view(-1, 1, self.embedding_dimensions), edge_embeddings)
         
         return (head_edge_embeddings.view(-1, self.embedding_dimensions) * tail_normalized_embeddings).sum(dim = 1)
@@ -341,8 +407,8 @@ class RESCAL(BilinearDecoder):
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding]:
+                            edge_embeddings: nn.Parameter
+                            ) -> tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the RESCAL model.
         
@@ -350,18 +416,22 @@ class RESCAL(BilinearDecoder):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
             The node embedding as a ParameterList containing one Parameter by node type,
             or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The edge embedding as a nn.Embedding containing one Parameter by edge type,
+        
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+            The edge embedding as a nn.Parameter containing one Parameter by edge type,
             or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
             The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
+        
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
             The unchanged edge embedding object.
         
         """
@@ -371,54 +441,65 @@ class RESCAL(BilinearDecoder):
         return node_embeddings, edge_embeddings
 
 
-    def get_embeddings(self) -> Dict[str, Tensor]:
+    def get_embeddings(self) -> dict[str, Tensor]:
         """
         Return the tensors representing nodes and edges in current model.
 
         Returns
         -------
-        edge_embeddings_matrix: Dict[str, Tensor]
-            TODO.What_that_variable_is_or_does
-            
+        edge_embeddings_matrix** *(dict[str, Tensor])*
+        : *Missing documentation*
+        % TODO.What_that_variable_is_or_does
+        
         """
-        return {"edge_embeddings_matrix": self.edge_embeddings_matrix.weight.data.view(-1, self.embedding_dimensions, self.embedding_dimensions)}
+        return {"edge_embeddings_matrix": self.edge_embeddings_matrix.data.view(-1, self.embedding_dimensions, self.embedding_dimensions)}
     
 
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
-        Link prediction evaluation helper function. Get node embeddings
-        and edge embeddings. The output will be fed to the
+        Link prediction evaluation helper function. Get node embeddings 
+        and edge embeddings. The output will be fed to the 
         `inference_score_function` method.
 
         Arguments
         ---------
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
             Embeddings of all nodes.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
             The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
             The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
             The indices of the edges (from KG).
-        node_inference: bool, optional, default to True, keyword-only
+        
+        **node_inference** *(bool, optional, default to True, keyword-only)*
             If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
             Head node embeddings.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
             Tail node embeddings.
-        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
+        
+        **edge_embeddings_inferred** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
             Edge embeddings.
-        candidates: torch.Tensor
+        
+        **candidates** *(torch.Tensor
             Candidate embeddings for nodes or edges.
 
         """
@@ -427,14 +508,14 @@ class RESCAL(BilinearDecoder):
         # Get head, tail and edge embeddings
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
-        edge_embeddings_inferred = self.edge_embeddings_matrix(edge_indices).view(-1, self.embedding_dimensions, self.embedding_dimensions)
+        edge_embeddings_inferred = self.edge_embeddings_matrix.data[edge_indices].view(-1, self.embedding_dimensions, self.embedding_dimensions)
 
         if node_inference:
             # Prepare candidates for every node
             candidates = node_embeddings.unsqueeze(0).expand(batch_size, -1, -1)
         else:
             # Prepare candidates for every edge
-            candidates = self.edge_embeddings_matrix.weight.data.unsqueeze(0).expand(batch_size, -1, -1, -1)
+            candidates = self.edge_embeddings_matrix.data.unsqueeze(0).expand(batch_size, -1, -1, -1)
 
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
 
@@ -446,41 +527,49 @@ class RESCAL(BilinearDecoder):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        Link prediction evaluation helper function. Compute the scores
+        Link prediction evaluation helper function. Compute the scores 
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        
         The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the edges in the knowledge graph.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the edges in the knowledge graph.
 
         Raises
         ------
-        AssertionError #1
-            When inferring heads, the tensor `tail_embeddings` must have 2 dimensions
-            and edge_embeddings must have 3 dimensions.
-        AssertionError #2
-            When inferring tails, the tensor `head_embeddings` must have 2 dimensions
-            and edge_embeddings must have 3 dimensions.
-        AssertionError #3
-            When inferring edges, the tensors `head_embeddings` and `tail_embeddings` must have 2 dimensions.
-        ValueError
-            Raised if none of the embeddings have a shape adapted to be inferred.
+        
+        **AssertionError #1**
+        : When inferring heads, the tensor `tail_embeddings` must have 2 dimensions 
+        and edge_embeddings must have 3 dimensions.
+        
+        **AssertionError #2**
+        : When inferring tails, the tensor `head_embeddings` must have 2 dimensions 
+        and edge_embeddings must have 3 dimensions.
+        
+        **AssertionError #3**
+        : When inferring edges, the tensors `head_embeddings` and `tail_embeddings` must have 2 dimensions.
+        
+        **ValueError**
+        : Raised if none of the embeddings have a shape adapted to be inferred.
 
         Returns
         -------
-        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            Tensor of score values.
-            First dimension: incomplete triplets tested
-            Second dimension: candidate indices
-            For example, if the function is called to infer the score of tails:
-            First dimension: (head_indices, edge_indices)
-            Second dimension: tail_indices
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : Tensor of score values.
+        : First dimension: incomplete triplets tested
+        : Second dimension: candidate indices
+        : For example, if the function is called to infer the score of tails:
+        : First dimension: (head_indices, edge_indices)
+        : Second dimension: tail_indices
         
         Notes
         -----
@@ -501,7 +590,7 @@ class RESCAL(BilinearDecoder):
             assert (len(head_embeddings.shape) == 2) and (len(edge_embeddings.shape) == 3), \
                 "When inferring tails, the tensors `head_embeddings` must have 2 dimensions and `edge_embeddings` must have 3 dimensions."
             
-            head_edge_embeddings = matmul(head_embeddings.view(batch_size, 1, self.embedding_dimensions)).view(batch_size, 1, self.embedding_dimensions)
+            head_edge_embeddings = matmul(head_embeddings.view(batch_size, 1, self.embedding_dimensions), edge_embeddings)
             
             return (head_edge_embeddings * tail_embeddings).sum(dim = 2)
         
@@ -521,41 +610,51 @@ class RESCAL(BilinearDecoder):
     
     
 class DistMult(BilinearDecoder):
-    """
-    Implementation of DisMult model detailed in the paper referenced below.
-    
-    This class inherits from the BilinearDecoder interface. It inherits its attributes as well.
-
-    References
-    ----------
-    Bishan Yang, Wen-tau Yih, Xiaodong He, Jianfeng Gao, and Li Deng.
-    `Embedding Entities and Relations for Learning and Inference in Knowledge Bases.`
-    https://arxiv.org/abs/1412.6575
-    arXiv :1412.6575 [cs], December 2014.
-
-    Arguments
-    ---------
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
-    embedding_dimensions: int
-        Dimensions of embeddings.
-
-    Attributes
-    ----------
-    embedding_dimensions: int
-        Dimensions of embeddings.
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
-    
-    """
     def __init__(self,
                 node_count: int,
                 edge_count: int,
                 embedding_dimensions: int):
+        """
+        Implementation of DisMult model detailed in the paper referenced below.
+
+        This class inherits from the BilinearDecoder interface. It inherits its attributes as well.
+
+        References
+        ----------
+        
+        * Bishan Yang, Wen-tau Yih, Xiaodong He, Jianfeng Gao, and Li Deng.
+            
+            `Embedding Entities and Relations for Learning and Inference in Knowledge Bases.`
+            
+            <https://arxiv.org/abs/1412.6575>
+            
+            arXiv: 1412.6575 [cs], December 2014.
+
+        Arguments
+        ---------
+        
+        **node_count** *(int)*
+        : Number of nodes in the knowledge graph.
+        
+        **edge_count** *(int)*
+        : Number of edges in the knowledge graph.
+        
+        **embedding_dimensions** *(int)*
+        : Dimensions of embeddings.
+
+        Attributes
+        ----------
+        
+        **embedding_dimensions** *(int)*
+        : Dimensions of embeddings.
+        
+        **node_count** *(int)*
+        : Number of nodes in the knowledge graph.
+        
+        **edge_count** *(int)*
+        : Number of edges in the knowledge graph.
+
+        """
         super().__init__()
 
         self.embedding_dimensions = embedding_dimensions
@@ -574,37 +673,33 @@ class DistMult(BilinearDecoder):
         """
         Compute the score function for the triplets given as argument.
         
-        See referenced paper for more details on the score:
-        https://arxiv.org/abs/1412.6575
+        See referenced paper for more details on the score: 
+        <https://arxiv.org/abs/1412.6575>
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the edges in the knowledge graph.
-
-        Arguments
-        ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            The embeddings of the head nodes for the current batch.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            The embeddings of the tail nodes for the current batch.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            The embeddings of the edges for the current batch.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the edges in the knowledge graph.
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            The score for each triplet given as a tensor by the decoder for the batch.
+        **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : The score for each triplet given as a tensor by the decoder for the batch.
         
         Notes
         -----
+        
         The batch can be the whole graph if it fits in memory.
+        
         Here, [batch_size] is batch.shape[1].
-            
+        
         """
         head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
         tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
@@ -614,8 +709,8 @@ class DistMult(BilinearDecoder):
     
     def normalize_parameters(self,
                             node_embeddings: nn.ParameterList,
-                            edge_embeddings: nn.Embedding
-                            ) -> Tuple[nn.ParameterList, nn.Embedding]:
+                            edge_embeddings: nn.Parameter
+                            ) -> tuple[nn.ParameterList, nn.Parameter]:
         """
         Normalize parameters for the DistMult model.
         
@@ -623,19 +718,23 @@ class DistMult(BilinearDecoder):
         
         Arguments
         ---------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The node embedding as a ParameterList containing one Parameter by node type,
-            or only one if there is no node type.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The edge embedding as a nn.Embedding containing one Parameter by edge type,
-            or only one if there is no node type.
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The node embedding as a ParameterList containing one Parameter by node type, 
+        or only one if there is no node type.
+        
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The edge embedding as a nn.Parameter containing one Parameter by edge type, 
+        or only one if there is no node type.
         
         Returns
         -------
-        node_embeddings: torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The normalized node embedding object.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            The unchanged edge embedding object.
+        
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The normalized node embedding object.
+        
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : The unchanged edge embedding object.
         
         """
         for embedding in node_embeddings:
@@ -647,42 +746,52 @@ class DistMult(BilinearDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+                                    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
-        Link prediction evaluation helper function. Get node embeddings
-        and edge embeddings. The output will be fed to the
+        Link prediction evaluation helper function. Get node embeddings 
+        and edge embeddings. The output will be fed to the 
         `inference_score_function` method.
         
         Arguments
         ---------
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of all nodes.
+        
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of all edges.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes (from KG).
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes (from KG).
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges (from KG).
+        
+        **node_inference** *(bool, default to True, keyword-only)*
+        : If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            Head node embeddings.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            Tail node embeddings.
-        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions]
-            Edge embeddings.
-        candidates: torch.Tensor
-            Candidate embeddings for nodes or edges.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : Head node embeddings.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : Tail node embeddings.
+        
+        **edge_embeddings_inferred** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
+        : Edge embeddings.
+        
+        **candidates** *(torch.Tensor)*
+        : Candidate embeddings for nodes or edges.
             
         """
         batch_size = head_indices.shape[0]
@@ -690,14 +799,14 @@ class DistMult(BilinearDecoder):
         # Get head, tail and edge embeddings
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
-        edge_embeddings_inferred = edge_embeddings(edge_indices)
+        edge_embeddings_inferred = edge_embeddings[edge_indices]
         
         if node_inference:
             # Prepare candidates for every node
             candidates = node_embeddings
         else:
             # Prepare candidates for every edge
-            candidates = edge_embeddings.weight.data
+            candidates = edge_embeddings
         
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         
@@ -711,39 +820,48 @@ class DistMult(BilinearDecoder):
                         edge_embeddings: Tensor
                         ) -> Tensor:
         """
-        Link prediction evaluation helper function. Compute the scores
+        Link prediction evaluation helper function. Compute the scores 
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        
         The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the edges in the knowledge graph.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the edges in the knowledge graph.
 
         Raises
         ------
-        AssertionError #1
-            When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
-        AssertionError #2
-            When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
-        AssertionError #3
-            When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
-        ValueError
-            If none of the embeddings have a shape adapted to be inferred.
+        
+        **AssertionError #1**
+        : When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
+        
+        **AssertionError #2**
+        : When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
+        
+        **AssertionError #3**
+        : When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
+        
+        **ValueError**
+        : If none of the embeddings have a shape adapted to be inferred.
 
         Returns
         -------
-        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            Tensor of score values.
-            First dimension: incomplete triplets tested
-            Second dimension: candidate indices
-            For example, if the function is called to infer the score of tails:
-            First dimension: (head_indices, edge_indices)
-            Second dimension: tail_indices
+        
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : Tensor of score values.
+        : First dimension: incomplete triplets tested
+        : Second dimension: candidate indices
+        : For example, if the function is called to infer the score of tails:
+        : First dimension: (head_indices, edge_indices)
+        : Second dimension: tail_indices
         
         """
         batch_size = head_embeddings.shape[0]
@@ -778,34 +896,37 @@ class DistMult(BilinearDecoder):
 
 
 class ComplEx(BilinearDecoder):
-    """
-    Implementation of ComplEx model detailed in the paper referenced below.
-    
-    This class inherits from the BilinearDecoder interface. It inherits its attributes as well.
-
-    References
-    ----------
-    TODO
-    Author
-    `Title`
-    link
-    journal.
-
-    Arguments
-    ---------
-    embedding_dimensions: int
-        Dimensions of embeddings.
-        
-    Attributes
-    ----------
-    embedding_dimensions: int
-        Dimensions of embeddings.
-    embedding_spaces: int
-        TODO.what_that_variable_is_or_does
-    
-    """
     def __init__(self,
                 embedding_dimensions: int):
+        """
+        Implementation of ComplEx model detailed in the paper referenced below.
+
+        This class inherits from the BilinearDecoder interface. It inherits its attributes as well.
+
+        References
+        ----------
+
+        *Missing reference*
+
+        % TODO: reference
+
+        Arguments
+        ---------
+
+        **embedding_dimensions** *(int)*
+        : Dimensions of embeddings.
+
+        Attributes
+        ----------
+
+        **embedding_dimensions** *(int)*
+        : Dimensions of embeddings.
+
+        **embedding_spaces** *(int)*
+        : *Missing documentation*
+        % TODO.what_that_variable_is_or_does
+
+        """
         super().__init__()
 
         self.embedding_dimensions = embedding_dimensions
@@ -822,26 +943,33 @@ class ComplEx(BilinearDecoder):
         """
         Compute the score function for the triplets given as argument.
         
-        See referenced paper for more details on the score:
-        TODO.link
+        See referenced paper for more details on the score: *missing reference*
+        
+        % TODO.link
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            The embeddings of the head nodes for the current batch.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            The embeddings of the tail nodes for the current batch.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            The embeddings of the edges for the current batch.
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : The embeddings of the head nodes for the current batch.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : The embeddings of the tail nodes for the current batch.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : The embeddings of the edges for the current batch.
 
         Returns
         -------
-        batch_score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            The score for each triplet given as a tensor by the decoder for the batch.
+        
+        **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : The score for each triplet given as a tensor by the decoder for the batch.
         
         Notes
         -----
+        
         The batch can be the whole graph if it fits in memory.
+        
         Here, [batch_size] is batch.shape[1].
         
         """        
@@ -856,58 +984,68 @@ class ComplEx(BilinearDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
                                     node_inference: bool = True
-                                    ) -> Tuple[
-                                        Tuple[Tensor, Tensor],
-                                        Tuple[Tensor, Tensor],
-                                        Tuple[Tensor, Tensor],
-                                        Tuple[Tensor, Tensor]]:
+                                    ) -> tuple[
+                                        tuple[Tensor, Tensor],
+                                        tuple[Tensor, Tensor],
+                                        tuple[Tensor, Tensor],
+                                        tuple[Tensor, Tensor]]:
         """
-        Link prediction evaluation helper function. Get node embeddings
-        and edge embeddings. The output will be fed to the
+        Link prediction evaluation helper function. Get node embeddings 
+        and edge embeddings. The output will be fed to the 
         `inference_score_function` method.
 
         Arguments
         ---------
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of all nodes.
+        
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of all edges.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes (from KG).
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes (from KG).
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges (from KG).
+        
+        **node_inference** *(bool, default to True, keyword-only)*
+        : If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
-        (real_head_embeddings, imaginary_head_embeddings): Tuple[Tensor, Tensor]
-            Head node embeddings, both the real and the imaginary ones.
-        (real_tail_embeddings, imaginary_tail_embeddings): Tuple[Tensor, Tensor]
-            Tail node embeddings, both the real and the imaginary ones.
-        (real_edge_embeddings, imaginary_edge_embeddings): Tuple[Tensor, Tensor]
-            Edge embeddings, both the real and the imaginary ones.
-        (real_candidates, imaginary_candidates): Tuple[Tensor, Tensor]
-            Candidate embeddings for nodes or edges, both the real and the imaginary ones.
+        
+        **(real_head_embeddings, imaginary_head_embeddings)** *(tuple[Tensor, Tensor])*
+        : Head node embeddings, both the real and the imaginary ones.
+        
+        **(real_tail_embeddings, imaginary_tail_embeddings)** *(tuple[Tensor, Tensor])*
+        : Tail node embeddings, both the real and the imaginary ones.
+        
+        **(real_edge_embeddings, imaginary_edge_embeddings)** *(tuple[Tensor, Tensor])*
+        : Edge embeddings, both the real and the imaginary ones.
+        
+        **(real_candidates, imaginary_candidates)** *(tuple[Tensor, Tensor])*
+        : Candidate embeddings for nodes or edges, both the real and the imaginary ones.
 
         """
         batch_size = head_indices.shape[0]
 
         real_head_embeddings, imaginary_head_embeddings = tensor_split(node_embeddings[head_indices], 2, dim = 1)
         real_tail_embeddings, imaginary_tail_embeddings = tensor_split(node_embeddings[tail_indices], 2, dim = 1)
-        real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings(edge_indices), 2, dim = 1)
+        real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings[edge_indices], 2, dim = 1)
 
         if node_inference:
             real_candidates, imaginary_candidates = tensor_split(node_embeddings, 2, dim = 1)
         else:
-            real_candidates, imaginary_candidates = tensor_split(edge_embeddings.weight.data, 2, dim = 1)
+            real_candidates, imaginary_candidates = tensor_split(edge_embeddings, 2, dim = 1)
         
         real_candidates = real_candidates.unsqueeze(0).expand(batch_size, -1, -1)
         imaginary_candidates = imaginary_candidates.unsqueeze(0).expand(batch_size, -1, -1)
@@ -920,47 +1058,55 @@ class ComplEx(BilinearDecoder):
     
     def inference_score(self,
                         *,
-                        head_embeddings: Tuple[Tensor, Tensor],
-                        tail_embeddings: Tuple[Tensor, Tensor],
-                        edge_embeddings: Tuple[Tensor, Tensor]
+                        head_embeddings: tuple[Tensor, Tensor],
+                        tail_embeddings: tuple[Tensor, Tensor],
+                        edge_embeddings: tuple[Tensor, Tensor]
                         ) -> Tensor:
         """
-        Link prediction evaluation helper function. Compute the scores
+        Link prediction evaluation helper function. Compute the scores 
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
+        
         The arguments should match the ones of the output of `inference_prepare_candidates`.
 
         Arguments
         ---------
-        head_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph. 
-            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
-        tail_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph. 
-            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
-        edge_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the edges in the knowledge graph. 
-            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
+        
+        **head_embeddings** *(tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph. 
+        : The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
+        
+        **tail_embeddings** *(tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph. 
+        : The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
+        
+        **edge_embeddings** *(tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the edges in the knowledge graph.
+        : The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
 
         Raises
         ------
-        AssertionError #1
-            When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
-        AssertionError #2
-            When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
-        AssertionError #3
-            When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
-        ValueError
-            If none of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.
+        
+        **AssertionError #1**
+        : When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
+        
+        **AssertionError #2**
+        : When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
+        
+        **AssertionError #3**
+        : When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
+        
+        **ValueError**
+        : If none of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.
 
         Returns
         -------
-        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            Tensor of score values.
-            First dimension: incomplete triplets tested
-            Second dimension: candidate indices
-            For example, if the function is called to infer the score of tails:
-            First dimension: (head_indices, edge_indices)
-            Second dimension: tail_indices
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : Tensor of score values.
+            : First dimension: incomplete triplets tested
+            : Second dimension: candidate indices
+        : For example, if the function is called to infer the score of tails:
+            : First dimension: (head_indices, edge_indices)
+            : Second dimension: tail_indices
         
         """
         real_head_embeddings, imaginary_head_embeddings = head_embeddings

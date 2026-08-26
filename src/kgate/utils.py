@@ -33,7 +33,7 @@ logging.basicConfig(
 
 
 def load_knowledge_graph(pickle_filename: Path
-                        ) -> Tuple["KnowledgeGraph", "KnowledgeGraph", "KnowledgeGraph"]:
+                        ) -> "KnowledgeGraph":
     """
     Load the knowledge graph from pickle files.
     
@@ -44,33 +44,26 @@ def load_knowledge_graph(pickle_filename: Path
 
     Returns
     -------
-    kg_train: KnowledgeGraph
+    knowledge_graph: KnowledgeGraph
         Train split from the knowledge graph, directly loaded from the pickle file.
-    kg_validation: KnowledgeGraph
-        Validation split from the knowledge graph, directly loaded from the pickle file.
-    kg_test: KnowledgeGraph
-        Test split from the knowledge graph, directly loaded from the pickle file.
-    
     """
     logging.info(f"Will not run the preparation step. Using knowledge graph stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:
-        kg_train = pickle.load(file)
-        kg_validation = pickle.load(file)
-        kg_test = pickle.load(file)
+        knowledge_graph = pickle.load(file)
         
-    return kg_train, kg_validation, kg_test
+    return knowledge_graph
 
 
 def set_random_seeds(seed: int) -> None:
     """
     Set random seeds for reproducibility.
-    
+
     Arguments
     ---------
-    seed: int
-        Value determining the random.
-        When KGATE run with the same data and configuration with the
-        same random seeds twice, it should give the exact same result twice.
+    
+    **seed** *(int)*
+    : Value determining the random.
+    : When KGATE run with the same data and configuration with the same random seeds twice, it should give the exact same result twice.
     
     """
     random.seed(seed)
@@ -79,44 +72,33 @@ def set_random_seeds(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def compute_triplet_proportions(kg_train: "KnowledgeGraph",
-                                kg_test: "KnowledgeGraph",
-                                kg_validation: "KnowledgeGraph"
+def compute_triplet_proportions(knowledge_graph: "KnowledgeGraph"
                                 ) -> dict:
     """
-    Computes the proportion of triplets for each edge in each of the KnowledgeGraphs
+    Computes the proportion of triplets for each edge in each of the KnowledgeGraphs 
     (train, test, validation) relative to the total number of triplets for that edge.
 
     Arguments
     ---------
-    kg_train: KnowledgeGraph
-        Train split from the knowledge graph.
-    kg_test: KnowledgeGraph
-        Test split from the knowledge graph.
-    kg_validation: KnowledgeGraph
-        Validation split from the knowledge graph.
+    **knowledge_graph** *(KnowledgeGraph)*
+    : The knowledge graph processed and split
 
     Returns
     -------
-    proportions: dict
-        A dictionary where keys are edge identifiers and values are sub-dictionaries
-        with the respective proportions of each edge in kg_train, kg_test, and kg_validation.
+    
+    **proportions** *(dict)*
+    : A dictionary where keys are edge identifiers and values are sub-dictionaries with the respective proportions of each edge in kg_train, kg_test, and kg_validation.
         
     """
-    # Concatenate edges from all knowledge graphs
-    all_edges = torch.cat(( kg_train.triplets,
-                            kg_test.triplets,
-                            kg_validation.triplets))
-
     # Compute the number of triplets for all edges
-    total_counts = torch.bincount(all_edges)
+    total_counts = torch.bincount(knowledge_graph.triplets)
 
     # Compute occurences of each edge
-    train_count = torch.bincount(kg_train.triplets,
+    train_count = torch.bincount(knowledge_graph.graphindices[3, knowledge_graph.train_mask],
                                 minlength = len(total_counts))
-    test_count = torch.bincount(kg_test.triplets,
+    test_count = torch.bincount(knowledge_graph.graphindices[3, knowledge_graph.test_mask],
                                 minlength = len(total_counts))
-    validation_count = torch.bincount(kg_validation.triplets,
+    validation_count = torch.bincount(knowledge_graph.graphindices[3, knowledge_graph.validation_mask],
                                     minlength = len(total_counts))
 
     # Compute proportions for each knowledge graph
@@ -124,128 +106,30 @@ def compute_triplet_proportions(kg_train: "KnowledgeGraph",
     for edge_index in range(len(total_counts)):
         if total_counts[edge_index] > 0:
             proportions[edge_index] = {
-                "train": train_count[edge_index].item() / total_counts[edge_index].item(),
-                "test": test_count[edge_index].item() / total_counts[edge_index].item(),
-                "validation": validation_count[edge_index].item() / total_counts[edge_index].item()
+                "train": (train_count[edge_index] / total_counts[edge_index]).item(),
+                "test": (test_count[edge_index] / total_counts[edge_index]).item(),
+                "validation": (validation_count[edge_index] / total_counts[edge_index]).item()
             }
 
     return proportions
 
 
-def concat_kgs( kg_train: "KnowledgeGraph",
-                kg_validation: "KnowledgeGraph",
-                kg_test: "KnowledgeGraph"
-                ) -> Tuple[Tensor, Tensor, Tensor]:
-    """
-    Merge the 3 splits of a knowledge graph into the original knowledge graph.
-
-    Arguments
-    ---------
-    kg_train: KnowledgeGraph
-        Train split from the knowledge graph.
-    kg_test: KnowledgeGraph
-        Test split from the knowledge graph.
-    kg_validation: KnowledgeGraph
-        Validation split from the knowledge graph.
-
-    Returns
-    -------
-    head: torch.Tensor, shape: [merged_kg.node_count]
-        List of head indices.
-    tail: torch.Tensor, shape: [merged_kg.node_count]
-        List of tail indices.
-    edge: torch.Tensor, shape: [merged_kg.node_count]
-        List of edge indices.
-    
-    Notes
-    -----
-    (merged_kg.node_count) is the number of nodes of the newly merged knowledge graph.
-    
-    """
-    head = cat((kg_train.head_indices,
-                kg_validation.head_indices,
-                kg_test.head_indices))
-    
-    tail = cat((kg_train.tail_indices,
-                kg_validation.tail_indices,
-                kg_test.tail_indices))
-    
-    edge = cat((kg_train.edge_indices,
-                kg_validation.edge_indices,
-                kg_test.edge_indices))
-    
-    return head, tail, edge
-
-
-def count_triplets( kg1: "KnowledgeGraph",
-                    kg2: "KnowledgeGraph",
-                    duplicates: List[Tuple[int, int]],
-                    reverse_duplicates: List[Tuple[int, int]]
-                    ) -> Tuple[int, int]:
-    """
-    Give the number of triplets that have duplicates ([head,edge,tail] = [head,edge,tail])
-    and the number of triplets that have reverse duplicates ([head,edge,tail] = [tail,edge,head]).
-    
-    Arguments
-    ---------
-    kg1: KnowledgeGraph
-        First knowledge graph.
-    kg2: KnowledgeGraph
-        Second knowledge graph.
-    duplicates: List[Tuple[int, int]]
-        List returned by torchkge.utils.data_redundancy.duplicates.
-    reverse_duplicates: List[Tuple[int, int]]
-        List returned by torchkge.utils.data_redundancy.duplicates.
-
-    Returns
-    -------
-    duplicate_count: int
-        Number of triplets in kg2 that have their duplicate triplet in kg1.
-    reverse_duplicate_count: int
-        Number of triplets in kg2 that have their reverse duplicate triplet in kg1.
-        
-    """
-    duplicate_count = 0
-    for first_edge_type, second_edge_type in duplicates:
-        head_tail_train = kg1.get_pairs(second_edge_type, type = "head_tail")
-        head_tail_test = kg2.get_pairs(first_edge_type, type = "head_tail")
-
-        duplicate_count += len(head_tail_test.intersection(head_tail_train))
-
-        head_tail_train = kg1.get_pairs(first_edge_type, type = "head_tail")
-        head_tail_test = kg2.get_pairs(second_edge_type, type = "head_tail")
-
-        duplicate_count += len(head_tail_test.intersection(head_tail_train))
-
-    reverse_duplicate_count = 0
-    for first_edge_type, second_edge_type in reverse_duplicates:
-        tail_head_train = kg1.get_pairs(second_edge_type, type = "tail_head")
-        head_tail_test = kg2.get_pairs(first_edge_type, type = "head_tail")
-
-        reverse_duplicate_count += len(head_tail_test.intersection(tail_head_train))
-
-        tail_head_train = kg1.get_pairs(first_edge_type, type = "tail_head")
-        head_tail_test = kg2.get_pairs(second_edge_type, type = "head_tail")
-
-        reverse_duplicate_count += len(head_tail_test.intersection(tail_head_train))
-
-    return duplicate_count, reverse_duplicate_count
-
-
 def find_best_model(directory: Path) -> Path | None:
     """
-    Find all files having a model and compare their `validation_metrics` score
+    Find all files having a model and compare their `validation_metrics` score 
     to return the path to the file with the best result.
     
     Arguments
     ---------
-    dir: Path
-        Path to the directory containing the model files.
+    
+    **dir** *(Path)*
+    : Path to the directory containing the model files.
     
     Returns
     -------
-    best_model_path: path
-        Path to the file with the best model
+    
+    **best_model_path** *(path)*
+    : Path to the file with the best model
 
     """
     
@@ -261,45 +145,26 @@ def find_best_model(directory: Path) -> Path | None:
                     default = None
                     )
     if best_model is None:
-        logging.error(f"No best model found in directory {directory}. Make sure to run the training before calling this method.")
-        return None
+        logging.warning(f"No best model found in directory {directory}, falling back to the latest checkpoint.")
+        best_model = max(
+                    (filename
+                    for filename
+                    in os.listdir(directory)
+                    if filename.startswith("checkpoint_")
+                    and filename.endswith(".pt")),
+
+                    key = lambda filename: float(filename.split("checkpoint_")[1].rstrip(".pt")),
+
+                    default = None
+                )
+        if best_model is None:
+            logging.error(f"No best model found in directory {directory}. Make sure to run the training before calling this method.")
+            return None
 
     best_model_path = Path(best_model)
     
     return best_model_path
     
-    
-def initialize_embedding(embedding_count: int,
-                        embedding_dimensions: int,
-                        device: str = "cpu"
-                        ) -> nn.Embedding:
-    """
-    Initialize embeddings with number of nodes/edges and embedding dimensions.
-    
-    Use of a Xavier uniform distribution.
-    See PyTorch documentation: https://docs.pytorch.org/docs/stable/nn.init.html#torch.nn.init.xavier_uniform_
-    
-    Arguments
-    ---------
-    embedding_count: int
-        Number of nodes/edges in the embedding.
-    embedding_dimensions: int
-        Dimensions of embeddings.
-    device: str, "cuda" or "cpu", default to "cpu"
-        Indicate if data should be sent to GPU or CPU.
-        GPU is referenced to as Cuda.
-        
-    Returns
-    -------
-    embedding: nn.Embedding
-        Embedding object with given parameters.
-    
-    """
-    embedding = nn.Embedding(embedding_count, embedding_dimensions, device = device)
-    nn.init.xavier_uniform_(embedding.weight.data)
-    
-    return embedding
-
 
 def read_train_metrics(train_metrics_file: Path
                         ) -> pd.DataFrame:
@@ -308,13 +173,15 @@ def read_train_metrics(train_metrics_file: Path
     
     Arguments
     ---------
-    train_metrics_file: Path
-        Path to the directory with the train metrics file.
-        
+    
+    **train_metrics_file** *(Path)*
+    : Path to the directory with the train metrics file.
+
     Returns
     -------
-    dataframe: pd.DataFrame
-        Data extracted from the train metrics file.
+    
+    **dataframe** *(pd.DataFrame)*
+    : Data extracted from the train metrics file.
     
     """
     dataframe = pd.read_csv(train_metrics_file)
@@ -337,14 +204,18 @@ def plot_learning_curves(train_metrics_file: Path,
     
     Arguments
     ---------
-    train_metrics_file: Path
-        Path to the directory with the train metrics file.
-    output_directory: Path
-        Path to the directory where to save the plot files.
-    validation_metric_value: str
-        TODO.What_that_argument_is_or_does
     
-    """    
+    **train_metrics_file** *(Path)*
+    : Path to the directory with the train metrics file.
+    
+    **output_directory** *(Path)*
+    : Path to the directory where to save the plot files.
+    
+    **validation_metric_value** *(str)*
+    : *Missing documentation*
+    % TODO.What_that_argument_is_or_does
+    
+    """
     output_directory = Path(output_directory)
     dataframe = read_train_metrics(train_metrics_file)
     dataframe["Training Loss"] = pd.to_numeric(dataframe["Training Loss"], errors = "coerce")
@@ -383,26 +254,33 @@ def filter_scores(  scores: Tensor,
     
     Arguments
     ---------
-    scores: torch.Tensor
-        Tensor of shape [batch_size, n] where n is the number of nodes or edges, depending on what is filtered.
-    graphindices: torch.Tensor
-        Tensor of shape [4, triplet_count] containing every true triplet in the KG.
-    missing: "head", "tail" or "edge"
-        The part of the triplet that is currently being predicted.
-    first_index: torch.Tensor
-        Tensor containing the index of the heads (if missing is "edge" or "tails")
-        or tails (if missing is "head") that are part of the triplet being predicted.
-    second_index: torch.Tensor
-        Tensor containing the index of the tails (if missing is "edge")
-        or the edges (if missing is "head" or "tails") that are part of the triplet being predicted.
-    true_index: torch.Tensor, optional
-        Tensor containing the index of the nodes or edges currently being predicted.
-        If omitted, every true index will be filtered out.
+    
+    **scores** *(torch.Tensor)*
+    : Tensor of shape [batch_size, n] where n is the number of nodes or edges, depending on what is filtered.
+    
+    **graphindices** *(torch.Tensor)*
+    : Tensor of shape [4, triplet_count] containing every true triplet in the KG.
+    
+    **missing** *("head", "tail" or "edge")*
+    : The part of the triplet that is currently being predicted.
+    
+    **first_index** *(torch.Tensor)*
+    : Tensor containing the index of the heads (if missing is "edge" or "tails")
+    : or tails (if missing is "head") that are part of the triplet being predicted.
+    
+    **second_index** *(torch.Tensor)*
+    : Tensor containing the index of the tails (if missing is "edge")
+    : or the edges (if missing is "head" or "tails") that are part of the triplet being predicted.
+    
+    **true_index** *(torch.Tensor, optional)*
+    : Tensor containing the index of the nodes or edges currently being predicted.
+    : If omitted, every true index will be filtered out.
 
     Returns
     -------
-    filtered_scores: torch.Tensor
-        Tensor of shape [batch_size, n] with -Inf values for all true node/edge index except the ones being predicted.
+    
+    **filtered_scores** *(torch.Tensor)*
+    : Tensor of shape [batch_size, n] with -Inf values for all true node/edge index except the ones being predicted.
     
     """
     batch_size = scores.shape[0]
@@ -442,26 +320,33 @@ def merge_kg(kg_list: List["KnowledgeGraph"],
     
     Arguments
     ---------
-    kg_list: List[KnowledgeGraph]
-        The list of all knowledge graphs to be merged.
-    complete_graphindices: bool, default to False
-        Whether or not the removed_triplets tensor should be integrated into the final KG's graphindices.
+    
+    **kg_list** *(List[KnowledgeGraph])*
+    : The list of all knowledge graphs to be merged.
+    
+    **complete_graphindices** *(bool, default to False)*
+    : Whether or not the removed_triplets tensor should be integrated into the final KG's graphindices.
 
     Raises
     ------
-    AssertionError #1
-        Knowledge graphs in kg_list must have the same node_to_index.
-    AssertionError #2
-        Knowledge graphs in kg_list must have the same edge_to_index.
-    AssertionError #3
-        Knowledge graphs in kg_list must have the same node_type_to_index.
-    AssertionError #4
-        Knowledge graphs in kg_list must have the same triplet_types.
+    
+    **AssertionError #1**
+    : Knowledge graphs in `kg_list` must have the same `node_to_index`.
+    
+    **AssertionError #2**
+    : Knowledge graphs in `kg_list` must have the same `edge_to_index`.
+    
+    **AssertionError #3**
+    : Knowledge graphs in `kg_list` must have the same `node_type_to_index`.
+    
+    **AssertionError #4**
+    : Knowledge graphs in `kg_list` must have the same `triplet_types`.
     
     Returns
     -------
-    KnowledgeGraph
-        The merged KnowledgeGraph object.
+    
+    **merged_kg** *(KnowledgeGraph)*
+    : The merged KnowledgeGraph object.
         
     """
     first_kg = kg_list[0]
@@ -473,17 +358,16 @@ def merge_kg(kg_list: List["KnowledgeGraph"],
     assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triplet_types."
 
     new_graphindices = cat([kg.graphindices for kg in kg_list], dim = 1)
-    if complete_graphindices:
-        removed_graphindices = cat([kg.removed_triplets for kg in kg_list], dim = 1)
-        new_graphindices = cat([new_graphindices, removed_graphindices], dim = 1)
     
-    return first_kg.__class__(
+    merged_kg = first_kg.__class__(
         graphindices = new_graphindices,
         node_to_index = first_kg.node_to_index,
         edge_to_index = first_kg.edge_to_index,
         node_type_to_index = first_kg.node_type_to_index,
         triplet_types = first_kg.triplet_types
         )
+    
+    return merged_kg
 
 
 def get_dictionary_mapping( dataframe: pd.DataFrame,
@@ -494,21 +378,24 @@ def get_dictionary_mapping( dataframe: pd.DataFrame,
 
     Arguments
     ---------
-    dataframe: pd.DataFrame
-        Pandas dataframe containing at least three columns : "head", "edge" and "tail".
-        Other columns are ignored.
-    nodes: bool, optional, default to True
-        If True will build the dictionary for the nodes mapping, otherwise will build
-        the dictionary for the edge mapping.
+    
+    **dataframe** *(pd.DataFrame)*
+    : Pandas dataframe containing at least three columns : "head", "edge" and "tail".
+    : Other columns are ignored.
+    
+    **nodes** *(bool, optional, default to True)*
+    : If True will build the dictionary for the nodes mapping, otherwise will build the dictionary for the edge mapping.
     
     Returns
     -------
-    node_to_index or edge_to_index: Dict[str, int]
-        Mapping dictionary for nodes or edges.
+    
+    **node_to_index or edge_to_index** *(Dict[str, int])*
+    : Mapping dictionary for nodes or edges.
 
     Notes
     -----
-    This function is adapted from the torchkge.utils.operations.get_dictionaries() from the TorchKGE package.
+    
+    This function is adapted from the `torchkge.utils.operations.get_dictionaries()` from the TorchKGE package.
     
     """
     if nodes:
@@ -523,20 +410,21 @@ def get_dictionary_mapping( dataframe: pd.DataFrame,
 def get_average_heads_per_tail( graphindices: Tensor
                                 ) -> Dict[float, float]:
     """
-    Get the average number of heads per tail across each edges.
+    Get the average number of heads per tail across each edge.
 
     Arguments
     ---------
-    graphindices: torch.Tensor, dtype: torch.long, shape: [4, triplet_count]
-        The knowledge graph representation as a tensor with four rows, respectively
-        the head, tail, edge and triplet indices.
+    
+    **graphindices** *(torch.Tensor, dtype: torch.long, shape: [4, triplet_count])*
+    : The knowledge graph representation as a tensor with four rows, respectively the head, tail, edge and triplet indices.
     
     Returns
     -------
-    average_heads_per_tail: Dict[float,float]
-        Keys: relation indices
-        Values: average number of heads per tail
-        
+    
+    **average_heads_per_tail** *(Dict[float,float])*
+    : Keys: edge indices
+    : Values: average number of heads per tail
+    
     """
     dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head", "tail", "edge", "triplet"])
     dataframe = dataframe.groupby(["edge", "tail"]).count().groupby("edge").mean()
@@ -548,18 +436,20 @@ def get_average_heads_per_tail( graphindices: Tensor
 def get_average_tails_per_head( graphindices: Tensor
                                 ) -> Dict[float, float]:
     """
-    Get the average number of tails per head across each edges.
+    Get the average number of tails per head across each edge.
 
     Arguments
     ---------
-    graphindices: torch.Tensor, dtype: torch.long, shape: [4, triplet_count]
-        The knowledge graph representation as a tensor with four rows, respectively
-        the head, tail, edge and triplet indices.
+    
+    **graphindices** *(torch.Tensor, dtype: torch.long, shape: [4, triplet_count])*
+    : The knowledge graph representation as a tensor with four rows, respectively the head, tail, edge and triplet indices.
     
     Returns
     -------
-    average_tails_per_head: Dict[float,float]
-        Keys: relation indices; Values: average number of tails per head
+    
+    **average_tails_per_head** *(Dict[float,float])*
+    : Keys: edge indices
+    : Values: average number of tails per head
     
     """
     dataframe = pd.DataFrame(graphindices.T.cpu().numpy(), columns = ["head", "tail", "edge", "triplet"])
@@ -572,23 +462,28 @@ def get_average_tails_per_head( graphindices: Tensor
 def get_bernoulli_probabilities(knowledge_graph: "KnowledgeGraph"
                                 ) -> Dict[float, float]:
     """
-    Evaluate the Bernoulli probabilities for negative sampling as in the
+    Evaluate the Bernoulli probabilities for negative sampling as in the 
     TransH original paper by Wang et al. (2014).
 
     Arguments
     ---------
-    knowledge_graph: kgate.KnowledgeGraph
-        The knowledge graph to sample bernoulli probabilities from.
+    
+    **knowledge_graph** *(kgate.KnowledgeGraph)*
+    : The knowledge graph to sample bernoulli probabilities from.
 
     Raises
     ------
-    AssertionError
-        The edges between `heads_per_tail` and `tails_per_edge` must correspond.
+    
+    **AssertionError**
+    : The edges between `heads_per_tail` and `tails_per_edge` must correspond.
     
     Returns
     -------
-    bernoulli_probabilities: Dict[int, float]
-        Sampled probabilities of tails for each head. Keys: edge indices; Values: probabilities.
+    
+    **bernoulli_probabilities** *(Dict[int, float])*
+    : Sampled probabilities of tails for each head.
+    : Keys: edge indices.
+    : Values: probabilities.
     
     """
     heads_per_tail = get_average_heads_per_tail(knowledge_graph.graphindices)
