@@ -4,3 +4,4 @@ from .utils import read_train_metrics
 from .grid_search import run_grid_search
 from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
 from .initializers import Initializer
+from .config import Configuration

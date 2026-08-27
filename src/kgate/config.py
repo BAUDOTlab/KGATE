@@ -1,3 +1,4 @@
+from kgate.constants import SUPPORTED_INITIALIZERS
 from torch.distributed import new_subgroups
 from typing import Any
 import os
@@ -10,7 +11,7 @@ import tomli_w
 from importlib.resources import open_binary
 
 from .constants import SUPPORTED_ENCODERS, SUPPORTED_DECODERS, SUPPORTED_SAMPLERS
-from .utils import random_seeds
+from .utils import set_random_seeds
 
 import torch
 
@@ -33,6 +34,11 @@ class Configuration:
         self.learning_rate_scheduler = Learning_Rate_Scheduler_Configuration(self._configuration["learning_rate_scheduler"])
         self.training = Training_Configuration(self._configuration["training"])
         self.evaluation = Evaluation_Configuration(self._configuration["evaluation"])
+
+    def __repr__(self):
+        base_config = "\n".join([f"{key}: {value}" for key, value in self._configuration.items() if not isinstance(value, dict)])
+        return base_config + "\n" + "\n".join([str(sub_config) for sub_config in list(self.__dict__.values())[1:]])
+
 
     @staticmethod
     def parse(config_path: os.PathLike, config_dictionnary: dict):
@@ -202,7 +208,7 @@ class Configuration:
     def seed(self, new_seed: int):
         if new_seed != self.seed:
             logging.warn("The seed has changed in the configuration! All random generators reset according to the new seed.")
-            random_seeds(new_seed)
+            set_random_seeds(new_seed)
 
         self._configuration["seed"] = new_seed
 
@@ -334,17 +340,10 @@ class Preprocessing_Configuration:
     def __init__(self, preprocessing_configuration: dict):
         self._configuration = preprocessing_configuration 
 
-    def __str__(self):
-        return f"""
-        run: {self.run} \n
-        remove_duplicate_triplets: {self.remove_duplicate_triplets} \n
-        make_directed: {self.make_directed} \n
-        flag_near_duplicate_edges: {self.flag_near_duplicate_edges} \n
-        theta_first_edge_type: {self.theta_first_edge_type} \n
-        theta_second_edge_type: {self.theta_second_edge_type}
-        clean_train_set: {self.clean_train_set} \n
-        split_proportions: {self.split_proportions} \n
-        """
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
 
     @property
     def run(self) -> bool:
@@ -486,7 +485,33 @@ class Preprocessing_Configuration:
         assert theta >= 0 and theta <= 1, f"Theta value must be between 0 and 1, got {theta}"
 
         self._configuration["theta_second_edge_type"] = theta
-        
+    
+    @property
+    def flag_cartesian_edges(self) -> bool:
+        """
+        Whether or not to flag edges that are form a cartesian product.
+
+        This helps identify edges with different names but nearly the same semantic
+        meaning, which may introduce data leakage should they be spread out in different sets.
+
+        The identification of near duplicates is done through the procedure described in
+        Akrami et al. (2020) [1]_ and further developed in Brière et al. (2025) [2]_.
+
+        Defaults to True.
+
+        References
+        ----------
+        .. [1] Farahnaz Akrami, Mohammed Samiul Saeef, Quingheng Zhang.
+        `Realistic Re-evaluation of Knowledge Graph Completion Methods:
+        An Experimental Study.`
+        <https://arxiv.org/pdf/2003.08001.pdf>
+        SIGMOD’20, June 14–19, 2020, Portland, OR, USA
+        .. [2] Brière, Galadriel, Thomas Stosskopf, Benjamin Loire, and Anaïs Baudot. 
+        “Benchmarking Data Leakage on Link Prediction in Biomedical Knowledge Graph Embeddings.” 
+        <https://doi.org/10.1101/2025.01.23.634511>
+        Preprint, bioRxiv, January 26, 2025.
+        """
+
     @property
     def clean_train_set(self) -> bool:
         """
@@ -520,6 +545,101 @@ class Preprocessing_Configuration:
 
         self._configuration["split"] = proportions
 
+class Initializer_Configuration:
+    """
+    Initializer part of the main configuration
+
+    The initializer generates the initial embeddings for nodes and edges.
+    Depending on the initializer used, the dimensions of the initial embeddings
+    may not be the same as node_embedding_dimension and edge_embedding_dimension,
+    in which case using an encoder is mandatory
+
+    Arguments
+    ---------
+    initializer_configuration: dict
+        Dictionary containing only the initializer configuration.
+    """
+    def __init__(self, initializer_config):
+        self._configuration = initializer_config
+        self.supported_initializer = SUPPORTED_INITIALIZERS
+
+        # If we load a configuration with an unsupported initializer name, 
+        # assume it is correct but warn the user.
+        if initializer_config["name"] not in SUPPORTED_INITIALIZERS:
+            logging.warn(f"Initializer name {initializer_config["name"]} is not a builtin KGATE initializer. It will be considered a custom initializer.")
+            self.register_name(initializer_config["name"])
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the initializer.
+
+        When using builtin KGATE initializers, possible values are:
+        - `Random`: all nodes and edges have random initial embeddings based on a xavier uniform function.
+        - `Feature`: the initial embeddings will be supplied by the user as node and edge features. If a node type doesn't have a feature, it will be randomly initialized as above.
+        - `Node2Vec`: use the Node2Vec random walk algorithm to initialize embeddings.
+
+        It is also possible to add your own custom initializer to the configuration, in
+        which case you should call :func:`~Config.initializer.register_name` to make sure
+        it is acknowledged as a valid initializer name.
+
+        Defaults to Random.
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def name(self, name: str):
+        assert name in self.supported_initializers, f"Unsupported initializer given. KGATE supports {', '.join(SUPPORTED_INITIALIZERS)} but got {name}. If you want to register a custom initializer name, use Config.initializer.register_name()"
+
+        self._configuration["name"] = name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid initializer.
+
+        Adds the given name to the list of supported initializers and set it
+        as the current initializer name in the configuration.
+
+        KGATE has a limited set of builtin initializers and validates inputs
+        against this list. To make sure your custom initializer pass the
+        sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the initializer to register.
+        """
+        self.supported_initializers.append(name)
+
+        self.name = name
+
+    @property
+    def walk_length(self) -> int:
+        """
+        Node2Vec parameter
+        """
+        return self._configuration["walk_length"]
+    
+    @walk_length.setter
+    def walk_length(self, new_walk_length: int):
+        self._configuration["walk_length"] = new_walk_length
+
+    @property
+    def context_size(self) -> int:
+        """
+        Node2Vec parameter
+        """
+        return self._configuration["context_size"]
+
+    @context_size.setter
+    def context_size(self, new_size: int):
+        self._configuration["context_size"] = new_size
+
+
 class Encoder_Configuration:
     """
     Encoder part of the main configuration.
@@ -542,6 +662,11 @@ class Encoder_Configuration:
         if encoder_config["name"] not in SUPPORTED_ENCODERS:
             logging.warn(f"Encoder name {encoder_config["name"]} is not a builtin KGATE encoder. It will be considered a custom encoder.")
             self.register_name(encoder_config["name"])
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
 
     @property
     def name(self) -> str:
@@ -627,7 +752,13 @@ class Decoder_Configuration:
         if decoder_config["name"] not in SUPPORTED_DECODERS:
             logging.warn(f"decoder name {decoder_config["name"]} is not a builtin KGATE decoder. It will be considered a custom decoder.")
             self.register_name(decoder_config["name"])
-            
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+
     @property
     def name(self) -> str:
         """
@@ -744,7 +875,7 @@ class Sampler_Configuration:
     sampler_configuration: dict
         Dictionary containing only the sampler configuration.
     """
-    def Negative_Sampler_Config(self, sampler_configuration):
+    def __init__(self, sampler_configuration):
         self._configuration = sampler_configuration
 
         self.supported_samplers = SUPPORTED_SAMPLERS
@@ -755,6 +886,9 @@ class Sampler_Configuration:
             logging.warn(f"Sampler name {sampler_configuration["name"]} is not a builtin KGATE negative sampler. It will be considered a custom negative sampler.")
             self.register_name(sampler_configuration["name"])
 
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
 
     @property
     def name(self) -> str:
@@ -825,6 +959,11 @@ class Optimizer_Configuration:
     def __init__(self, optimizer_configuration):
         self._configuration = optimizer_configuration
         self._other_parameters = {}
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
 
     @property
     def name(self) -> str:
@@ -917,6 +1056,11 @@ class Learning_Rate_Scheduler_Configuration:
         self._configuration = lr_scheduler_configuration
         self._parameters = {}
 
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
     @property
     def name(self) -> str:
         """
@@ -960,6 +1104,11 @@ class Training_Configuration:
     """
     def __init__(self, training_configuration):
         self._configuration = training_configuration
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
 
     @property
     def max_epochs(self) -> int:
@@ -1093,6 +1242,11 @@ class Evaluation_Configuration:
     def __init__(self, evaluation_configuration):
         self._configuration = evaluation_configuration
 
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
     @property
     def objective(self) -> Literal["Link Prediction", "Triplet Classification"]:
         """# Types of evaluation to be run on the validation and testing set.
@@ -1108,3 +1262,11 @@ class Evaluation_Configuration:
 
         self._configuration["objective"] = new_objective
     
+    @property
+    def target_edges(self) -> list[str]:
+        """Name of the edges of interest to isolate them during evaluation."""
+        return self._configuration["target_edges"]
+    
+    @target_edges.setter
+    def target_edges(self, new_targets: list[str]):
+        self._configuration["target_edges"] = new_targets

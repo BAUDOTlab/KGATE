@@ -51,9 +51,7 @@ from .samplers import (
 from .utils import (
     find_best_model,
     load_knowledge_graph,
-    parse_config,
     plot_learning_curves,
-    save_config,
     set_random_seeds,
 )
 
@@ -731,9 +729,9 @@ class Architect(Module):
         try:
             learning_rate_scheduler: optim.lr_scheduler.LRScheduler = learning_rate_scheduler_class(self.optimizer, **learning_rate_scheduler_params)
         except TypeError as e:
-            raise ValueError(f"Error initializing '{learning_rate_scheduler_type}': {e}")
+            raise ValueError(f"Error initializing '{learning_rate_scheduler_name}': {e}")
         
-        logging.info(f"Scheduler '{learning_rate_scheduler_type}' initialized with parameters: {learning_rate_scheduler_params}")
+        logging.info(f"Scheduler '{learning_rate_scheduler_name}' initialized with parameters: {learning_rate_scheduler_params}")
         
         return learning_rate_scheduler
 
@@ -979,7 +977,7 @@ class Architect(Module):
         # If we find an identical config we resume training from it, otherwise we clean the checkpoints directory.
         existing_config_path: Path = Path(self.configuration.output_directory).joinpath("kgate_config.toml")
         if existing_config_path.exists():
-            existing_config = parse_config(str(existing_config_path), {})
+            existing_config = Configuration(config_path = str(existing_config_path), config_dict = {})
             all_checkpoints = glob(f"{self.checkpoints_directory}/checkpoint_*.pt")
             if existing_config == self.configuration and len(all_checkpoints) > 0:
                 checkpoint_file = checkpoint_file or Path(max(all_checkpoints, key = os.path.getctime))
@@ -1067,7 +1065,7 @@ class Architect(Module):
             to_save
         )
 
-        save_config(self.configuration)
+        self.configuration.save()
 
         if checkpoint_file is not None:
             if Path(checkpoint_file).is_file():

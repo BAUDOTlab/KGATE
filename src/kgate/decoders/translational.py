@@ -1718,53 +1718,6 @@ class TorusE(TranslationalDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-<<<<<<< HEAD
-                                    edge_embeddings: nn.Embedding,
-                                    head_indices: Tensor,
-                                    tail_indices: Tensor,
-                                    edge_indices: Tensor,
-                                    node_inference: bool = True
-                                    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        """
-        Link prediction evaluation helper function. Get node embeddings
-        and edge embeddings. The output will be fed to the
-        `inference_score_function` method.
-
-        Arguments
-        ---------
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
-
-        Returns
-        -------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            Head node embeddings.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions]
-            Tail node embeddings.
-        edge_embeddings_inferred: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions]
-            Edge embeddings.
-        candidates: torch.Tensor
-            Candidate embeddings for nodes or edges.
-||||||| cbb8986
-    def inference_prepare_candidates(self, *, 
-                                    h_idx: Tensor, 
-                                    t_idx: Tensor, 
-                                    r_idx: Tensor, 
-                                    node_embeddings: Tensor, 
-                                    relation_embeddings: nn.Embedding,
-                                    entities: bool =True) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        b_size = h_idx.shape[0]
-=======
                                     edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
@@ -1778,33 +1731,6 @@ class TorusE(TranslationalDecoder):
 
         Arguments
         ---------
-<<<<<<< HEAD
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
-||||||| dbd47f1
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
-=======
         
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
@@ -1823,7 +1749,6 @@ class TorusE(TranslationalDecoder):
         
         **node_inference** *(bool, optional, default to True, keyword-only)*
         : If True, prepare candidate nodes; otherwise, prepare candidate edges.
->>>>>>> dev
 
         Returns
         -------
@@ -1839,8 +1764,6 @@ class TorusE(TranslationalDecoder):
         
         **candidates** *(torch.Tensor)*
         : Candidate embeddings for nodes or edges.
->>>>>>> main
-
         """
         batch_size = head_indices.shape[0]
 
@@ -1851,34 +1774,15 @@ class TorusE(TranslationalDecoder):
 
         head_embeddings = node_embeddings[head_indices]
         tail_embeddings = node_embeddings[tail_indices]
-<<<<<<< HEAD
-        edge_embeddings_inferred = edge_embeddings(edge_indices)
-||||||| cbb8986
-        device = h_idx.device        
-=======
         edge_embeddings_inferred = edge_embeddings[edge_indices]
->>>>>>> main
 
         if node_inference:
             # Prepare candidates for every node
             candidates = node_embeddings
         else:
             # Prepare candidates for every edge
-<<<<<<< HEAD
-            candidates = edge_embeddings.weight.data
-||||||| cbb8986
-            # Prepare candidates for every relations
-            candidates = relation_embeddings.weight.data
-=======
             candidates = edge_embeddings.data
->>>>>>> main
             
         candidates = candidates.unsqueeze(0).expand(batch_size, -1, -1)
         
-<<<<<<< HEAD
         return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
-||||||| cbb8986
-        return h, t, r, candidates
-=======
-        return head_embeddings, tail_embeddings, edge_embeddings_inferred, candidates
->>>>>>> main

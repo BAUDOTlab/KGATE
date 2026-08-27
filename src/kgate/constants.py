@@ -1,6 +1,13 @@
 # Separators that can be used to load a CSV file
 SUPPORTED_SEPARATORS = [",","\t",";"]
 
+# Builtin KGATE initializers
+SUPPORTED_INITIALIZERS = [
+    "Random",
+    "Feature",
+    "Node2Vec"
+]
+
 # Builtin KGATE encoders
 SUPPORTED_ENCODERS = [
     "Default",

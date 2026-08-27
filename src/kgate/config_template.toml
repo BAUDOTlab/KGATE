@@ -187,6 +187,7 @@ pretrained_embeddings = "auto"
 # - Triplet Classification: Discriminates between true and false triplets
 objective = "Link Prediction"
 
+# Name of the edges of interest to isolate them during evaluation.
 target_edges = []
 
 [data_leakage]
