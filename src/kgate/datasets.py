@@ -54,12 +54,12 @@ def load_FB15k_237(data_directory: os.PathLike = None, keep_split: bool = False)
 
     output_directory.mkdir(exist_ok = True)
 
-    freebase_urls = ["https://github.com/villmow/datasets_knowledge_embedding/blob/master/FB15k-237/train.txt",
-                     "https://github.com/villmow/datasets_knowledge_embedding/blob/master/FB15k-237/valid.txt",
-                     "https://github.com/villmow/datasets_knowledge_embedding/blob/master/FB15k-237/test.txt"]
+    freebase_urls = ["https://raw.githubusercontent.com/villmow/datasets_knowledge_embedding/refs/heads/master/FB15k-237/train.txt",
+                     "https://raw.githubusercontent.com/villmow/datasets_knowledge_embedding/refs/heads/master/FB15k-237/valid.txt",
+                     "https://raw.githubusercontent.com/villmow/datasets_knowledge_embedding/refs/heads/master/FB15k-237/test.txt"]
 
     for url in freebase_urls:
-        filename = url.split["/"][:-1]
+        filename = url.split("/")[::-1][0]
         filepath = output_directory.joinpath(filename)
         if not filepath.exists():
             logging.info(f"Downloading {filename} from {url}...")
@@ -107,12 +107,12 @@ def load_WN18RR(data_directory: os.PathLike = None, keep_split: bool = False) ->
 
     output_directory.mkdir(exist_ok = True)
 
-    freebase_urls = ["https://github.com/villmow/datasets_knowledge_embedding/blob/master/WN18RR/text/train.txt",
-                     "https://github.com/villmow/datasets_knowledge_embedding/blob/master/WN18RR/text/valid.txt",
-                     "https://github.com/villmow/datasets_knowledge_embedding/blob/master/WN18RR/text/test.txt"]
+    wordnet_urls = ["https://raw.githubusercontent.com/villmow/datasets_knowledge_embedding/refs/heads/master/WN18RR/text/train.txt",
+                    "https://raw.githubusercontent.com/villmow/datasets_knowledge_embedding/refs/heads/master/WN18RR/text/valid.txt",
+                    "https://raw.githubusercontent.com/villmow/datasets_knowledge_embedding/refs/heads/master/WN18RR/text/test.txt"]
 
-    for url in freebase_urls:
-        filename = url.split["/"][:-1]
+    for url in wordnet_urls:
+        filename = url.split("/")[::-1][0]
         filepath = output_directory.joinpath(filename)
         if not filepath.exists():
             logging.info(f"Downloading {filename} from {url}...")

@@ -10,7 +10,7 @@ SUPPORTED_INITIALIZERS = [
 
 # Builtin KGATE encoders
 SUPPORTED_ENCODERS = [
-    "Default",
+    "None",
     "GCN",
     "GAT"
 ]
@@ -26,6 +26,11 @@ SUPPORTED_DECODERS = [
     "DistMult",
     "ComplEx",
     "ConvKB"
+]
+
+SUPPORTED_LOSSES = [
+    "Margin",
+    "BCE"
 ]
 
 # Builtin KGATE negative samplers

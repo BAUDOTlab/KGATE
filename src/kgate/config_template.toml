@@ -13,11 +13,12 @@ output_directory = ""
 
 verbose = true
 
-# If the knowledge graph has not been preprocessed by KGATE before,
-# it is highly recommended to set this option as true.
-run_kg_preprocessing = true
 
 [preprocessing]
+
+# If the knowledge graph has not been preprocessed by KGATE before,
+# it is highly recommended to set this option as true.
+run_preprocessing = true
 
 remove_duplicate_triplets = true
 
@@ -73,7 +74,7 @@ context_size = 8
 # Supported options are:
 # - GCN: Graph Convolutional Network proposed by Kipf & Welling 2017
 # - GAT: Graph Attention Network improvment proposed by Brody et al. 2021
-name = "Default" #Lookup table
+name = "None" #Lookup table
 gnn_layer_number = 1
 
 
@@ -92,15 +93,27 @@ gnn_layer_number = 1
 # - ComplEx: Bilinear model proposed by TODO
 name = "TransE"
 
-# Translational decoders use a Margin Loss, which needs a margin parameter.
-# This is ignored for non-translational decoders.
-margin = 1
-
 # Type of dissimilarity used in the loss function. L1 or L2.
 dissimilarity = "L2"
 
 # Number of convolutional filter used by ConvKB
 filter_count = 3
+
+[model.loss]
+# The name of the loss function to use
+# Supported options are:
+# - Margin: a pairwise margin ranking loss which encourages the scores of positive triplets
+# to exceed the scores of negative triplets.
+# - BCE: a binary cross-entropy loss that treats link prediction as a binary classification problem.
+name = "Margin"
+
+# How the loss of each elements is aggregated into a single value.
+# Options are `mean` or `sum`
+reduction = "mean"
+
+# Only for Margin Loss, the value by which the positive scores must exceed the 
+# negative scores.
+margin = 1
 
 [negative_sampler]
 # Type of negative sampler to generate false triplets during the training.
@@ -129,7 +142,7 @@ weight_decay = 0.001
 
 # This is the initial learning rate, which might be modified by a learning rate scheduler (see below)
 # The name must rename unchanged, as it is directly called by PyTorch
-lr = 0.001
+learning_rate = 0.001
 
 [learning_rate_scheduler]
 # The Learning Rate Scheduler is an optional module that alters the learning rate throughout the training.

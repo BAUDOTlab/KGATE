@@ -10,7 +10,7 @@ import tomllib
 import tomli_w
 from importlib.resources import open_binary
 
-from .constants import SUPPORTED_ENCODERS, SUPPORTED_DECODERS, SUPPORTED_SAMPLERS
+from .constants import SUPPORTED_ENCODERS, SUPPORTED_DECODERS, SUPPORTED_SAMPLERS, SUPPORTED_LOSSES
 from .utils import set_random_seeds
 
 import torch
@@ -27,8 +27,10 @@ class Configuration:
         self._configuration = Configuration.parse(config_path, config_dict)
 
         self.preprocessing = Preprocessing_Configuration(self._configuration["preprocessing"])
+        self.initializer = Initializer_Configuration(self._configuration["model"]["initializer"])
         self.encoder = Encoder_Configuration(self._configuration["model"]["encoder"])
         self.decoder = Decoder_Configuration(self._configuration["model"]["decoder"])
+        self.loss = Loss_Configuration(self._configuration["model"]["loss"])
         self.negative_sampler = Sampler_Configuration(self._configuration["negative_sampler"])
         self.optimizer = Optimizer_Configuration(self._configuration["optimizer"])
         self.learning_rate_scheduler = Learning_Rate_Scheduler_Configuration(self._configuration["learning_rate_scheduler"])
@@ -187,7 +189,7 @@ class Configuration:
         config_path = filename or Path(self.output_directory).joinpath("kgate_config.toml")
 
         with open(config_path, "wb") as f:
-            tomli_w.dump(self._config, f)
+            tomli_w.dump(self._configuration, f)
 
     @property
     def seed(self) -> int:
@@ -354,11 +356,11 @@ class Preprocessing_Configuration:
 
         Defaults to True.
         """
-        return self._configuration["run_kg_preprocessing"]
+        return self._configuration["run_preprocessing"]
 
     @run.setter
     def run(self, run_preprocessing: bool):
-        self._configuration["run_kg_preprocessing"] = run_preprocessing
+        self._configuration["run_preprocessing"] = run_preprocessing
     
     @property
     def remove_duplicate_triplets(self) -> bool:
@@ -811,22 +813,6 @@ class Decoder_Configuration:
         self.name = name
 
     @property
-    def margin(self) -> int:
-        """
-        Margin value when using a Margin Loss.
-
-        The margin loss is only used with translational decoders.
-        This is ignored for non-translational decoders.
-
-        Default is 1.
-        """
-        return self._configuration["margin"]
-
-    @margin.setter
-    def margin(self, margin: int) -> int:
-        self._configuration["margin"] = margin
-
-    @property
     def dissimilarity(self) -> str:
         """
         Type of dissimilarity used in the loss function.
@@ -862,6 +848,107 @@ class Decoder_Configuration:
     def filter_count(self, filter_count: int):
         assert filter_count >= 1, "Cannot use less than one filter."
         self._configuration["filter_count"] = filter_count
+
+class Loss_Configuration:
+    """
+    Loss part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    loss_configuration: dict
+        Dictionary containing only the loss configuration.
+    """
+    def __init__(self, loss_configuration: dict):
+        self._configuration = loss_configuration 
+
+        self.supported_losses = SUPPORTED_LOSSES
+
+        # If we load a configuration with an unsupported loss name, 
+        # assume it is correct but warn the user.
+        if loss_configuration["name"] not in SUPPORTED_LOSSES:
+            logging.warn(f"Sampler name {loss_configuration["name"]} is not a builtin KGATE loss. It will be considered a custom loss.")
+            self.register_name(loss_configuration["name"])
+
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def name(self) -> bool:
+        """
+        The name of the loss function to use
+        
+        Supported options are:
+        - Margin: a pairwise margin ranking loss which encourages the scores of positive triplets
+        to exceed the scores of negative triplets.
+        - BCE: a binary cross-entropy loss that treats link prediction as a binary classification problem.
+
+        Defaults to Margin
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def name(self, new_name: str):
+        assert new_name in self.supported_losses, f"Unsupported loss given. KGATE supports {', '.join(SUPPORTED_SAMPLERS)} but got {new_name}. If you want to register a custom loss name, use Config.loss.register_name()"
+
+        self._configuration["name"] = new_name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid loss.
+
+        Adds the given name to the list of supported losss and set it
+        as the current loss name in the configuration.
+
+        KGATE has a limited set of builtin losses and validates inputs
+        against this list. To make sure your custom loss pass the
+        sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the loss to register.
+        """
+         
+        self.supported_losses.append(name)
+
+        self.name = name
+
+    @property
+    def margin(self) -> int:
+        """
+        Margin value when using a Margin Loss.
+
+        The margin loss is only used with translational decoders.
+        This is ignored for non-translational decoders.
+
+        Default is 1.
+        """
+        return self._configuration["margin"]
+
+    @margin.setter
+    def margin(self, margin: int) -> int:
+        self._configuration["margin"] = margin
+
+    @property
+    def reduction(self) -> str:
+        """
+        How the loss of each elements is aggregated into a single value.
+
+        Options are `mean` or `sum`
+        """
+        return self._configuration["reduction"]
+
+    @reduction.setter
+    def reduction(self, new_reduction: str):
+        assert new_reduction in ["mean", "sum"], "Reduction must be one of mean or sum."
+
+        self._configuration["reduction"] = new_reduction
 
 class Sampler_Configuration:
     """
@@ -987,13 +1074,13 @@ class Optimizer_Configuration:
 
         See PyTorch documentation for details.
         """
-        return self._configuration["weight_decay"]
+        return self._configuration["params"]["weight_decay"]
 
     @weight_decay.setter
     def weight_decay(self, new_decay: float):
         assert 0 <= new_decay <= 1, f"weight_decay must be between 0 and 1, but got {new_decay}"
 
-        self._configuration["weight_decay"] = new_decay
+        self._configuration["params"]["weight_decay"] = new_decay
 
     @property
     def learning_rate(self) -> float:
@@ -1002,13 +1089,13 @@ class Optimizer_Configuration:
 
         It may evolve during training if a learning rate scheduler is set up.
         """
-        return self._configuration["learning_rate"]
+        return self._configuration["params"]["learning_rate"]
 
     @learning_rate.setter
     def learning_rate(self, new_learning_rate):
         assert 0 <= new_learning_rate <= 1, f"learning_rate must be between 0 and 1, but got {new_learning_rate}"
 
-        self._configuration["learning_rate"] = new_learning_rate
+        self._configuration["params"]["learning_rate"] = new_learning_rate
 
     @property
     def other_parameters(self) -> dict:
