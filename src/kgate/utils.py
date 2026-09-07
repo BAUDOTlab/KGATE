@@ -32,166 +32,6 @@ logging.basicConfig(
 )
 
 
-def parse_config(config_path: str,
-                config_dictionnary: dict
-                ) -> dict:
-    """
-    Parse the configuration file and compares it to default and inline configurations to determine what 
-    each parameter must be. For each parameter, the final parsed configuration will include in 
-    priority order: inline configuration, configuration file, default configuration.
-    
-    Arguments
-    ---------
-
-    **config_path** *(str)*
-    : The complete path to the configuration file. If one already exists, it will be overwritten.
-    
-    **config_dictionnary** *(dict, optional)*
-    : The parsed configuration as a python dictionnary.
-    
-    Raises
-    ------
-
-    **FileNotFoundError**
-    : The configuration file is not found at the indicated path.
-    : Check that you gave the correct path, and that it is a str.
-    : If you give a relative path, it must be relative to the run script path.
-    
-    Returns
-    -------
-
-    **config** *(dict)*
-    : The final parsed configuration as a python dictionnary.
-    : Using priority orders: inline configuration, configuration file, default configuration
-    
-    """
-    if config_path != "" and not Path(config_path).exists():
-        raise FileNotFoundError(f"Configuration file {config_path} not found.")
-
-    with open_binary("kgate", "config_template.toml") as f:
-        default_config = tomllib.load(f)
-
-    config = {}
-
-    if config_path != "":
-        logging.info(f"Loading parameters from {config_path}")
-        with open(config_path, "rb") as f:
-            config = tomllib.load(f)
-    
-    # Make the final configuration, using priority orders:
-    # 1. Inline configuration (config_dictionnary)
-    # 2. Configuration file (config)
-    # 3. Default configuration (default_config)
-    # If a default value is None, consider it required and not defaultable
-    config = {  key: set_config_key(key, default_config, config, config_dictionnary)
-                for key
-                in default_config}
-
-    return config
-
-
-def set_config_key( key: str,
-                    default: dict,
-                    config: dict | None = None,
-                    inline: dict | None = None
-                    ) -> str | int | list | dict:
-    """
-    For a specific parameter, a 'key', compare default, inline and user-made configurations to give 
-    the key value with priority order: inline configuration, configuration file, default configuration.
-
-    Arguments
-    ---------
-    
-    **default** *(dict)*
-    : The default parsed configuration as a python dictionnary.
-    
-    **config** *(dict, optional)*
-    : The configuration parsed from the config file.
-    
-    **inline** *(dict, optional)*
-    : The inline parsed configuration as a python dictionnary.
-
-    Raises
-    ------
-    
-    **ValueError**
-    : A parameter without a default value is required but not set.
-
-    Returns
-    -------
-    
-    : Return one of the following values:
-        : **inline_value** *(str or int or float or List or dict or None)*
-            : Value of the key given by the user in command line.
-            : Can only be of types dict and List within the recursive call.
-        : **config_value** *(str or int or float or List or dict or None)*
-            : Value of the key from the configuration file.
-            : Can only be of types dict and List within the recursive call.
-        : **default[key]** *(str or int or float or List or dict or None)*
-            : Value of the key from the default configuration file.
-            : Can only be of types dict and List within the recursive call.
-    
-    """
-    if inline is not None and key in inline:
-        inline_value = inline[key]
-    else:
-        inline_value = None
-
-    if config is not None and key in config:
-        config_value = config[key]
-    else: 
-        config_value = None
-
-    # If the value is a dict, recursively call this function on each of its keys
-    if key in default and isinstance(default[key], dict):
-        new_value = {}
-        # The keys are taken from default
-        keys = list(default[key].keys())
-        if config_value is not None:
-            # If they exist, keys are taken from the config file
-            keys += (list(config_value.keys()))
-        if inline_value is not None:
-            # If they exist, keys are taken from inline inputs
-            keys += (list(inline_value.keys()))
-        for child_key in set(keys):
-            new_value.update({child_key: set_config_key(child_key, default[key], config_value, inline_value)})
-        return new_value
-    
-    # Return the key value in priority from: inline, config, default
-    if inline_value is not None:
-        return inline_value
-    elif config_value is not None:
-        return config_value
-    elif default[key] is not None:
-        logging.info(f"No value set for parameter {key}. Defaulting to {default[key]}")
-        return default[key]
-    else:
-        raise ValueError(f"Parameter {key} is required but not set without a default value.")
-
-
-def save_config(config: dict,
-                filename: Path | None = None):
-    """
-    Saves the Architect configuration as a TOML file.
-    
-    If no filename is given, it will be created as `config.output_directory/kgate_config.toml`.
-    
-    Arguments
-    ---------
-
-    **config** *(dict)*
-    : The parsed config as a python dictionnary.
-    
-    **filename** *(Path, optional)*
-    : The complete path to the configuration file. If one already exists, it will be overwritten.
-    
-    """
-    config_path = filename or Path(config["output_directory"]).joinpath("kgate_config.toml")
-
-    with open(config_path, "wb") as f:
-        tomli_w.dump(config,f)
-
-
 def load_knowledge_graph(pickle_filename: Path
                         ) -> "KnowledgeGraph":
     """
@@ -199,14 +39,13 @@ def load_knowledge_graph(pickle_filename: Path
     
     Arguments
     ---------
-
-    **pickle_filename** *(Path)*
-    : The complete path to the pickle file (.pkl).
+    pickle_filename: Path
+        The complete path to the pickle file (.pkl).
 
     Returns
     -------
-    **knowledge_graph** *(KnowledgeGraph)*
-    : The knowledge graph loaded from the pickle file.    
+    knowledge_graph: KnowledgeGraph
+        Train split from the knowledge graph, directly loaded from the pickle file.
     """
     logging.info(f"Will not run the preparation step. Using knowledge graph stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:

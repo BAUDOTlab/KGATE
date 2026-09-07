@@ -1731,33 +1731,6 @@ class TorusE(TranslationalDecoder):
 
         Arguments
         ---------
-<<<<<<< HEAD
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
-||||||| dbd47f1
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
-=======
         
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only)*
         : Embeddings of all nodes.
@@ -1776,7 +1749,6 @@ class TorusE(TranslationalDecoder):
         
         **node_inference** *(bool, optional, default to True, keyword-only)*
         : If True, prepare candidate nodes; otherwise, prepare candidate edges.
->>>>>>> dev
 
         Returns
         -------
@@ -1792,7 +1764,6 @@ class TorusE(TranslationalDecoder):
         
         **candidates** *(torch.Tensor)*
         : Candidate embeddings for nodes or edges.
-
         """
         batch_size = head_indices.shape[0]
 

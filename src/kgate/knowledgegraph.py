@@ -9,7 +9,7 @@ import logging
 from collections import defaultdict
 from itertools import combinations
 from math import ceil
-from typing import Self, Dict, Tuple, List, Set, Literal
+from typing import Dict, Tuple, List, Literal
 
 import numpy as np
 import pandas as pd
@@ -19,7 +19,6 @@ import torch
 from torch import tensor, Tensor, cat
 import torch.nn as nn
 from torch.utils.data import Dataset
-from torch.types import Number
 
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import k_hop_subgraph
@@ -87,6 +86,7 @@ class EncoderInput:
         self.seed_mapping = seed_mapping
 
 
+
     def __repr__(self):
         x_repr = "\n\t".join([
             f"{node}: {{ [{embedding.size(0)},{embedding.size(1)}] }}" 
@@ -94,7 +94,7 @@ class EncoderInput:
             ])
         edge_repr = "\n\t".join([
             f"{edge}: {edge_index}"
-            for edge, edge_index in self.edge_index.items()
+            for edge, edge_index in self.edge_list.items()
         ])
         mapping_repr = "\n\t".join([
             f"{node_type}: {index}"
@@ -1481,4 +1481,3 @@ class KnowledgeGraph(Dataset):
                                     node_to_index = torchkge_kg.ent2ix,
                                     edge_to_index = torchkge_kg.rel2ix)
             return new_kg
-        

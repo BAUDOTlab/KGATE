@@ -28,7 +28,6 @@ class BilinearDecoder(Module):
 
         Furthermore, this interface doesn't implement anything but is a type helper. 
         However, functions from this class returning None can be used directly from inheriting classes.
-
         """
         super().__init__()
 

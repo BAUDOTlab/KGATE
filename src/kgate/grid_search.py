@@ -6,8 +6,7 @@ import pandas as pd
 
 from .architect import Architect
 from .knowledgegraph import KnowledgeGraph
-from .utils import parse_config
-
+from .config import Configuration
 
 logging.captureWarnings(True)
 logging_level = logging.INFO
@@ -55,8 +54,8 @@ def run_grid_search(config_path: str,
     
     """
     def objective(trial: optuna.trial.Trial):
-        config = parse_config(  config_path = config_path,
-                                config_dictionnary = {})
+        config = Configuration(  config_path = config_path,
+                                config_dict = {})
 
         config = {key: suggest_value(trial, key, config[key]) for key in config}
         

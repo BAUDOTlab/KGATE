@@ -174,7 +174,7 @@ class EdgeInference:
                     hop_count = encoder.n_layers
                     edge_list = self.kg.edge_list
 
-                    _,_,_, edge_mask = k_hop_subgraph(
+                    _, _, _, edge_mask = k_hop_subgraph(
                         node_idx = seed_nodes,
                         num_hops = hop_count,
                         edge_index = edge_list

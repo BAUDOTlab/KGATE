@@ -32,6 +32,7 @@ from torch.nn import Module
 from torch.utils.data import DataLoader, Subset
 from torchkge.utils import BinaryCrossEntropyLoss, MarginLoss
 
+from .config import Configuration
 from .datasets import load_FB15k_237, load_PrimeKG, load_WN18RR
 from .decoders import *
 from .encoders import *
@@ -50,9 +51,7 @@ from .samplers import (
 from .utils import (
     find_best_model,
     load_knowledge_graph,
-    parse_config,
     plot_learning_curves,
-    save_config,
     set_random_seeds,
 )
 
@@ -222,7 +221,7 @@ class Architect(Module):
 
         # kg should be of type KnowledgeGraph, if exists use it instead of the one in config
         # dataframe should have columns head, tail and edge
-        self.config: dict = parse_config(config_path, kwargs)
+        self.configuration: Configuration = Configuration(config_path = config_path, config_dict = kwargs)
 
         if torch.cuda.is_available():
             # Benchmark convolution algorithms to chose the optimal one.
@@ -239,7 +238,7 @@ class Architect(Module):
         logging.info(f"Setting number of threads to {number_of_cores}")
         torch.set_num_threads(number_of_cores)
 
-        output_directory: Path = Path(self.config["output_directory"])
+        output_directory: Path = Path(self.configuration.output_directory)
         # Create output folder if it doesn't exist
         logging.info(f"Output folder: {output_directory}")
         output_directory.mkdir(parents = True, exist_ok = True)
@@ -248,17 +247,17 @@ class Architect(Module):
         self.device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logging.info(f"Detected device: {self.device}")
 
-        set_random_seeds(self.config["seed"])
+        set_random_seeds(self.configuration.seed)
 
-        self.node_embedding_dimensions: int = self.config["model"]["node_embedding_dimensions"]
-        self.edge_embedding_dimensions: int = self.config["model"]["edge_embedding_dimensions"]
+        self.node_embedding_dimensions: int = self.configuration.node_embedding_dimensions
+        self.edge_embedding_dimensions: int = self.configuration.edge_embedding_dimensions
         if self.edge_embedding_dimensions == -1:
             self.edge_embedding_dimensions = self.node_embedding_dimensions
-        self.evaluation_batch_size: int = self.config["training"]["evaluation_batch_size"]
+        self.evaluation_batch_size: int = self.configuration.training.evaluation_batch_size
 
         self.metadata = None
         if metadata is None:
-            metadata = self.config["metadata_csv"] if self.config["metadata_csv"] != "" else None
+            metadata = self.configuration.metadata_path if self.configuration.metadata_path != "" else None
         self.set_metadata(metadata = metadata)
         
         if isinstance(knowledge_graph, str):
@@ -272,16 +271,14 @@ class Architect(Module):
                 case _:
                     raise ValueError(f"Unrecognized {knowledge_graph} knowledge graph specified.")
 
-        run_kg_preprocessing: bool = self.config["run_kg_preprocessing"]
-
-        if run_kg_preprocessing:
+        if self.configuration.preprocessing.run:
             logging.info(f"Preparing KG...")
-            self.knowledge_graph = prepare_knowledge_graph(self.config, knowledge_graph, dataframe, self.metadata)
+            self.knowledge_graph = prepare_knowledge_graph(self.configuration, knowledge_graph, dataframe, self.metadata)
             logging.info("KG preprocessed.")
         else:
             if knowledge_graph is None:
                 logging.info("Loading KG...")
-                self.knowledge_graph = load_knowledge_graph(Path(self.config["kg_pkl"]))
+                self.knowledge_graph = load_knowledge_graph(Path(self.configuration.knowledge_graph_pickle_file))
                 logging.info("Done")
             else:
                 self.knowledge_graph = knowledge_graph
@@ -452,12 +449,12 @@ class Architect(Module):
             The encoder object, or None if there is no encoder.
         
         """
-        encoder_config: dict = self.config["model"]["encoder"]
+        encoder_config = self.configuration.encoder
         if encoder_name == "":
-            encoder_name = encoder_config["name"]
+            encoder_name = encoder_config.name
         
         if gnn_layers == 0:
-            gnn_layers = encoder_config["gnn_layer_number"]
+            gnn_layers = encoder_config.gnn_layers
 
         edge_types = self.knowledge_graph.triplet_types
 
@@ -545,16 +542,16 @@ class Architect(Module):
         : The loss object.
         
         """
-        decoder_config: dict = self.config["model"]["decoder"]
+        decoder_configuration: dict = self.configuration.decoder
 
         if decoder_name == "":
-            decoder_name = decoder_config["name"]
+            decoder_name = decoder_configuration.name
         if dissimilarity == "":
-            dissimilarity = decoder_config["dissimilarity"]
-        if margin is None:
-            margin = decoder_config["margin"]
-        if filter_count is None:
-            filter_count = decoder_config["filter_count"]
+            dissimilarity = decoder_configuration.dissimilarity
+        if margin == 0:
+            margin = decoder_configuration.margin
+        if filter_count == 0:
+            filter_count = decoder_configuration.filter_count
 
         # Translational models
         match decoder_name:
@@ -633,24 +630,12 @@ class Architect(Module):
         : Initialized optimizer.
         
         """
-        optimizer_name: str = self.config["optimizer"]["name"]
+        optimizer_name: str = self.configuration.optimizer.name
 
         # Retrieve optimizer parameters, defaulting to an empty dictionnary if not specified
-        optimizer_params: dict = self.config["optimizer"]["params"]
+        optimizer_params: dict = self.configuration.optimizer.parameters
 
-        # Mapping of optimizer names to their corresponding PyTorch classes
-        optimizer_mapping = {
-            "Adam": optim.Adam,
-            "SGD": optim.SGD,
-            "RMSprop": optim.RMSprop,
-            # Add other optimizers here as needed
-        }
-
-        # Check if the specified optimizer is supported
-        if optimizer_name not in optimizer_mapping:
-            raise NotImplementedError(f"Optimizer type '{optimizer_name}' is not supported. Please check the configuration. Supported optimizers are:\n{'\n'.join(optimizer_mapping.keys())}")
-
-        optimizer_class = optimizer_mapping[optimizer_name]
+        optimizer_class = getattr(optim, optimizer_name)
 
         parameters = [node_embedding for node_embedding in self.knowledge_graph.node_embeddings]
         parameters.append(self.knowledge_graph.edge_embeddings)
@@ -687,9 +672,9 @@ class Architect(Module):
         : The initialized sampler.
         
         """
-        negative_sampler_config: dict = self.config["sampler"]
-        negative_sampler_name: str = negative_sampler_config["name"]
-        negative_triplet_count: int = negative_sampler_config["negative_triplet_count"]
+        negative_sampler_config = self.configuration.negative_sampler
+        negative_sampler_name: str = negative_sampler_config.name
+        negative_triplet_count: int = negative_sampler_config.negative_triplet_count
 
         match negative_sampler_name:
             case "Positional":
@@ -728,40 +713,25 @@ class Architect(Module):
         : Instance of the specified scheduler or None if no scheduler is configured.
         
         """
-        learning_rate_scheduler_config: dict = self.config["learning_rate_scheduler"]
-        
-        if learning_rate_scheduler_config["type"] == "":
+        learning_rate_scheduler_config = self.configuration.learning_rate_scheduler
+
+        learning_rate_scheduler_name: str = learning_rate_scheduler_config.name
+
+        if learning_rate_scheduler_name == "":
             warnings.warn("No learning rate scheduler specified in the configuration, none will be used.")
             return None
     
-        learning_rate_scheduler_type: str = learning_rate_scheduler_config["type"]
-        learning_rate_scheduler_params: dict = learning_rate_scheduler_config["params"]
-        
-        # Mapping of scheduler names to their corresponding PyTorch classes
-        learning_rate_scheduler_mapping = {
-            "StepLR": optim.lr_scheduler.StepLR,
-            "MultiStepLR": optim.lr_scheduler.MultiStepLR,
-            "ExponentialLR": optim.lr_scheduler.ExponentialLR,
-            "CosineAnnealingLR": optim.lr_scheduler.CosineAnnealingLR,
-            "CosineAnnealingWarmRestarts": optim.lr_scheduler.CosineAnnealingWarmRestarts,
-            "ReduceLROnPlateau": optim.lr_scheduler.ReduceLROnPlateau,
-            "LambdaLR": optim.lr_scheduler.LambdaLR,
-            "OneCycleLR": optim.lr_scheduler.OneCycleLR,
-            "CyclicLR": optim.lr_scheduler.CyclicLR,
-        }
+        learning_rate_scheduler_params: dict = learning_rate_scheduler_config.parameters
 
-        # Verify that the scheduler type is supported
-        if learning_rate_scheduler_type not in learning_rate_scheduler_mapping:
-            raise ValueError(f"Scheduler type '{learning_rate_scheduler_type}' is not supported. Please check the configuration.")
-        learning_rate_scheduler_class = learning_rate_scheduler_mapping[learning_rate_scheduler_type]
+        learning_rate_scheduler_class = getattr(optim.lr_scheduler, learning_rate_scheduler_name)
         
         # Initialize the scheduler based on its type
         try:
             learning_rate_scheduler: optim.lr_scheduler.LRScheduler = learning_rate_scheduler_class(self.optimizer, **learning_rate_scheduler_params)
         except TypeError as e:
-            raise ValueError(f"Error initializing '{learning_rate_scheduler_type}': {e}")
+            raise ValueError(f"Error initializing '{learning_rate_scheduler_name}': {e}")
         
-        logging.info(f"Scheduler '{learning_rate_scheduler_type}' initialized with parameters: {learning_rate_scheduler_params}")
+        logging.info(f"Scheduler '{learning_rate_scheduler_name}' initialized with parameters: {learning_rate_scheduler_params}")
         
         return learning_rate_scheduler
 
@@ -784,12 +754,11 @@ class Architect(Module):
         
         Returns
         -------
-        
-        **evaluator** *(LinkPredictionEvaluator or TripletClassificationEvaluator)*
-        : The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
+        evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
+            The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
         
         """
-        match self.config["evaluation"]["objective"]:
+        match self.configuration.evaluation.objective:
             case "Link Prediction":
                 evaluator = LinkPredictionEvaluator(graphindices = self.knowledge_graph.graphindices, embedding_dimensions = self.node_embedding_dimensions)
                 self.validation_metric = "MRR"
@@ -798,9 +767,9 @@ class Architect(Module):
                                                         knowledge_graph = self.knowledge_graph)
                 self.validation_metric = "Accuracy"
             case _:
-                raise NotImplementedError(f"The requested evaluator {self.config["evaluation"]["objective"]} is not implemented.")
+                raise NotImplementedError(f"The requested evaluator {self.configuration.evaluation.objective} is not implemented.")
             
-        logging.info(f"Using {self.config["evaluation"]["objective"]} evaluator.")
+        logging.info(f"Using {self.configuration.evaluation.objective} evaluator.")
         
         return evaluator
     
@@ -810,7 +779,7 @@ class Architect(Module):
         
         Options are random initialization, which is equivalent to just a lookup embedding,
         user-supplied features that can be learnt with a deep encoder, and Node2Vec."""
-        match self.config["model"]["initializer"]["name"]:
+        match self.configuration.initializer.name:
             case "Random":
                 initializer = Initializer()
             case "Feature":
@@ -819,15 +788,15 @@ class Architect(Module):
                 initializer = Node2VecInitializer(
                     edge_indices = self.knowledge_graph.edge_list[:, self.knowledge_graph.train_mask],
                     embedding_dimensions = self.node_embedding_dimensions,
-                    walk_length = self.config["model"]["initializer"]["walk_length"],
-                    context_size = self.config["model"]["initializer"]["context_size"],
+                    walk_length = self.configuration.initializer.walk_length,
+                    context_size = self.configuration.initializer.context_size,
                     output_directory = self.checkpoints_directory,
                     device = self.device
                 )
             case _:
-                raise NotImplementedError(f"The requested initializer {self.config["model"]["initializer"]["name"]} is not implemented.")
+                raise NotImplementedError(f"The requested initializer {self.configuration.initializer.name} is not implemented.")
             
-        logging.info(f"Using the {self.config["model"]["initializer"]["name"]} initializer")
+        logging.info(f"Using the {self.configuration.initializer.name} initializer")
         return initializer
 
     def initialize_model(self,
@@ -900,7 +869,6 @@ class Architect(Module):
                 # TODO: make it an hyperparameter
                 self.knowledge_graph.node_embeddings.requires_grad_(False)
 
-
         logging.info("Initializing optimizer...")
         self.optimizer = self.optimizer or self.initialize_optimizer()
 
@@ -945,6 +913,15 @@ class Architect(Module):
         **dry_run** *(bool, optional, default to False)*
         : Initialize every variable and the trainer, but doesn't start the training.
 
+        Arguments
+        ---------
+        checkpoint_file: Path, optional
+            The path to the checkpoint file to load and resume a previous training. If None, the training will start from scratch.
+        attributes: Dict[str, pd.DataFrame]
+            dict(node_type, embedding) containing the embedding for each type of node.
+        dry_run: bool, optional, default to False
+            Initialize every variable and the trainer, but doesn't start the training.
+
         Notes
         -----
         If there already is a configuration file in the output folder identical to the current configuration, KGATE will 
@@ -952,25 +929,25 @@ class Architect(Module):
         the output folder will be cleaned and the current configuration will be written as `kgate_config.toml`
         
         """
-        train_config: dict = self.config["training"]
-        self.max_epochs: int = train_config["max_epochs"]
-        self.train_batch_size: int = train_config["train_batch_size"]
-        self.patience: int = train_config["patience"]
-        self.evaluation_interval: int = train_config["evaluation_interval"]
-        self.save_interval: int = train_config["save_interval"]
+        train_configuration = self.configuration.training
+        self.max_epochs: int = train_configuration.max_epochs
+        self.train_batch_size: int = train_configuration.train_batch_size
+        self.patience: int = train_configuration.patience
+        self.evaluation_interval: int = train_configuration.evaluation_interval
+        self.save_interval: int = train_configuration.save_interval
 
-        match train_config["pretrained_embeddings"]:
+        match train_configuration.pretrained_embeddings:
             case "auto":
-                pretrained = Path(self.config["output_directory"]).joinpath("embeddings.pt")
+                pretrained = Path(self.configuration.output_directory).joinpath("embeddings.pt")
             case "":
                 pretrained = None
             case _:
-                pretrained = Path(train_config["pretrained_embeddings"])
+                pretrained = Path(train_configuration.pretrained_embeddings)
                 if not pretrained.exists(): pretrained = None
         
         self.initialize_model(attributes = attributes, pretrained = pretrained)
 
-        self.train_metrics_file: Path = Path(self.config["output_directory"], "training_metrics.csv")
+        self.train_metrics_file: Path = Path(self.configuration.output_directory, "training_metrics.csv")
 
         if checkpoint_file is None:
             with open(self.train_metrics_file, mode = "w", newline = "") as file:
@@ -998,11 +975,11 @@ class Architect(Module):
         )
 
         # If we find an identical config we resume training from it, otherwise we clean the checkpoints directory.
-        existing_config_path: Path = Path(self.config["output_directory"]).joinpath("kgate_config.toml")
+        existing_config_path: Path = Path(self.configuration.output_directory).joinpath("kgate_config.toml")
         if existing_config_path.exists():
-            existing_config = parse_config(str(existing_config_path), {})
+            existing_config = Configuration(config_path = str(existing_config_path), config_dict = {})
             all_checkpoints = glob(f"{self.checkpoints_directory}/checkpoint_*.pt")
-            if existing_config == self.config and len(all_checkpoints) > 0:
+            if existing_config == self.configuration and len(all_checkpoints) > 0:
                 checkpoint_file = checkpoint_file or Path(max(all_checkpoints, key = os.path.getctime))
                 logging.info("Found previous run with the same configuration in the output folder...")
         elif self.checkpoints_directory.exists() and len(os.listdir(self.checkpoints_directory)) > 0:
@@ -1014,54 +991,60 @@ class Architect(Module):
 
         trainer.add_event_handler(Events.COMPLETED, self.on_training_completed)
 
-        to_save = {
-            "embeddings": self.knowledge_graph.embeddings,
-            "decoder": self.decoder,
-            "optimizer": self.optimizer,
-            "trainer": trainer,
-        }
+        checkpoints_count = self.configuration.training.keep_n_checkpoints
 
-        if self.encoder is not None:
-            to_save.update({"encoder": self.encoder})
-        if self.scheduler is not None:
-            to_save.update({"scheduler": self.scheduler})
-        
-        checkpoint_handler = Checkpoint(
-            to_save,   # Dictionnary of objects to save
-            DiskSaver(dirname = self.checkpoints_directory,
-                    require_empty = False,
-                    create_dir = True),   # Save manager
-                    n_saved = 2,   # Only keep last 2 checkpoints
-                    global_step_transform = lambda *_: trainer.state.epoch   # Include epoch number
-        )
+        if checkpoints_count != 0:
+            if checkpoints_count == -1: checkpoints_count = None
 
-        def save_checkpoint_to_cpu(engine: Engine):
-            """
-            Custom save function to move the model to CPU before saving and back to GPU after.
+            to_save = {
+                "edges": self.edge_embeddings,
+                "nodes": self.node_embeddings,
+                "decoder": self.decoder,
+                "optimizer": self.optimizer,
+                "trainer": trainer,
+            }
 
-            Arguments
-            ---------
-            engine: Engine
-                Runner managing the training.
+            if isinstance(self.encoder, GNN):
+                to_save.update({"encoder": self.encoder})
+            if self.scheduler is not None:
+                to_save.update({"scheduler": self.scheduler})
+            
+            checkpoint_handler = Checkpoint(
+                to_save,   # Dictionnary of objects to save
+                DiskSaver(dirname = self.checkpoints_directory,
+                        require_empty = False,
+                        create_dir = True),   # Save manager
+                        n_saved = checkpoints_count,   # Only keep last [checkpoint_count] checkpoints
+                        global_step_transform = lambda *_: trainer.state.epoch   # Include epoch number
+            )
 
-            """
-            # Move models to CPU before saving
-            if self.encoder is not None:
-                self.encoder.to("cpu")
-            self.decoder.to("cpu")
-            self.knowledge_graph.embeddings.to("cpu")
+            def save_checkpoint_to_cpu(engine: Engine):
+                """
+                Custom save function to move the model to CPU before saving and back to GPU after.
 
-            # Save the checkpoint
-            checkpoint_handler(engine)
+                Arguments
+                ---------
+                engine: Engine
+                    Runner managing the training.
 
-            # Move models back to GPU
-            if self.encoder is not None:
-                self.encoder.to(self.device)
-            self.decoder.to(self.device)
-            self.knowledge_graph.embeddings.to(self.device)
+                """
+                # Move models to CPU before saving
+                if self.encoder is not None:
+                    self.encoder.to("cpu")
+                self.decoder.to("cpu")
+                self.knowledge_graph.embeddings.to("cpu")
 
-        # Attach checkpoint handler to trainer and call save_checkpoint_to_cpu
-        trainer.add_event_handler(Events.EPOCH_COMPLETED(every = self.save_interval), save_checkpoint_to_cpu)
+                # Save the checkpoint
+                checkpoint_handler(engine)
+
+                # Move models back to GPU
+                if self.encoder is not None:
+                    self.encoder.to(self.device)
+                self.decoder.to(self.device)
+                self.knowledge_graph.embeddings.to(self.device)
+
+            # Attach checkpoint handler to trainer and call save_checkpoint_to_cpu
+            trainer.add_event_handler(Events.EPOCH_COMPLETED(every = self.save_interval), save_checkpoint_to_cpu)
     
         checkpoint_best_handler: ModelCheckpoint = ModelCheckpoint(
             dirname = self.checkpoints_directory,
@@ -1082,12 +1065,11 @@ class Architect(Module):
             to_save
         )
 
-        save_config(self.config)
+        self.configuration.save()
 
         if checkpoint_file is not None:
             if Path(checkpoint_file).is_file():
                 logging.info(f"Resuming training from checkpoint: {checkpoint_file}")
-                logging.info(f"edge_embeddings size: {self.knowledge_graph.edge_embeddings.size()}")
                 checkpoint = torch.load(checkpoint_file, weights_only = False)
                 Checkpoint.load_objects(to_load = to_save, checkpoint = checkpoint)
 
@@ -1134,8 +1116,8 @@ class Architect(Module):
 
         self.eval()
 
-        target_edges: List[str] = self.config["evaluation"]["target_edges"]
-        metrics_file: Path = Path(self.config["output_directory"], "evaluation_metrics.toml")
+        target_edges: List[str] = self.configuration.evaluation.target_edges
+        metrics_file: Path = Path(self.configuration.output_directory, "evaluation_metrics.toml")
 
         target_edges_result = {}
 
@@ -1738,7 +1720,7 @@ class Architect(Module):
         """
         logging.info(f"Training completed after {engine.state.epoch} epochs.")
 
-        plot_learning_curves(self.train_metrics_file, self.config["output_directory"], self.validation_metric)
+        plot_learning_curves(self.train_metrics_file, self.configuration.output_directory, self.validation_metric)
 
 
     def calculate_metrics_for_edges(self,

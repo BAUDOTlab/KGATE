@@ -25,9 +25,12 @@ remove_duplicate_triplets = true
 make_directed = true
 make_directed_edges = []
 
+# Whether to control for near duplicate and near reverse duplicate edges.
 flag_near_duplicate_edges = true
 
+# Whether to control for cartesian product edges.
 flag_cartesian_edges = true
+
 # Remove all flagged edges from the train set
 clean_train_set = true
 
@@ -99,7 +102,7 @@ dissimilarity = "L2"
 # Number of convolutional filter used by ConvKB
 filter_count = 3
 
-[sampler]
+[negative_sampler]
 # Type of negative sampler to generate false triplets during the training.
 # Supported options are:
 # - Positional: proposed by Socher et al. 2011, replaces either the head or tail of a triplet by another node in the same place with the same edge.
@@ -145,7 +148,7 @@ lr = 0.001
 #             see the documentation for Architect.initialize_scheduler() and give the function name as argument.
 # - OneCycleLR: Increases the learning rate to a maximum learning rate before reducing it to a minimum.
 # - CyclicLR: Cycles the learning rate between two boundaries with a constant frequency.
-type = ""
+name = ""
 
 [learning_rate_scheduler.params]
 
@@ -169,6 +172,10 @@ evaluation_batch_size = 32
 # Number of epochs after which a checkpoint is saved to retain the training state of a model.
 save_interval = 5
 
+# How many checkpoints should be kept. KGATE automatically deletes the most ancient training checkpoint to preserve space.
+# Set to -1 to keep all checkpoints. Note that this might take up a lot of space.
+keep_n_checkpoints = 2
+
 # Either the absolute path towards a pretrained checkpoint, or "auto" to let KGATE find automatically the latest
 # Embeddings in the output_directory.
 pretrained_embeddings = "auto"
@@ -180,6 +187,7 @@ pretrained_embeddings = "auto"
 # - Triplet Classification: Discriminates between true and false triplets
 objective = "Link Prediction"
 
+# Name of the edges of interest to isolate them during evaluation.
 target_edges = []
 
 [data_leakage]
