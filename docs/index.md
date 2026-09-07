@@ -38,9 +38,3 @@ reference/api_preprocessing
 reference/api_samplers
 reference/api_utils
 ```
-
-```{toctree}
-:maxdepth: 1
-:caption: References:
-
-reference/architect

@@ -9,7 +9,7 @@ import logging
 from collections import defaultdict
 from itertools import combinations
 from math import ceil
-from typing import Self, Dict, Tuple, List, Set, Literal
+from typing import Dict, Tuple, List, Literal
 
 import numpy as np
 import pandas as pd
@@ -19,14 +19,9 @@ import torch
 from torch import tensor, Tensor, cat
 import torch.nn as nn
 from torch.utils.data import Dataset
-from torch.types import Number
 
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import k_hop_subgraph
-
-import torchkge
-
-from .utils import get_dictionary_mapping
 
 import torchkge
 
@@ -1486,4 +1481,3 @@ class KnowledgeGraph(Dataset):
                                     node_to_index = torchkge_kg.ent2ix,
                                     edge_to_index = torchkge_kg.rel2ix)
             return new_kg
-        

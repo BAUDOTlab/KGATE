@@ -28,16 +28,6 @@ class BilinearDecoder(Module):
 
         Furthermore, this interface doesn't implement anything but is a type helper. 
         However, functions from this class returning None can be used directly from inheriting classes.
-
-    def score(  self,
-                *,
-                head_embeddings: Tensor,
-                tail_embeddings: Tensor,
-                edge_embeddings: Tensor,
-                head_indices: Tensor,
-                tail_indices: Tensor,
-                edge_indices: Tensor
-                ) -> Tensor:
         """
         super().__init__()
 

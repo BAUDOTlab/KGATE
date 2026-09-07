@@ -34,14 +34,6 @@ myst_enable_extensions = [
     "fieldlist",
 ]
 
-myst_enable_extensions = [
-   "colon_fence",
-    "substitution",
-    "replacements",
-    "deflist",
-    "tasklist",
-]
-
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 

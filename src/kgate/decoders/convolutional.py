@@ -10,8 +10,6 @@ Modifications and additional functionalities added by Benjamin Loire <benjamin.l
 The modifications are licensed under the BSD license according to the source license.
 """
 
-from typing import Tuple, Dict
-
 from torch import Tensor, cat
 import torch.nn as nn
 from torch.nn import Module
