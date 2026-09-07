@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from typing import Callable
 
 
-class Loss(Module):
+class KGE_Loss(Module):
     """
     Composite loss that aggregates multiple loss terms into a single loss.
 
@@ -23,10 +23,11 @@ class Loss(Module):
     : ``positive_scores`` and ``negative_scores`` and returning a value.
     """
 
-    def __init__(self, *terms: list[Module]):
-        self.terms = terms
+    def __init__(self, *terms: Module):
+        super().__init__()
+        self.terms = list(terms)
 
-    def forward(self, positive_scores: tensor, negative_scores: tensor):
+    def forward(self, positive_scores: tensor, negative_scores: tensor) -> tensor:
         """
         Compute the composite loss across all registered terms.
 
@@ -45,7 +46,7 @@ class Loss(Module):
         """
         return sum([term(positive_scores, negative_scores) for term in self.terms])
 
-    def add_term(self, new_term: Module | Callable):
+    def add_term(self, new_term: Module | Callable) -> None:
         """
         Register a loss term.
 
@@ -81,10 +82,11 @@ class MarginLoss(Module):
     """
 
     def __init__(self, margin: int, reduction: Literal["sum", "mean"]):
+        super().__init__()
         self.margin = margin
         self.reduction = reduction
 
-    def forward(self, positive_scores: tensor, negative_scores: tensor):
+    def forward(self, positive_scores: tensor, negative_scores: tensor) -> tensor:
         """
         Compute the margin ranking loss between positive and negative scores.
 
@@ -127,9 +129,10 @@ class BinaryCrossEntropyLoss(Module):
     """
 
     def __init__(self, reduction: Literal["sum", "mean"]):
+        super().__init__()
         self.reduction = reduction
 
-    def forward(self, positive_scores: tensor, negative_scores: tensor):
+    def forward(self, positive_scores: tensor, negative_scores: tensor) -> tensor:
         """
         Compute the combined binary cross-entropy loss for positive and negative scores.
 

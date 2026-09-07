@@ -30,12 +30,12 @@ from ignite.metrics import RunningAverage
 from torch import Tensor, optim, tensor
 from torch.nn import Module
 from torch.utils.data import DataLoader, Subset
-from torchkge.utils import BinaryCrossEntropyLoss, MarginLoss
 
 from .config import Configuration
 from .datasets import load_FB15k_237, load_PrimeKG, load_WN18RR
 from .decoders import *
 from .encoders import *
+from .loss import KGE_Loss, MarginLoss, BinaryCrossEntropyLoss
 from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
 from .inference import EdgeInference, NodeInference
 from .initializers import *
@@ -150,7 +150,7 @@ class Architect(Module):
         : Decoder model of the autoencoder.
         : For more details, refer to the `initialize_decoder` function.
         
-        **decoder_loss** *(MarginLoss or BinaryCrossEntropyLoss)*
+        **loss** *(MarginLoss or BinaryCrossEntropyLoss)*
         : The loss object associated with the proper decoder, but may be overwritten.
         : Either `MarginLoss(margin)` or `BinaryCrossEntropyLoss()`.
         
@@ -257,7 +257,7 @@ class Architect(Module):
 
         self.metadata = None
         if metadata is None:
-            metadata = self.configuration.metadata_path if self.configuration.metadata_path != "" else None
+            metadata = self.configuration.metadata_path if self.configuration.metadata_path.is_file() else None
         self.set_metadata(metadata = metadata)
         
         if isinstance(knowledge_graph, str):
@@ -287,7 +287,7 @@ class Architect(Module):
         self.initializer: Initializer = None
         self.encoder: GNN | None = None
         self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
-        self.decoder_loss: MarginLoss | BinaryCrossEntropyLoss = None
+        self.loss: KGE_Loss = None
         self.skip_normalization: bool = False
         self.optimizer: optim.Optimizer = None
         self.sampler: NegativeSampler = None
@@ -467,7 +467,7 @@ class Architect(Module):
                 encoder = GATEncoder(edge_types, self.encoder_node_embedding_dimensions, gnn_layers)
             case _:
                 encoder = None
-                logging.warning(f"Unrecognized encoder {encoder_name}. Defaulting to a random initialization.")
+                logging.warning(f"Unrecognized encoder {encoder_name}, will not use any.")
         
         return encoder
 
@@ -475,7 +475,6 @@ class Architect(Module):
     def initialize_decoder( self,
                             decoder_name: str = "",
                             dissimilarity: Literal["L1", "L2", "torus_L1", "torus_L2", "torus_eL2", ""] = "",
-                            margin: int = None,
                             filter_count: int = None
                             ) -> Tuple[
                                         BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
@@ -519,10 +518,7 @@ class Architect(Module):
         
         **dissimilarity** *({"L1", "L2"}, optional)*
         : Type of the dissimilarity metric.
-        
-        **margin** *(int, optional, default to 0)*
-        : Margin to be used with MarginLoss. Unused with bilinear models.
-        
+                
         **filter_count** *(int, optional, default to 0)*
         : Number of convolution filters.
 
@@ -538,7 +534,7 @@ class Architect(Module):
         **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder)*
         : The decoder object.
         
-        **decoder_loss** *(MarginLoss or BinaryCrossEntropyLoss)*
+        **loss** *(MarginLoss or BinaryCrossEntropyLoss)*
         : The loss object.
         
         """
@@ -548,8 +544,6 @@ class Architect(Module):
             decoder_name = decoder_configuration.name
         if dissimilarity == "":
             dissimilarity = decoder_configuration.dissimilarity
-        if margin == 0:
-            margin = decoder_configuration.margin
         if filter_count == 0:
             filter_count = decoder_configuration.filter_count
 
@@ -557,58 +551,94 @@ class Architect(Module):
         match decoder_name:
             case "TransE":
                 decoder = TransE(dissimilarity_type = dissimilarity)
-                decoder_loss = MarginLoss(margin)
             case "TransH":
                 decoder = TransH(embedding_dimensions = self.node_embedding_dimensions,
                                 node_count = self.knowledge_graph.node_count,
                                 edge_count = self.knowledge_graph.edge_count,
                                 device = self.device)
-                decoder_loss = MarginLoss(margin)
             case "TransR":
                 decoder = TransR(node_embedding_dimensions = self.node_embedding_dimensions,
                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
                                 node_count = self.knowledge_graph.node_count, 
                                 edge_count = self.knowledge_graph.edge_count,
                                 device = self.device)
-                decoder_loss = MarginLoss(margin)
             case "TransD":
                 decoder = TransD(node_embedding_dimensions = self.node_embedding_dimensions,
                                 edge_embedding_dimensions = self.edge_embedding_dimensions, 
                                 node_count = self.knowledge_graph.node_count, 
                                 edge_count = self.knowledge_graph.edge_count,
                                 device = self.device)
-                decoder_loss = MarginLoss(margin)
             case "TorusE":
                 decoder = TorusE(dissimilarity_type = dissimilarity)
-                decoder_loss = MarginLoss(margin)
             case "RESCAL":
                 decoder = RESCAL(embedding_dimensions = self.node_embedding_dimensions,
                                 node_count = self.knowledge_graph.node_count,
                                 edge_count = self.knowledge_graph.edge_count,
                                 device = self.device)
-                decoder_loss = BinaryCrossEntropyLoss()
             case "DistMult":
                 decoder = DistMult(embedding_dimensions = self.node_embedding_dimensions,
                                 node_count = self.knowledge_graph.node_count,
                                 edge_count = self.knowledge_graph.edge_count)
-                decoder_loss = BinaryCrossEntropyLoss()
             case "ComplEx":
                 decoder = ComplEx(embedding_dimensions = self.node_embedding_dimensions)
-                decoder_loss = BinaryCrossEntropyLoss()
             case "ConvKB":
                 decoder = ConvKB(embedding_dimensions = self.node_embedding_dimensions, 
                                 filter_count = filter_count, 
                                 node_count = self.knowledge_graph.node_count, 
                                 edge_count = self.knowledge_graph.edge_count)
-                decoder_loss = BinaryCrossEntropyLoss()
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
 
         if not callable(getattr(decoder, "normalize_parameters", None)):
             self.skip_normalization = True
 
-        return decoder, decoder_loss
+        return decoder
 
+    def initialize_loss(self,
+                        loss_name: str = "",
+                        margin: int = -1,
+                        reduction: str = ""
+                        ) -> KGE_Loss:
+        """
+        Creates and initializes the Loss object.
+
+        KGATE's base loss is a composite loss that can have multiple terms. Once it is 
+        initialized, additional loss functions can be added using the loss.add_term method.
+
+        Arguments
+        ---------
+        **loss_name** *(str)*
+        : The name of the loss function. Currently supported losses are `Margin` and `BCE`
+
+        **margin** *(int)*
+        : Only for margin loss, the value by which the positive scores must
+        : exceed the negative scores.
+
+        **reduction** *(str)*
+        : How the loss of each elements is aggregated into a single value.
+        : Options are `mean` and `sum`.
+        """
+        loss_configuration = self.configuration.loss
+
+        if loss_name == "":
+            loss_name = loss_configuration.name
+        if margin == -1:
+            margin = loss_configuration.margin
+        if reduction == "":
+            reduction = loss_configuration.reduction
+
+        loss = KGE_Loss()
+
+        match loss_name:
+            case "Margin":
+                loss.add_term(MarginLoss(margin, reduction))
+            case "BCE":
+                loss.add_term(BinaryCrossEntropyLoss(reduction))
+            case _:
+                raise NotImplementedError(f"The requested loss {loss_name} is not implemented.")
+
+        return loss
+        
 
     def initialize_optimizer(self) -> optim.Optimizer:
         """
@@ -845,8 +875,11 @@ class Architect(Module):
         # Cannot use short-circuit syntax with tuples
         logging.info("Initializing decoder...")
         if self.decoder is None:
-            self.decoder, self.decoder_loss = self.initialize_decoder()
+            self.decoder = self.initialize_decoder()
             self.decoder.to(self.device)
+
+        logging.info("Initializing loss...")
+        self.loss = self.loss or self.initialize_loss()
 
         logging.info("Initializing encoder...")
         self.encoder = self.encoder or self.initialize_encoder()
@@ -997,8 +1030,7 @@ class Architect(Module):
             if checkpoints_count == -1: checkpoints_count = None
 
             to_save = {
-                "edges": self.edge_embeddings,
-                "nodes": self.node_embeddings,
+                "embeddings": self.knowledge_graph.embeddings,
                 "decoder": self.decoder,
                 "optimizer": self.optimizer,
                 "trainer": trainer,
@@ -1291,7 +1323,7 @@ class Architect(Module):
         assert len(checkpoint["embeddings"]["edge_embeddings"]) == self.knowledge_graph.edge_count, f"Mismatch between the number of edges in the checkpoint ({len(checkpoint["embeddings"]["edge_embeddings"])}) and the current configuration ({self.knowledge_graph.edge_count})!"
 
         if self.encoder is not None:
-            assert len(checkpoint["embeddings"]["node_embeddings"]) == len(self.knowledge_graph.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint["nodes"])}) and the current configuration ({len(self.knowledge_graph.node_type_to_index)})!"
+            assert len(checkpoint["embeddings"]) -1 == len(self.knowledge_graph.node_type_to_index), f"Mismatch between the number of node types in the checkpoint ({len(checkpoint["nodes"])}) and the current configuration ({len(self.knowledge_graph.node_type_to_index)})!"
         else:
             assert len(checkpoint["embeddings"]["node_embeddings.0"]) == self.knowledge_graph.node_count, f"Mismatch between the number of nodes in the checkpoint ({len(checkpoint["embeddings"]["node_embeddings.0"])}) and the current configuration ({self.knowledge_graph.node_count})!"
 
@@ -1312,7 +1344,7 @@ class Architect(Module):
         : Make sure to run the training first and not rename checkpoint files before running evaluation.
         
         """
-        self.decoder, _ = self.initialize_decoder()
+        self.decoder = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
 
         logging.info("Loading best model.")
@@ -1434,7 +1466,7 @@ class Architect(Module):
 
         # Compute loss with positive and negative triplets
         positive_scores, negative_scores = self(batch, negative_batch, node_embeddings)
-        loss = self.decoder_loss(positive_scores, negative_scores)
+        loss = self.loss(positive_scores, negative_scores)
         loss.backward()
 
         self.optimizer.step()
