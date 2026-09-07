@@ -89,15 +89,27 @@ gnn_layer_number = 1
 # - ComplEx: Bilinear model proposed by TODO
 name = "TransE"
 
-# Translational decoders use a Margin Loss, which needs a margin parameter.
-# This is ignored for non-translational decoders.
-margin = 1
-
 # Type of dissimilarity used in the loss function. L1 or L2.
 dissimilarity = "L2"
 
 # Number of convolutional filter used by ConvKB
 filter_count = 3
+
+[model.loss]
+# The name of the loss function to use
+# Supported options are:
+# - Margin: a pairwise margin ranking loss which encourages the scores of positive triplets
+# to exceed the scores of negative triplets.
+# - BCE: a binary cross-entropy loss that treats link prediction as a binary classification problem.
+name = "Margin"
+
+# How the loss of each elements is aggregated into a single value.
+# Options are `mean` or `sum`
+reduction = "mean"
+
+# Only for Margin Loss, the value by which the positive scores must exceed the 
+# negative scores.
+margin = 1
 
 [sampler]
 # Type of negative sampler to generate false triplets during the training.
