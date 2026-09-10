@@ -537,9 +537,9 @@ class KnowledgeGraph(Dataset):
         return max(self.edge_to_index.values()) + 1
 
     @property
-    def identity(self) -> pd.DataFrame:
+    def identity(self) -> pd.Series:
         """
-        Get the DataFrame containing all the identity of the knowledge graph nodes.
+        Get the Series containing all the identity of the knowledge graph nodes.
         
         The default identity is the node ID, but different values can be set using the `set_identity` method.
         
@@ -547,7 +547,7 @@ class KnowledgeGraph(Dataset):
         if self.metadata is not None:
             return self.metadata[self._identity]
         else:
-            return pd.DataFrame([])
+            return pd.Series([])
 
 
     def set_identity(self, new_identity: str) -> None:
@@ -652,9 +652,9 @@ class KnowledgeGraph(Dataset):
 
         if include_splits:
             dataframe["split"] = "ground_truth"
-            dataframe["split"][self.train_mask] = "train"
-            dataframe["split"][self.validation_mask] = "validation"
-            dataframe["split"][self.test_mask] = "test"
+            dataframe.loc[self.train_mask, "split"] = "train"
+            dataframe.loc[self.validation_mask, "split"] = "validation"
+            dataframe.loc[self.test_mask, "split"] = "test"
 
         return dataframe
     
@@ -829,8 +829,9 @@ class KnowledgeGraph(Dataset):
         **indices_to_delete** *(List[int] or torch.Tensor)*
         : Indices of triplets to delete from the knowledge graph.
         """
-        self.graphindices[indices_to_delete] = -1
-        self.graphindices = self.graphindices[self.graphindices != -1]
+        mask = torch.ones(self.graphindices.size(1), dtype=bool)
+        mask[indices_to_delete] = False
+        self.graphindices = self.graphindices[mask]
 
     def remove_triplets_from_training(self,
                         indices_to_remove: List[int] | torch.Tensor
@@ -1029,8 +1030,10 @@ class KnowledgeGraph(Dataset):
             # Logging duplicate information
             if len(pairs) - len(unique_triplets) > 0:
                 logging.info(f"{len(pairs) - len(unique_triplets)} duplicates found. Keeping {len(unique_triplets)} unique triplets for edge {edge_type_index}")
-
-        self.remove_triplets_from_training(~indices_to_keep)
+        
+        keep = torch.zeros(self.triplet_count, dtype=torch.bool)
+        keep[indices_to_keep] = True
+        self.remove_triplets_from_training(~keep)
 
 
     def get_pairs(  self,
@@ -1286,15 +1289,17 @@ class KnowledgeGraph(Dataset):
 
         subgraph = graphindices[:, edge_mask]
 
-        # All seed nodes not present in the subgraph are put in this dictionary 
-        # to be used in the self-loop addition at the end of this function        
-        missing_nodes_indices: Dict[str, Tensor] = defaultdict(lambda: torch.empty(0, dtype=torch.long)) # key : node type, value: isolated node indices
-        uniques, counts = torch.cat((subgraph[:2].unique(), seed_nodes)).unique(return_counts=True)
-        index_to_node_type = {v: k for k,v in self.node_type_to_index.items()}
+        # Isolated seeds: seed nodes that appear in no triplet of the subgraph.
+        # k_hop_subgraph keeps them in `subset`, but with no edges they are absent
+        # from the subgraph, so they would get no x_dict row and no representation after the encoder pass.
+        all_subgraph_nodes = subgraph[:2].unique()
+        isolated_seeds = seed_nodes[~torch.isin(seed_nodes, all_subgraph_nodes)].unique()
 
-        for missing_node in uniques[counts == 1]:
-            node_type = index_to_node_type[self.node_types[missing_node].item()]
-            missing_nodes_indices[node_type] = torch.cat([missing_nodes_indices[node_type], missing_node.reshape(1)])
+        missing_nodes_indices: Dict[str, Tensor] = defaultdict(lambda: torch.empty(0, dtype=torch.long))  # key: node type, value: isolated seed indices
+        for node_type, node_type_index in self.node_type_to_index.items():
+            sel = isolated_seeds[self.node_types[isolated_seeds] == node_type_index]
+            if sel.numel() > 0:
+                missing_nodes_indices[node_type] = sel
 
         triplet_type_indices = subgraph[3].unique()
         # Create empty tensor to preallocate memory with the correct dtype and device 
@@ -1303,8 +1308,6 @@ class KnowledgeGraph(Dataset):
 
         pyg_edge_index = {}
         x_dict = {}
-
-        all_subgraph_nodes = torch.cat([subgraph[0], subgraph[1]]).unique()
 
         for node_type, node_type_index in self.node_type_to_index.items():
             mask = self.node_types[all_subgraph_nodes] == node_type_index
@@ -1476,7 +1479,10 @@ class KnowledgeGraph(Dataset):
             return new_kg
         
         else:
-            new_kg = KnowledgeGraph(dataframe = torchkge_kg.get_df(),
+            dataframe = torchkge_kg.get_df().rename(
+                columns={"from": "head", "to": "tail", "rel": "edge"})
+
+            new_kg = KnowledgeGraph(dataframe = dataframe,
                                     metadata = metadata,
                                     node_to_index = torchkge_kg.ent2ix,
                                     edge_to_index = torchkge_kg.rel2ix)
