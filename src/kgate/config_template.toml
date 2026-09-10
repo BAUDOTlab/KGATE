@@ -40,7 +40,6 @@ clean_train_set = true
 # and third value is test set.
 split = [0.8, 0.1, 0.1] 
 
-[preprocessing.params]
 theta_cartesian = 0.8
 theta_first_edge_type = 0.8
 theta_second_edge_type = 0.8

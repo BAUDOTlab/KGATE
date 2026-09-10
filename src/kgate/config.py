@@ -235,7 +235,7 @@ class Configuration:
         """
         Path to the knowledge graph in pickle format.
         """
-        return Path(self._configuration["kg_pkl"])
+        return self._configuration["kg_pkl"]
 
     @knowledge_graph_pickle_file.setter
     def knowledge_graph_pickle_file(self, path: os.PathLike):
@@ -542,7 +542,7 @@ class Preprocessing_Configuration:
         return self._configuration["split"]
     
     @split_proportions.setter
-    def split_proportions(self, proportions: Sequence[int, int, int]):
+    def split_proportions(self, proportions: Sequence[float]):
         assert sum(proportions) == 1, f"The sum of all proportions must be 1 but got {sum(proportions)}."
 
         self._configuration["split"] = proportions
