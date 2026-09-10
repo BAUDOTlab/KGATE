@@ -928,7 +928,7 @@ class TransR(TranslationalDecoder):
 
         initializer = Initializer()
         self.projection_matrix = initializer.initialize_embedding(
-                        node_count, 
+                        edge_count, 
                         edge_embedding_dimensions * node_embedding_dimensions, 
                         device)
 

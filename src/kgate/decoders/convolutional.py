@@ -332,7 +332,7 @@ class ConvKB(ConvolutionalDecoder):
         super().__init__()
         
         self.node_count = node_count
-        self.edge_cont = edge_count
+        self.edge_count = edge_count
         self.embedding_dimensions = embedding_dimensions
 
         self.convolution_layer = nn.Sequential(

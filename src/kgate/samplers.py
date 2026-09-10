@@ -177,9 +177,9 @@ class UniformNegativeSampler(NegativeSampler):
         node_types = self.knowledge_graph.node_types
         triplet_types = self.knowledge_graph.triplet_types
         for i in range(batch_size):
-            heads = negative_triplet_heads[i * negative_triplet_count, (i+1) * negative_triplet_count]
-            tails = negative_triplet_tails[i * negative_triplet_count, (i+1) * negative_triplet_count]
-            edges = negative_triplet_edges[i * negative_triplet_count, (i+1) * negative_triplet_count]
+            heads = negative_triplet_heads[i * negative_triplet_count: (i+1) * negative_triplet_count]
+            tails = negative_triplet_tails[i * negative_triplet_count: (i+1) * negative_triplet_count]
+            edges = negative_triplet_edges[i * negative_triplet_count: (i+1) * negative_triplet_count]
 
             head_types = node_types[heads]
             tail_types = node_types[tails]
