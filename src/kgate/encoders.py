@@ -67,7 +67,6 @@ class GNN(nn.Module):
         """
         super().__init__()
         
-        self.device = "cuda"
         self.convolutions = nn.ModuleList()
         
         # Define HeteroConv aggregation
@@ -133,7 +132,7 @@ class GATEncoder(GNN):
                 aggregation: Literal["sum", "mean", "min", "max", "cat", None] = "sum",
                 device: torch.device | Literal["cuda", "cpu"] = "cuda"):
         """
-        Implementation of GraphSAGE model detailed in the paper referenced below.
+        Implementation of Graph Attention Network model detailed in the paper referenced below.
 
         This class inherits from the GNN class. It inherits its attributes as well.
 
