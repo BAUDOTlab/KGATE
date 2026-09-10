@@ -186,7 +186,7 @@ class FeatureInitializer(Initializer):
             if node_type in self.node_features:
                 current_feature: pd.DataFrame = self.node_features[node_type]
                 
-                node_type_embeddings = self.initialize_embeddings(current_feature, knowledge_graph, node_type, device = device)
+                node_type_embeddings = self.initialize_embedding(current_feature, knowledge_graph, node_type, device = device)
                 
                 node_embeddings.append(nn.Parameter(node_type_embeddings))
             else:
