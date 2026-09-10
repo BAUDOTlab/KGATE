@@ -992,7 +992,10 @@ class Architect(Module):
         self.learning_rates: List[float] = []
 
         train_subset = Subset(self.knowledge_graph, self.knowledge_graph.train_mask.nonzero(as_tuple = True)[0])
-        data_loader: DataLoader = DataLoader(train_subset, self.train_batch_size)
+        data_loader: DataLoader = DataLoader(train_subset,
+                                            self.train_batch_size, 
+                                            shuffle=True, 
+                                            pin_memory= (self.device.type == "cuda"))
         logging.info(f"Number of training batches: {len(data_loader)}")
 
         trainer: Engine = Engine(self.process_batch)
@@ -1018,8 +1021,9 @@ class Architect(Module):
         elif self.checkpoints_directory.exists() and len(os.listdir(self.checkpoints_directory)) > 0:
             shutil.rmtree(self.checkpoints_directory)
 
+        trainer.add_event_handler(Events.EPOCH_COMPLETED, self.normalize_parameters)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.log_metrics_to_csv)
-        trainer.add_event_handler(Events.EPOCH_COMPLETED, self.clean_memory)
+        #trainer.add_event_handler(Events.EPOCH_COMPLETED, self.clean_memory)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.update_scheduler)
 
         trainer.add_event_handler(Events.COMPLETED, self.on_training_completed)
@@ -1050,33 +1054,8 @@ class Architect(Module):
                         global_step_transform = lambda *_: trainer.state.epoch   # Include epoch number
             )
 
-            def save_checkpoint_to_cpu(engine: Engine):
-                """
-                Custom save function to move the model to CPU before saving and back to GPU after.
-
-                Arguments
-                ---------
-                engine: Engine
-                    Runner managing the training.
-
-                """
-                # Move models to CPU before saving
-                if self.encoder is not None:
-                    self.encoder.to("cpu")
-                self.decoder.to("cpu")
-                self.knowledge_graph.embeddings.to("cpu")
-
-                # Save the checkpoint
-                checkpoint_handler(engine)
-
-                # Move models back to GPU
-                if self.encoder is not None:
-                    self.encoder.to(self.device)
-                self.decoder.to(self.device)
-                self.knowledge_graph.embeddings.to(self.device)
-
             # Attach checkpoint handler to trainer and call save_checkpoint_to_cpu
-            trainer.add_event_handler(Events.EPOCH_COMPLETED(every = self.save_interval), save_checkpoint_to_cpu)
+            trainer.add_event_handler(Events.EPOCH_COMPLETED(every = self.save_interval), checkpoint_handler)
     
         checkpoint_best_handler: ModelCheckpoint = ModelCheckpoint(
             dirname = self.checkpoints_directory,
@@ -1346,7 +1325,12 @@ class Architect(Module):
         """
         self.decoder = self.initialize_decoder()
         self.encoder = self.initialize_encoder()
-
+        initializer = Initializer()
+        initializer.initialize_all_embeddings(self.knowledge_graph,
+                                            node_embedding_dimensions=self.node_embedding_dimensions,
+                                            edge_embedding_dimensions=self.edge_embedding_dimensions,
+                                            device = self.device,
+                                            inplace=True)
         logging.info("Loading best model.")
         best_model = find_best_model(self.checkpoints_directory)
 
@@ -1453,7 +1437,7 @@ class Architect(Module):
         : Training loss value of the model for this epoch.
         
         """
-        batch = batch.T.to(self.device)
+        batch = batch.to(self.device).T
 
         negative_batch = self.sampler.corrupt_batch(batch)
         negative_batch = negative_batch.to(self.device)
@@ -1470,9 +1454,6 @@ class Architect(Module):
         loss.backward()
 
         self.optimizer.step()
-
-        if not self.skip_normalization:
-            self.normalize_parameters()
 
         return loss
 
@@ -1595,7 +1576,7 @@ class Architect(Module):
         else:
             node_embeddings = self.knowledge_graph.node_embeddings[0].data.cpu()
 
-        edge_embeddings = self.knowledge_grpah.edge_embeddings.data.cpu()
+        edge_embeddings = self.knowledge_graph.edge_embeddings.data.cpu()
 
         decoder_embeddings = self.decoder.get_embeddings()
 
@@ -1688,6 +1669,7 @@ class Architect(Module):
         self.eval()  # Set the model to evaluation mode
         validation_score = 0
         with torch.no_grad():
+            self.evaluator.reset()
             validation_subset = Subset(self.knowledge_graph, self.knowledge_graph.validation_mask.nonzero(as_tuple = True)[0])
 
             if isinstance(self.evaluator,LinkPredictionEvaluator):
