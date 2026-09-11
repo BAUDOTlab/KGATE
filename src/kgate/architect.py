@@ -26,7 +26,6 @@ from ignite.handlers import (
     ModelCheckpoint,
     ProgressBar,
 )
-from ignite.metrics import RunningAverage
 from torch import Tensor, optim, tensor
 from torch.nn import Module
 from torch.utils.data import DataLoader, Subset
@@ -60,8 +59,39 @@ logging.captureWarnings(True)
 logging_level = logging.INFO
 logging.basicConfig(
     level = logging_level,  
-    format = "%(asctime)s - %(levelname)s - %(message)s" 
+    format = "%(asctime)s - %(levelname)s - %(message)s"
 )
+
+
+class _BatchedKGSubset(Subset):
+    """
+    A ``Subset`` over a ``KnowledgeGraph`` that supports PyTorch's vectorized
+    ``__getitems__`` batch protocol.
+
+    The ``DataLoader`` fetch of a full batch then reduces to a single tensor
+    gather (``graphindices[:, indices]``) instead of one Python ``__getitem__``
+    call per sample followed by a ``torch.stack`` in the collate function.
+    On PyTorch versions without the ``__getitems__`` hook, the regular
+    per-item ``Subset.__getitem__`` path is used as before.
+    """
+
+    def __getitems__(self, indices):
+        # indices: sequence of positions within this subset (train triplets only)
+        train_indices = self.indices[indices]
+        # [4, batch_size] -> [batch_size, 4], matching the layout produced by
+        # default_collate over the per-item samples
+        return self.dataset.graphindices[:, train_indices].T
+
+
+def _batch_collate(batch):
+    """
+    Collate function tolerant of both batch-fetch paths:
+    a single [batch_size, 4] tensor (vectorized ``__getitems__``) or the
+    legacy list of [4] samples (per-item ``__getitem__``).
+    """
+    if torch.is_tensor(batch):
+        return batch
+    return torch.stack(batch, dim = 0)
 
 
 class Architect(Module):
@@ -589,9 +619,6 @@ class Architect(Module):
             case _:
                 raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
 
-        if not callable(getattr(decoder, "normalize_parameters", None)):
-            self.skip_normalization = True
-
         return decoder
 
     def initialize_loss(self,
@@ -991,15 +1018,25 @@ class Architect(Module):
         self.validation_metric_value: List[float] = []
         self.learning_rates: List[float] = []
 
-        train_subset = Subset(self.knowledge_graph, self.knowledge_graph.train_mask.nonzero(as_tuple = True)[0])
+        train_subset = _BatchedKGSubset(self.knowledge_graph, self.knowledge_graph.train_mask.nonzero(as_tuple = True)[0])
         data_loader: DataLoader = DataLoader(train_subset,
                                             self.train_batch_size, 
                                             shuffle=True, 
-                                            pin_memory= (self.device.type == "cuda"))
+                                            pin_memory= (self.device.type == "cuda"),
+                                            collate_fn = _batch_collate)
         logging.info(f"Number of training batches: {len(data_loader)}")
 
         trainer: Engine = Engine(self.process_batch)
-        RunningAverage(output_transform = lambda x: x).attach(trainer, "loss_running_average")
+        # Per-batch running average of the loss (same alpha = 0.98 as the previous
+        # ignite RunningAverage, same "loss_running_average" metric key, same float
+        # value at epoch end). It is computed on the loss's own device: the standard
+        # `ignite.metrics.RunningAverage` calls `loss.detach().to("cpu", copy=True)` on
+        # every batch, which forces a GPU->CPU synchronization that serializes the CPU
+        # and GPU pipelines (measured cost: ~8-10 ms per batch on the FB15k-237
+        # benchmark setup, i.e. ~80-100 s over 100 epochs).
+        trainer.add_event_handler(Events.EPOCH_STARTED, self._reset_loss_running_average)
+        trainer.add_event_handler(Events.ITERATION_COMPLETED, self._update_loss_running_average)
+        trainer.add_event_handler(Events.EPOCH_COMPLETED, self._finalize_loss_running_average)
 
         progress_bar = ProgressBar()
         progress_bar.attach(trainer)
@@ -1021,7 +1058,6 @@ class Architect(Module):
         elif self.checkpoints_directory.exists() and len(os.listdir(self.checkpoints_directory)) > 0:
             shutil.rmtree(self.checkpoints_directory)
 
-        trainer.add_event_handler(Events.EPOCH_COMPLETED, self.normalize_parameters)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.log_metrics_to_csv)
         #trainer.add_event_handler(Events.EPOCH_COMPLETED, self.clean_memory)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.update_scheduler)
@@ -1030,21 +1066,21 @@ class Architect(Module):
 
         checkpoints_count = self.configuration.training.keep_n_checkpoints
 
+        to_save = {
+            "embeddings": self.knowledge_graph.embeddings,
+            "decoder": self.decoder,
+            "optimizer": self.optimizer,
+            "trainer": trainer,
+        }
+
+        if isinstance(self.encoder, GNN):
+            to_save.update({"encoder": self.encoder})
+        if self.scheduler is not None:
+            to_save.update({"scheduler": self.scheduler})
+
         if checkpoints_count != 0:
             if checkpoints_count == -1: checkpoints_count = None
 
-            to_save = {
-                "embeddings": self.knowledge_graph.embeddings,
-                "decoder": self.decoder,
-                "optimizer": self.optimizer,
-                "trainer": trainer,
-            }
-
-            if isinstance(self.encoder, GNN):
-                to_save.update({"encoder": self.encoder})
-            if self.scheduler is not None:
-                to_save.update({"scheduler": self.scheduler})
-            
             checkpoint_handler = Checkpoint(
                 to_save,   # Dictionnary of objects to save
                 DiskSaver(dirname = self.checkpoints_directory,
@@ -1412,6 +1448,69 @@ class Architect(Module):
             node_embeddings = self.knowledge_graph.node_embeddings[0]
 
         return node_embeddings
+
+    def _reset_loss_running_average(self, engine: Engine) -> None:
+        """
+        Reset the per-epoch running average of the training loss.
+        
+        % Equivalent to the reset of the previous `ignite.metrics.RunningAverage`
+        % attachment, kept on the loss's device to avoid a per-batch GPU->CPU sync.
+        
+        Arguments
+        ---------
+        
+        **engine** *(Engine)*
+        : Runner managing the training.
+        
+        """
+        engine.state.metrics.pop("loss_running_average", None)
+        engine.state.loss_running_average_value = None
+
+
+    def _update_loss_running_average(self, engine: Engine) -> None:
+        """
+        Update the per-epoch running average of the training loss (EMA, alpha = 0.98).
+        
+        The value is stored in `engine.state.metrics["loss_running_average"]`, exactly like
+        the previous `ignite.metrics.RunningAverage` attachment, but is computed on the
+        loss's own device so that no GPU->CPU synchronization happens on every batch.
+        
+        Arguments
+        ---------
+        
+        **engine** *(Engine)*
+        : Runner managing the training.
+        
+        """
+        alpha = 0.98
+        loss = engine.state.output.detach()
+        value = engine.state.loss_running_average_value
+        if value is None or value.device != loss.device:
+            value = loss
+        else:
+            value = value * alpha + (1.0 - alpha) * loss
+        engine.state.loss_running_average_value = value
+        engine.state.metrics["loss_running_average"] = value
+
+
+    def _finalize_loss_running_average(self, engine: Engine) -> None:
+        """
+        Convert the end-of-epoch running average of the training loss to a plain
+        float, exactly like the previous `ignite.metrics.RunningAverage` attachment
+        did (see `ignite.metrics.metric.Metric.completed`), so that downstream
+        consumers (e.g. the training metrics CSV) see the same type as before.
+        
+        Arguments
+        ---------
+        
+        **engine** *(Engine)*
+        : Runner managing the training.
+        
+        """
+        value = engine.state.loss_running_average_value
+        if isinstance(value, Tensor) and len(value.size()) == 0:
+            engine.state.metrics["loss_running_average"] = value.item()
+
 
     def process_batch(self,
                     engine: Engine,

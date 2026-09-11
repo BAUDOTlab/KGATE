@@ -382,7 +382,6 @@ class KnowledgeGraph(Dataset):
     def __getitem__(self, index) -> Tensor:
         return self.graphindices[:, index]
     
-    
     @property
     def embeddings(self) -> KnowledgeGraphEmbeddings:
         return self._embeddings
