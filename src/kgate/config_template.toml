@@ -98,6 +98,24 @@ dissimilarity = "L2"
 # Number of convolutional filter used by ConvKB
 filter_count = 3
 
+[model.regularizer]
+# Regularization function applied to the parameters selected by `params` below.
+# It is applied by the trainer at the end of every epoch and before an evaluation.
+# This is the module that gathers what the decoders used to do in their own
+# `normalize_parameters` method (e.g. L2-normalizing their node embeddings).
+# Supported options are:
+# - None: no regularization (default).
+# - L1: row-wise L1 normalization of each parameter.
+# - L2: row-wise L2 normalization of each parameter (what TransE, RESCAL and DistMult
+#       used to do to their node embeddings).
+name = "None"
+
+# Which parameters to regularize:
+# - node: only the node embeddings
+# - edge: only the edge embeddings
+# - all: both
+params = "node"
+
 [model.loss]
 # The name of the loss function to use
 # Supported options are:

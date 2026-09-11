@@ -1,9 +1,9 @@
 """
 Tests for kgate.samplers.
 
-Most tests use the single-node-type path (no metadata). The multi-node-type
-paths of some samplers contain known bugs, exposed with xfail(strict=True)
-and documented in fixes/samplers.txt.
+Most tests use the single-node-type path (no metadata). Remaining known
+limitations of the multi-node-type paths are documented in
+fixes/samplers.txt.
 """
 
 import pytest
@@ -52,17 +52,13 @@ class TestUniformNegativeSampler:
         assert corrupted.shape == (4, 8)
         assert not torch.equal(corrupted[:2], batch[:2])
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Multi-type branch indexes a 1-D tensor with 2 arguments "
-               "(negative_triplet_heads[i*n, (i+1)*n]) -> IndexError. "
-               "See fixes/samplers.txt.",
-    )
     def test_corrupt_batch_multi_type(self, hetero_kg):
-        sampler = UniformNegativeSampler(hetero_kg, negative_triplet_count=1)
+        sampler = UniformNegativeSampler(hetero_kg, negative_triplet_count=2)
         batch = hetero_kg.graphindices[:, :2]
         corrupted = sampler.corrupt_batch(batch)
-        assert corrupted.shape == (4, 2)
+        # 2 samples x 2 corrupted triplets each -> [4, 4], edges preserved
+        assert corrupted.shape == (4, 4)
+        torch.testing.assert_close(corrupted[2], batch[2].repeat(2))
 
 
 class TestBernoulliNegativeSampler:
@@ -131,12 +127,6 @@ class TestPositionalNegativeSampler:
             edge = batch[2, i].item()
             assert corrupted[0, i].item() in sampler.possible_heads[edge].tolist()
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Tail corruption is silently skipped: `corrupted_tails` is "
-               "never appended to, so tail-corrupted columns stay identical "
-               "to the input. See fixes/samplers.txt.",
-    )
     def test_corrupt_tails(self, kg):
         sampler = PositionalNegativeSampler(kg)
         sampler.bernoulli_probabilities = torch.tensor([0.0, 0.0])

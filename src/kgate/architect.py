@@ -12,7 +12,7 @@ import warnings
 from collections.abc import Callable
 from glob import glob
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Set, Tuple
+from typing import Any, Callable, Dict, List, Literal, Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -27,10 +27,11 @@ from ignite.handlers import (
     ProgressBar,
 )
 from torch import Tensor, optim, tensor
+import torch.nn as nn
 from torch.nn import Module
 from torch.utils.data import DataLoader, Subset
 
-from .config import Configuration
+from .config import Configuration, Regularizer_Configuration
 from .datasets import load_FB15k_237, load_PrimeKG, load_WN18RR
 from .decoders import *
 from .encoders import *
@@ -40,6 +41,7 @@ from .inference import EdgeInference, NodeInference
 from .initializers import *
 from .knowledgegraph import KnowledgeGraph
 from .preprocessing import SUPPORTED_SEPARATORS, prepare_knowledge_graph
+from .regularizers import REGULARIZER_FUNCTIONS, Regularizer
 from .samplers import (
     BernoulliNegativeSampler,
     MixedNegativeSampler,
@@ -317,6 +319,7 @@ class Architect(Module):
         self.initializer: Initializer = None
         self.encoder: GNN | None = None
         self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
+        self.regularizer: Regularizer | None = None
         self.loss: KGE_Loss = None
         self.skip_normalization: bool = False
         self.optimizer: optim.Optimizer = None
@@ -667,6 +670,59 @@ class Architect(Module):
         return loss
         
 
+    def initialize_regularizer(self) -> Regularizer | None:
+        """
+        Initialize the regularizer according to the configuration.
+
+        The regularizer is a model component initialized after the decoder: it
+        is given the set of parameters to regularize and the function to apply
+        to them, and is applied through the trainer hooks (see
+        `apply_regularizer`). It gathers what the decoders used to do in their
+        own `normalize_parameters` method (e.g. TransE, RESCAL and DistMult
+        L2-normalizing their node embeddings).
+
+        The parameters it regularizes are the node and/or edge embeddings of
+        the knowledge graph, selected by the `params` configuration key
+        (`node`, `edge` or `all`). The function is selected by the `name`
+        configuration key (see `kgate.regularizers.REGULARIZER_FUNCTIONS` for
+        the builtin functions, or `Config.regularizer.register_name` for
+        custom function names).
+
+        Returns
+        -------
+        
+        **regularizer** *(Regularizer or None)*
+        : The initialized regularizer, or None if no regularizer is configured
+          (`[model.regularizer] name = "None"`, the default).
+        
+        Raises
+        ------
+        
+        **KeyError**
+        : If the configured regularizer name is not a known function.
+        
+        """
+        regularizer_configuration: Regularizer_Configuration = self.configuration.regularizer
+
+        if regularizer_configuration.name == "None":
+            logging.info("No regularizer configured. Skipping.")
+            return None
+
+        func: Callable[[Tensor], Tensor] = REGULARIZER_FUNCTIONS[regularizer_configuration.name]
+
+        # Build the set of parameters to regularize, according to the configuration
+        params: list[nn.Parameter] = []
+        if regularizer_configuration.params in ("node", "all"):
+            params.extend(self.knowledge_graph.node_embeddings)
+        if regularizer_configuration.params in ("edge", "all"):
+            params.append(self.knowledge_graph.edge_embeddings)
+
+        regularizer = Regularizer(params = params, func = func)
+        logging.info(f"Regularizer initialized: {regularizer}")
+
+        return regularizer
+
+
     def initialize_optimizer(self) -> optim.Optimizer:
         """
         Initialize the optimizer based on the configuration provided.
@@ -869,6 +925,9 @@ class Architect(Module):
             * Encoder
             * Node Embeddings (either at random, or using given node features)
             * Edge Embeddings (either at random, or using given edge features)
+            * Regularizer (initialized after the decoder, as soon as the node
+              and edge embeddings it regularizes have been created; see
+              `initialize_regularizer`)
             * Optimizer
             * Negative Sampler
             * Scheduler
@@ -929,6 +988,14 @@ class Architect(Module):
                 # TODO: make it an hyperparameter
                 self.knowledge_graph.node_embeddings.requires_grad_(False)
 
+        logging.info("Initializing regularizer...")
+        # The regularizer is initialized after the decoder, and needs the node
+        # and edge embeddings it regularizes, so it is created here, as soon as
+        # those embeddings exist. It is applied through the trainer hooks (see
+        # `apply_regularizer`), and gathers what the decoders used to do in
+        # their `normalize_parameters` method.
+        self.regularizer = self.regularizer or self.initialize_regularizer()
+
         logging.info("Initializing optimizer...")
         self.optimizer = self.optimizer or self.initialize_optimizer()
 
@@ -960,6 +1027,9 @@ class Architect(Module):
             * `Checkpoint` save at a configured interval.
             * Evaluation on the validation set at a configured interval.
             * Metrics logging at each epoch, in the `training_metrics.csv` output file.
+            * Application of the configured regularizer at the end of each epoch
+              (see `initialize_regularizer` and `apply_regularizer`; a no-op if
+              no regularizer is configured).
 
         Arguments
         ---------
@@ -1058,6 +1128,10 @@ class Architect(Module):
         elif self.checkpoints_directory.exists() and len(os.listdir(self.checkpoints_directory)) > 0:
             shutil.rmtree(self.checkpoints_directory)
 
+        # Apply the configured regularizer at the end of every epoch (no-op if
+        # no regularizer is configured), before the metrics are logged and the
+        # model is evaluated, so that both see the regularized parameters.
+        trainer.add_event_handler(Events.EPOCH_COMPLETED, self.apply_regularizer)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.log_metrics_to_csv)
         #trainer.add_event_handler(Events.EPOCH_COMPLETED, self.clean_memory)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.update_scheduler)
@@ -1690,29 +1764,44 @@ class Architect(Module):
         return embedding_dictionnary
 
 
+    def apply_regularizer(self):
+        """
+        Apply the configured regularizer to the parameters it was given.
+
+        This is the entry point of the regularizer trainer hooks: it is called
+        at the end of every epoch, and before the training and test procedures.
+        It is a no-op if no regularizer was configured
+        (`[model.regularizer] name = "None"`, the default), in which case
+        nothing is changed.
+
+        The regularizer itself is initialized after the decoder in
+        `initialize_model`, and is given the set of parameters to regularize
+        and the function to apply to them (see `initialize_regularizer`).
+        """
+        if self.regularizer is None:
+            return
+
+        self.regularizer()
+
+        logging.debug(f"Applied regularizer to the configured parameters.")
+
+
     def normalize_parameters(self):
         """
         Normalize all parameters of the model.
-        
-        Each decoder has a specific normalization routine, so this function doesn't do anything by itself, 
-        except calling the `decoder.normalize_parameters` function if it exists.
 
-        Raises
-        ------
-        
-        **AssertionError**
-        : The `decoder.normalize_params` method should return exactly two elements: the node embedding and the edge embedding.
-        
+        Kept for backward compatibility: the normalization routines that used
+        to be implemented in each decoder's `normalize_parameters` method
+        (e.g. TransE, RESCAL and DistMult L2-normalizing their node embeddings)
+        are now gathered in the `Regularizer` module (see
+        `kgate.regularizers`), selected through the configuration
+        (`[model.regularizer]`) and applied by the trainer hooks.
+
+        This function therefore simply applies the configured regularizer (a
+        no-op if no regularizer is configured, which is the default).
         """
-        # Some decoders should not normalize parameters or do so in a different way.
-        # In this case, they should implement the function themselves and we return it.
-        normalize_function: Callable[..., Tuple[nn.ParameterList, nn.Embedding]] | None = getattr(self.decoder, "normalize_params", None)
-
-        if callable(normalize_function):
-            normalized_embeddings = normalize_function(node_embeddings = self.knowledge_graph.node_embeddings, edge_embeddings = self.knowledge_graph.edge_embeddings)
-            assert len(normalized_embeddings) == 2, "The decoder.normalize_params method should return exactly two elements, the node embedding and the edge embedding."
-            self.knowledge_graph.node_embeddings, self.knowledge_graph.edge_embeddings = normalized_embeddings
-            
+        self.apply_regularizer()
+        
         logging.debug(f"Normalized all embeddings.")
 
 
