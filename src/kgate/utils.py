@@ -495,3 +495,9 @@ def get_bernoulli_probabilities(knowledge_graph: "KnowledgeGraph"
         tails_per_head[edge] = tails_per_head[edge] / (tails_per_head[edge] + heads_per_tail[edge])
     
     return tails_per_head
+
+def normalize_embeddings(embedding: Tensor, p: Literal[1,2], squared: bool):
+    if squared:
+        return torch.nn.functional.normalize(embedding, p, dim=1)**2
+    else:
+        return torch.nn.functional.normalize(embedding, p, dim=1)
