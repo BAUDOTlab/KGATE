@@ -74,10 +74,10 @@ from .samplers import (
 
 
 def initialize_initializer(configuration: Initializer_Configuration,
-                           knowledge_graph: KnowledgeGraph,
-                           node_embedding_dimensions: int,
-                           checkpoints_directory: Path,
-                           device: torch.device) -> Initializer:
+                           knowledge_graph: KnowledgeGraph = None,
+                           node_embedding_dimensions: int = None,
+                           checkpoints_directory: Path = None,
+                           device: torch.device = None) -> Initializer:
     """
     Set the method used to generate initial embeddings
     
@@ -335,7 +335,7 @@ def initialize_decoder(configuration: Decoder_Configuration,
         case _:
             raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
 
-    return decoder
+    return decoder.to(device)
 
 
 def initialize_loss(configuration: Loss_Configuration,
@@ -449,6 +449,7 @@ def initialize_regularizer(configuration: Regularizer_Configuration,
 
 def initialize_optimizer(configuration: Optimizer_Configuration,
                          knowledge_graph: KnowledgeGraph,
+                         *,
                          decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
                          encoder: GCNEncoder | GATEncoder | None = None) -> optim.Optimizer:
     """
@@ -493,17 +494,28 @@ def initialize_optimizer(configuration: Optimizer_Configuration,
 
     optimizer_class = getattr(optim, optimizer_name)
 
-    parameters = [node_embedding for node_embedding in knowledge_graph.node_embeddings]
-    parameters.append(knowledge_graph.edge_embeddings)
-    parameters.extend(decoder.parameters())
+    base_parameters = [node_embedding for node_embedding in knowledge_graph.node_embeddings]
+    base_parameters.append(knowledge_graph.edge_embeddings)
+    base_parameters.extend(decoder.parameters())
+
+    # `weight_decay` is a per-parameter-group argument for the supported
+    # optimizers; everything else is passed globally. Apply the configured
+    # weight decay to the node/edge/decoder parameters, but zero it out for the
+    # encoder: decaying the encoder's per-relation message-path weights prunes
+    # the only component that can carry graph structure, collapsing the GNN to
+    # a shared near-affine map (see BUG 2 in fixes/gnn_encoder_degradation.txt).
+    weight_decay = optimizer_params.get("weight_decay", 0.0)
+    global_params = {key: value for key, value in optimizer_params.items() if key != "weight_decay"}
+
+    param_groups = [{"params": base_parameters, "weight_decay": weight_decay}]
     if encoder is not None:
-        parameters.extend(encoder.parameters())
+        param_groups.append({"params": list(encoder.parameters()), "weight_decay": 0.0})
 
     # Initialize the optimizer with given parameters
-    optimizer: optim.Optimizer = optimizer_class(parameters, **optimizer_params)
+    optimizer: optim.Optimizer = optimizer_class(param_groups, **global_params)
 
-    logging.info(f"Optimizer '{optimizer_name}' initialized with parameters: {optimizer_params}")
-    
+    logging.info(f"Optimizer '{optimizer_name}' initialized with parameters: {optimizer_params} (encoder weight_decay=0)")
+
     return optimizer
 
 
@@ -673,16 +685,14 @@ def initialize_evaluator(configuration: Evaluation_Configuration,
     match configuration.objective:
         case "Link Prediction":
             evaluator = LinkPredictionEvaluator(graphindices = knowledge_graph.graphindices, embedding_dimensions = node_embedding_dimensions)
-            validation_metric = "MRR"
         case "Triplet Classification":
             if architect is None:
                 raise ValueError("The Triplet Classification evaluator needs the Architect instance (it uses its device and scoring_function). Please provide it as the `architect` argument.")
             evaluator = TripletClassificationEvaluator(architect = architect, knowledge_graph = knowledge_graph)
-            validation_metric = "Accuracy"
         case _:
             raise NotImplementedError(f"The requested evaluator {configuration.objective} is not implemented.")
     
     logging.info(f"Using {configuration.objective} evaluator.")
     
-    return evaluator, validation_metric
+    return evaluator
 
