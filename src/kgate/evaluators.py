@@ -251,19 +251,31 @@ class LinkPredictionEvaluator:
                                                                     dtype = torch.float)
     
         all_nodes = knowledge_graph.graphindices[:2].unique()
-        for i in range((len(all_nodes) // batch_size) + 1):
-            seed_nodes: Tensor = all_nodes[i * batch_size: (i + 1) * batch_size]
-            
+        try:
             input = knowledge_graph.get_encoder_input(
-                    seed_nodes = seed_nodes,
-                    hop_count = encoder.layer_count
-                    )
-                    
-            encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
+                seed_nodes=all_nodes,
+                hop_count = encoder.layer_count
+            )
+            encoder_output = encoder(input.x_dict, input.edge_index)
             for node_type, indices in input.seed_mapping.items():
                 node_type_index = knowledge_graph.node_type_to_index[node_type]
-                node_type_mask = (knowledge_graph.node_types[seed_nodes] == node_type_index)
-                self.evaluation_node_embeddings[seed_nodes[node_type_mask]] = encoder_output[node_type][indices]
+                node_type_mask = (knowledge_graph.node_types[all_nodes] == node_type_index)
+                self.evaluation_node_embeddings[all_nodes[node_type_mask]] = encoder_output[node_type][indices]
+            
+        except torch.OutOfMemoryError:
+            for i in range((len(all_nodes) // batch_size) + 1):
+                seed_nodes: Tensor = all_nodes[i * batch_size: (i + 1) * batch_size]
+                
+                input = knowledge_graph.get_encoder_input(
+                        seed_nodes = seed_nodes,
+                        hop_count = encoder.layer_count
+                        )
+                        
+                encoder_output: Dict[str, Tensor] = encoder(input.x_dict, input.edge_index)
+                for node_type, indices in input.seed_mapping.items():
+                    node_type_index = knowledge_graph.node_type_to_index[node_type]
+                    node_type_mask = (knowledge_graph.node_types[seed_nodes] == node_type_index)
+                    self.evaluation_node_embeddings[seed_nodes[node_type_mask]] = encoder_output[node_type][indices]
         
         self.generated_embeddings = True
 
@@ -338,7 +350,9 @@ class LinkPredictionEvaluator:
             if encoder is not None and not self.generated_embeddings:
                 self.generate_evaluation_embeddings(batch_size, encoder, evaluated_subset, encoder_node_embedding_dimensions)
             else:
-                self.evaluation_node_embeddings = node_embeddings[0].data
+                # Concatenate the embeddings of all node types (in node_type_to_global
+                # order) so that global node indices can be used directly.
+                self.evaluation_node_embeddings = torch.cat([embeddings.data for embeddings in node_embeddings], dim=0)
 
             for i, batch in tqdm(enumerate(dataloader),
                                 total = len(dataloader),
