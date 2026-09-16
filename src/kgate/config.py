@@ -10,7 +10,7 @@ import tomllib
 import tomli_w
 from importlib.resources import open_binary
 
-from .constants import SUPPORTED_ENCODERS, SUPPORTED_DECODERS, SUPPORTED_SAMPLERS, SUPPORTED_LOSSES, SUPPORTED_REGULARIZERS, SUPPORTED_REGULARIZER_PARAMS
+from .constants import SUPPORTED_ENCODERS, SUPPORTED_DECODERS, SUPPORTED_SAMPLERS, SUPPORTED_LOSSES, SUPPORTED_REGULARIZERS, SUPPORTED_REGULARIZER_PARAMS, SUPPORTED_NORMALIZERS, SUPPORTED_NORMALIZER_PARAMS
 from .utils import set_random_seeds
 
 import torch
@@ -31,6 +31,7 @@ class Configuration:
         self.encoder = Encoder_Configuration(self._configuration["model"]["encoder"])
         self.decoder = Decoder_Configuration(self._configuration["model"]["decoder"])
         self.regularizer = Regularizer_Configuration(self._configuration["model"]["regularizer"])
+        self.normalizer = Normalizer_Configuration(self._configuration["model"]["normalizer"])
         self.loss = Loss_Configuration(self._configuration["model"]["loss"])
         self.negative_sampler = Sampler_Configuration(self._configuration["negative_sampler"])
         self.optimizer = Optimizer_Configuration(self._configuration["optimizer"])
@@ -950,6 +951,113 @@ class Regularizer_Configuration:
     @params.setter
     def params(self, params: str):
         assert params in SUPPORTED_REGULARIZER_PARAMS, f"Unsupported regularizer parameters given. KGATE supports {', '.join(SUPPORTED_REGULARIZER_PARAMS)} but got {params}."
+        self._configuration["params"] = params
+
+
+class Normalizer_Configuration:
+    """
+    Normalizer part of the main configuration.
+
+    The normalizer is a model component initialized by the Architect after the
+    decoder. It is given a set of embeddings to normalize and the function to
+    apply to them, and is applied through the Architect (see
+    `Architect.initialize_normalizer`, `Architect.scoring_function` and
+    `Architect.apply_normalizer`). It gathers what the decoders used to do in
+    their own `score` method (e.g. L2-normalizing their head and tail
+    embeddings).
+
+    This class is not meant to be used as a standalone, but to make access to
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    normalizer_configuration: dict
+        Dictionary containing only the normalizer configuration.
+    """
+
+    def __init__(self, normalizer_configuration: dict):
+        self._configuration = normalizer_configuration
+        self.supported_normalizers = SUPPORTED_NORMALIZERS
+
+        # "None" means no normalizer. Any other name must be a supported
+        # normalizer function, or it is considered a custom function name.
+        if normalizer_configuration["name"] != "None" and normalizer_configuration["name"] not in self.supported_normalizers:
+            logging.warn(f"normalizer name {normalizer_configuration["name"]} is not a builtin KGATE normalizer function. It will be considered a custom function name.")
+            self.register_name(normalizer_configuration["name"])
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the normalizer function to apply.
+
+        When using builtin KGATE normalizer functions, possible values are:
+        - `L1`: row-wise L1 normalization of each embedding.
+        - `L2`: row-wise L2 normalization of each embedding (what RESCAL,
+          DistMult, TransE, TransH, TransR and TransD used to do in their
+          `score` method).
+
+        `None` means no normalizer is initialized.
+
+        It is also possible to add your own custom normalizer function to the
+        configuration, in which case you should call
+        :func:`~Config.normalizer.register_name` to make sure it is
+        acknowledged as a valid normalizer name.
+
+        Defaults to L2, which matches the historical behavior of the decoders
+        that used to normalize in their own `score` method (RESCAL, DistMult,
+        TransE, TransH, TransR and TransD L2-normalizing their head and tail
+        embeddings).
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def name(self, name: str):
+        if name != "None":
+            assert name in self.supported_normalizers, f"Unsupported normalizer given. KGATE supports {', '.join(SUPPORTED_NORMALIZERS)} (or None) but got {name}. If you want to register a custom normalizer name, use Config.normalizer.register_name()"
+        self._configuration["name"] = name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid normalizer function.
+
+        Adds the given name to the list of supported normalizer functions and
+        sets it as the current normalizer name in the configuration.
+
+        KGATE has a limited set of builtin normalizer functions and validates
+        inputs against this list. To make sure your custom normalizer passes
+        the sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the normalizer function to register.
+        """
+        self.supported_normalizers.append(name)
+
+        self.name = name
+
+    @property
+    def params(self) -> str:
+        """
+        Which embeddings to normalize.
+
+        Possible values are:
+        - `node`: only the node embeddings (head and tail)
+        - `edge`: only the edge embeddings
+        - `all`: both
+
+        Defaults to `node`.
+        """
+        return self._configuration["params"]
+
+    @params.setter
+    def params(self, params: str):
+        assert params in SUPPORTED_NORMALIZER_PARAMS, f"Unsupported normalizer parameters given. KGATE supports {', '.join(SUPPORTED_NORMALIZER_PARAMS)} but got {params}."
         self._configuration["params"] = params
 
 

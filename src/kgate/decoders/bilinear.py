@@ -386,13 +386,18 @@ class RESCAL(BilinearDecoder):
         
         Here, [batch_size] is batch.shape[1].
         
-        """
-        head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
-        tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
-        edge_embeddings = self.edge_embeddings_matrix.data[edge_indices].view(-1, self.embedding_dimensions, self.embedding_dimensions)
-        head_edge_embeddings = matmul(head_normalized_embeddings.view(-1, 1, self.embedding_dimensions), edge_embeddings)
+        The head and tail embeddings are expected to be normalized between the
+        encoder and the decoder step: this used to be done by this `score`
+        method itself (row-wise L2 normalization), and is now gathered in the
+        `Normalizer` module (see `kgate.normalizers`), selected through the
+        configuration (`[model.normalizer]`) and applied by the Architect
+        (see `Architect.scoring_function`).
         
-        return (head_edge_embeddings.view(-1, self.embedding_dimensions) * tail_normalized_embeddings).sum(dim = 1)
+        """
+        edge_embeddings = self.edge_embeddings_matrix.data[edge_indices].view(-1, self.embedding_dimensions, self.embedding_dimensions)
+        head_edge_embeddings = matmul(head_embeddings.view(-1, 1, self.embedding_dimensions), edge_embeddings)
+        
+        return (head_edge_embeddings.view(-1, self.embedding_dimensions) * tail_embeddings).sum(dim = 1)
     
     
     def normalize_parameters(self,
@@ -690,11 +695,15 @@ class DistMult(BilinearDecoder):
         
         Here, [batch_size] is batch.shape[1].
         
-        """
-        head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
-        tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
+        The head and tail embeddings are expected to be normalized between the
+        encoder and the decoder step: this used to be done by this `score`
+        method itself (row-wise L2 normalization), and is now gathered in the
+        `Normalizer` module (see `kgate.normalizers`), selected through the
+        configuration (`[model.normalizer]`) and applied by the Architect
+        (see `Architect.scoring_function`).
         
-        return (head_normalized_embeddings * edge_embeddings * tail_normalized_embeddings).sum(dim = 1)
+        """
+        return (head_embeddings * edge_embeddings * tail_embeddings).sum(dim = 1)
     
     
     def normalize_parameters(self,

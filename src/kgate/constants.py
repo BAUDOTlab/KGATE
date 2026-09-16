@@ -46,6 +46,19 @@ SUPPORTED_REGULARIZER_PARAMS = [
     "all"
 ]
 
+# Builtin KGATE normalizer functions (see `kgate.normalizers.NORMALIZER_FUNCTIONS`)
+SUPPORTED_NORMALIZERS = [
+    "L1",
+    "L2"
+]
+
+# Which embeddings a normalizer can be applied to (see `Architect.initialize_normalizer`)
+SUPPORTED_NORMALIZER_PARAMS = [
+    "node",
+    "edge",
+    "all"
+]
+
 # Builtin KGATE negative samplers
 SUPPORTED_SAMPLERS = [
     "Positional",

@@ -38,6 +38,7 @@ from .config import (
     Decoder_Configuration,
     Loss_Configuration,
     Regularizer_Configuration,
+    Normalizer_Configuration,
     Optimizer_Configuration,
     Sampler_Configuration,
     Learning_Rate_Scheduler_Configuration,
@@ -64,6 +65,7 @@ from .initializers import FeatureInitializer, Initializer, Node2VecInitializer
 from .knowledgegraph import KnowledgeGraph
 from .loss import BinaryCrossEntropyLoss, KGE_Loss, MarginLoss
 from .regularizers import REGULARIZER_FUNCTIONS, Regularizer
+from .normalizers import NORMALIZER_FUNCTIONS, Normalizer
 from .samplers import (
     BernoulliNegativeSampler,
     MixedNegativeSampler,
@@ -445,6 +447,74 @@ def initialize_regularizer(configuration: Regularizer_Configuration,
     logging.info(f"Regularizer initialized: {regularizer}")
 
     return regularizer
+
+
+def initialize_normalizer(configuration: Normalizer_Configuration,
+                          knowledge_graph: KnowledgeGraph) -> Normalizer | None:
+    """
+    Initialize the normalizer according to the configuration.
+
+    The normalizer is a model component initialized after the decoder: it
+    is given the set of embeddings to normalize and the function to apply
+    to them, and is applied by the Architect between the encoder and the
+    decoder step (see `Architect.scoring_function`), batchwise when there is
+    an encoder, or once over the whole graph at the beginning of each epoch
+    when there is not (see `Architect.apply_normalizer`). It gathers what
+    the decoders used to do in their own `score` method (e.g. RESCAL,
+    DistMult, TransE, TransH, TransR and TransD L2-normalizing their head
+    and tail embeddings).
+
+    The embeddings it normalizes are the node and/or edge embeddings of
+    the knowledge graph, selected by the `params` configuration key
+    (`node`, `edge` or `all`). The function is selected by the `name`
+    configuration key (see `kgate.normalizers.NORMALIZER_FUNCTIONS` for
+    the builtin functions, or `Config.normalizer.register_name` for
+    custom function names).
+
+    Arguments
+    ---------
+    
+    **configuration** *(Configuration)*
+    : The Architect's configuration.
+    
+    **knowledge_graph** *(KnowledgeGraph)*
+    : The Architect's knowledge graph (its node and edge embeddings are the
+      embeddings that can be normalized).
+    
+    Returns
+    -------
+    
+    **normalizer** *(Normalizer or None)*
+    : The initialized normalizer, or None if no normalizer is configured
+      (`[model.normalizer] name = "None"`).
+    
+    Raises
+    ------
+    
+    **KeyError**
+    : If the configured normalizer name is not a known function.
+    
+    """
+    if configuration.name == "None":
+        logging.info("No normalizer configured. Skipping.")
+        return None
+
+    func = NORMALIZER_FUNCTIONS[configuration.name]
+
+    # Build the set of embeddings to normalize, according to the configuration
+    params: list[nn.Parameter] = []
+    if configuration.params in ("node", "all"):
+        params.extend(knowledge_graph.node_embeddings)
+    if configuration.params in ("edge", "all"):
+        params.append(knowledge_graph.edge_embeddings)
+
+    normalizer = Normalizer(  func = func,
+                              node = configuration.params in ("node", "all"),
+                              edge = configuration.params in ("edge", "all"),
+                              params = params)
+    logging.info(f"Normalizer initialized: {normalizer}")
+
+    return normalizer
 
 
 def initialize_optimizer(configuration: Optimizer_Configuration,

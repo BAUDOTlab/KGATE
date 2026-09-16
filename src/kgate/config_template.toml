@@ -116,6 +116,42 @@ name = "None"
 # - all: both
 params = "node"
 
+[model.normalizer]
+# Normalization function applied to the embeddings selected by `params` below.
+# It is applied by the Architect between the encoder and the decoder step, so
+# it is done batchwise: the function is applied to the (encoder output)
+# embeddings of each batch before they are scored by the decoder.
+# When there is no encoder, the embeddings passed to the decoder are the node
+# and edge embeddings themselves; normalizing them batchwise would recompute
+# the same whole-graph normalization on every batch, so they are normalized
+# once, over the whole graph, at the beginning of each epoch (in place, on
+# the parameters). Note that between two epoch-start normalizations the
+# optimizer keeps updating the embeddings, so the decoder may see embeddings
+# whose norms are not exactly unit anymore: this small approximation is the
+# trade-off of not recomputing the same whole-graph normalization on every
+# batch.
+# This is the module that gathers what the decoders used to do in their own
+# `score` method (e.g. L2-normalizing their head and tail embeddings).
+# Supported options are:
+# - None: no normalization.
+# - L1: row-wise L1 normalization of each embedding.
+# - L2: row-wise L2 normalization of each embedding (default; what RESCAL,
+#       DistMult, TransE, TransH, TransR and TransD used to do to their head
+#       and tail embeddings in their `score` method).
+# Note: this default matches the historical behavior of the decoders that
+# used to normalize in their own `score` method. To restore the historical
+# behavior of the decoders that did not (ComplEx, TorusE, ConvKB), set
+# `name = "None"`; to restore the historical behavior of TransD (which also
+# normalized its edge embeddings), set `params = "all"` (or `"edge"` on top
+# of `"node"`).
+name = "L2"
+
+# Which embeddings to normalize:
+# - node: only the node embeddings (head and tail)
+# - edge: only the edge embeddings
+# - all: both
+params = "all"
+
 [model.loss]
 # The name of the loss function to use
 # Supported options are:

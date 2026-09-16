@@ -411,12 +411,16 @@ class TransE(TranslationalDecoder):
         **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
         : The score of each triplet as a tensor.
             
-        """
-        head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
-        tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
+        The head and tail embeddings are expected to be normalized between the
+        encoder and the decoder step: this used to be done by this `score`
+        method itself (row-wise L2 normalization), and is now gathered in the
+        `Normalizer` module (see `kgate.normalizers`), selected through the
+        configuration (`[model.normalizer]`) and applied by the Architect
+        (see `Architect.scoring_function`).
         
-        batch_score = - self.dissimilarity( head_normalized_embeddings + edge_embeddings,
-                                            tail_normalized_embeddings)
+        """
+        batch_score = - self.dissimilarity( head_embeddings + edge_embeddings,
+                                            tail_embeddings)
     
         return batch_score
     
@@ -635,14 +639,19 @@ class TransH(TranslationalDecoder):
         **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
         : The score of each triplet as a tensor.
         
+        The head and tail embeddings are expected to be normalized between the
+        encoder and the decoder step: this used to be done by this `score`
+        method itself (row-wise L2 normalization), and is now gathered in the
+        `Normalizer` module (see `kgate.normalizers`), selected through the
+        configuration (`[model.normalizer]`) and applied by the Architect
+        (see `Architect.scoring_function`).
+        
         """
-        head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
-        tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
         self.evaluated_projections = False
         normal_vector = normalize(self.normal_vector[edge_indices], p = 2, dim = 1)
         
-        batch_score = - self.dissimilarity( self.project(head_normalized_embeddings, normal_vector) + edge_embeddings,
-                                            self.project(tail_normalized_embeddings, normal_vector))
+        batch_score = - self.dissimilarity( self.project(head_embeddings, normal_vector) + edge_embeddings,
+                                            self.project(tail_embeddings, normal_vector))
         
         return batch_score
     
@@ -975,18 +984,23 @@ class TransR(TranslationalDecoder):
         **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
         : The score of each triplet as a tensor.
         
+        The head and tail embeddings are expected to be normalized between the
+        encoder and the decoder step: this used to be done by this `score`
+        method itself (row-wise L2 normalization), and is now gathered in the
+        `Normalizer` module (see `kgate.normalizers`), selected through the
+        configuration (`[model.normalizer]`) and applied by the Architect
+        (see `Architect.scoring_function`).
+        
         """
-        head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
-        tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
         self.evaluated_projections = False
-        batch_size = head_normalized_embeddings.shape[0]
+        batch_size = head_embeddings.shape[0]
 
         projection_matrix = self.projection_matrix[edge_indices].view(batch_size,
                                                             self.edge_embedding_dimensions,
                                                             self.node_embedding_dimensions)
         
-        batch_score = - self.dissimilarity( self.project(head_normalized_embeddings, projection_matrix) + edge_embeddings,
-                                            self.project(tail_normalized_embeddings, projection_matrix))
+        batch_score = - self.dissimilarity( self.project(head_embeddings, projection_matrix) + edge_embeddings,
+                                            self.project(tail_embeddings, projection_matrix))
         
         return batch_score
     
@@ -1341,19 +1355,24 @@ class TransD(TranslationalDecoder):
         **batch_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
         : The score of each triplet as a tensor.
         
+        The head, tail and edge embeddings are expected to be normalized
+        between the encoder and the decoder step: this used to be done by
+        this `score` method itself (row-wise L2 normalization), and is now
+        gathered in the `Normalizer` module (see `kgate.normalizers`),
+        selected through the configuration (`[model.normalizer]`) and applied
+        by the Architect (see `Architect.scoring_function`). To restore the
+        historical behavior of this decoder, set `[model.normalizer] params =
+        "all"` (it used to normalize its edge embeddings as well).
+        
         """
-        head_normalized_embeddings = normalize(head_embeddings, p = 2, dim = 1)
-        tail_normalized_embeddings = normalize(tail_embeddings, p = 2, dim = 1)
-        edge_normalized_embeddings = normalize(edge_embeddings, p = 2, dim = 1)
-
         head_projected_vectors = normalize(self.node_projection_vector[head_indices], p = 2, dim = 1)
         tail_projected_vectors = normalize(self.node_projection_vector[tail_indices], p = 2, dim = 1)
         edge_projected_vectors = normalize(self.edge_projection_vector[edge_indices], p = 2, dim = 1)
 
-        projected_heads = self.project(head_normalized_embeddings, head_projected_vectors, edge_projected_vectors)
-        projected_tails = self.project(tail_normalized_embeddings, tail_projected_vectors, edge_projected_vectors)
+        projected_heads = self.project(head_embeddings, head_projected_vectors, edge_projected_vectors)
+        projected_tails = self.project(tail_embeddings, tail_projected_vectors, edge_projected_vectors)
         
-        batch_score = - self.dissimilarity( projected_heads + edge_normalized_embeddings,
+        batch_score = - self.dissimilarity( projected_heads + edge_embeddings,
                                             projected_tails)
         
         return batch_score

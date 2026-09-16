@@ -31,7 +31,7 @@ import torch.nn as nn
 from torch.nn import Module
 from torch.utils.data import DataLoader, Subset
 
-from .config import Configuration, Regularizer_Configuration
+from .config import Configuration, Normalizer_Configuration, Regularizer_Configuration
 from .datasets import load_FB15k_237, load_PrimeKG, load_WN18RR
 from .decoders import *
 from .encoders import *
@@ -42,6 +42,7 @@ from .initializers import *
 from .knowledgegraph import KnowledgeGraph
 from .preprocessing import SUPPORTED_SEPARATORS, prepare_knowledge_graph
 from .regularizers import REGULARIZER_FUNCTIONS, Regularizer
+from .normalizers import NORMALIZER_FUNCTIONS, Normalizer
 from .samplers import (
     BernoulliNegativeSampler,
     MixedNegativeSampler,
@@ -303,7 +304,7 @@ class Architect(Module):
                     knowledge_graph = load_PrimeKG()
                 case _:
                     raise ValueError(f"Unrecognized {knowledge_graph} knowledge graph specified.")
-
+        
         if self.configuration.preprocessing.run:
             logging.info(f"Preparing KG...")
             self.knowledge_graph = prepare_knowledge_graph(self.configuration, knowledge_graph, dataframe, self.metadata)
@@ -321,6 +322,7 @@ class Architect(Module):
         self.encoder: GNN | None = None
         self.decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder = None
         self.regularizer: Regularizer | None = None
+        self.normalizer: Normalizer | None = None
         self.loss: KGE_Loss = None
         self.skip_normalization: bool = False
         self.optimizer: optim.Optimizer = None
@@ -463,6 +465,9 @@ class Architect(Module):
             * Regularizer (initialized after the decoder, as soon as the node
               and edge embeddings it regularizes have been created; see
               `initialize_regularizer`)
+            * Normalizer (initialized after the decoder, as soon as the node
+              and edge embeddings it normalizes have been created; see
+              `initialize_normalizer`)
             * Optimizer
             * Negative Sampler
             * Scheduler
@@ -536,6 +541,16 @@ class Architect(Module):
         # their `normalize_parameters` method.
         self.regularizer = self.regularizer or initialize_regularizer(self.configuration.regularizer, self.knowledge_graph)
 
+        logging.info("Initializing normalizer...")
+        # The normalizer is initialized after the decoder, and needs the node
+        # and edge embeddings it normalizes, so it is created here, as soon as
+        # those embeddings exist. It is applied by the Architect between the
+        # encoder and the decoder step (batchwise when there is an encoder, or
+        # once over the whole graph at the beginning of each epoch when there
+        # is not), and gathers what the decoders used to do in their `score`
+        # method.
+        self.normalizer = self.normalizer or initialize_normalizer(self.configuration.normalizer, self.knowledge_graph)
+
         logging.info("Initializing optimizer...")
         self.optimizer = self.optimizer or initialize_optimizer(self.configuration.optimizer, 
                                                                 self.knowledge_graph, 
@@ -573,6 +588,11 @@ class Architect(Module):
             * Application of the configured regularizer at the end of each epoch
               (see `initialize_regularizer` and `apply_regularizer`; a no-op if
               no regularizer is configured).
+            * Application of the configured normalizer at the beginning of each
+              epoch (see `initialize_normalizer` and `apply_normalizer`; a no-op
+              if no normalizer is configured, or if there is an encoder, in
+              which case the normalization is applied batchwise between the
+              encoder and the decoder step instead).
 
         Arguments
         ---------
@@ -675,6 +695,15 @@ class Architect(Module):
         # no regularizer is configured), before the metrics are logged and the
         # model is evaluated, so that both see the regularized parameters.
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.apply_regularizer)
+        # Apply the configured normalizer at the beginning of every epoch
+        # (no-op if no normalizer is configured, or if there is an encoder,
+        # in which case the normalization is applied batchwise between the
+        # encoder and the decoder step, in `scoring_function`):
+        # without an encoder, the embeddings between the encoder and the
+        # decoder are the node and edge embeddings themselves, so they are
+        # normalized once, over the whole graph, instead of recomputing the
+        # same normalization on every batch.
+        trainer.add_event_handler(Events.EPOCH_STARTED, self.apply_normalizer)
         #trainer.add_event_handler(Events.EPOCH_COMPLETED, self.clean_memory)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.update_scheduler)
 
@@ -1237,6 +1266,14 @@ class Architect(Module):
         If the encoder is not a GNN, directly runs and update the embeddings. 
         Otherwise, samples a subgraph from the given batch nodes and runs the encoder before.
         
+        If a normalizer is configured and there is an encoder, the normalizer is
+        applied between the encoder and the decoder step, batchwise: its
+        function is applied to the (encoder output) head and tail embeddings
+        of the current batch, and the new embeddings are scored by the decoder.
+        When there is no encoder, the normalization is applied once over the
+        whole graph at the beginning of each epoch instead (see
+        `apply_normalizer`), so this step is skipped here.
+        
         Arguments
         ---------
         
@@ -1263,6 +1300,20 @@ class Architect(Module):
         head_embeddings = node_embeddings[head_indices]
         edge_embeddings = self.knowledge_graph.edge_embeddings[edge_indices]  # Edges are unchanged
         tail_embeddings = node_embeddings[tail_indices]
+
+        # Apply the configured normalizer, between the encoder and the decoder
+        # step. This is the batchwise application of the normalizer: the
+        # function is applied to the (encoder output) embeddings of the
+        # current batch, and the new embeddings are returned (the parameters
+        # are left untouched, so the gradients flow through the
+        # normalization). Without an encoder, this step is skipped: the
+        # embeddings between the encoder and the decoder are the node and edge
+        # embeddings themselves, so they are normalized once, over the whole
+        # graph, at the beginning of each epoch (see `apply_normalizer`).
+        if self.normalizer is not None and self.encoder is not None:
+            head_embeddings, tail_embeddings, edge_embeddings = self.normalizer(  head_embeddings = head_embeddings,
+                                                                                  tail_embeddings = tail_embeddings,
+                                                                                  edge_embeddings = edge_embeddings)
 
         return self.decoder.score(  head_embeddings = head_embeddings,
                                     tail_embeddings = tail_embeddings,
@@ -1355,14 +1406,58 @@ class Architect(Module):
         (e.g. TransE, RESCAL and DistMult L2-normalizing their node embeddings)
         are now gathered in the `Regularizer` module (see
         `kgate.regularizers`), selected through the configuration
-        (`[model.regularizer]`) and applied by the trainer hooks.
+        (`[model.regularizer]`) and applied by the trainer hooks. The
+        normalization routines that used to be applied to the head and tail
+        embeddings in each decoder's `score` method (e.g. RESCAL, DistMult,
+        TransE, TransH, TransR and TransD L2-normalizing their head and tail
+        embeddings) are now gathered in the `Normalizer` module (see
+        `kgate.normalizers`), selected through the configuration
+        (`[model.normalizer]`) and applied by the Architect between the
+        encoder and the decoder step.
 
-        This function therefore simply applies the configured regularizer (a
-        no-op if no regularizer is configured, which is the default).
+        This function therefore applies the configured regularizer (a no-op
+        if no regularizer is configured, which is the default), and the
+        configured normalizer if there is no encoder (a no-op if no normalizer
+        is configured).
         """
         self.apply_regularizer()
+        self.apply_normalizer()
         
         logging.debug(f"Normalized all embeddings.")
+
+
+    def apply_normalizer(self):
+        """
+        Apply the configured normalizer to the embeddings it was given.
+
+        This is the entry point of the normalizer trainer hooks: it is called
+        at the beginning of every epoch, and before the evaluation and the
+        embedding export procedures. It is a no-op if no normalizer was
+        configured (`[model.normalizer] name = "None"`), or if
+        there is an encoder, in which case the normalization is applied
+        batchwise between the encoder and the decoder step, in
+        `scoring_function`, instead.
+
+        Without an encoder, the embeddings between the encoder and the
+        decoder are the node and edge embeddings themselves: normalizing them
+        batchwise would recompute the same whole-graph normalization on every
+        batch, so they are normalized once, over the whole graph, here, at
+        the beginning of each epoch. Note that between two epoch-start
+        normalizations the optimizer keeps updating the embeddings, so the
+        decoder may see embeddings whose norms are not exactly unit anymore:
+        this small approximation is the trade-off of not recomputing the same
+        whole-graph normalization on every batch.
+
+        The normalizer itself is initialized after the decoder in
+        `initialize_model`, and is given the set of embeddings to normalize
+        and the function to apply to them (see `initialize_normalizer`).
+        """
+        if self.normalizer is None or self.encoder is not None:
+            return
+
+        self.normalizer.apply_whole_graph()
+
+        logging.debug(f"Applied normalizer to the configured embeddings.")
 
 
     def log_metrics_to_csv(self, engine: Engine):

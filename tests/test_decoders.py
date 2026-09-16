@@ -288,8 +288,11 @@ class TestBilinearDecoders:
         t = torch.randn(2, 3)
         e = torch.randn(2, 3)
         scores = decoder.score(head_embeddings=h, tail_embeddings=t, edge_embeddings=e)
-        expected = ((h / h.norm(dim=1, keepdim=True))
-                    * (t / t.norm(dim=1, keepdim=True)) * e).sum(dim=1)
+        # The `score` method no longer normalizes its inputs: the row-wise L2
+        # normalization used to be done here, and is now gathered in the
+        # `Normalizer` module (see `kgate.normalizers`), applied by the
+        # Architect between the encoder and the decoder step
+        expected = (h * e * t).sum(dim=1)
         assert torch.allclose(scores, expected, atol=1e-5)
 
     def test_complex_init_and_score(self):
