@@ -355,8 +355,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=_choice_type(NORMALIZER_OPTIONS, "normalizer"),
         metavar="NAME",
         help=(
-            "embedding normalization applied between the encoder and the decoder step: "
-            "L2 (default), L1 or None. Choose from: " + ", ".join(NORMALIZER_OPTIONS.values())
+            "embedding normalization function, applied both after the initializer "
+            "runs (initial_normalization) and during the training loop "
+            "(training_normalization): L2 (default), L1 or None. Choose from: "
+            + ", ".join(NORMALIZER_OPTIONS.values())
         ),
     )
     group.add_argument(
@@ -721,7 +723,8 @@ def build_config_dict(args: argparse.Namespace) -> dict:
 
     norm: dict[str, Any] = {}
     if args.normalizer is not None:
-        norm["name"] = args.normalizer
+        norm["initial_normalization"] = args.normalizer
+        norm["training_normalization"] = args.normalizer
     if args.normalize is not None:
         norm["initial_parameters"] = args.normalize
         norm["training_parameters"] = args.normalize

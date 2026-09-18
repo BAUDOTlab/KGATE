@@ -663,19 +663,8 @@ class Architect(Module):
         elif self.checkpoints_directory.exists() and len(os.listdir(self.checkpoints_directory)) > 0:
             shutil.rmtree(self.checkpoints_directory)
 
-        # Apply the configured regularizer at the end of every epoch (no-op if
-        # no regularizer is configured), before the metrics are logged and the
-        # model is evaluated, so that both see the regularized parameters.
+        # Apply the configured regularizer at the end of every epoch 
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.apply_regularizer)
-        # Apply the configured normalizer at the beginning of every epoch
-        # (no-op if no normalizer is configured, or if there is an encoder,
-        # in which case the normalization is applied batchwise between the
-        # encoder and the decoder step, in `scoring_function`):
-        # without an encoder, the embeddings between the encoder and the
-        # decoder are the node and edge embeddings themselves, so they are
-        # normalized once, over the whole graph, instead of recomputing the
-        # same normalization on every batch.
-        trainer.add_event_handler(Events.EPOCH_STARTED, self.apply_normalizer)
         #trainer.add_event_handler(Events.EPOCH_COMPLETED, self.clean_memory)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.update_scheduler)
 
@@ -1367,6 +1356,18 @@ class Architect(Module):
         self.regularizer()
 
         logging.debug(f"Applied regularizer to the configured parameters.")
+
+
+    def apply_normalizer(self):
+        """
+        Apply the configured normalizer to the whole-graph embeddings, in place.
+        """
+        if self.normalizer is None:
+            return
+
+        self.normalizer.initialize(self.knowledge_graph.node_embeddings, self.knowledge_graph.edge_embeddings)
+
+        logging.debug(f"Applied normalizer to the configured parameters.")
 
 
     def normalize_parameters(self):

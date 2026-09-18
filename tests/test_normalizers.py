@@ -4,11 +4,16 @@ Tests for kgate.normalizers and its Configuration / Architect wiring.
 The Normalizer is the module that gathers what the decoders used to do in
 their own `score` method (e.g. RESCAL, DistMult, TransE, TransH, TransR and
 TransD L2-normalizing their head and tail embeddings). It is initialized by
-the Architect after the decoder, is given a set of embeddings to normalize
-and the function to apply to them, and is applied by the Architect between
-the encoder and the decoder step: batchwise when there is an encoder (see
-`Architect.scoring_function`), or once over the whole graph at the beginning
-of each epoch when there is not (see `Architect.apply_normalizer`).
+the Architect after the decoder (see `kgate.modules.initialize_normalizer`)
+and is applied:
+- to the initial embeddings, in place, right after the initializer runs
+  (`Architect.initialize_model` and `Normalizer.initialize`);
+- batchwise to the (encoder output) embeddings between the encoder and the
+  decoder step during the training loop, when there is an encoder
+  (`Architect.scoring_function`);
+- to the whole-graph embeddings, in place, before training starts and before
+  an export of the embeddings, when there is no encoder
+  (`Architect.normalize_parameters` / `Architect.apply_normalizer`).
 """
 
 import pytest
@@ -22,252 +27,337 @@ from kgate.modules import initialize_normalizer
 
 
 class TestNormalizer:
-    def test_l2_batchwise_call(self):
+    def test_defaults(self):
+        normalizer = Normalizer()
+        assert normalizer.initial_targets == "all"
+        assert normalizer.training_targets == "all"
+        assert normalizer.nodes is True
+        assert normalizer.edges is True
+        # Both functions default to the identity: no normalization
+        x = torch.randn(3, 4)
+        assert torch.equal(normalizer.initial_normalization(x), x)
+        assert torch.equal(normalizer.training_normalization(x), x)
+
+    def test_non_callable_training_normalization_raises(self):
+        with pytest.raises(TypeError, match="must be callable"):
+            Normalizer(training_normalization="L2")
+
+    def test_initial_falls_back_to_training(self):
+        normalizer = Normalizer(training_normalization=l2_normalize)
+        assert normalizer.initial_normalization is l2_normalize
+
+        normalizer = Normalizer(initial_normalization=None, training_normalization=l1_normalize)
+        assert normalizer.initial_normalization is l1_normalize
+
+    def test_batchwise_nodes_only(self):
         head = torch.randn(5, 8)
         tail = torch.randn(5, 8)
         edge = torch.randn(5, 8)
-        head_original = head.clone()
-        tail_original = tail.clone()
-        normalizer = Normalizer(func=l2_normalize, node=True, edge=False)
+
+        normalizer = Normalizer(training_normalization=l2_normalize, training_targets="node")
         new_head, new_tail, new_edge = normalizer(head_embeddings=head, tail_embeddings=tail, edge_embeddings=edge)
-        # Functional: new tensors for the selected embeddings, the inputs (and
-        # the parameters they are built from) are left untouched, so the
-        # gradients flow through the normalization
+
         assert new_head is not head
         assert new_tail is not tail
-        torch.testing.assert_close(head, head_original)
-        torch.testing.assert_close(tail, tail_original)
-        # Edge is not selected: the same tensor is returned, unchanged
-        assert new_edge is edge
-        # Node embeddings are row-wise L2-normalized
-        torch.testing.assert_close(torch.norm(new_head, dim=1), torch.ones(5))
-        torch.testing.assert_close(torch.norm(new_tail, dim=1), torch.ones(5))
+        assert new_edge is edge  # Edges are not normalized: same object returned
+        assert torch.allclose(new_head.norm(dim=1), torch.ones(5))
+        assert torch.allclose(new_tail.norm(dim=1), torch.ones(5))
+        assert torch.allclose(head.norm(dim=1), torch.norm(head, dim=1))  # Inputs are not modified in place
 
-    def test_l1_batchwise_call(self):
-        head = torch.tensor([[3.0, 4.0], [1.0, 1.0]])
-        tail = head.clone()
-        edge = torch.ones(2, 2)
-        normalizer = Normalizer(func=l1_normalize, node=True, edge=True)
+    def test_batchwise_edges_only(self):
+        head = torch.randn(5, 8)
+        tail = torch.randn(5, 8)
+        edge = torch.randn(5, 8)
+
+        normalizer = Normalizer(training_normalization=l1_normalize, training_targets="edge")
         new_head, new_tail, new_edge = normalizer(head_embeddings=head, tail_embeddings=tail, edge_embeddings=edge)
-        torch.testing.assert_close(torch.norm(new_head, p=1, dim=1), torch.ones(2))
-        torch.testing.assert_close(new_head[0], torch.tensor([3.0 / 7.0, 4.0 / 7.0]))
-        torch.testing.assert_close(torch.norm(new_edge, p=1, dim=1), torch.ones(2))
 
-    def test_custom_function(self):
-        head = torch.ones(3, 4)
-        tail = torch.ones(3, 4)
-        edge = torch.ones(3, 4)
-        normalizer = Normalizer(func=lambda x: x * 0.5, node=True, edge=True)
+        assert new_head is head
+        assert new_tail is tail
+        assert new_edge is not edge
+        assert torch.allclose(new_edge.norm(dim=1, p=1), torch.ones(5))
+
+    def test_batchwise_all(self):
+        head = torch.randn(5, 8)
+        tail = torch.randn(5, 8)
+        edge = torch.randn(5, 8)
+
+        normalizer = Normalizer(training_normalization=l2_normalize, training_targets="all")
         new_head, new_tail, new_edge = normalizer(head_embeddings=head, tail_embeddings=tail, edge_embeddings=edge)
-        torch.testing.assert_close(new_head, torch.full_like(head, 0.5))
-        torch.testing.assert_close(new_tail, torch.full_like(tail, 0.5))
-        torch.testing.assert_close(new_edge, torch.full_like(edge, 0.5))
 
-    def test_node_only_selection(self):
-        head = torch.randn(2, 3)
-        tail = torch.randn(2, 3)
-        edge = torch.randn(2, 3)
-        normalizer = Normalizer(func=l2_normalize, node=True, edge=False)
+        assert new_head is not head
+        assert new_tail is not tail
+        assert new_edge is not edge
+        assert torch.allclose(new_head.norm(dim=1), torch.ones(5))
+        assert torch.allclose(new_tail.norm(dim=1), torch.ones(5))
+        assert torch.allclose(new_edge.norm(dim=1), torch.ones(5))
+
+    def test_batchwise_custom_function(self):
+        head = torch.randn(5, 8)
+        tail = torch.randn(5, 8)
+        edge = torch.randn(5, 8)
+
+        scale = lambda x: x * 0.5
+        normalizer = Normalizer(training_normalization=scale, training_targets="all")
         new_head, new_tail, new_edge = normalizer(head_embeddings=head, tail_embeddings=tail, edge_embeddings=edge)
-        torch.testing.assert_close(torch.norm(new_head, dim=1), torch.ones(2))
-        torch.testing.assert_close(torch.norm(new_tail, dim=1), torch.ones(2))
-        torch.testing.assert_close(new_edge, edge)
 
-    def test_edge_only_selection(self):
-        head = torch.randn(2, 3)
-        tail = torch.randn(2, 3)
-        edge = torch.randn(2, 3)
-        normalizer = Normalizer(func=l2_normalize, node=False, edge=True)
-        new_head, new_tail, new_edge = normalizer(head_embeddings=head, tail_embeddings=tail, edge_embeddings=edge)
-        torch.testing.assert_close(new_head, head)
-        torch.testing.assert_close(new_tail, tail)
-        torch.testing.assert_close(torch.norm(new_edge, dim=1), torch.ones(2))
+        assert torch.allclose(new_head, head * 0.5)
+        assert torch.allclose(new_tail, tail * 0.5)
+        assert torch.allclose(new_edge, edge * 0.5)
 
-    def test_apply_whole_graph_in_place(self):
-        param = nn.Parameter(torch.randn(5, 8))
-        original = param
-        normalizer = Normalizer(func=l2_normalize, node=True, edge=False, params=[param])
-        normalizer.apply_whole_graph()
-        # In place: the parameter object is preserved, so the optimizer keeps
-        # its references to the same parameters
-        assert param is original
-        torch.testing.assert_close(torch.norm(param.data, dim=1), torch.ones(5))
+    def test_initialize_single_node_parameter(self):
+        node_embeddings = nn.Parameter(torch.randn(10, 4))
+        edge_embeddings = nn.Parameter(torch.randn(6, 4))
 
-    def test_apply_whole_graph_multiple_params(self):
-        params = [nn.Parameter(torch.randn(3, 4)), nn.Parameter(torch.randn(2, 4))]
-        normalizer = Normalizer(func=l2_normalize, node=True, edge=True, params=params)
-        normalizer.apply_whole_graph()
-        for param in params:
-            torch.testing.assert_close(torch.norm(param.data, dim=1), torch.ones(param.data.shape[0]))
+        normalizer = Normalizer(initial_normalization=l2_normalize, initial_targets="all")
+        returned_nodes, returned_edges = normalizer.initialize(node_embeddings, edge_embeddings)
 
-    def test_apply_whole_graph_idempotent_for_l1_l2(self):
-        # Applying the normalization twice must not change the result, so the
-        # epoch-start application and the evaluation-time application do not
-        # interfere
-        param = nn.Parameter(torch.randn(5, 8))
-        normalizer = Normalizer(func=l2_normalize, node=True, edge=False, params=[param])
-        normalizer.apply_whole_graph()
-        first = param.data.clone()
-        normalizer.apply_whole_graph()
-        torch.testing.assert_close(param.data, first)
+        assert returned_nodes is node_embeddings  # Normalized in place, same object
+        assert returned_edges is edge_embeddings
+        assert torch.allclose(node_embeddings.norm(dim=1), torch.ones(10))
+        assert torch.allclose(edge_embeddings.norm(dim=1), torch.ones(6))
 
-    def test_non_callable_function_raises(self):
-        with pytest.raises(TypeError):
-            Normalizer(func="L2")
+    def test_initialize_node_parameter_list(self):
+        # As stored in `KnowledgeGraph.node_embeddings`: one Parameter per node type
+        node_embeddings = nn.ParameterList([nn.Parameter(torch.randn(4, 4)), nn.Parameter(torch.randn(3, 4))])
+        edge_embeddings = nn.Parameter(torch.randn(6, 4))
 
-    def test_non_tensor_params_raise(self):
-        with pytest.raises(TypeError):
-            Normalizer(func=l2_normalize, params=[torch.ones(3, 4).numpy()])
+        normalizer = Normalizer(initial_normalization=l2_normalize, initial_targets="all")
+        normalizer.initialize(node_embeddings, edge_embeddings)
 
-    def test_no_selection_raises(self):
-        with pytest.raises(ValueError):
-            Normalizer(func=l2_normalize, node=False, edge=False)
+        assert torch.allclose(node_embeddings[0].norm(dim=1), torch.ones(4))
+        assert torch.allclose(node_embeddings[1].norm(dim=1), torch.ones(3))
+        assert torch.allclose(edge_embeddings.norm(dim=1), torch.ones(6))
+
+    def test_initialize_targets_node(self):
+        node_embeddings = nn.Parameter(torch.randn(10, 4))
+        edge_embeddings = nn.Parameter(torch.randn(6, 4))
+        original_edge = edge_embeddings.clone()
+
+        normalizer = Normalizer(initial_normalization=l2_normalize, initial_targets="node")
+        normalizer.initialize(node_embeddings, edge_embeddings)
+
+        assert torch.allclose(node_embeddings.norm(dim=1), torch.ones(10))
+        assert torch.allclose(edge_embeddings, original_edge)  # Edges left untouched
+
+    def test_initialize_targets_edge(self):
+        node_embeddings = nn.Parameter(torch.randn(10, 4))
+        edge_embeddings = nn.Parameter(torch.randn(6, 4))
+        original_node = node_embeddings.clone()
+
+        normalizer = Normalizer(initial_normalization=l2_normalize, initial_targets="edge")
+        normalizer.initialize(node_embeddings, edge_embeddings)
+
+        assert torch.allclose(node_embeddings, original_node)  # Nodes left untouched
+        assert torch.allclose(edge_embeddings.norm(dim=1), torch.ones(6))
 
     def test_properties(self):
-        param = nn.Parameter(torch.randn(2, 3))
-        normalizer = Normalizer(func=l2_normalize, node=True, edge=False, params=[param])
-        assert normalizer.params == [param]
-        assert normalizer.func is l2_normalize
-        assert normalizer.node is True
-        assert normalizer.edge is False
+        normalizer = Normalizer(
+            initial_normalization=l1_normalize,
+            training_normalization=l2_normalize,
+            initial_targets="edge",
+            training_targets="node"
+        )
+        assert normalizer.initial_normalization is l1_normalize
+        assert normalizer.training_normalization is l2_normalize
+        assert normalizer.initial_targets == "edge"
+        assert normalizer.training_targets == "node"
+        assert normalizer.nodes is True
+        assert normalizer.edges is False
 
     def test_repr(self):
-        normalizer = Normalizer(func=l2_normalize, node=True, edge=False, params=[nn.Parameter(torch.randn(2, 3))])
-        assert "Normalizer" in repr(normalizer)
-        assert "l2_normalize" in repr(normalizer)
-        assert "1 parameter(s)" in repr(normalizer)
+        normalizer = Normalizer(initial_normalization=l2_normalize, training_normalization=l1_normalize)
+        r = repr(normalizer)
+        assert "Normalizer" in r
+        assert "l2_normalize" in r
+        assert "l1_normalize" in r
 
 
 class TestBuiltinFunctions:
     def test_registered_functions(self):
-        assert set(NORMALIZER_FUNCTIONS) == {"L1", "L2"}
+        assert set(NORMALIZER_FUNCTIONS.keys()) == {"L1", "L2"}
 
-    def test_l2_matches_decoder_behavior(self):
-        # This must be the same operation the RESCAL, DistMult, TransE,
-        # TransH, TransR and TransD decoders applied to their head and tail
-        # embeddings in their `score` method
-        x = torch.randn(6, 8)
-        expected = torch.nn.functional.normalize(x, p=2, dim=1)
-        torch.testing.assert_close(l2_normalize(x), expected)
+    def test_l2_normalize_matches_torch(self):
+        x = torch.randn(4, 5)
+        assert torch.allclose(l2_normalize(x), torch.nn.functional.normalize(x, p=2, dim=1))
 
-    def test_l1(self):
-        x = torch.randn(6, 8)
-        expected = torch.nn.functional.normalize(x, p=1, dim=1)
-        torch.testing.assert_close(l1_normalize(x), expected)
+    def test_l1_normalize(self):
+        x = torch.randn(4, 5)
+        assert torch.allclose(l1_normalize(x), x / x.norm(dim=1, p=1, keepdim=True))
 
     def test_normalize_embeddings(self):
-        x = torch.randn(6, 8)
-        torch.testing.assert_close(normalize_embeddings(x, 2), torch.nn.functional.normalize(x, p=2, dim=1))
-        torch.testing.assert_close(normalize_embeddings(x, 1), torch.nn.functional.normalize(x, p=1, dim=1))
-        torch.testing.assert_close(
-            normalize_embeddings(x, 2, squared=True),
-            torch.nn.functional.normalize(x, p=2, dim=1)**2
-        )
-
-    def test_utils_backward_compatibility(self):
-        # kgate.utils.normalize_embeddings must still work and delegate to
-        # the normalizer module
-        from kgate.utils import normalize_embeddings as utils_normalize_embeddings
         x = torch.randn(4, 5)
-        torch.testing.assert_close(utils_normalize_embeddings(x, 2, False), torch.nn.functional.normalize(x, p=2, dim=1))
-        torch.testing.assert_close(utils_normalize_embeddings(x, 1, True), torch.nn.functional.normalize(x, p=1, dim=1)**2)
+        assert torch.allclose(normalize_embeddings(x, p=2), torch.nn.functional.normalize(x, p=2, dim=1))
+        assert torch.allclose(normalize_embeddings(x, p=1), x / x.norm(dim=1, p=1, keepdim=True))
 
 
 class TestConfiguration:
     def test_defaults(self):
-        # L2 on all the embeddings, both after the initializer runs and
-        # during the training loop
-        config = Configuration()
-        assert config.normalizer.name == "L2"
-        assert config.normalizer.initial_parameters == "all"
-        assert config.normalizer.training_parameters == "all"
+        normalizer_config = Configuration().normalizer
+        assert normalizer_config.initial_normalization == "L2"
+        assert normalizer_config.training_normalization == "L2"
+        assert normalizer_config.initial_parameters == "all"
+        assert normalizer_config.training_parameters == "all"
 
     def test_inline_override(self):
-        config = Configuration(config_dict={"model": {"normalizer": {"name": "L1", "initial_parameters": "node", "training_parameters": "edge"}}})
-        assert config.normalizer.name == "L1"
-        assert config.normalizer.initial_parameters == "node"
-        assert config.normalizer.training_parameters == "edge"
+        normalizer_config = Configuration(
+            config_dict = {
+                "model": {
+                    "normalizer": {
+                        "initial_normalization": "L1",
+                        "training_normalization": "L2",
+                        "initial_parameters": "node",
+                        "training_parameters": "edge"
+                    }
+                }
+            }
+        ).normalizer
+        assert normalizer_config.initial_normalization == "L1"
+        assert normalizer_config.training_normalization == "L2"
+        assert normalizer_config.initial_parameters == "node"
+        assert normalizer_config.training_parameters == "edge"
 
-    def test_none(self):
-        config = Configuration(config_dict={"model": {"normalizer": {"name": "None"}}})
-        assert config.normalizer.name == "None"
+    def test_none_scopes(self):
+        normalizer_config = Configuration(
+            config_dict = {
+                "model": {
+                    "normalizer": {
+                        "initial_normalization": "None",
+                        "training_normalization": "None"
+                    }
+                }
+            }
+        ).normalizer
+        assert normalizer_config.initial_normalization == "None"
+        assert normalizer_config.training_normalization == "None"
 
-    def test_invalid_name_raises(self):
-        config = Configuration()
-        with pytest.raises(AssertionError):
-            config.normalizer.name = "L9"
+    def test_setters_validate(self):
+        normalizer_config = Configuration().normalizer
 
-    def test_invalid_params_raises(self):
-        config = Configuration()
-        with pytest.raises(AssertionError):
-            config.normalizer.initial_parameters = "banana"
-        with pytest.raises(AssertionError):
-            config.normalizer.training_parameters = "banana"
-        # "None" is a valid selection (no normalizer in that scope)
-        config.normalizer.initial_parameters = "None"
+        with pytest.raises(AssertionError, match="Unsupported normalizer given"):
+            normalizer_config.initial_normalization = "L9"
+        with pytest.raises(AssertionError, match="Unsupported normalizer given"):
+            normalizer_config.training_normalization = "L9"
+
+        normalizer_config.initial_normalization = "L1"
+        normalizer_config.training_normalization = "L1"
+        assert normalizer_config.initial_normalization == "L1"
+        assert normalizer_config.training_normalization == "L1"
+
+        with pytest.raises(AssertionError, match="Unsupported normalizer parameters given"):
+            normalizer_config.initial_parameters = "banana"
+        with pytest.raises(AssertionError, match="Unsupported normalizer parameters given"):
+            normalizer_config.training_parameters = "None"
+
+        normalizer_config.initial_parameters = "node"
+        normalizer_config.training_parameters = "edge"
+        assert normalizer_config.initial_parameters == "node"
+        assert normalizer_config.training_parameters == "edge"
 
     def test_register_name(self):
-        config = Configuration()
-        config.normalizer.register_name("MyCustom")
-        assert config.normalizer.name == "MyCustom"
-        assert "MyCustom" in config.normalizer.supported_normalizers
+        normalizer_config = Configuration().normalizer
+
+        with pytest.raises(AssertionError):
+            normalizer_config.initial_normalization = "custom_norm"
+
+        normalizer_config.register_name("custom_norm")
+        normalizer_config.initial_normalization = "custom_norm"
+        assert normalizer_config.initial_normalization == "custom_norm"
 
     def test_repr(self):
-        assert "Normalizer_Configuration" in repr(Configuration().normalizer)
+        normalizer_config = Configuration().normalizer
+        r = repr(normalizer_config)
+        assert "initial_normalization" in r
+        assert "training_normalization" in r
+        assert "initial_parameters" in r
+        assert "training_parameters" in r
 
 
 class TestModules:
-    def test_default_normalizer(self, embedded_kg):
-        # The default configuration normalizes all the embeddings (L2), both
-        # after the initializer runs and during the training loop
-        configuration = Configuration(config_dict={"model": {"normalizer": {}}})
-        training_normalizer, initial_normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
-        for normalizer in (training_normalizer, initial_normalizer):
-            assert isinstance(normalizer, Normalizer)
-            assert normalizer.func is l2_normalize
-            assert normalizer.node is True
-            assert normalizer.edge is True
-            assert normalizer.params == list(embedded_kg.node_embeddings) + [embedded_kg.edge_embeddings]
+    def test_default(self, embedded_kg):
+        normalizer = initialize_normalizer(Configuration().normalizer, embedded_kg)
 
-    def test_normalizer_edge(self, embedded_kg):
-        configuration = Configuration(config_dict={"model": {"normalizer": {"name": "L1", "initial_parameters": "edge", "training_parameters": "edge"}}})
-        training_normalizer, initial_normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
-        for normalizer in (training_normalizer, initial_normalizer):
-            assert normalizer.func is l1_normalize
-            assert normalizer.edge is True
-            assert normalizer.node is False
-            assert normalizer.params == [embedded_kg.edge_embeddings]
+        assert isinstance(normalizer, Normalizer)
+        assert normalizer.initial_normalization is l2_normalize
+        assert normalizer.training_normalization is l2_normalize
+        assert normalizer.initial_targets == "all"
+        assert normalizer.training_targets == "all"
+        assert normalizer.nodes is True
+        assert normalizer.edges is True
 
-    def test_normalizer_all(self, embedded_kg):
-        configuration = Configuration(config_dict={"model": {"normalizer": {"name": "L2", "initial_parameters": "all", "training_parameters": "all"}}})
-        training_normalizer, initial_normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
-        for normalizer in (training_normalizer, initial_normalizer):
-            assert normalizer.node is True
-            assert normalizer.edge is True
-            assert len(normalizer.params) == len(embedded_kg.node_embeddings) + 1
+    def test_mixed_scopes(self, embedded_kg):
+        config = Configuration(
+            config_dict = {
+                "model": {
+                    "normalizer": {
+                        "initial_normalization": "L1",
+                        "training_normalization": "L2",
+                        "initial_parameters": "node",
+                        "training_parameters": "edge"
+                    }
+                }
+            }
+        ).normalizer
 
-    def test_scope_none(self, embedded_kg):
-        # A scope can be disabled with "None": only the other scope gets a
-        # normalizer
-        configuration = Configuration(config_dict={"model": {"normalizer": {"initial_parameters": "None", "training_parameters": "node"}}})
-        training_normalizer, initial_normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
-        assert initial_normalizer is None
-        assert isinstance(training_normalizer, Normalizer)
-        assert training_normalizer.node is True
-        assert training_normalizer.edge is False
-        assert training_normalizer.params == list(embedded_kg.node_embeddings)
+        normalizer = initialize_normalizer(config, embedded_kg)
 
-    def test_none_normalizer(self, embedded_kg):
-        configuration = Configuration(config_dict={"model": {"normalizer": {"name": "None"}}})
-        training_normalizer, initial_normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
-        assert training_normalizer is None
-        assert initial_normalizer is None
+        assert normalizer.initial_normalization is l1_normalize
+        assert normalizer.training_normalization is l2_normalize
+        assert normalizer.initial_targets == "node"
+        assert normalizer.training_targets == "edge"
+        assert normalizer.nodes is False
+        assert normalizer.edges is True
+
+    def test_both_none_is_noop(self, embedded_kg):
+        config = Configuration(
+            config_dict = {
+                "model": {
+                    "normalizer": {
+                        "initial_normalization": "None",
+                        "training_normalization": "None"
+                    }
+                }
+            }
+        ).normalizer
+
+        normalizer = initialize_normalizer(config, embedded_kg)
+
+        x = torch.randn(3, 4)
+        # Both scopes are the identity function
+        assert torch.equal(normalizer.initial_normalization(x), x)
+        assert torch.equal(normalizer.training_normalization(x), x)
+        # And the initial function falls back to the (identity) training function
+        h, t, e = normalizer(head_embeddings=x, tail_embeddings=x, edge_embeddings=x)
+        assert h is x and t is x and e is x
+
+    def test_initial_none_falls_back_to_training(self, embedded_kg):
+        config = Configuration(
+            config_dict = {
+                "model": {
+                    "normalizer": {
+                        "initial_normalization": "None",
+                        "training_normalization": "L2"
+                    }
+                }
+            }
+        ).normalizer
+
+        normalizer = initialize_normalizer(config, embedded_kg)
+
+        assert normalizer.initial_normalization is l2_normalize
+        assert normalizer.training_normalization is l2_normalize
 
     def test_unknown_name_raises(self, embedded_kg):
-        configuration = Configuration(config_dict={"model": {"normalizer": {"name": "MyRegistered"}}})
-        configuration.normalizer.register_name("MyRegistered")
+        config = Configuration(
+            config_dict = {
+                "model": {
+                    "normalizer": {"initial_normalization": "banana", "training_normalization": "banana"}
+                }
+            }
+        ).normalizer
+
         with pytest.raises(KeyError):
-            initialize_normalizer(configuration.normalizer, embedded_kg)
+            initialize_normalizer(config, embedded_kg)
 
 
 class TestArchitectWiring:
@@ -275,199 +365,218 @@ class TestArchitectWiring:
         architect = Architect(
             knowledge_graph=embedded_kg,
             output_directory=str(tmp_path / "out"),
-            preprocessing={"run_preprocessing": False},
+            preprocessing = {"run_preprocessing": False},
+        )
+
+        architect.initialize_model()
+
+        assert isinstance(architect.normalizer, Normalizer)
+        # The initial normalization is applied in place to the initial parameters
+        node_embeddings = embedded_kg.node_embeddings[0]
+        edge_embeddings = embedded_kg.edge_embeddings
+        assert torch.allclose(node_embeddings.norm(dim=1), torch.ones(node_embeddings.shape[0]))
+        assert torch.allclose(edge_embeddings.norm(dim=1), torch.ones(edge_embeddings.shape[0]))
+
+    def test_apply_normalizer_renormalizes(self, embedded_kg, tmp_path):
+        architect = Architect(
+            knowledge_graph=embedded_kg,
+            output_directory=str(tmp_path / "out"),
+            preprocessing = {"run_preprocessing": False},
         )
         architect.initialize_model()
-        # The default configuration initializes both normalizers (L2 on all
-        # the embeddings)
-        assert isinstance(architect.normalizer, Normalizer)
-        assert architect.normalizer.func is l2_normalize
-        assert architect.normalizer.node is True
-        assert architect.normalizer.edge is True
-        assert isinstance(architect.initial_normalizer, Normalizer)
-        # No encoder: the initial normalizer is applied once in
-        # `initialize_model`, so the initial embeddings are already unit-norm
-        node_embedding = architect.knowledge_graph.node_embeddings[0]
-        torch.testing.assert_close(torch.norm(node_embedding.data, dim=1), torch.ones(node_embedding.data.shape[0]))
-        torch.testing.assert_close(torch.norm(architect.knowledge_graph.edge_embeddings.data, dim=1), torch.ones(architect.knowledge_graph.edge_embeddings.data.shape[0]))
-        # The training normalizer is applied at the epoch start (L2 is
-        # idempotent, so the embeddings stay unit-norm)
+
+        # Perturb the parameters
+        node_embeddings = embedded_kg.node_embeddings[0]
+        edge_embeddings = embedded_kg.edge_embeddings
+        node_embeddings.data.add_(torch.randn_like(node_embeddings.data) * 0.1)
+        edge_embeddings.data.add_(torch.randn_like(edge_embeddings.data) * 0.1)
+        assert not torch.allclose(node_embeddings.norm(dim=1), torch.ones(node_embeddings.shape[0]))
+
+        # Without an encoder, the normalizer is applied to the whole graph, in place
         architect.apply_normalizer()
-        torch.testing.assert_close(torch.norm(node_embedding.data, dim=1), torch.ones(node_embedding.data.shape[0]))
 
-    def test_initial_normalizer_not_applied_twice(self, embedded_kg, tmp_path):
-        # The initial normalizer is a one-shot operation: calling
-        # `initialize_model` again must not re-normalize the embeddings
+        assert torch.allclose(node_embeddings.norm(dim=1), torch.ones(node_embeddings.shape[0]))
+        assert torch.allclose(edge_embeddings.norm(dim=1), torch.ones(edge_embeddings.shape[0]))
+
+    def test_apply_normalizer_noop_with_encoder(self, embedded_kg, tmp_path):
         architect = Architect(
             knowledge_graph=embedded_kg,
             output_directory=str(tmp_path / "out"),
-            preprocessing={"run_preprocessing": False},
+            preprocessing = {"run_preprocessing": False},
+            model = {"encoder": {"name": "GCN", "gnn_layer_number": 1}},
         )
         architect.initialize_model()
-        node_embedding = architect.knowledge_graph.node_embeddings[0]
-        # Simulate training: perturb the embeddings (they are no longer
-        # unit-norm), then re-initialize the model
-        node_embedding.data.add_(torch.randn_like(node_embedding.data) * 0.1)
-        perturbed = torch.norm(node_embedding.data, dim=1).clone()
-        assert not torch.allclose(perturbed, torch.ones_like(perturbed))
-        architect.initialize_model()
-        # Not re-normalized: the norms are still the perturbed ones
-        torch.testing.assert_close(torch.norm(node_embedding.data, dim=1), perturbed)
 
-    def test_none_normalizer(self, embedded_kg, tmp_path):
+        # Perturb the parameters
+        node_embeddings = embedded_kg.node_embeddings[0]
+        edge_embeddings = embedded_kg.edge_embeddings
+        node_embeddings.data.add_(torch.randn_like(node_embeddings.data) * 0.1)
+        edge_embeddings.data.add_(torch.randn_like(edge_embeddings.data) * 0.1)
+        perturbed_node = node_embeddings.clone()
+        perturbed_edge = edge_embeddings.clone()
+
+        # With an encoder, the decoder sees the encoder output, not the
+        # parameters: the whole-graph application is skipped
+        architect.apply_normalizer()
+
+        assert torch.allclose(node_embeddings, perturbed_node)
+        assert torch.allclose(edge_embeddings, perturbed_edge)
+
+    def test_scoring_function_with_encoder_normalizes(self, embedded_kg, tmp_path):
         architect = Architect(
             knowledge_graph=embedded_kg,
             output_directory=str(tmp_path / "out"),
-            preprocessing={"run_preprocessing": False},
-            model={"normalizer": {"name": "None"}},
-        )
-        architect.initialize_model()
-        assert architect.normalizer is None
-        assert architect.initial_normalizer is None
-        architect.apply_normalizer()  # no-op, no error
-
-    def test_apply_normalizer_skipped_with_encoder(self, embedded_kg, tmp_path):
-        # With an encoder, the training normalizer is applied batchwise in
-        # `scoring_function`, not at the epoch start: `apply_normalizer` is a
-        # no-op (the initial scope is disabled here, so nothing is applied at
-        # the initialization either)
-        architect = Architect(
-            knowledge_graph=embedded_kg,
-            output_directory=str(tmp_path / "out"),
-            preprocessing={"run_preprocessing": False},
-            model={
-                "encoder": {"name": "GCN", "layer_count": 1},
-                "normalizer": {"name": "L2", "initial_parameters": "None", "training_parameters": "all"},
-            },
-        )
-        architect.initialize_model()
-        assert architect.encoder is not None
-        assert isinstance(architect.normalizer, Normalizer)
-        assert architect.initial_normalizer is None
-        node_embedding = architect.knowledge_graph.node_embeddings[0]
-        edge_embedding = architect.knowledge_graph.edge_embeddings
-        assert not torch.allclose(torch.norm(node_embedding.data, dim=1), torch.ones(node_embedding.data.shape[0]))
-        architect.apply_normalizer()  # no-op: encoder case
-        assert not torch.allclose(torch.norm(node_embedding.data, dim=1), torch.ones(node_embedding.data.shape[0]))
-        assert not torch.allclose(torch.norm(edge_embedding.data, dim=1), torch.ones(edge_embedding.data.shape[0]))
-
-    def test_scoring_function_applies_normalizer_with_encoder(self, embedded_kg, tmp_path):
-        # With an encoder, the normalizer is applied between the encoder and
-        # the decoder step, batchwise
-        architect = Architect(
-            knowledge_graph=embedded_kg,
-            output_directory=str(tmp_path / "out"),
-            preprocessing={"run_preprocessing": False},
-            model={
-                "encoder": {"name": "GCN", "layer_count": 1},
-                "normalizer": {"name": "L2", "initial_parameters": "None", "training_parameters": "all"},
-            },
+            preprocessing = {"run_preprocessing": False},
+            model = {"encoder": {"name": "GCN", "gnn_layer_number": 1}},
         )
         architect.initialize_model()
 
-        batch = architect.knowledge_graph.graphindices[:, architect.knowledge_graph.train_mask.nonzero(as_tuple=True)[0]]
+        # Simulate encoder output: arbitrary (unnormalized) embeddings
+        embedded_kg.node_embeddings[0].data.add_(torch.randn(8, 4) * 0.3)
+        embedded_kg.edge_embeddings.data.add_(torch.randn(2, 4) * 0.3)
+        node_embeddings = torch.cat([emb for emb in embedded_kg.node_embeddings])
+        train_indices = architect.knowledge_graph.train_mask.nonzero(as_tuple=True)[0]
+        head_embeddings = node_embeddings[architect.knowledge_graph.graphindices[0][train_indices]]
+        tail_embeddings = node_embeddings[architect.knowledge_graph.graphindices[1][train_indices]]
+        edge_indices = architect.knowledge_graph.graphindices[2][train_indices]
+        edge_embeddings = embedded_kg.edge_embeddings[edge_indices]
 
-        node_embeddings = torch.cat(list(architect.knowledge_graph.node_embeddings), dim=0)
-        edge_embeddings = architect.knowledge_graph.edge_embeddings
+        # Hand-computed TransE score on L2-normalized embeddings
+        normalized_head = head_embeddings / head_embeddings.norm(dim=1, keepdim=True)
+        normalized_tail = tail_embeddings / tail_embeddings.norm(dim=1, keepdim=True)
+        normalized_edge = edge_embeddings / edge_embeddings.norm(dim=1, keepdim=True)
+        expected_score = - (normalized_head + normalized_edge - normalized_tail).norm(dim=1)**2
 
+        # The normalizer is applied batchwise between the encoder and the decoder step
+        batch = architect.knowledge_graph.graphindices[:, train_indices]
         scores = architect.scoring_function(batch, node_embeddings)
 
-        # The decoder must have received normalized embeddings: recompute the
-        # (default, TransE) score by hand on the normalized embeddings and
-        # check that it differs from the score on the raw (unnormalized)
-        # ones, i.e. that the normalization actually happened between the
-        # encoder and the decoder step
-        head, tail, edge = batch[0], batch[1], batch[2]
-        h = l2_normalize(node_embeddings[head])
-        t = l2_normalize(node_embeddings[tail])
-        e = l2_normalize(edge_embeddings[edge])
-        normalized_score = - (h + e - t).norm(dim=1)**2
-        raw_score = - (node_embeddings[head] + edge_embeddings[edge] - node_embeddings[tail]).norm(dim=1)**2
-        assert not torch.allclose(scores, raw_score)
-        assert torch.allclose(scores, normalized_score)
+        torch.testing.assert_close(scores, expected_score)
 
-    def test_scoring_function_without_normalizer(self, embedded_kg, tmp_path):
-        # With no normalizer, the scoring function is unchanged: the decoder
-        # sees the raw embeddings
+    def test_scoring_function_without_encoder(self, embedded_kg, tmp_path):
         architect = Architect(
             knowledge_graph=embedded_kg,
             output_directory=str(tmp_path / "out"),
-            preprocessing={"run_preprocessing": False},
-            model={
-                "decoder": {"name": "DistMult"},
-                "normalizer": {"name": "None"},
-            },
+            preprocessing = {"run_preprocessing": False},
         )
         architect.initialize_model()
-        assert architect.normalizer is None
 
-        batch = architect.knowledge_graph.graphindices[:, architect.knowledge_graph.train_mask.nonzero(as_tuple=True)[0]]
+        # Without an encoder, the decoder sees the parameters directly:
+        # no batchwise normalization is applied in `scoring_function`
+        # (perturb the parameters to make the check non-degenerate)
+        embedded_kg.node_embeddings[0].data.add_(torch.randn(8, 4) * 0.3)
+        embedded_kg.edge_embeddings.data.add_(torch.randn(2, 4) * 0.3)
+        node_embeddings = torch.cat([emb for emb in embedded_kg.node_embeddings])
+        train_indices = architect.knowledge_graph.train_mask.nonzero(as_tuple=True)[0]
+        head_embeddings = node_embeddings[architect.knowledge_graph.graphindices[0][train_indices]]
+        tail_embeddings = node_embeddings[architect.knowledge_graph.graphindices[1][train_indices]]
+        edge_indices = architect.knowledge_graph.graphindices[2][train_indices]
+        edge_embeddings = embedded_kg.edge_embeddings[edge_indices]
 
-        node_embeddings = torch.cat(list(architect.knowledge_graph.node_embeddings), dim=0)
-        edge_embeddings = architect.knowledge_graph.edge_embeddings
+        raw_score = - (head_embeddings + edge_embeddings - tail_embeddings).norm(dim=1)**2
 
+        batch = architect.knowledge_graph.graphindices[:, train_indices]
         scores = architect.scoring_function(batch, node_embeddings)
-        head, tail, edge = batch[0], batch[1], batch[2]
-        raw_score = (node_embeddings[head] * edge_embeddings[edge] * node_embeddings[tail]).sum(dim=1)
+
         torch.testing.assert_close(scores, raw_score)
 
-    def test_normalize_parameters_applies_normalizer(self, embedded_kg, tmp_path):
-        # `normalize_parameters` (used by `get_embeddings`) applies the
-        # configured normalizer when there is no encoder
+    def test_no_normalizer(self, embedded_kg, tmp_path):
         architect = Architect(
             knowledge_graph=embedded_kg,
             output_directory=str(tmp_path / "out"),
-            preprocessing={"run_preprocessing": False},
-            model={"normalizer": {"name": "L2", "initial_parameters": "all", "training_parameters": "all"}},
+            preprocessing = {"run_preprocessing": False},
+            model = {
+                "decoder": {"name": "DistMult"},
+                "normalizer": {"initial_normalization": "None", "training_normalization": "None"}
+            },
+        )
+
+        architect.initialize_model()
+
+        # Perturb the parameters to make the check non-degenerate
+        embedded_kg.node_embeddings[0].data.add_(torch.randn(8, 4) * 0.3)
+        embedded_kg.edge_embeddings.data.add_(torch.randn(2, 4) * 0.3)
+        node_embeddings = torch.cat([emb for emb in embedded_kg.node_embeddings])
+        train_indices = architect.knowledge_graph.train_mask.nonzero(as_tuple=True)[0]
+        head_embeddings = node_embeddings[architect.knowledge_graph.graphindices[0][train_indices]]
+        tail_embeddings = node_embeddings[architect.knowledge_graph.graphindices[1][train_indices]]
+        edge_indices = architect.knowledge_graph.graphindices[2][train_indices]
+        edge_embeddings = embedded_kg.edge_embeddings[edge_indices]
+
+        # DistMult is a bilinear model: raw score, no normalization
+        # (the perturbation above makes this check non-degenerate)
+        raw_score = (head_embeddings * edge_embeddings * tail_embeddings).sum(dim=1)
+
+        batch = architect.knowledge_graph.graphindices[:, train_indices]
+        scores = architect.scoring_function(batch, node_embeddings)
+
+        torch.testing.assert_close(scores, raw_score)
+
+    def test_normalize_parameters(self, embedded_kg, tmp_path):
+        architect = Architect(
+            knowledge_graph=embedded_kg,
+            output_directory=str(tmp_path / "out"),
+            preprocessing = {"run_preprocessing": False},
         )
         architect.initialize_model()
-        assert isinstance(architect.normalizer, Normalizer)
-        assert len(architect.normalizer.params) == len(embedded_kg.node_embeddings) + 1
+
+        # Perturb the parameters
+        node_embeddings = embedded_kg.node_embeddings[0]
+        edge_embeddings = embedded_kg.edge_embeddings
+        node_embeddings.data.add_(torch.randn_like(node_embeddings.data) * 0.1)
+        edge_embeddings.data.add_(torch.randn_like(edge_embeddings.data) * 0.1)
+
+        # `normalize_parameters` is called before training and before an export
         architect.normalize_parameters()
-        for param in architect.normalizer.params:
-            expected = torch.ones(param.data.shape[0], device=param.data.device)
-            torch.testing.assert_close(torch.norm(param.data, dim=1), expected)
+
+        assert torch.allclose(node_embeddings.norm(dim=1), torch.ones(node_embeddings.shape[0]))
+        assert torch.allclose(edge_embeddings.norm(dim=1), torch.ones(edge_embeddings.shape[0]))
+
+    def test_normalize_parameters_noop_with_encoder(self, embedded_kg, tmp_path):
+        architect = Architect(
+            knowledge_graph=embedded_kg,
+            output_directory=str(tmp_path / "out"),
+            preprocessing = {"run_preprocessing": False},
+            model = {"encoder": {"name": "GCN", "gnn_layer_number": 1}},
+        )
+        architect.initialize_model()
+
+        node_embeddings = embedded_kg.node_embeddings[0]
+        edge_embeddings = embedded_kg.edge_embeddings
+        node_embeddings.data.add_(torch.randn_like(node_embeddings.data) * 0.1)
+        edge_embeddings.data.add_(torch.randn_like(edge_embeddings.data) * 0.1)
+        perturbed_node = node_embeddings.clone()
+        perturbed_edge = edge_embeddings.clone()
+
+        architect.normalize_parameters()
+
+        assert torch.allclose(node_embeddings, perturbed_node)
+        assert torch.allclose(edge_embeddings, perturbed_edge)
 
 
 class TestDecoderConsolidation:
-    def test_distmult_score_no_longer_normalizes(self):
-        # The DistMult `score` method must not normalize its inputs anymore:
-        # it is expected to receive embeddings already normalized between the
-        # encoder and the decoder step (by the Architect's normalizer)
-        from kgate.decoders import DistMult
+    def test_distmult_no_longer_normalizes(self):
+        from kgate.decoders.bilinear import DistMult
+        decoder = DistMult(node_count=4, edge_count=2, embedding_dimensions=3)
+        head = torch.randn(2, 3)
+        tail = torch.randn(2, 3)
+        edge = torch.randn(2, 3)
+        scores = decoder.score(head_embeddings=head, tail_embeddings=tail, edge_embeddings=edge,
+                               head_indices=torch.tensor([0, 1]),
+                               tail_indices=torch.tensor([2, 3]),
+                               edge_indices=torch.tensor([0, 1]))
+        # DistMult is a bilinear model: element-wise product of the three, summed
+        torch.testing.assert_close(scores, (head * edge * tail).sum(dim=1))
 
-        embedding_dimensions = 4
-        decoder = DistMult(embedding_dimensions = embedding_dimensions,
-                           node_count = 8,
-                           edge_count = 2)
-
-        head = torch.randn(5, embedding_dimensions)
-        tail = torch.randn(5, embedding_dimensions)
-        edge = torch.randn(5, embedding_dimensions)
-
-        scores = decoder.score(head_embeddings = head,
-                               tail_embeddings = tail,
-                               edge_embeddings = edge)
-
-        # Raw bilinear score: no internal normalization
-        raw_score = (head * edge * tail).sum(dim = 1)
-        torch.testing.assert_close(scores, raw_score)
-
-    def test_transE_score_no_longer_normalizes(self):
-        # The TransE `score` method must not normalize its inputs anymore
-        from kgate.decoders import TransE
-
-        embedding_dimensions = 4
-        decoder = TransE(dissimilarity_type = "L2")
-
-        head = torch.randn(5, embedding_dimensions)
-        tail = torch.randn(5, embedding_dimensions)
-        edge = torch.randn(5, embedding_dimensions)
-
-        scores = decoder.score(head_embeddings = head,
-                               tail_embeddings = tail,
-                               edge_embeddings = edge)
-
-        # Raw translational score: no internal normalization
-        raw_score = - (head + edge - tail).norm(dim = 1)**2
+    def test_transE_no_longer_normalizes(self):
+        from kgate.decoders.translational import TransE
+        decoder = TransE(dissimilarity_type="L2")
+        head = torch.randn(2, 4)
+        tail = torch.randn(2, 4)
+        edge = torch.randn(2, 4)
+        scores = decoder.score(head_embeddings=head, tail_embeddings=tail, edge_embeddings=edge,
+                               head_indices=torch.tensor([0, 1]),
+                               tail_indices=torch.tensor([2, 3]),
+                               edge_indices=torch.tensor([0, 1]))
+        raw_score = - (head + edge - tail).norm(dim=1)**2
         torch.testing.assert_close(scores, raw_score)

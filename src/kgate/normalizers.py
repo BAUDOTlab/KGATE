@@ -132,23 +132,31 @@ class Normalizer:
 
         return head_embeddings, tail_embeddings, edge_embeddings
 
-    def initialize(self, node_embeddings: Parameter, edge_embeddings: Parameter) -> tuple[Tensor, Tensor]:
-        """Apply the initial normalizer function to the initial targets
+    def initialize(self,
+                   node_embeddings: Parameter | Iterable[Parameter],
+                   edge_embeddings: Parameter
+                   ) -> tuple[Parameter | Iterable[Parameter], Parameter]:
+        """Apply the initial normalizer function to the initial targets, in place.
         
         Arguments
         ---------
-        **node_embeddings** *(torch.Tensor, shape: [node_count, dimensions])*
-        The graph node embeddings
+        **node_embeddings** *(torch.nn.Parameter or iterable of torch.nn.Parameter, shape: [node_count, dimensions])*
+        The graph node embeddings: either a single embedding table, or one
+        embedding table per node type.
 
-        **edge_embeddings** *(torch.Tensor, shape: [edge_count, dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, shape: [edge_count, dimensions])*
         The graph edge embeddings
 
-        **node_embeddings, edge_embeddings** *(tuple[torch.Tensor, torch.Tensor])*
+        Returns
+        -------
+        **node_embeddings, edge_embeddings** *(tuple[torch.nn.Parameter, torch.nn.Parameter])*
         : The same embeddings, normalized where the normalizer is configured,
         : and left unchanged otherwise.
         """
         if self.initial_targets in ["node", "all"]:
-            node_embeddings.data = self.initial_normalization(node_embeddings.data)
+            node_parameters = [node_embeddings] if isinstance(node_embeddings, Parameter) else list(node_embeddings)
+            for node_embedding in node_parameters:
+                node_embedding.data = self.initial_normalization(node_embedding.data)
         if self.initial_targets in ["edge", "all"]:
             edge_embeddings.data = self.initial_normalization(edge_embeddings.data)
 

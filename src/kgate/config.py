@@ -959,6 +959,23 @@ class Normalizer_Configuration:
     """
     Normalizer part of the main configuration.
 
+    The normalizer is a model component initialized by the Architect after the
+    decoder. It is applied to the embeddings between the encoder and the
+    decoder step: batchwise during the training loop when there is an encoder,
+    and once, over the whole graph, after the initializer runs and at the
+    beginning of each epoch otherwise (see `kgate.normalizers` and
+    `Architect.apply_normalizer`). It gathers what the decoders used to do in
+    their `score` method (e.g. L2-normalizing their head and tail embeddings).
+
+    Two normalizer functions are configured, each with its own embedding
+    selection:
+    - `initial_normalization` (applied to the `initial_parameters` embeddings)
+      is the function applied to the embeddings right after the initializer
+      runs.
+    - `training_normalization` (applied to the `training_parameters`
+      embeddings) is the function applied to the embeddings during the
+      training loop.
+
     This class is not meant to be used as a standalone, but to make access to
     configuration parameter easier.
 
@@ -972,11 +989,14 @@ class Normalizer_Configuration:
         self._configuration = normalizer_configuration
         self.supported_normalizers = SUPPORTED_NORMALIZERS
 
-        # "None" means no normalizer. Any other name must be a supported
-        # normalizer function, or it is considered a custom function name.
-        if normalizer_configuration["name"] != "None" and normalizer_configuration["name"] not in self.supported_normalizers:
-            logging.warn(f"normalizer name {normalizer_configuration["name"]} is not a builtin KGATE normalizer function. It will be considered a custom function name.")
-            self.register_name(normalizer_configuration["name"])
+        # "None" means no normalization in that scope. Any other name must be
+        # a supported normalizer function, or it is considered a custom
+        # function name.
+        for key in ("initial_normalization", "training_normalization"):
+            name = normalizer_configuration[key]
+            if name != "None" and name not in self.supported_normalizers:
+                logging.warn(f"normalizer {key} {name} is not a builtin KGATE normalizer function. It will be considered a custom function name.")
+                self.register_name(name)
 
     def __repr__(self):
         config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
@@ -984,9 +1004,10 @@ class Normalizer_Configuration:
 
 
     @property
-    def name(self) -> str:
+    def initial_normalization(self) -> str:
         """
-        The name of the normalizer function to apply.
+        The name of the normalizer function to apply to the
+        `initial_parameters` embeddings, right after the initializer runs.
 
         When using builtin KGATE normalizer functions, possible values are:
         - `L1`: row-wise L1 normalization of each embedding.
@@ -994,7 +1015,8 @@ class Normalizer_Configuration:
           DistMult, TransE, TransH, TransR and TransD used to do in their
           `score` method).
 
-        `None` means no normalizer is initialized.
+        `None` means no initial normalization: the initial embeddings are left
+        as-is.
 
         It is also possible to add your own custom normalizer function to the
         configuration, in which case you should call
@@ -1006,33 +1028,54 @@ class Normalizer_Configuration:
         TransE, TransH, TransR and TransD L2-normalizing their head and tail
         embeddings).
         """
-        return self._configuration["name"]
+        return self._configuration["initial_normalization"]
 
-    @name.setter
-    def name(self, name: str):
-        if name != "None":
-            assert name in self.supported_normalizers, f"Unsupported normalizer given. KGATE supports {', '.join(SUPPORTED_NORMALIZERS)} (or None) but got {name}. If you want to register a custom normalizer name, use Config.normalizer.register_name()"
-        self._configuration["name"] = name
+    @initial_normalization.setter
+    def initial_normalization(self, name: str):
+        Normalizer_Configuration.validate_normalization_name(name, self.supported_normalizers)
+
+        self._configuration["initial_normalization"] = name
+
+    @property
+    def training_normalization(self) -> str:
+        """
+        The name of the normalizer function to apply to the
+        `training_parameters` embeddings, during the training loop.
+
+        Same possible values as `initial_normalization` (`L1`, `L2`, `None`
+        or a registered custom function name).
+
+        `None` means no normalization during the training loop: the decoder
+        sees the raw embeddings (the encoder output when there is an encoder,
+        or the node and edge embeddings themselves otherwise).
+
+        Defaults to L2 normalization.
+        """
+        return self._configuration["training_normalization"]
+
+    @training_normalization.setter
+    def training_normalization(self, name: str):
+        Normalizer_Configuration.validate_normalization_name(name, self.supported_normalizers)
+
+        self._configuration["training_normalization"] = name
 
     def register_name(self, name: str):
         """
         Register this name as a valid normalizer function.
 
-        Adds the given name to the list of supported normalizer functions and
-        sets it as the current normalizer name in the configuration.
+        Adds the given name to the list of supported normalizer functions.
 
         KGATE has a limited set of builtin normalizer functions and validates
-        inputs against this list. To make sure your custom normalizer passes
-        the sanitization checks, it needs to be registered as valid.
+        inputs against this list. To make sure your custom normalizer function
+        passes the sanitization checks, it needs to be registered as valid.
 
         Arguments
         ---------
             name: str
                 The name of the normalizer function to register.
         """
-        self.supported_normalizers.append(name)
-
-        self.name = name
+        if name not in self.supported_normalizers:
+            self.supported_normalizers.append(name)
 
     @property
     def initial_parameters(self) -> str:
@@ -1043,7 +1086,6 @@ class Normalizer_Configuration:
         - `node`: only the node embeddings (head and tail)
         - `edge`: only the edge embeddings
         - `all`: both
-        - `None`: no normalization of the initial embeddings
 
         Defaults to `all`.
         """
@@ -1074,7 +1116,7 @@ class Normalizer_Configuration:
     def validate_params(params: str):
         """
         Check that the given embedding selection is a valid normalizer
-        parameter (`node`, `edge`, `all` or `None`).
+        parameter (`node`, `edge` or `all`).
 
         Arguments
         ---------
@@ -1086,7 +1128,28 @@ class Normalizer_Configuration:
         AssertionError
             If the selection is not supported.
         """
-        assert params in SUPPORTED_NORMALIZER_PARAMS or params == "None", f"Unsupported normalizer parameters given. KGATE supports {', '.join(SUPPORTED_NORMALIZER_PARAMS)} (or None) but got {params}."
+        assert params in SUPPORTED_NORMALIZER_PARAMS, f"Unsupported normalizer parameters given. KGATE supports {', '.join(SUPPORTED_NORMALIZER_PARAMS)} but got {params}."
+
+    @staticmethod
+    def validate_normalization_name(name: str, supported_normalizers: List[str]):
+        """
+        Check that the given normalizer function name is valid (`None` or one
+        of the supported normalizer functions).
+
+        Arguments
+        ---------
+        name: str
+            The normalizer function name to validate.
+        supported_normalizers: list of str
+            The list of supported normalizer function names to check against.
+
+        Raises
+        ------
+        AssertionError
+            If the name is not supported.
+        """
+        if name != "None":
+            assert name in supported_normalizers, f"Unsupported normalizer given. KGATE supports {', '.join(supported_normalizers)} (or None) but got {name}. If you want to register a custom normalizer name, use Config.normalizer.register_name()"
 
 
 class Loss_Configuration:

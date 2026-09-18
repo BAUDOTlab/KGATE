@@ -447,13 +447,16 @@ def initialize_normalizer(configuration: Normalizer_Configuration,
     
     """
 
+    initial_normalization = (lambda x: x) if configuration.initial_normalization == "None" else NORMALIZER_FUNCTIONS[configuration.initial_normalization]
+    training_normalization = (lambda x: x) if configuration.training_normalization == "None" else NORMALIZER_FUNCTIONS[configuration.training_normalization]
+
     normalizer = Normalizer(
-            initial_normalization = NORMALIZER_FUNCTIONS[configuration.initial_normalization],
-            training_normalization = NORMALIZER_FUNCTIONS[configuration.training_normalization],
+            initial_normalization = initial_normalization,
+            training_normalization = training_normalization,
             initial_targets = configuration.initial_parameters,
             training_targets = configuration.training_parameters
             )
-    logging.info(f"Normalizer initialized (training: {normalizer})")
+    logging.info(f"Normalizer initialized (initial: {configuration.initial_normalization} on {configuration.initial_parameters}, training: {configuration.training_normalization} on {configuration.training_parameters})")
 
     return normalizer
 
