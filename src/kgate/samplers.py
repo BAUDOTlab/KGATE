@@ -28,10 +28,8 @@ class NegativeSampler:
         """
         Interface for negative samplers of KGATE.
 
-        The interface doesn't have an __init__ method as inheriting samplers are supposed 
-        to take care of their initialization.
-
-        Furthermore, this interface doesn't implement anything but is a type helper.
+        This interface doesn't implement anything but is a type helper: its __init__ does nothing, 
+        and inheriting samplers are supposed to take care of their own initialization.
 
         """
         pass
@@ -74,19 +72,16 @@ class UniformNegativeSampler(NegativeSampler):
         """
         This class inherits from the NegativeSampler interface.
 
-        For each edge, choose simultenously head and tail from Bernoulli random distribution.
+        For each positive sample, corrupts the head or the tail of the triplet (the corrupted element
+        is chosen by a Bernoulli draw with probability 1/2) by replacing it with a random node.
 
-        Check that no true triplet is created by accident.
-
-        If the corrupted triplet is of a type that doesn't exist in the original knowledge graph, 
-        it is created.
-
-        % TODO: missing references
+        In typed knowledge graphs, the (head type, edge, tail type) combination of each corrupted triplet
+        is registered in `triplet_type_to_index` if it does not exist yet.
 
         Arguments
         ---------
 
-        **kg** *(KnowledgeGraph)*
+        **knowledge_graph** *(KnowledgeGraph)*
         : Knowledge graph on which the sampling will be done.
 
         **negative_triplet_count** *(int, optional, default to 1)*
@@ -96,20 +91,18 @@ class UniformNegativeSampler(NegativeSampler):
         ----------
 
         **index_to_node_type** *(Dict[int, str])*
-        : keys: node index
+        : keys: node type index
+        : values: node type name
 
         **edge_types** *(Dict[int, str])*
         : keys: edge index
         : values: edge name
 
-        **kg** *(KnowledgeGraph)*
+        **knowledge_graph** *(KnowledgeGraph)*
         : Knowledge graph on which the sampling will be done.
 
         **negative_triplet_count** *(int)*
         : Number of negative samples to create from each triplet.
-
-        **node_count** *(int)*
-        : Number of nodes.
 
         """
         self.knowledge_graph = knowledge_graph
@@ -237,19 +230,17 @@ class BernoulliNegativeSampler(NegativeSampler):
         """
         This class inherits from the NegativeSampler interface.
 
-        For each edge, choose head from Bernoulli random distribution, then tail from Bernoulli random distribution.
+        For each positive sample, corrupts the head of the triplet with the edge-specific Bernoulli
+        probability and the tail with the complementary probability, replacing the corrupted element
+        with a random node.
 
-        Check that no true triplet is created by accident.
-
-        If the corrupted triplet is of a type that doesn't exist in the original knowledge graph, 
-        it is created.
-
-        % TODO: references
+        In typed knowledge graphs, the (head type, edge, tail type) combination of each corrupted triplet
+        is appended to `triplet_types` if it does not exist yet.
 
         Arguments
         ---------
 
-        **kg** *(KnowledgeGraph)*
+        **knowledge_graph** *(KnowledgeGraph)*
         : Knowledge graph on which the sampling will be done.
 
         **negative_triplet_count** *(int, optional, default to 1)*
@@ -259,23 +250,21 @@ class BernoulliNegativeSampler(NegativeSampler):
         ----------
 
         **index_to_node_type** *(Dict[int, str])*
-        : keys: node index
+        : keys: node type index
+        : values: node type name
 
         **edge_types** *(Dict[int, str])*
         : keys: edge index
         : values: edge name
 
-        **kg** *(KnowledgeGraph)*
+        **knowledge_graph** *(KnowledgeGraph)*
         : Knowledge graph on which the sampling will be done.
 
         **negative_triplet_count** *(int)*
         : Number of negative samples to create from each triplet.
 
-        **node_count** *(int)*
-        : Number of nodes.
-
         **bernoulli_probabilities** *(torch.Tensor, dtype: torch.float, shape: [edge_count])*
-        : Tensor containing the probabilities of sampling a head for each edge.
+        : Tensor containing the probabilities of corrupting the head for each edge.
 
         """
         self.knowledge_graph = knowledge_graph
@@ -417,44 +406,41 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         Arguments
         ---------
 
-        **kg** *(kgate.data_structure.KnowledgeGraph)*
+        **knowledge_graph** *(kgate.knowledgegraph.KnowledgeGraph)*
         : Knowledge graph from which the corrupted triplets will be created.
 
         Attributes
         ----------
 
         **possible_heads** *(Dict[int, torch.Tensor])*
-        : keys: edges
-        : values: list of number of possible heads for each edge, equivalent to possible_head_count
+        : keys: edge index
+        : values: tensor of the possible heads (node indices) for that edge, equivalent to possible_head_count
 
         **possible_tails** *(Dict[int, torch.Tensor])*
-        : keys: edges
-        : values: list of number of possible tails for each edge, equivalent to possible_tail_count
+        : keys: edge index
+        : values: tensor of the possible tails (node indices) for that edge, equivalent to possible_tail_count
 
         **possible_head_count** *(torch.Tensor)*
-        : List of number of possible heads for each edge.
+        : Number of possible heads for each edge.
         : Equivalent of List[int], but with Tensor possibilities.
 
         **possible_tail_count** *(torch.Tensor)*
-        : List of number of possible tails for each edge.
+        : Number of possible tails for each edge.
         : Equivalent of List[int], but with Tensor possibilities.
 
         **index_to_node_type** *(Dict[int, str])*
-        : keys: node index
-        : values: node types
+        : keys: node type index
+        : values: node type name
 
         **edge_types** *(Dict[int, str])*
         : keys: edge index
         : values: edge name
 
-        **kg** *(KnowledgeGraph)*
+        **knowledge_graph** *(KnowledgeGraph)*
         : Knowledge graph on which the sampling will be done.
 
-        **node_count** *(int)*
-        : Number of nodes.
-
         **bernoulli_probabilities** *(torch.Tensor, dtype: torch.float, shape: [edge_count])*
-        : Tensor containing the probabilities of sampling a head for each edge.
+        : Tensor containing the probabilities of corrupting the head for each edge.
 
         **negative_triplet_count** *(int)*
         : Number of negative samples to create from each triplet.
@@ -576,22 +562,21 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
                                 Tensor, 
                                 Tensor]:
         """
-        For each edge of the knowledge graph (and possibly the 
-        validation graph but not the test graph) find all the possible heads 
+        For each edge of the knowledge graph, find all the possible heads 
         and tails in the sense of Wang et al., e.g. all nodes that occupy 
-        once this position in another triplet.
+        once this position in another triplet of the same edge.
 
         Returns
         -------
         
-        **possible_heads** *(Dict[int, List[int]])*
+        **possible_heads** *(Dict[int, torch.Tensor])*
         : keys : edge index
-        : values : list of possible heads
+        : values : tensor of possible heads
         
-        **possible tails** *(Dict[int, List[int]])*
+        **possible_tails** *(Dict[int, torch.Tensor])*
         : keys : edge index
-        : values : list of possible tails
-        
+        : values : tensor of possible tails
+                
         **possible_heads_count** *(torch.Tensor, dtype: torch.long, shape: (edge_count))*
         : Number of possible heads for each edge.
         
@@ -654,18 +639,9 @@ class PositionalNegativeSampler(BernoulliNegativeSampler):
         Arguments
         ---------
         
-        **batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
+        **batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])* 
         : Tensor containing the integer key of heads, tails, edges and triplets of the edges in the current batch.
         : Here, batch_size is batch.shape[1].
-
-        Raises
-        ------
-        
-        **AssertionError #1**
-        : The size/shape of possible_head_count must be corrupted_head_count.
-        
-        **AssertionError #2**
-        : The size/shape of possible_head_count must be (batch_size - corrupted_head_count).
 
         Returns
         -------
@@ -807,19 +783,19 @@ class MixedNegativeSampler(NegativeSampler):
         Arguments
         ---------
 
-        **kg** *(KnowledgeGraph)*
+        **knowledge_graph** *(KnowledgeGraph)*
             Main knowledge graph (usually training one).
 
         **negative_triplet_count** *(int, optional, default to 1)*
-            Third of the number of negative samples to create from each triplet. Since it uses 3 sampler
-            methods, it generates 3 times the amount of negative_triplet_count indicated.
+            Number of negative samples to create from each triplet with the Uniform and Bernoulli samplers.
+            Since the Positional sampler always adds one negative sample per triplet, the total number of
+            negative samples per triplet is 2 * negative_triplet_count + 1.
 
         Attributes
         ----------
 
         **negative_triplet_count** *(int)*
-            Number of negative samples to create from each triplet.
-            Inherited attribute, equivalent to negative_triplet_count.
+            Number of negative samples to create from each triplet with the Uniform and Bernoulli samplers.
 
         **uniform_sampler** *(UniformNegativeSampler)*
             Initialization of the UniformNegativeSampler class as an attribute.

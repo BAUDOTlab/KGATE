@@ -175,16 +175,18 @@ class TestBuiltinFunctions:
 
 class TestConfiguration:
     def test_defaults(self):
-        # L2 on the node embeddings: the historical behavior of the decoders
-        # that used to normalize in their own `score` method
+        # L2 on all the embeddings, both after the initializer runs and
+        # during the training loop
         config = Configuration()
         assert config.normalizer.name == "L2"
-        assert config.normalizer.params == "node"
+        assert config.normalizer.initial_parameters == "all"
+        assert config.normalizer.training_parameters == "all"
 
     def test_inline_override(self):
-        config = Configuration(config_dict={"model": {"normalizer": {"name": "L1", "params": "all"}}})
+        config = Configuration(config_dict={"model": {"normalizer": {"name": "L1", "initial_parameters": "node", "training_parameters": "edge"}}})
         assert config.normalizer.name == "L1"
-        assert config.normalizer.params == "all"
+        assert config.normalizer.initial_parameters == "node"
+        assert config.normalizer.training_parameters == "edge"
 
     def test_none(self):
         config = Configuration(config_dict={"model": {"normalizer": {"name": "None"}}})
@@ -198,7 +200,11 @@ class TestConfiguration:
     def test_invalid_params_raises(self):
         config = Configuration()
         with pytest.raises(AssertionError):
-            config.normalizer.params = "banana"
+            config.normalizer.initial_parameters = "banana"
+        with pytest.raises(AssertionError):
+            config.normalizer.training_parameters = "banana"
+        # "None" is a valid selection (no normalizer in that scope)
+        config.normalizer.initial_parameters = "None"
 
     def test_register_name(self):
         config = Configuration()
@@ -212,30 +218,50 @@ class TestConfiguration:
 
 class TestModules:
     def test_default_normalizer(self, embedded_kg):
-        # The default configuration normalizes the node embeddings with L2
+        # The default configuration normalizes all the embeddings (L2), both
+        # after the initializer runs and during the training loop
         configuration = Configuration(config_dict={"model": {"normalizer": {}}})
-        normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
-        assert isinstance(normalizer, Normalizer)
-        assert normalizer.func is l2_normalize
-        assert normalizer.node is True
-        assert normalizer.edge is False
-        # Only the node embeddings are normalized
-        assert normalizer.params == list(embedded_kg.node_embeddings)
+        training_normalizer, initial_normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
+        for normalizer in (training_normalizer, initial_normalizer):
+            assert isinstance(normalizer, Normalizer)
+            assert normalizer.func is l2_normalize
+            assert normalizer.node is True
+            assert normalizer.edge is True
+            assert normalizer.params == list(embedded_kg.node_embeddings) + [embedded_kg.edge_embeddings]
 
     def test_normalizer_edge(self, embedded_kg):
-        configuration = Configuration(config_dict={"model": {"normalizer": {"name": "L1", "params": "edge"}}})
-        normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
-        assert normalizer.func is l1_normalize
-        assert normalizer.edge is True
-        assert normalizer.node is False
-        assert normalizer.params == [embedded_kg.edge_embeddings]
+        configuration = Configuration(config_dict={"model": {"normalizer": {"name": "L1", "initial_parameters": "edge", "training_parameters": "edge"}}})
+        training_normalizer, initial_normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
+        for normalizer in (training_normalizer, initial_normalizer):
+            assert normalizer.func is l1_normalize
+            assert normalizer.edge is True
+            assert normalizer.node is False
+            assert normalizer.params == [embedded_kg.edge_embeddings]
 
     def test_normalizer_all(self, embedded_kg):
-        configuration = Configuration(config_dict={"model": {"normalizer": {"name": "L2", "params": "all"}}})
-        normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
-        assert normalizer.node is True
-        assert normalizer.edge is True
-        assert len(normalizer.params) == len(embedded_kg.node_embeddings) + 1
+        configuration = Configuration(config_dict={"model": {"normalizer": {"name": "L2", "initial_parameters": "all", "training_parameters": "all"}}})
+        training_normalizer, initial_normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
+        for normalizer in (training_normalizer, initial_normalizer):
+            assert normalizer.node is True
+            assert normalizer.edge is True
+            assert len(normalizer.params) == len(embedded_kg.node_embeddings) + 1
+
+    def test_scope_none(self, embedded_kg):
+        # A scope can be disabled with "None": only the other scope gets a
+        # normalizer
+        configuration = Configuration(config_dict={"model": {"normalizer": {"initial_parameters": "None", "training_parameters": "node"}}})
+        training_normalizer, initial_normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
+        assert initial_normalizer is None
+        assert isinstance(training_normalizer, Normalizer)
+        assert training_normalizer.node is True
+        assert training_normalizer.edge is False
+        assert training_normalizer.params == list(embedded_kg.node_embeddings)
+
+    def test_none_normalizer(self, embedded_kg):
+        configuration = Configuration(config_dict={"model": {"normalizer": {"name": "None"}}})
+        training_normalizer, initial_normalizer = initialize_normalizer(configuration.normalizer, embedded_kg)
+        assert training_normalizer is None
+        assert initial_normalizer is None
 
     def test_unknown_name_raises(self, embedded_kg):
         configuration = Configuration(config_dict={"model": {"normalizer": {"name": "MyRegistered"}}})
@@ -252,17 +278,41 @@ class TestArchitectWiring:
             preprocessing={"run_preprocessing": False},
         )
         architect.initialize_model()
-        # The default configuration initializes a normalizer
+        # The default configuration initializes both normalizers (L2 on all
+        # the embeddings)
         assert isinstance(architect.normalizer, Normalizer)
         assert architect.normalizer.func is l2_normalize
         assert architect.normalizer.node is True
-        assert architect.normalizer.edge is False
-        # No encoder: the whole-graph application is a no-op-free in-place
-        # normalization of the node embeddings
+        assert architect.normalizer.edge is True
+        assert isinstance(architect.initial_normalizer, Normalizer)
+        # No encoder: the initial normalizer is applied once in
+        # `initialize_model`, so the initial embeddings are already unit-norm
         node_embedding = architect.knowledge_graph.node_embeddings[0]
-        assert not torch.allclose(torch.norm(node_embedding.data, dim=1), torch.ones(node_embedding.data.shape[0]))
+        torch.testing.assert_close(torch.norm(node_embedding.data, dim=1), torch.ones(node_embedding.data.shape[0]))
+        torch.testing.assert_close(torch.norm(architect.knowledge_graph.edge_embeddings.data, dim=1), torch.ones(architect.knowledge_graph.edge_embeddings.data.shape[0]))
+        # The training normalizer is applied at the epoch start (L2 is
+        # idempotent, so the embeddings stay unit-norm)
         architect.apply_normalizer()
         torch.testing.assert_close(torch.norm(node_embedding.data, dim=1), torch.ones(node_embedding.data.shape[0]))
+
+    def test_initial_normalizer_not_applied_twice(self, embedded_kg, tmp_path):
+        # The initial normalizer is a one-shot operation: calling
+        # `initialize_model` again must not re-normalize the embeddings
+        architect = Architect(
+            knowledge_graph=embedded_kg,
+            output_directory=str(tmp_path / "out"),
+            preprocessing={"run_preprocessing": False},
+        )
+        architect.initialize_model()
+        node_embedding = architect.knowledge_graph.node_embeddings[0]
+        # Simulate training: perturb the embeddings (they are no longer
+        # unit-norm), then re-initialize the model
+        node_embedding.data.add_(torch.randn_like(node_embedding.data) * 0.1)
+        perturbed = torch.norm(node_embedding.data, dim=1).clone()
+        assert not torch.allclose(perturbed, torch.ones_like(perturbed))
+        architect.initialize_model()
+        # Not re-normalized: the norms are still the perturbed ones
+        torch.testing.assert_close(torch.norm(node_embedding.data, dim=1), perturbed)
 
     def test_none_normalizer(self, embedded_kg, tmp_path):
         architect = Architect(
@@ -273,24 +323,27 @@ class TestArchitectWiring:
         )
         architect.initialize_model()
         assert architect.normalizer is None
+        assert architect.initial_normalizer is None
         architect.apply_normalizer()  # no-op, no error
 
     def test_apply_normalizer_skipped_with_encoder(self, embedded_kg, tmp_path):
-        # With an encoder, the normalization is applied batchwise in
+        # With an encoder, the training normalizer is applied batchwise in
         # `scoring_function`, not at the epoch start: `apply_normalizer` is a
-        # no-op
+        # no-op (the initial scope is disabled here, so nothing is applied at
+        # the initialization either)
         architect = Architect(
             knowledge_graph=embedded_kg,
             output_directory=str(tmp_path / "out"),
             preprocessing={"run_preprocessing": False},
             model={
                 "encoder": {"name": "GCN", "layer_count": 1},
-                "normalizer": {"name": "L2", "params": "all"},
+                "normalizer": {"name": "L2", "initial_parameters": "None", "training_parameters": "all"},
             },
         )
         architect.initialize_model()
         assert architect.encoder is not None
         assert isinstance(architect.normalizer, Normalizer)
+        assert architect.initial_normalizer is None
         node_embedding = architect.knowledge_graph.node_embeddings[0]
         edge_embedding = architect.knowledge_graph.edge_embeddings
         assert not torch.allclose(torch.norm(node_embedding.data, dim=1), torch.ones(node_embedding.data.shape[0]))
@@ -307,7 +360,7 @@ class TestArchitectWiring:
             preprocessing={"run_preprocessing": False},
             model={
                 "encoder": {"name": "GCN", "layer_count": 1},
-                "normalizer": {"name": "L2", "params": "all"},
+                "normalizer": {"name": "L2", "initial_parameters": "None", "training_parameters": "all"},
             },
         )
         architect.initialize_model()
@@ -365,7 +418,7 @@ class TestArchitectWiring:
             knowledge_graph=embedded_kg,
             output_directory=str(tmp_path / "out"),
             preprocessing={"run_preprocessing": False},
-            model={"normalizer": {"name": "L2", "params": "all"}},
+            model={"normalizer": {"name": "L2", "initial_parameters": "all", "training_parameters": "all"}},
         )
         architect.initialize_model()
         assert isinstance(architect.normalizer, Normalizer)

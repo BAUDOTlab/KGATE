@@ -75,7 +75,7 @@ class MarginLoss(Module):
     : The minimum margin by which positive scores should exceed
     negative scores.
 
-    **reduction** *(Literal[, "sum", "mean"])*
+    **reduction** *(Literal["sum", "mean"])*
     : Specifies the reduction to apply to the output of the margin
     ranking loss. `sum` will sum the output and `mean` will sum the 
     output before dividing it by the number of elements.

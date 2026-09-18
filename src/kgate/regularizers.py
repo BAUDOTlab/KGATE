@@ -27,10 +27,10 @@ class Regularizer:
     Regularizer for KGATE.
 
     A regularizer is given a set of parameters to regularize and a function
-    to apply to them. It is initialized by the Architect after the decoder
-    (see `Architect.initialize_regularizer`), and applied through the trainer
-    hooks (see `Architect.apply_regularizer`), for example at the end of
-    every epoch and before an evaluation.
+    to apply to them. It is created by the Architect after the decoder
+    (see `kgate.modules.initialize_regularizer`), and applied through the
+    trainer hooks (see `Architect.apply_regularizer`), for example at the end
+    of every epoch.
 
     Applying the regularizer is done in place, on the `.data` of each
     parameter, so the parameter objects themselves (and therefore the

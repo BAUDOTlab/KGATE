@@ -41,10 +41,8 @@ class Predictions:
         """
         Object holding the predictions output of an Evaluator.
 
-        Predictions are available as a dataframe, but can also be accessed through 
-        builtin methods to get specific metrics.
-
-        % TODO: the object could be better structured altogether
+        Predictions are stored as rank tensors and can be accessed through 
+        builtin methods to get specific metrics (e.g. `mrr`, `mean_rank`, `hit_at_k`).
 
         Arguments
         ---------
@@ -88,9 +86,8 @@ class Predictions:
     @property
     def mean_rank(self) -> Tuple[float, float]:
         """
-        Mean rank metric
-        
-        % TODO.What_the_function_does_about_globally
+        Mean rank metric: mean of the `true_predictions_rank` values, both
+        unfiltered and filtered.
         
         Returns
         -------
@@ -101,7 +98,7 @@ class Predictions:
         
         **filtered_mean_rank_score** *(float)*
         : Mean value of `filtered_true_predictions_rank` scores.
-        : Among the ranking of all predictions, `filtered_true_predictions_rank` is the rank of the true result.
+        : Among the ranking of all filtered predictions, `filtered_true_predictions_rank` is the rank of the true result.
         : True triplets that are not the target of the prediction are filtered out.
         
         """
@@ -144,9 +141,8 @@ class Predictions:
     @property
     def mrr(self) -> Tuple[float, float]:
         """
-        Mean reciprocal rank
-        
-        % TODO.What_the_function_does_about_globally
+        Mean reciprocal rank: mean of the inverse of the ranks of the true
+        predictions, both unfiltered and filtered.
 
         Returns
         -------
@@ -190,7 +186,7 @@ class LinkPredictionEvaluator:
         Arguments
         ---------
         
-        **full_graphindices** *(torch.Tensor)*
+        **graphindices** *(torch.Tensor)*
         : Tensor of shape [4, triplet_count] containing every true triplet.
         
         **embedding_dimensions** *(int)*
@@ -199,8 +195,14 @@ class LinkPredictionEvaluator:
         Attributes
         ----------
         
-        **full_graphindices** *(torch.Tensor)*
+        **graphindices** *(torch.Tensor)*
         : Tensor of shape [4, triplet_count] containing every true triplet.
+        
+        **embedding_dimensions** *(int)*
+        : Dimensions of embeddings.
+        
+        **generated_embeddings** *(bool)*
+        : Indicate whether `generate_evaluation_embeddings` has already been called.
         
         **evaluated** *(bool)*
         : Indicate whether the method LinkPredictionEvaluator.evaluate has already
@@ -303,15 +305,15 @@ class LinkPredictionEvaluator:
         **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder)*
         : Decoder model to evaluate.
         
-        **knowledge_graph** *(KnowledgeGraph)*
-        : Knowledge graph on which the evaluation will be done.
+        **evaluated_subset** *(Subset[KnowledgeGraph])*
+        : Subset of the knowledge graph on which the evaluation will be done.
         
         **node_embeddings** *(nn.ParameterList, keyword-only)*
         : A list containing all embeddings for each node type.
-        : keys: node type index
+        : position: node type index
         : values: tensors of shape (node_count, embedding_dimensions)
         
-        **edge_embeddings** *(nn.Embedding, keyword-only)*
+        **edge_embeddings** *(nn.Parameter, keyword-only)*
         : A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
         
         **verbose** *(bool, default = True)*
@@ -449,7 +451,6 @@ class TripletClassificationEvaluator:
         
         **device** *(str, "cuda" or "cpu", default to "cuda")*
         : Indicate if data should be sent to GPU or CPU.
-        : GPU is referenced to as Cuda.
         
         **evaluated** *(bool, default to False)*
         : Indicate whether the `evaluate` function has already been called.
@@ -458,13 +459,12 @@ class TripletClassificationEvaluator:
         : Value of the thresholds for the scoring function to consider a 
         triplet as true. It is defined by calling the `evaluate` method.
         
-        **sampler** *(torchkge.sampling.NegativeSampler)*
-        : Negative sampler.
+        **sampler** *(kgate.samplers.PositionalNegativeSampler)*
+        : Negative sampler used to generate the negative samples.
 
         """
         self.architect = architect
         self.knowledge_graph = knowledge_graph
-        self.device = self.architect.device.type == "cuda"
 
         self.evaluated = False
         self.thresholds = None
@@ -576,10 +576,14 @@ class TripletClassificationEvaluator:
                 ) -> float:
         
         """
-        *Missing documentation*
-        
-        % TODO.what_that_function_does
-        
+        Triplet Classification accuracy: evaluates the model on the given
+        subset by classifying both the true triplets (which should be accepted)
+        and one positionally-sampled negative per true triplet (which should be
+        rejected), using the thresholds learned from the validation set.
+
+        If the evaluator has not been evaluated yet on this subset, it is
+        evaluated first.
+
         Arguments
         ---------
         

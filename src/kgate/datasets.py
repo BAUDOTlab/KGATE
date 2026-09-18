@@ -15,8 +15,9 @@ logging.basicConfig(
 def get_data_root_directory() -> Path:
     """Gets or create the root directory of KGATE data.
 
-    Looks first for the `KGATE_DATA_ROOT` environment variable, and fallback to
-    the current working directory if it is not found.
+    Looks first for the `KGATE_DATA_ROOT` environment variable, and falls back
+    to a `KGATE_DATA` subdirectory of the current working directory if it is
+    not set.
 
     Returns
     -------
@@ -135,6 +136,23 @@ def load_WN18RR(data_directory: os.PathLike = None, keep_split: bool = False) ->
     return knowledge_graph
 
 def load_PrimeKG(data_directory: os.PathLike = None) -> KnowledgeGraph:
+    """
+    Load the knowledge graph PrimeKG into memory.
+
+    If the data is not on disk, first download it (both the knowledge graph
+    and the node/edge metadata files).
+
+    Arguments
+    ---------
+    **data_directory** *(os.PathLike, optional)*
+    : Directory to read or download the knowledge graph to.
+
+    Returns
+    -------
+    **knowledge_graph** *(KnowledgeGraph)*
+    The PrimeKG knowledge graph, with its metadata and the `node_name` column
+    set as identity.
+    """
     primekg_url = "https://dataverse.harvard.edu/api/access/datafile/6180620"
     metadata_url = "https://dataverse.harvard.edu/api/access/datafile/6180617"
 

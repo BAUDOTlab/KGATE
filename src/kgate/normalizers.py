@@ -41,46 +41,23 @@ class Normalizer:
     """
     Normalizer for KGATE.
 
-    A normalizer is given a set of embeddings to normalize and a function to
-    apply to them. It is initialized by the Architect after the decoder
-    (see `initialize_normalizer`), and applied by the Architect in two
-    different ways, depending on whether there is an encoder or not:
-
-    - With an encoder, it is applied batchwise, between the encoder and the
-      decoder step (see `Architect.scoring_function`): the function is
-      applied to the (encoder output) embeddings of the current batch, and
-      the new embeddings are returned. The original tensors (and the
-      parameters they are built from) are left untouched, so the gradients
-      flow through the normalization.
-
-    - Without an encoder, the embeddings between the encoder and the decoder
-      are the node and edge embeddings themselves. Normalizing them batchwise
-      would recompute the same whole-graph normalization on every batch, so
-      they are normalized once, over the whole graph, at the beginning of
-      each epoch (see `Architect.apply_normalizer`), and again before an
-      evaluation or an export of the embeddings. This is done in place, on
-      the `.data` of each parameter, so the parameter objects themselves (and
-      therefore the optimizer's references to them) are preserved. This is
-      the same mechanism the decoders used in their `normalize_parameters`
-      method.
+    The normalizer runs before each gradient step on the embeddings to shape them
+    in order to avoid gradient explosion. The normalizer runs before the decoder, and 
+    after the encoder if there is one.
 
     Arguments
     ---------
     
-    **func** *(Callable[[torch.Tensor], torch.Tensor])*
-    : The function to apply to each embedding. It must accept a tensor and
-      return a tensor of the same shape.
+    **training_normalization** *(Callable[[torch.Tensor], torch.Tensor], optional, keyword-only)*
+    : The function to apply to each embedding.
+    : It must accept a tensor and return a tensor of the same shape.
+
+    **initial_normalization** *(Callable[[torch.Tensor], torch.Tensor], optional, keyword-only)*
+    : The function to apply to each embedding before the beginning of the training.
+    : It must accept a tensor and return a tensor of the same shape.
+    : If no function is given, will default to the same as `training_normalization`
     
-    **node** *(bool, default to True, keyword-only)*
-    : Whether the node embeddings (head and tail) are normalized.
-    
-    **edge** *(bool, default to False, keyword-only)*
-    : Whether the edge embeddings are normalized.
-    
-    **params** *(Iterable[torch.Tensor], default to empty, keyword-only)*
-    : The set of embeddings (node and/or edge embedding parameters of the
-      knowledge graph) to normalize in place when there is no encoder.
-    
+    #TODO complete
     Raises
     ------
     
@@ -93,59 +70,29 @@ class Normalizer:
     
     """
     def __init__(self,
-                func: Callable[[Tensor], Tensor],
                 *,
-                node: bool = True,
-                edge: bool = False,
-                params: Iterable[Tensor] = ()):
-        if not callable(func):
-            raise TypeError(f"The normalizer function must be callable, but got {type(func)}.")
+                initial_normalization: Callable[[Tensor], Tensor] = None,
+                training_normalization: Callable[[Tensor], Tensor] = lambda x: x,
+                initial_targets: Literal["node", "edge", "all"] = "all",
+                training_targets: Literal["node", "edge", "all"] = "all"):
+        if not callable(training_normalization):
+            raise TypeError(f"The normalizer functions must be callable, but got {type(training_normalization)}.")
         
-        try:
-            params = list(params)
-        except TypeError as e:
-            raise TypeError(f"The embeddings to normalize must be an iterable of torch.Tensor, but got {type(params)}.") from e
+        self.initial_normalization = initial_normalization or training_normalization
+        self.training_normalization = training_normalization
 
-        for param in params:
-            if not isinstance(param, Tensor):
-                raise TypeError(f"Every element of `params` must be a torch.Tensor, but found {type(param)}.")
-        
-        if not node and not edge:
-            raise ValueError(f"A normalizer must normalize at least one kind of embeddings: `node` and `edge` are both False.")
-        
-        self._func: Callable[[Tensor], Tensor] = func
-        self._node: bool = node
-        self._edge: bool = edge
-        self._params: list[Tensor] = params
+        self.initial_targets = initial_targets
+        self.training_targets = training_targets
 
     @property
-    def params(self) -> list[Tensor]:
-        """
-        The set of embeddings this normalizer is applied to in place
-        (no-encoder case).
-        """
-        return self._params
-
+    def nodes(self) -> bool:
+        """Whether the normalizer targets the nodes during the training."""
+        return self.training_targets in ["node", "all"]
+    
     @property
-    def func(self) -> Callable[[Tensor], Tensor]:
-        """
-        The function applied to each embedding of this normalizer.
-        """
-        return self._func
-
-    @property
-    def node(self) -> bool:
-        """
-        Whether the node embeddings (head and tail) are normalized.
-        """
-        return self._node
-
-    @property
-    def edge(self) -> bool:
-        """
-        Whether the edge embeddings are normalized.
-        """
-        return self._edge
+    def edges(self) -> bool:
+        """Whether the normalizer targets the edges during the training."""
+        return self.training_targets in ["edge", "all"]
 
     def __call__(self,
                  *,
@@ -154,15 +101,8 @@ class Normalizer:
                  edge_embeddings: Tensor
                  ) -> tuple[Tensor, Tensor, Tensor]:
         """
-        Apply the normalizer function to the embeddings given as arguments, and
+        Apply the training normalizer function to the embeddings given as arguments, and
         return the normalized ones.
-
-        This is the batchwise application of the normalizer, used between the
-        encoder and the decoder step: the function is applied to the (encoder
-        output) embeddings of the current batch, and the new embeddings are
-        returned. The original tensors (and the parameters they are built
-        from) are left untouched, so the gradients flow through the
-        normalization.
 
         Arguments
         ---------
@@ -180,49 +120,44 @@ class Normalizer:
         -------
         
         **head_embeddings, tail_embeddings, edge_embeddings** *(tuple[torch.Tensor, torch.Tensor, torch.Tensor])*
-        : The same embeddings, normalized where the normalizer is configured
-          to (see the `node` and `edge` properties), and left unchanged
-          otherwise.
+        : The same embeddings, normalized where the normalizer is configured,
+        : and left unchanged otherwise.
         
         """
-        if self._node:
-            head_embeddings = self._func(head_embeddings)
-            tail_embeddings = self._func(tail_embeddings)
-        if self._edge:
-            edge_embeddings = self._func(edge_embeddings)
+        if self.nodes:
+            head_embeddings = self.training_normalization(head_embeddings)
+            tail_embeddings = self.training_normalization(tail_embeddings)
+        if self.edges:
+            edge_embeddings = self.training_normalization(edge_embeddings)
 
         return head_embeddings, tail_embeddings, edge_embeddings
 
-    def apply_whole_graph(self):
+    def initialize(self, node_embeddings: Parameter, edge_embeddings: Parameter) -> tuple[Tensor, Tensor]:
+        """Apply the initial normalizer function to the initial targets
+        
+        Arguments
+        ---------
+        **node_embeddings** *(torch.Tensor, shape: [node_count, dimensions])*
+        The graph node embeddings
+
+        **edge_embeddings** *(torch.Tensor, shape: [edge_count, dimensions])*
+        The graph edge embeddings
+
+        **node_embeddings, edge_embeddings** *(tuple[torch.Tensor, torch.Tensor])*
+        : The same embeddings, normalized where the normalizer is configured,
+        : and left unchanged otherwise.
         """
-        Apply the normalizer function to every embedding it was given, in place.
+        if self.initial_targets in ["node", "all"]:
+            node_embeddings.data = self.initial_normalization(node_embeddings.data)
+        if self.initial_targets in ["edge", "all"]:
+            edge_embeddings.data = self.initial_normalization(edge_embeddings.data)
 
-        This is the whole-graph application of the normalizer, used when there
-        is no encoder: the embeddings between the encoder and the decoder are
-        the node and edge embeddings themselves, so normalizing them batchwise
-        would recompute the same whole-graph normalization on every batch.
-        They are therefore normalized once, over the whole graph, at the
-        beginning of each epoch.
-
-        The function is applied to `param.data`, so the parameter objects are
-        preserved (the optimizer keeps its references to the same parameters).
-        This is the same mechanism the decoders used in their
-        `normalize_parameters` method.
-        """
-        for param in self._params:
-            if isinstance(param, Parameter):
-                # Operate on `.data` (a non-leaf, non-grad tensor) so no
-                # throwaway autograd graph is built, and assign back to `.data`
-                # so the Parameter object itself is preserved (the optimizer
-                # keeps its references to the same parameters).
-                param.data = self._func(param.data)
-            else:
-                param.copy_(self._func(param))
-
+        return node_embeddings, edge_embeddings
+    
     def __repr__(self):
-        return (f"{self.__class__.__name__}(params: {len(self._params)} parameter(s), "
-                f"node: {self._node}, edge: {self._edge}, "
-                f"func: {getattr(self._func, '__name__', repr(self._func))})")
+        return (f"{self.__class__.__name__}"
+                f"initial normalization: {getattr(self.initial_normalization, '__name__', repr(self.initial_normalization))}"
+                f"training normalization:{getattr(self.training_normalization, '__name__', repr(self.training_normalization))}")
 
 
 # ------------------------------------------------------------------------------------

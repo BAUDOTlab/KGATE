@@ -173,10 +173,6 @@ class KnowledgeGraph(Dataset):
         **node_type_to_index** *(Dict[str, int], default to None)*
         : Dictionary mapping the node type to their index in the knowledge graph.
 
-        **removed_triplets** *(torch.Tensor, shape: [4, removed_triplet_count], default to None)*
-        : `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
-        : They are kept in memory as they still represent ground truth.
-
         Attributes
         ----------
 
@@ -205,10 +201,6 @@ class KnowledgeGraph(Dataset):
         **node_type_to_index** *(Dict[str, int], default to None)*
         : Dictionary mapping the node type to their index in the knowledge graph.
 
-        **removed_triplets** *(torch.Tensor, shape: [4, removed_triplet_count], default to None)*
-        : `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
-        : They are kept in memory as they still represent ground truth.
-
         **triplet_count** *(int)*
         : Total number of triplets in the knowledge graph.
 
@@ -218,17 +210,15 @@ class KnowledgeGraph(Dataset):
         **edge_count** *(int)*
         : Total number of edges in the knowledge graph.
 
-        **node_types** *(torch.Tensor)*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        **node_types** *(torch.Tensor, shape: [node_count], dtype: torch.long)*
+        : The type index (see `node_type_to_index`) of each node in the knowledge graph.
 
-        **node_type_to_global** *(Dict[str, int])*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        **node_type_to_global** *(Dict[str, Tensor])*
+        : Mapping of each node type to the tensor of global indices of the nodes of that type.
 
-        **global_to_local_indices** *(Dict[str, int])*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        **global_to_local_indices** *(torch.Tensor, shape: [node_count], dtype: torch.long)*
+        : For each node (global index), its local index within the nodes of its node type.
+        : Nodes without a type are mapped to -1.
 
         **train_mask** *(torch.Tensor, shape: [triplet_count], dtype: torch.bool)*
         : Boolean mask with the indices of triplets belonging to the training set.
@@ -243,14 +233,11 @@ class KnowledgeGraph(Dataset):
         Raises
         ------
 
-        **ValueError**
+        **AssertionError #1**
         : If `dataframe` is not given, `graphindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided.
 
-        **ValueError**
+        **AssertionError #2**
         : The `graphindices` parameter must be a 2D tensor of shape [4, triplet_count].
-
-        **ValueError**
-        : The `removed_triplets` parameter must be a 2D tensor of shape [4, triplet_count].
 
         """
         
@@ -684,12 +671,6 @@ class KnowledgeGraph(Dataset):
         **AssertionError #2**
         : The sum of provided shares (`split_proportions`) must be equal to 1.
 
-        Returns
-        -------
-        
-        **kgs** *(Tuple[Self, Self, Self])*
-        : 3 new instances of KnowledgeGraph: train, validation, test.
-            
         """
         if sizes is not None:
             assert sum(sizes) == self.triplet_count, "The sum of provided sizes must match the number of triplets."
@@ -751,7 +732,7 @@ class KnowledgeGraph(Dataset):
         """
         Return the proper train, validation and test masks with proportion of each triplet type corresponding to the given values.
         
-        This method is called by the `split_kg` method.
+        This method is called by the `generate_masks` method.
 
         Arguments
         ---------
@@ -836,12 +817,13 @@ class KnowledgeGraph(Dataset):
                         indices_to_remove: List[int] | torch.Tensor
                         ) -> None:
         """
-        Removes specified triplets from the knowledge graph during training. 
+        Removes specified triplets from all splits (train, validation and test) of the knowledge graph.
+        The triplets remain part of the ground truth, but are no longer used during training or evaluation.
 
         Arguments
         ---------
         **indices_to_remove** *(List[int] or torch.Tensor)*
-        : Indices of triplets to remove from the knowledge graph.
+        : Indices of the triplets to remove from the splits.
         """
         self.train_mask[indices_to_remove] = False
         self.validation_mask[indices_to_remove] = False
@@ -875,7 +857,7 @@ class KnowledgeGraph(Dataset):
         : The maximum node index must not be superior to the number of nodes.
         
         **ValueError #2**
-        : The maximum triplet index must not be superior to the number of edges.
+        : The maximum triplet type index must not be superior to the number of triplet types.
         
         """
         assert new_triplets.dim() == 2 and new_triplets.size(0) == 4, "new_triplets must have shape [4, n]"
@@ -905,8 +887,8 @@ class KnowledgeGraph(Dataset):
         """
         Adds reverse triplets for the specified undirected edges in the knowledge graph.
         
-        Updates `head_index`, `tail_index`, `edges` with the reverse triplets, and updates the dictionaries to include 
-        both original and reverse triplets in all directions.
+        Adds the reverse triplets of the given undirected edge types to the ground truth, so that both 
+        (A, edge, B) and (B, edge, A) as well as the reversed variants (A, edge_rev, B) and (B, edge_rev, A) are represented.
 
         Arguments
         ----------
@@ -917,8 +899,8 @@ class KnowledgeGraph(Dataset):
         Returns
         -------
         
-        **reverse_list** *(List[int])*
-        : List of all original and reverse triplets, in all directions.
+        **reverse_list** *(List[Tuple[int, int]])* 
+        : One (original edge index, reverse edge index) pair for each undirected edge processed.
         
         """
         index_to_edge = {value: key for key, value in self.edge_to_index.items()}
@@ -1054,19 +1036,14 @@ class KnowledgeGraph(Dataset):
         : Index of the edge type to get the node pair of.
         
         **split** *("train", "validation" or "test", optional)*
-        : Format the node is given back as, either head then tail or tail then head.
-
-        Raises
-        ------
-        
-        **AssertionError #1**
-        : If the type is not "head_tail" then it must be "tail_head".
+        : If given, only the triplets belonging to this split are considered.
 
         Returns
         -------
         
-        **node_pair** *(Set[Tuple[Number, Number])*
-        : The head/tail or tail/head pair associated to the given edge.
+        **node_pair** *(torch.Tensor, shape: [2, n])*
+        : The head and tail indices of the triplets with the given edge type,
+        : the first row being the head indices and the second the tail indices.
         
         """
         if split is not None:
@@ -1258,13 +1235,6 @@ class KnowledgeGraph(Dataset):
         **mask** *(torch.Tensor, dtype: bool, size: [triplet_count], optional)*
         : Mask to limit the subgraph to a given sample of the original KG.
 
-        Raises
-        ------
-        
-        **AssertionError**
-        : *Missing documentation*
-        % TODO: what that means, causes, and fixes if easy
-
         Returns
         -------
         
@@ -1378,24 +1348,14 @@ class KnowledgeGraph(Dataset):
 
     def flatten_embeddings(self) -> Tensor:
         """
-        *Missing documentation*
-        
-        % TODO.What_the_function_does_about_globally
-
-        Arguments
-        ---------
-        
-        **node_embeddings** *(nn.ParameterList, keyword-only)*
-        : A list containing all embeddings for each node type.
-        : keys: node type index
-        : values: tensors of shape (node_count, embedding_dimensions)
+        Flatten the node embeddings of all node types into a single tensor.
 
         Returns
         -------
         
         embeddings: torch.Tensor
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        : Tensor of shape [node_count, embedding_dimensions] containing the embedding of each node,
+        : gathered in the order of their global index in the knowledge graph.
         
         """
         embeddings: torch.Tensor = torch.zeros((self.node_count, self.node_embeddings[0].size(1)),
@@ -1420,7 +1380,11 @@ class KnowledgeGraph(Dataset):
     def from_hetero_data(cls, hetero_data: HeteroData) -> "KnowledgeGraph":
         """
         Create a new KGATE KnowledgeGraph instance from the PyTorch Geometric HeteroData object.
-        
+
+        Note
+        ----
+        This method is not implemented yet: it is a stub that returns None.
+
         Arguments
         ---------
         **hetero_data** *(HeteroData)*

@@ -1,31 +1,18 @@
 """
 Module initialization functions for the KGATE Architect.
 
-This script contains the initialization functions of the different modules of
-the Architect (the functions currently named `initialize_xxx()` in
-`kgate.architect`, except for `initialize_model`).
+This module contains the standalone initialization functions of the different
+components of the Architect (decoder, loss, encoder, initializer, regularizer,
+normalizer, optimizer, negative sampler, learning rate scheduler, evaluator).
 
-Unlike the Architect methods, these functions are standalone: they do not take
-the Architect instance. Instead, each property of the Architect that they use
-is fed to them as an argument. Their bodies are otherwise the same as the
-corresponding Architect methods, so they produce the same objects given the
-same inputs.
 
-Wiring these standalone functions into the Architect is left to the user.
-
-Note
-----
-`initialize_evaluator` is the only function whose behavior differs slightly:
-the Architect method sets `architect.validation_metric` as a side effect,
-while this function returns the corresponding metric name (`"MRR"` or
-`"Accuracy"`) alongside the evaluator, so the caller can set it.
 
 @author: Benjamin Loire <benjamin.loire@univ-amu.fr>
 """
 import logging
 import warnings
 from pathlib import Path
-from typing import Any, Literal, Tuple
+from typing import Any, Callable, Literal, Tuple
 
 import torch
 import torch.nn as nn
@@ -166,8 +153,10 @@ def initialize_encoder(configuration: Encoder_Configuration,
     **encoder_node_embedding_dimensions** *(int)*
     : The Architect's `encoder_node_embedding_dimensions`.
     
-    **encoder_name** *({"Default", "GCN", "GAT", "Node2Vec"}, optional)*
-    : Name of the encoder.
+    **encoder_name** *({"GCN", "GAT"}, default to "")*
+    : Name of the encoder. If empty (the default), the `name` key of the
+      configuration is used. Any other value is unsupported and leads to no
+      encoder being created.
     
     **gnn_layers** *(int, optional, default to 0)*
     : Number of hidden layers for the encoder. Only used for deep learning encoders.
@@ -224,8 +213,6 @@ def initialize_decoder(configuration: Decoder_Configuration,
     **RESCAL** [6]_, **DistMult** [7]_, **ComplEx** [8]_ and **ConvKB** [9]_. See the description of decoder classes for details about 
     their implementation, or read their original papers.
 
-    Translational models are used with a `torchkge.MarginLoss` while bilinear models are used with a 
-    `torchkge.BinaryCrossEntropyLoss`.
 
     If both configuration and arguments are given, the arguments take priority.
 
@@ -236,14 +223,11 @@ def initialize_decoder(configuration: Decoder_Configuration,
     .. [2] Wang, Zhen et al. “Knowledge Graph Embedding by Translating on Hyperplanes.” AAAI Conference on Artificial Intelligence (2014).
     .. [3] Lin, Yankai et al. “Learning Entity and Relation Embeddings for Knowledge Graph Completion.” AAAI Conference on Artificial Intelligence (2015).
     .. [4] Ji, Guoliang et al. “Knowledge Graph Embedding via Dynamic Mapping Matrix.” Annual Meeting of the Association for Computational Linguistics (2015).
-    .. [5] *Missing documentation for TorusE*
+    .. [5] Ebisu, Takuma and Ryutaro Ichise. “TorusE: Knowledge Graph Embedding on a Lie Group.” AAAI Conference on Artificial Intelligence (2018).
     .. [6] Nickel, Maximilian et al. “A Three-Way Model for Collective Learning on Multi-Relational Data.” International Conference on Machine Learning (2011).
-    .. [7] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2014).
-    .. [8] *Missing documentation for ComplEx*
+    .. [7] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2015).
+    .. [8] Trouillon, Théo et al. “Complex Embeddings for Simple Link Prediction.” International Conference on Machine Learning (2016).
     .. [9] Nguyen, Dai Quoc et al. “A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network.” North American Chapter of the Association for Computational Linguistics (2017).
-
-    % TODO: add reference to TorusE and ComplEx
-    % TODO: proper links to the references
     
     Arguments
     ----------
@@ -266,11 +250,11 @@ def initialize_decoder(configuration: Decoder_Configuration,
     **decoder_name** *(str, optional)*
     : Name of the decoder.
     
-    **dissimilarity** *({"L1", "L2"}, optional)*
-    : Type of the dissimilarity metric.
+    **dissimilarity** *({"L1", "L2", "torus_L1", "torus_L2", "torus_eL2"}, default to "")*
+    : Type of the dissimilarity metric, only for translational decoders.
             
-    **filter_count** *(int, optional, default to 0)*
-    : Number of convolution filters.
+    **filter_count** *(int, default to None)*
+    : Number of convolution filters, only for the ConvKB decoder.
 
     Raises
     ------
@@ -282,10 +266,7 @@ def initialize_decoder(configuration: Decoder_Configuration,
     -------
     
     **decoder** *(BilinearDecoder or ConvolutionalDecoder or TranslationalDecoder)*
-    : The decoder object.
-    
-    **loss** *(MarginLoss or BinaryCrossEntropyLoss)*
-    : The loss object.
+    : The decoder object, moved to the given device.
     
     """
     if decoder_name == "":
@@ -392,19 +373,6 @@ def initialize_regularizer(configuration: Regularizer_Configuration,
     """
     Initialize the regularizer according to the configuration.
 
-    The regularizer is a model component initialized after the decoder: it
-    is given the set of parameters to regularize and the function to apply
-    to them, and is applied through the trainer hooks (see
-    `Architect.apply_regularizer`). It gathers what the decoders used to do
-    in their own `normalize_parameters` method (e.g. TransE, RESCAL and
-    DistMult L2-normalizing their node embeddings).
-
-    The parameters it regularizes are the node and/or edge embeddings of
-    the knowledge graph, selected by the `params` configuration key
-    (`node`, `edge` or `all`). The function is selected by the `name`
-    configuration key (see `kgate.regularizers.REGULARIZER_FUNCTIONS` for
-    the builtin functions, or `Config.regularizer.register_name` for
-    custom function names).
 
     Arguments
     ---------
@@ -454,22 +422,6 @@ def initialize_normalizer(configuration: Normalizer_Configuration,
     """
     Initialize the normalizer according to the configuration.
 
-    The normalizer is a model component initialized after the decoder: it
-    is given the set of embeddings to normalize and the function to apply
-    to them, and is applied by the Architect between the encoder and the
-    decoder step (see `Architect.scoring_function`), batchwise when there is
-    an encoder, or once over the whole graph at the beginning of each epoch
-    when there is not (see `Architect.apply_normalizer`). It gathers what
-    the decoders used to do in their own `score` method (e.g. RESCAL,
-    DistMult, TransE, TransH, TransR and TransD L2-normalizing their head
-    and tail embeddings).
-
-    The embeddings it normalizes are the node and/or edge embeddings of
-    the knowledge graph, selected by the `params` configuration key
-    (`node`, `edge` or `all`). The function is selected by the `name`
-    configuration key (see `kgate.normalizers.NORMALIZER_FUNCTIONS` for
-    the builtin functions, or `Config.normalizer.register_name` for
-    custom function names).
 
     Arguments
     ---------
@@ -484,9 +436,8 @@ def initialize_normalizer(configuration: Normalizer_Configuration,
     Returns
     -------
     
-    **normalizer** *(Normalizer or None)*
-    : The initialized normalizer, or None if no normalizer is configured
-      (`[model.normalizer] name = "None"`).
+    **normalizer** *(Normalizer)*
+    : The initialized normalizer.
     
     Raises
     ------
@@ -495,24 +446,14 @@ def initialize_normalizer(configuration: Normalizer_Configuration,
     : If the configured normalizer name is not a known function.
     
     """
-    if configuration.name == "None":
-        logging.info("No normalizer configured. Skipping.")
-        return None
 
-    func = NORMALIZER_FUNCTIONS[configuration.name]
-
-    # Build the set of embeddings to normalize, according to the configuration
-    params: list[nn.Parameter] = []
-    if configuration.params in ("node", "all"):
-        params.extend(knowledge_graph.node_embeddings)
-    if configuration.params in ("edge", "all"):
-        params.append(knowledge_graph.edge_embeddings)
-
-    normalizer = Normalizer(  func = func,
-                              node = configuration.params in ("node", "all"),
-                              edge = configuration.params in ("edge", "all"),
-                              params = params)
-    logging.info(f"Normalizer initialized: {normalizer}")
+    normalizer = Normalizer(
+            initial_normalization = NORMALIZER_FUNCTIONS[configuration.initial_normalization],
+            training_normalization = NORMALIZER_FUNCTIONS[configuration.training_normalization],
+            initial_targets = configuration.initial_parameters,
+            training_targets = configuration.training_parameters
+            )
+    logging.info(f"Normalizer initialized (training: {normalizer})")
 
     return normalizer
 
@@ -525,8 +466,9 @@ def initialize_optimizer(configuration: Optimizer_Configuration,
     """
     Initialize the optimizer based on the configuration provided.
     
-    Available optimizers are Adam, SGD and RMSprop. See torch.optim 
-    documentation for optimizer parameters: <https://docs.pytorch.org/docs/stable/optim.html>
+    Any `torch.optim` optimizer can be selected by name (e.g. Adam, SGD or 
+    RMSprop). See torch.optim documentation for the optimizer parameters: 
+    <https://docs.pytorch.org/docs/stable/optim.html>
 
     Arguments
     ---------
@@ -542,13 +484,14 @@ def initialize_optimizer(configuration: Optimizer_Configuration,
     : The Architect's decoder (its parameters are optimized).
     
     **encoder** *(GCNEncoder or GATEncoder or None, optional, default to None)*
-    : The Architect's encoder, if any (its parameters are optimized).
+    : The Architect's encoder, if any (its parameters are optimized with
+      zero weight decay).
     
     Raises
     ------
     
-    **NotImplementedError**
-    : If the optimizer is not supported.
+    **AttributeError**
+    : If the configured optimizer name is not an attribute of `torch.optim`.
 
     Returns
     -------
@@ -706,18 +649,6 @@ def initialize_evaluator(configuration: Evaluation_Configuration,
     Triplet Classification evaluate the ability of a model to discriminate between existing and 
     fake triplet in a KG.
     
-    Note
-    ----
-    
-    The Architect method sets `architect.validation_metric` as a side effect.
-    This function returns the corresponding metric name (`"MRR"` for Link
-    Prediction, `"Accuracy"` for Triplet Classification) alongside the
-    evaluator, so the caller can set it.
-    
-    The Triplet Classification evaluator inherently references the model it
-    evaluates (it uses the Architect's `device` and `scoring_function`), so
-    unlike the other functions in this module, an Architect instance must be
-    provided for that objective (it is ignored for Link Prediction).
     
     Arguments
     ---------
@@ -739,17 +670,18 @@ def initialize_evaluator(configuration: Evaluation_Configuration,
     Raises
     ------
     
+    **ValueError**
+    : If the objective is Triplet Classification but no Architect instance is
+      provided.
+    
     **NotImplementedError**
     : If the name of the task is not supported.
     
     Returns
     -------
-    evaluator: LinkPredictionEvaluator or TripletClassificationEvaluator
-        The initialized evaluator, either LinkPredictionEvaluator or TripletClassificationEvaluator.
     
-    validation_metric: str
-        The corresponding validation metric name: `"MRR"` for Link Prediction,
-        `"Accuracy"` for Triplet Classification.
+    **evaluator** *(LinkPredictionEvaluator or TripletClassificationEvaluator)*
+    : The initialized evaluator.
     
     """
     match configuration.objective:

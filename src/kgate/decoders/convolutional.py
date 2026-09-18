@@ -1,7 +1,7 @@
 """
 Convolutional decoder classes for training and inference.
 
-Original code for the samplers from TorchKGE developers
+Original code for the decoders from TorchKGE developers
 @author: Armand Boschin <aboschin@enst.fr>
 
 Modifications and additional functionalities added by Benjamin Loire <benjamin.loire@univ-amu.fr>:
@@ -102,21 +102,22 @@ class ConvolutionalDecoder(Module):
         Arguments
         ---------
         
-        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
-        : The node embedding as a ParameterList containing one Parameter by node type, 
-        or only one if there is no node type.
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float)*
+        : The node embedding as a ParameterList containing one Parameter per node type,
+        : each of shape [node_count for the node type, embedding_dimensions],
+        : or only one if there is no node type.
         
-        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
-        : The edge embedding as a nn.Parameter containing one Parameter by edge type, 
-        or only one if there is no node type.
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [edge_count, embedding_dimensions])*
+        : The edge embedding as a nn.Parameter containing one row per edge type,
+        : or only one if there is no edge type.
         
         Returns
         -------
         
-        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float, shape: [batch_size, node_embedding_dimensions])*
-        : The normalized node embedding object.
+        **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float)*
+        : The normalized node embedding object, with the same structure as the input.
         
-        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions])*
+        **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float)*
         : The normalized edge embedding object.
         
         Notes
@@ -168,7 +169,7 @@ class ConvolutionalDecoder(Module):
         """
         Link prediction evaluation helper function. Get node embeddings 
         and edge embeddings. The output will be fed to the 
-        `inference_score_function` method.
+        `inference_score` method.
 
         Refer to the specific decoder for details on this function's implementation.
         
@@ -281,7 +282,7 @@ class ConvKB(ConvolutionalDecoder):
         """
         Implementation of ConvKB model detailed in the paper referenced below.
 
-        This class inherits from the ConvolutionalDecoder interface. It inherits its attributes as well.
+        This class inherits from the ConvolutionalDecoder interface, whose interface methods it implements.
 
         References
         ----------
@@ -403,7 +404,7 @@ class ConvKB(ConvolutionalDecoder):
         """
         Link prediction evaluation helper function. Get node embeddings 
         and edge embeddings. The output will be fed to the 
-        `inference_score_function` method.
+        `inference_score` method.
         
         Arguments
         ---------

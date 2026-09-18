@@ -22,7 +22,8 @@ class Inference_KG(Dataset):
         """
         Subset of a KG used for inference.
 
-        This class inherits from the PyTorch [`utils.data.Dataset`](https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html)
+        This class is a subclass of the PyTorch
+        [`utils.data.Dataset`](https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html)
 
         Arguments
         ---------
@@ -59,16 +60,16 @@ class Inference_KG(Dataset):
         
         # Either both tensors are nodes, or they are node and edge
         assert first_index_tensor.size() == second_index_tensor.size(), "Both index tensors must be of the same size for inference."
-        self.first_tensor_index = first_index_tensor
-        self.second_tensor_index = second_index_tensor
+        self.first_index_tensor = first_index_tensor
+        self.second_index_tensor = second_index_tensor
 
 
     def __len__(self):
-        return self.first_tensor_index.size(0)
+        return self.first_index_tensor.size(0)
 
 
     def __getitem__(self, index: int):
-        return (self.first_tensor_index[index], self.second_tensor_index[index])
+        return (self.first_index_tensor[index], self.second_index_tensor[index])
 
 
 
@@ -102,12 +103,13 @@ class EdgeInference:
                 encoder: GNN | None,
                 decoder: TranslationalDecoder | BilinearDecoder | ConvolutionalDecoder,
                 node_embeddings: nn.ParameterList, 
-                edge_embeddings: nn.Embedding, 
+                edge_embeddings: nn.Parameter, 
                 verbose: bool = True,
                 **_):
         """
-        *Missing documentation*
-        % TODO.What_the_function_does_about_globally
+        Use a trained embedding model to infer the missing edges of triplets:
+        for each given (head, tail) pair, rank all edges and return the top_k
+        best ones.
 
         Arguments
         ---------
@@ -134,7 +136,7 @@ class EdgeInference:
         : keys: node type index
         : values: tensors of shape (node_count, embedding_dimensions)
         
-        **edge_embeddings** *(nn.Embedding, keyword-only)*
+        **edge_embeddings** *(nn.Parameter, keyword-only)*
         : A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
         
         **verbose** *(bool, default to True, keyword-only)*
@@ -143,12 +145,12 @@ class EdgeInference:
         Returns
         -------
 
-        **predictions** *(torch.Tensor)*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        **predictions** *(torch.Tensor, shape: [len(head_indices), top_k], dtype: torch.long)*
+        : The top_k predicted edges for each (head, tail) pair of the input,
+        : ranked from best to worst score.
         
-        **scores** *(torch.Tensor, shape [batch_size, n])*
-        : Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
+        **scores** *(torch.Tensor, shape: [batch_size, top_k])*
+        : The scores of the predicted edges, with known (true) edges filtered out.
         
         """
         with torch.no_grad():
@@ -168,7 +170,7 @@ class EdgeInference:
                                 desc = "Inference"):
                 head_indices, tail_indices = batch[0], batch[1]
                 embeddings = torch.zeros(len(head_indices), node_embeddings[0].shape[1], device=device, dtype=torch.float)
-
+                # TODO update with to harmonize the code
                 if encoder is not None:
                     seed_nodes = batch.unique()
                     hop_count = encoder.n_layers
@@ -248,11 +250,9 @@ class NodeInference:
                 verbose: bool = True,
                 **_):
         """
-        <span style="color:#8B0000"> 
-        <strong>Description</strong>
-        </span>
-    
-        Predict the missing node of a triplet where either head and edge or edge and tail are known.
+        Use a trained embedding model to infer the missing node of triplets:
+        for each given (node, edge) pair, rank all nodes and return the top_k
+        best ones.
 
         Arguments
         ---------
@@ -284,7 +284,8 @@ class NodeInference:
           : values: tensors of shape (node_count, embedding_dimensions)
         
         **edge_embeddings** *(nn.Embedding, keyword-only)*
-        : A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
+        : Embedding module holding one embedding per edge,
+        : of shape (edge_count, embedding_dimensions).
         
         **verbose** *(bool, default to True, keyword-only)*
         : Indicate whether a progress bar should be displayed during evaluation.
@@ -292,12 +293,13 @@ class NodeInference:
         Returns
         -------
         
-        **predictions** *(torch.Tensor)*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        **predictions** *(torch.Tensor, shape: [len(node_indices), top_k], dtype: torch.long)*
+        : The top_k predicted nodes for each (node, edge) pair of the input,
+        : ranked from best to worst score.
         
-        **scores** *(torch.Tensor, shape [batch_size, n])*
-        : Tensor with -Inf values for all true nodes/edges indices except the ones being predicted.
+        **scores** *(torch.Tensor, shape: [len(node_indices), top_k])*
+        : The scores of the predicted nodes, with known (true) nodes filtered out
+        : (set to -Inf) by `filter_scores`.
         
         """
         with torch.no_grad():

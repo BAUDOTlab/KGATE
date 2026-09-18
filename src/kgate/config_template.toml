@@ -144,13 +144,18 @@ params = "node"
 # `name = "None"`; to restore the historical behavior of TransD (which also
 # normalized its edge embeddings), set `params = "all"` (or `"edge"` on top
 # of `"node"`).
-name = "L2"
+initial_normalization = "L2"
 
-# Which embeddings to normalize:
+training_normalization = "L2"
+
+# Which embeddings to normalize after the initializer run:
 # - node: only the node embeddings (head and tail)
 # - edge: only the edge embeddings
 # - all: both
-params = "all"
+initial_parameters = "all"
+
+# Same as above, but during the training loop.
+training_parameters = "all"
 
 [model.loss]
 # The name of the loss function to use

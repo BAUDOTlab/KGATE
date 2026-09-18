@@ -50,9 +50,10 @@ class Configuration:
         Parse the configuration file and integrates it with the default and inline configurations.
         
         For each parameter, the final parsed configuration will include in priority order: inline 
-        configuration, configuration file, default configuration. If the configuration file or inline 
-        configuration contain parameters not existing in the default configuration, they will be included
-        in the final configuration but not validated.
+        configuration, configuration file, default configuration.
+        
+        Top-level parameters that do not exist in the default configuration are silently ignored, 
+        though additional parameters given within an existing section are kept and passed as-is.
 
         Some elements of the model may use additional parameters not included in the KGATE configuration.
         In that case, you can use the Config.[element]_kwargs dictionary that will be fed to the initialization
@@ -859,7 +860,7 @@ class Regularizer_Configuration:
     The regularizer is a model component initialized by the Architect after the
     decoder. It is given a set of parameters to regularize and the function to
     apply to them, and is applied through the trainer hooks (see
-    `Architect.initialize_regularizer` and `Architect.apply_regularizer`).
+    `kgate.modules.initialize_regularizer` and `Architect.apply_regularizer`).
     It gathers what the decoders used to do in their `normalize_parameters`
     method (e.g. L2-normalizing their node embeddings).
 
@@ -958,14 +959,6 @@ class Normalizer_Configuration:
     """
     Normalizer part of the main configuration.
 
-    The normalizer is a model component initialized by the Architect after the
-    decoder. It is given a set of embeddings to normalize and the function to
-    apply to them, and is applied through the Architect (see
-    `Architect.initialize_normalizer`, `Architect.scoring_function` and
-    `Architect.apply_normalizer`). It gathers what the decoders used to do in
-    their own `score` method (e.g. L2-normalizing their head and tail
-    embeddings).
-
     This class is not meant to be used as a standalone, but to make access to
     configuration parameter easier.
 
@@ -1042,23 +1035,58 @@ class Normalizer_Configuration:
         self.name = name
 
     @property
-    def params(self) -> str:
+    def initial_parameters(self) -> str:
         """
-        Which embeddings to normalize.
+        Which embeddings to normalize after the initializer runs.
 
         Possible values are:
         - `node`: only the node embeddings (head and tail)
         - `edge`: only the edge embeddings
         - `all`: both
+        - `None`: no normalization of the initial embeddings
 
-        Defaults to `node`.
+        Defaults to `all`.
         """
-        return self._configuration["params"]
+        return self._configuration["initial_parameters"]
 
-    @params.setter
-    def params(self, params: str):
-        assert params in SUPPORTED_NORMALIZER_PARAMS, f"Unsupported normalizer parameters given. KGATE supports {', '.join(SUPPORTED_NORMALIZER_PARAMS)} but got {params}."
-        self._configuration["params"] = params
+    @initial_parameters.setter
+    def initial_parameters(self, params: str):
+        Normalizer_Configuration.validate_params(params)
+        self._configuration["initial_parameters"] = params
+
+    @property
+    def training_parameters(self) -> str:
+        """
+        Which embeddings to normalize during the training loop.
+
+        Same possible values as `initial_parameters`.
+
+        Defaults to `all`.
+        """
+        return self._configuration["training_parameters"]
+
+    @training_parameters.setter
+    def training_parameters(self, params: str):
+        Normalizer_Configuration.validate_params(params)
+        self._configuration["training_parameters"] = params
+
+    @staticmethod
+    def validate_params(params: str):
+        """
+        Check that the given embedding selection is a valid normalizer
+        parameter (`node`, `edge`, `all` or `None`).
+
+        Arguments
+        ---------
+        params: str
+            The embedding selection to validate.
+
+        Raises
+        ------
+        AssertionError
+            If the selection is not supported.
+        """
+        assert params in SUPPORTED_NORMALIZER_PARAMS or params == "None", f"Unsupported normalizer parameters given. KGATE supports {', '.join(SUPPORTED_NORMALIZER_PARAMS)} (or None) but got {params}."
 
 
 class Loss_Configuration:

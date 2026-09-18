@@ -39,7 +39,7 @@ SUPPORTED_REGULARIZERS = [
     "L2"
 ]
 
-# Which parameters a regularizer can be applied to (see `Architect.initialize_regularizer`)
+# Which parameters a regularizer can be applied to (see `kgate.modules.initialize_regularizer`)
 SUPPORTED_REGULARIZER_PARAMS = [
     "node",
     "edge",
@@ -52,7 +52,7 @@ SUPPORTED_NORMALIZERS = [
     "L2"
 ]
 
-# Which embeddings a normalizer can be applied to (see `Architect.initialize_normalizer`)
+# Which embeddings a normalizer can be applied to (see `kgate.modules.initialize_normalizer`)
 SUPPORTED_NORMALIZER_PARAMS = [
     "node",
     "edge",

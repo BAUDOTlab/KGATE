@@ -47,6 +47,8 @@ from kgate.constants import (
     SUPPORTED_LOSSES,
     SUPPORTED_REGULARIZER_PARAMS,
     SUPPORTED_REGULARIZERS,
+    SUPPORTED_NORMALIZERS,
+    SUPPORTED_NORMALIZER_PARAMS,
     SUPPORTED_SAMPLERS,
 )
 
@@ -129,6 +131,8 @@ LOSS_OPTIONS = _canonical_options(SUPPORTED_LOSSES)
 SAMPLER_OPTIONS = _canonical_options(SUPPORTED_SAMPLERS)
 REGULARIZER_OPTIONS = _canonical_options(SUPPORTED_REGULARIZERS + ["None"])
 REGULARIZER_PARAM_OPTIONS = _canonical_options(SUPPORTED_REGULARIZER_PARAMS)
+NORMALIZER_OPTIONS = _canonical_options(SUPPORTED_NORMALIZERS + ["None"])
+NORMALIZER_PARAM_OPTIONS = _canonical_options(SUPPORTED_NORMALIZER_PARAMS)
 
 OBJECTIVE_OPTIONS: dict[str, str] = {
     "linkprediction": "Link Prediction",
@@ -345,6 +349,25 @@ def build_parser() -> argparse.ArgumentParser:
         type=_choice_type(REGULARIZER_PARAM_OPTIONS, "parameter selection"),
         metavar="NAME",
         help="which embeddings the regularizer is applied to: node (default), edge or all",
+    )
+    group.add_argument(
+        "--normalizer",
+        type=_choice_type(NORMALIZER_OPTIONS, "normalizer"),
+        metavar="NAME",
+        help=(
+            "embedding normalization applied between the encoder and the decoder step: "
+            "L2 (default), L1 or None. Choose from: " + ", ".join(NORMALIZER_OPTIONS.values())
+        ),
+    )
+    group.add_argument(
+        "--normalize",
+        type=_choice_type(NORMALIZER_PARAM_OPTIONS, "embedding selection"),
+        metavar="NAME",
+        help=(
+            "which embeddings the normalizer is applied to, both after the "
+            "initializer runs (initial_parameters) and during the training loop "
+            "(training_parameters): node, edge or all (default: all)"
+        ),
     )
     group.add_argument(
         "--loss",
@@ -695,6 +718,15 @@ def build_config_dict(args: argparse.Namespace) -> dict:
         reg["params"] = args.regularize
     if reg:
         model["regularizer"] = reg
+
+    norm: dict[str, Any] = {}
+    if args.normalizer is not None:
+        norm["name"] = args.normalizer
+    if args.normalize is not None:
+        norm["initial_parameters"] = args.normalize
+        norm["training_parameters"] = args.normalize
+    if norm:
+        model["normalizer"] = norm
 
     loss: dict[str, Any] = {}
     if args.loss is not None:

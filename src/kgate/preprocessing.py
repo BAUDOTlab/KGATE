@@ -333,26 +333,21 @@ def clean_datasets( knowledge_graph: KnowledgeGraph,
                     known_reverses: List[Tuple[int, int]]
                     ) -> None:
     """
-    Clean the train knowledge graph by removing reverse duplicate triplets contained 
-    in the second knowledge graph (test or validation).
+    Clean the training set by removing reverse duplicate triplets: for each pair
+    of known reverse edges, triplets of one edge whose (head, tail) pair appears
+    in the validation or test set with the reverse edge are removed from the
+    training set (and vice versa), in place.
 
     Arguments
     ---------
     
-    **kg_train** *(KnowledgeGraph)*
-    : The training knowledge graph subset.
-    
-    **kg_second** *(KnowledgeGraph)*
-    : The second knowledge graph subset, test or validation.
+    **knowledge_graph** *(KnowledgeGraph)*
+    : The knowledge graph with train, validation and test masks already
+      generated; the training set is cleaned in place.
     
     **known_reverses** *(List[Tuple[int, int]])*
-    : Each tuple contains two edges (first_edge_type, second_edge_type) that are known reverse edges.
-
-    Returns
-    -------
-    
-    **kg_train** *(KnowledgeGraph)*
-    : The cleaned train knowledge graph subset.
+    : Each tuple contains two edges (first_edge_type, second_edge_type) that are
+      known reverse edges.
     
     """
     logging.info("Cleaning knowledge graph by removing duplicated edges...")

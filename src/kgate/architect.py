@@ -122,8 +122,9 @@ class Architect(Module):
         **config_path** *(str, optional)*
         : Path to the configuration file
         
-        **knowledge_graph** *(KnowledgeGraph, optional)*
+        **knowledge_graph** *(KnowledgeGraph or str, optional)*
         :  A knowledge graph that may have already been preprocessed by KGATE and split accordingly, or an unprocessed KnowledgeGraph object.
+        : Can also be the name of a built-in dataset, one of "FB15k-237", "WN18RR" or "PrimeKG".
         
         **dataframe** *(pd.DataFrame, optional)*
         : The knowledge graph as a pandas dataframe containing at least the columns head, tail and edge, 
@@ -134,12 +135,12 @@ class Architect(Module):
         knowledge graph. If this argument is not provided, the metadata will be read from config.metadata if it exists. If both are absent, 
         all nodes will be considered to be the same node type.
         
-        **cuddn_benchmark** *(bool, optional, default to True)*
+        **cudnn_benchmark** *(bool, optional, default to True)*
         : Benchmark different convolution algorithms to chose the optimal one.
         : Initialization is slightly longer when it is enabled, and only if cuda is available.
         
         **number_of_cores** *(int, optional, default to 0)*
-        : Set the number of cpu cores used by KGATE. If set to 0, the maximum number of available cores is used.
+        : Set the number of cpu cores used by KGATE. If set to 0, all the cores the process has access to are used.
         
         **kwargs** *(dict)*
         : Inline configuration parameters. The name of the arguments must match the parameters found in `config_template.toml`.
@@ -147,8 +148,8 @@ class Architect(Module):
         Attributes
         ----------
         
-        **config** *(dict)*
-        : The parsed configuration as a python dictionnary.
+        **configuration** *(Configuration)*
+        : The parsed configuration object (see `kgate.config.Configuration`).
         
         **knowledge_graph** *(KnowledgeGraph)*
         : The associated knowledge graph.
@@ -165,12 +166,12 @@ class Architect(Module):
         : If not explicitly different than `node_embedding_dimensions`, it is the same. Most models only support the same value for both hyperparameters.
         
         **node_embeddings** *(nn.ParameterList)*
-        : A list containing all embeddings for each node type.
-        : keys: node type index
-        : values: tensors of shape [node_count, node_embedding_dimensions]
+        : A list containing the node embeddings of each node type, stored in `knowledge_graph.node_embeddings`.
+        : Position in the list: node type index (order of `knowledge_graph.node_type_to_index`)
+        : Values: tensors of shape [node_count of this type, node_embedding_dimensions]
         
-        **edge_embeddings** *(nn.Embedding, shape: [edge_type_count, edge_embedding_dimensions])*
-        : Embeddings for each edge type.
+        **edge_embeddings** *(nn.Parameter, shape: [edge_type_count, edge_embedding_dimensions])*
+        : Embeddings for each edge type, stored in `knowledge_graph.edge_embeddings`.
         
         **initializer** *(Initializer)*
         : Initializer object to generate the initial embeddings.
@@ -218,31 +219,20 @@ class Architect(Module):
         Raises
         ------
         
-        **InvalidColumnName**
-        : Pandas error.
+        **pd.errors.InvalidColumnName**
         : The metadata dataframe must have columns named "id" and "type".
         
-        **ValueError #1**
-        : If the file referenced as `metadata_csv` in the config file exists but cannot be parsed.
-        
-        **ValueError #2**
+        **ValueError**
         : The metadata csv file uses a non supported separator.
         : Supported separators are comma (,), tabulation (    ) and semi-colon (;).
-        
-        **ValueError #3**
-        : If the `run_kg_preprocessing` setting in the config file is set to False, 
-        but the knowledge graph `kg` is given but not as a tuple.
-        : The knowledge graph must either be preprocessed and given as a tuple (training, validation and test), 
-        or `run_kg_preprocessing` must be set to True.
 
         Examples
         --------
         
-        Inline hyperparameter declaration
+        Inline hyperparameter declaration (keys must match `config_template.toml`)
         >>> model_params = {"node_embedding_dimensions": 100, "decoder": {"name":"DistMult"}}
         >>> sampler_params = {"negative_triplet_count":5}
-        >>> run_preprocessing = True
-        >>> architect = Architect("/path/to/configuration", model = model_params, sampler = sampler_params, run_kg_preprocessing = run_preprocessing)
+        >>> architect = Architect("/path/to/configuration", model = model_params, negative_sampler = sampler_params, preprocessing = {"run_preprocessing": True})
 
         Notes
         -----
@@ -458,16 +448,13 @@ class Architect(Module):
         This is done automatically by running the `train_model` method.
         
         The initialization is done in this order:
+            * Initializer
             * Decoder
+            * Loss
             * Encoder
-            * Node Embeddings (either at random, or using given node features)
-            * Edge Embeddings (either at random, or using given edge features)
-            * Regularizer (initialized after the decoder, as soon as the node
-              and edge embeddings it regularizes have been created; see
-              `initialize_regularizer`)
-            * Normalizer (initialized after the decoder, as soon as the node
-              and edge embeddings it normalizes have been created; see
-              `initialize_normalizer`)
+            * Node and Edge Embeddings (either at random, or using given node features, or a pretrained file)
+            * Regularizer
+            * Normalizer
             * Optimizer
             * Negative Sampler
             * Scheduler
@@ -483,7 +470,6 @@ class Architect(Module):
         
         **pretrained** *(Path, optional)*
         : Path to the pretrained node embeddings.
-        % TODO: add support for pretrained edge embeddings
 
         Raises
         ------
@@ -521,12 +507,8 @@ class Architect(Module):
             self.knowledge_graph.node_embeddings = torch.load(pretrained)
         elif not (hasattr(self.knowledge_graph.embeddings, "node_embeddings")
                   and hasattr(self.knowledge_graph.embeddings, "edge_embeddings")):
-            # Only create the embeddings if they do not already exist (e.g. from a
-            # previous `initialize_model` call). Re-initializing here would silently
-            # replace the existing parameters with fresh random ones: the optimizer,
-            # which was built from the old parameters, would then update tensors that
-            # are no longer used by the forward pass, and training would stall with a
-            # flat loss while the exposed embeddings never move.
+            # We only initialize the embeddings if they don't already exist to
+            # avoid optimizer parameter mismatch (among other pitfalls)
             self.initializer.initialize_all_embeddings(self.knowledge_graph,
                                                         node_embedding_dimensions = self.node_embedding_dimensions,
                                                         edge_embedding_dimensions = self.edge_embedding_dimensions,
@@ -534,22 +516,14 @@ class Architect(Module):
                                                         inplace = True)
 
         logging.info("Initializing regularizer...")
-        # The regularizer is initialized after the decoder, and needs the node
-        # and edge embeddings it regularizes, so it is created here, as soon as
-        # those embeddings exist. It is applied through the trainer hooks (see
-        # `apply_regularizer`), and gathers what the decoders used to do in
-        # their `normalize_parameters` method.
         self.regularizer = self.regularizer or initialize_regularizer(self.configuration.regularizer, self.knowledge_graph)
 
         logging.info("Initializing normalizer...")
-        # The normalizer is initialized after the decoder, and needs the node
-        # and edge embeddings it normalizes, so it is created here, as soon as
-        # those embeddings exist. It is applied by the Architect between the
-        # encoder and the decoder step (batchwise when there is an encoder, or
-        # once over the whole graph at the beginning of each epoch when there
-        # is not), and gathers what the decoders used to do in their `score`
-        # method.
         self.normalizer = self.normalizer or initialize_normalizer(self.configuration.normalizer, self.knowledge_graph)
+        # Run the first normalization of the parameters. This operation not yet tracked by the 
+        # optimizer
+        self.normalizer.initialize(self.knowledge_graph.node_embeddings, self.knowledge_graph.edge_embeddings)
+        logging.info(f"Normalized the initial parameters")
 
         logging.info("Initializing optimizer...")
         self.optimizer = self.optimizer or initialize_optimizer(self.configuration.optimizer, 
@@ -585,14 +559,12 @@ class Architect(Module):
             * `Checkpoint` save at a configured interval.
             * Evaluation on the validation set at a configured interval.
             * Metrics logging at each epoch, in the `training_metrics.csv` output file.
-            * Application of the configured regularizer at the end of each epoch
+            * Application of the training normalizer at the
+              beginning of each epoch.
+            * Application of the regularizer at the end of each epoch
               (see `initialize_regularizer` and `apply_regularizer`; a no-op if
               no regularizer is configured).
-            * Application of the configured normalizer at the beginning of each
-              epoch (see `initialize_normalizer` and `apply_normalizer`; a no-op
-              if no normalizer is configured, or if there is an encoder, in
-              which case the normalization is applied batchwise between the
-              encoder and the decoder step instead).
+
 
         Arguments
         ---------
@@ -790,15 +762,18 @@ class Architect(Module):
     def test(self) -> Dict[str, float | Dict[str, float]]:
         """
         Run the test procedure, evaluate the metrics on the test set and return the dictionary of the results.
-        
-        % TODO: will be changed with <https://github.com/BAUDOTlab/KGATE/pull/22>
+
+        The results are also written to `evaluation_metrics.toml` in the output directory.
 
         Returns
         -------
         
         **results** *(Dict[str, float | Dict[str, float]])*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        : Dictionary containing:
+        : - "Global_metrics": the global metric (e.g. MRR) over the whole test set.
+        : - "remaining_edges": "Global_metrics" and "Individual_metrics" (metric per edge) for the edges that are not target edges.
+        : - "target_edges": (only if target edges are configured) "Global_metrics" and "Individual_metrics" for the target edges.
+        : - "target_edges_by_frequency": reserved key, currently empty.
         
         """
         torch.cuda.empty_cache()
@@ -872,8 +847,8 @@ class Architect(Module):
         Infer missing nodes or edges, depending on the given parameters.
         
         Only two of heads, tails and edges must be given, and the other one will be inferred. For example, when inferring tails, 
-        for each couple `heads[n]` and `edges[n]`, `top_k` tails will be predicted. The values in those list must correspond to 
-        the `identity` of the metadata, by default the current identity. If there is no metadata, the node ID is used.
+        for each couple `heads[n]` and `edges[n]`, `top_k` tails will be predicted. The values in those lists must be the node IDs
+        and edge names as they appear in the knowledge graph (the keys of `knowledge_graph.node_to_index` and `knowledge_graph.edge_to_index`).
         
         Arguments
         ---------
@@ -1180,21 +1155,17 @@ class Architect(Module):
         """
         Function called by the trainer to run the training loop on a mini-batch.
 
-        % TODO: may be merged with the forward function
-
         Arguments
         ---------
         
-        **batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
-        : Tensor containing the integer key of heads, tails, edges and triplets 
-        of the edges in the current batch.
-        : Here, batch_size is batch.shape[1].
+        **batch** *(torch.Tensor, dtype: torch.long, shape: [batch_size, 4])* 
+        : Tensor containing, for each triplet of the batch, the integer key of the head, tail, edge and triplet type.
 
         Returns
         -------
         
         **loss_value** *(torch.types.Number)*
-        : Training loss value of the model for this epoch.
+        : Training loss value of the model for this batch.
         
         """
         batch = batch.to(self.device).T
@@ -1228,20 +1199,20 @@ class Architect(Module):
 
         Arguments
         ---------
-        positive_triplets_batch: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
-            Tensor containing the integer key of true sampled triplets of
-            the edges in the current batch.
-        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the integer key of negatively sampled triplets of
-            the edges in the current batch.
-        node_embeddings: torch.Tensor, dtype: torch.long, shape: [batch_size]
-            Mask tensor corresponding to a split of the knowledge graph
+        positive_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+            Tensor containing the integer keys (head, tail, edge, triplet type) of the true triplets
+            in the current batch.
+        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size * negative_triplet_count]
+            Tensor containing the integer keys of the negatively sampled triplets of the same batch.
+        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, embedding_dimensions]
+            Embeddings of the nodes of the knowledge graph.
 
         Returns
         -------
-        positive_score: torch.Tensor, dtype: torch.float, shape: [4, batch_size]
-            Tensor containing the score of each true triplet within the batch.
-        negative_score: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+        positive_score: torch.Tensor, dtype: torch.float, shape: [batch_size * negative_triplet_count]
+            Tensor containing the score of each true triplet within the batch, repeated to match
+            the number of negative samples.
+        negative_score: torch.Tensor, dtype: torch.float, shape: [batch_size * negative_triplet_count]
             Tensor containing the score of each negative triplet within the batch.
         
         """
@@ -1266,13 +1237,9 @@ class Architect(Module):
         If the encoder is not a GNN, directly runs and update the embeddings. 
         Otherwise, samples a subgraph from the given batch nodes and runs the encoder before.
         
-        If a normalizer is configured and there is an encoder, the normalizer is
-        applied between the encoder and the decoder step, batchwise: its
-        function is applied to the (encoder output) head and tail embeddings
-        of the current batch, and the new embeddings are scored by the decoder.
-        When there is no encoder, the normalization is applied once over the
-        whole graph at the beginning of each epoch instead (see
-        `apply_normalizer`), so this step is skipped here.
+        The embeddings are normalized at this step if it is required by the configuration
+        If there is an encoder, the normalization is done after the encoder pass but before
+        the decoder pass.
         
         Arguments
         ---------
@@ -1285,8 +1252,8 @@ class Architect(Module):
             * triplet_index
         : Here, batch_size is batch.shape[1].
         
-        **node_embeddings** *(torch.Tensor, dtype: torch.long, shape: [node_count])*
-        : Embedding tensor corresponding to the nodes of a split of the knowledge graph
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, embedding_dimensions])* 
+        : Embeddings of the nodes of the knowledge graph.
         
         Returns
         -------
@@ -1329,8 +1296,13 @@ class Architect(Module):
 
         Returns
         -------
-        embedding_dictionnary: Dict[str, Tensor]
-            Embeddings of nodes and edges, as well as decoder-specific embeddings.
+        embedding_dictionnary: Dict[str, Tensor | Dict[str, str]]
+            Dictionary containing:
+            - "nodes": the embeddings of all nodes (shape [node_count, embedding_dimensions]);
+            - "node_mapping": mapping of node indices to node identifiers;
+            - "edges": the embeddings of all edge types (shape [edge_count, edge_embedding_dimensions]);
+            - "edge_mapping": mapping of edge indices to edge names;
+            - "decoder": decoder-specific embeddings, if the decoder has any.
 
         """
         self.normalize_parameters()
@@ -1425,39 +1397,6 @@ class Architect(Module):
         
         logging.debug(f"Normalized all embeddings.")
 
-
-    def apply_normalizer(self):
-        """
-        Apply the configured normalizer to the embeddings it was given.
-
-        This is the entry point of the normalizer trainer hooks: it is called
-        at the beginning of every epoch, and before the evaluation and the
-        embedding export procedures. It is a no-op if no normalizer was
-        configured (`[model.normalizer] name = "None"`), or if
-        there is an encoder, in which case the normalization is applied
-        batchwise between the encoder and the decoder step, in
-        `scoring_function`, instead.
-
-        Without an encoder, the embeddings between the encoder and the
-        decoder are the node and edge embeddings themselves: normalizing them
-        batchwise would recompute the same whole-graph normalization on every
-        batch, so they are normalized once, over the whole graph, here, at
-        the beginning of each epoch. Note that between two epoch-start
-        normalizations the optimizer keeps updating the embeddings, so the
-        decoder may see embeddings whose norms are not exactly unit anymore:
-        this small approximation is the trade-off of not recomputing the same
-        whole-graph normalization on every batch.
-
-        The normalizer itself is initialized after the decoder in
-        `initialize_model`, and is given the set of embeddings to normalize
-        and the function to apply to them (see `initialize_normalizer`).
-        """
-        if self.normalizer is None or self.encoder is not None:
-            return
-
-        self.normalizer.apply_whole_graph()
-
-        logging.debug(f"Applied normalizer to the configured embeddings.")
 
 
     def log_metrics_to_csv(self, engine: Engine):
@@ -1555,8 +1494,8 @@ class Architect(Module):
         -------
         
         **validation_metric_value** *(float)*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        : The validation metric value (e.g. the validation MRR) computed during the last evaluation,
+        : or 0 if no evaluation has been run yet.
         
         """
         return engine.state.metrics.get("validation_metric_value", 0)
@@ -1586,8 +1525,6 @@ class Architect(Module):
                                         ) -> Tuple[float, int, Dict[str, float], float]:
         """
         Compute the metrics for each individual edge.
-
-        % TODO: must be rewritten
         
         Arguments
         ---------
@@ -1597,7 +1534,7 @@ class Architect(Module):
         Can be a subset of a full knowledge graph when run on test split.
 
         **edge_indices** *(List[str])*
-        : Indices of edges.
+        : Names of the edges for which the metrics are computed.
 
         Returns
         -------
@@ -1716,13 +1653,10 @@ class Architect(Module):
         : Wrong evaluator called.
         : The evaluator is initialized beforehand and may be incompatible with link prediction.
         : This error is raised when an evaluator incompatible with link prediction is initialized.
-        % TODO: this may be improved by resetting the evaluator or creating it on the fly, though that may be problematic on some level?
-
         Returns
         -------
         **test_mrr** (*float)*
         : The filtered MRR resulting from the evaluation on given knowledge graph.
-        % TODO: might be better to return the Prediction object altogether, and let the calling function deal with it
         
         """
         # Test MRR measure
@@ -1750,8 +1684,8 @@ class Architect(Module):
         ------
         
         **ValueError**
-        : Wrong evaluator called.
-        % TODO.detail
+        : Wrong evaluator called: this error is raised when an evaluator
+          incompatible with triplet classification is initialized.
 
         Returns
         -------
