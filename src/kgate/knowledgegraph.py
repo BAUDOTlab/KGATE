@@ -264,6 +264,7 @@ class KnowledgeGraph(Dataset):
         self.metadata = None
         if metadata is not None:
             self.add_metadata(metadata)
+            self._identity = "id" # private attribute, for more info refer to identity property
 
         if dataframe is None:
             # The mapping is done on the absolute index of nodes. However, subgraphs don't have all the nodes
@@ -294,7 +295,6 @@ class KnowledgeGraph(Dataset):
 
                 dataframe_node_types = list(set(mapping_dataframe['head_type'].unique()).union(set(mapping_dataframe['tail_type'].unique())))
                 self.node_type_to_index = {node_type: i for i, node_type in enumerate(sorted(dataframe_node_types))}
-                self._identity = "id" # private attribute, for more info refer to identity property
             else:
                 mapping_dataframe = dataframe
 
@@ -1381,9 +1381,18 @@ class KnowledgeGraph(Dataset):
         """
         Create a new KGATE KnowledgeGraph instance from the PyTorch Geometric HeteroData object.
 
-        Note
-        ----
-        This method is not implemented yet: it is a stub that returns None.
+        The conversion follows the standard PyG conventions for heterogeneous graphs:
+
+        * Each node type of the HeteroData becomes a KGATE node type.
+        * Each edge type (source_type, relation, target_type) becomes a KGATE triplet type,
+          with its `edge_index` providing the head and tail local indices of the triplets.
+        * The relation name is the KGATE edge: edge types that share the same relation name
+          (with different node types) share a single edge index, as in the dataframe-based construction.
+
+        Since PyG nodes are only identified by their local index within their node type, nodes are
+        assigned the deterministic identifier "<node_type>_<local_index>" (e.g. "A_0", "B_3").
+        Global node indices are assigned contiguously, node type by node type, in the order of
+        `hetero_data.node_types`; node types that only appear in edge types are appended afterwards.
 
         Arguments
         ---------
@@ -1394,10 +1403,110 @@ class KnowledgeGraph(Dataset):
         -------
         **KnowledgeGraph**
         : The knowledge graph as a KGATE KnowledgeGraph object.
-            
+
+        Raises
+        ------
+        **TypeError**
+        : If `hetero_data` is not a PyTorch Geometric HeteroData object.
+
+        **ValueError #1**
+        : If the HeteroData contains no node, i.e. no node type with an `x` or `num_nodes`
+          attribute and no `edge_index`.
+
+        **ValueError #2**
+        : If the HeteroData contains no edge, i.e. no edge type with a non-empty `edge_index`.
         """
-        # TODO for PyTorch Geometric compatibility
-        pass
+        if not isinstance(hetero_data, HeteroData):
+            raise TypeError(f"Expected a torch_geometric.data.HeteroData object, but got {type(hetero_data)}.")
+
+        edge_types = list(hetero_data.edge_types)
+
+        # Node types: the declared node types first, then the node types that only appear in edge types
+        node_types = list(hetero_data.node_types)
+        for source_type, _, target_type in edge_types:
+            for node_type in (source_type, target_type):
+                if node_type not in node_types:
+                    node_types.append(node_type)
+
+        # Number of nodes per node type, inferred from the node storage
+        node_counts: Dict[str, int] = {node_type: 0 for node_type in node_types}
+        for node_type in node_types:
+            store = hetero_data[node_type]
+            if len(store) > 0:
+                num_nodes = store.num_nodes
+                if num_nodes is not None:
+                    node_counts[node_type] = int(num_nodes)
+            x = store.get("x")
+            if x is not None and x.dim() >= 1:
+                node_counts[node_type] = max(node_counts[node_type], int(x.size(0)))
+
+        # Collect the non-empty edge types, extending the node counts with the referenced local indices
+        edge_data: List[Tuple[Tuple[str, str, str], Tensor]] = []
+        for source_type, relation, target_type in edge_types:
+            edge_index = hetero_data[(source_type, relation, target_type)].get("edge_index")
+            if edge_index is None or edge_index.size(1) == 0:
+                continue
+            edge_index = edge_index.long()
+            node_counts[source_type] = max(node_counts[source_type], int(edge_index[0].max()) + 1)
+            node_counts[target_type] = max(node_counts[target_type], int(edge_index[1].max()) + 1)
+            edge_data.append(((source_type, relation, target_type), edge_index))
+
+        # Global index of the first node of each node type (contiguous blocks per node type)
+        type_offsets: Dict[str, int] = {}
+        offset = 0
+        for node_type in node_types:
+            type_offsets[node_type] = offset
+            offset += node_counts[node_type]
+
+        # Node identifiers and global indices: contiguous blocks per node type
+        node_to_index: Dict[str, int] = {}
+        for node_type in node_types:
+            for local_index in range(node_counts[node_type]):
+                node_to_index[f"{node_type}_{local_index}"] = type_offsets[node_type] + local_index
+
+        if not node_to_index:
+            raise ValueError("The HeteroData object contains no node: at least one node type must have an `x` or `num_nodes` attribute, or an edge with an `edge_index`.")
+        if not edge_data:
+            raise ValueError("The HeteroData object contains no edge: at least one edge type must have a non-empty `edge_index`.")
+
+        # Edge indices: one KGATE edge per relation name
+        edge_to_index: Dict[str, int] = {}
+        for triplet_type, _ in edge_data:
+            if triplet_type[1] not in edge_to_index:
+                edge_to_index[triplet_type[1]] = len(edge_to_index)
+
+        # Build the [4, triplet_count] tensor and the list of triplet types.
+        # Note: PyG edge_index uses local indices within each node type, so they are
+        # remapped to the global node indices of the knowledge graph here.
+        triplet_types: List[Tuple[str, str, str]] = []
+        graphindices = []
+        for (source_type, relation, target_type), edge_index in edge_data:
+            edge_index_row = torch.full((edge_index.size(1),), edge_to_index[relation], dtype = torch.long, device = edge_index.device)
+            triplet_type_row = torch.full((edge_index.size(1),), len(triplet_types), dtype = torch.long, device = edge_index.device)
+            graphindices.append(torch.stack([
+                edge_index[0] + type_offsets[source_type],
+                edge_index[1] + type_offsets[target_type],
+                edge_index_row,
+                triplet_type_row
+            ], dim = 0))
+            triplet_types.append((source_type, relation, target_type))
+
+        graphindices = torch.cat(graphindices, dim = 1)
+
+        # Metadata so that node identities and types stay accessible
+        metadata = pd.DataFrame({
+            "id": list(node_to_index.keys()),
+            "type": [node_type for node_type in node_types for _ in range(node_counts[node_type])]
+        })
+
+        return cls(
+            graphindices = graphindices,
+            metadata = metadata,
+            triplet_types = triplet_types,
+            node_to_index = node_to_index,
+            edge_to_index = edge_to_index,
+            node_type_to_index = {node_type: index for index, node_type in enumerate(node_types)}
+        )
 
     @classmethod
     def from_torchkge(  cls,
@@ -1434,7 +1543,7 @@ class KnowledgeGraph(Dataset):
                             for edge
                             in torchkge_kg.rel2ix]
             
-            new_kg = KnowledgeGraph(graphindices = graphindices,
+            new_kg = cls(graphindices = graphindices,
                                     triplet_types = triplet_types,
                                     node_to_index = torchkge_kg.ent2ix,
                                     edge_to_index = torchkge_kg.rel2ix,
@@ -1445,7 +1554,7 @@ class KnowledgeGraph(Dataset):
             dataframe = torchkge_kg.get_df().rename(
                 columns={"from": "head", "to": "tail", "rel": "edge"})
 
-            new_kg = KnowledgeGraph(dataframe = dataframe,
+            new_kg = cls(dataframe = dataframe,
                                     metadata = metadata,
                                     node_to_index = torchkge_kg.ent2ix,
                                     edge_to_index = torchkge_kg.rel2ix)

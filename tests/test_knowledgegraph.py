@@ -8,6 +8,7 @@ fast and memory-light.
 import pandas as pd
 import pytest
 import torch
+from torch_geometric.data import HeteroData
 
 from kgate.knowledgegraph import KnowledgeGraph
 
@@ -58,6 +59,67 @@ class TestConstruction:
         # One node type per half of the graph
         assert len(kg.node_type_to_global["A"]) == 4
         assert len(kg.node_type_to_global["B"]) == 4
+
+    def test_from_hetero_data(self):
+        data = HeteroData()
+        data["A"].x = torch.randn(4, 8)
+        data["B"].x = torch.randn(4, 8)
+        data["A", "E1", "B"].edge_index = torch.tensor([[0, 1, 2, 3], [0, 1, 2, 3]])
+        data["B", "E2", "A"].edge_index = torch.tensor([[0, 1, 2, 3], [0, 1, 2, 3]])
+
+        kg = KnowledgeGraph.from_hetero_data(data)
+        assert kg.node_count == 8
+        assert len(kg) == 8
+        assert set(kg.node_type_to_index) == {"A", "B"}
+        assert kg.triplet_types == [("A", "E1", "B"), ("B", "E2", "A")]
+        # PyG local indices are remapped to global indices (B's nodes start at 4)
+        assert kg[0].tolist() == [0, 4, 0, 0]
+        assert kg[4].tolist() == [4, 0, 1, 1]
+        # Node identifiers are "<node_type>_<local_index>"
+        assert kg.node_to_index == {f"A_{i}": i for i in range(4)} | {f"B_{i}": 4 + i for i in range(4)}
+        # A metadata dataframe with node ids and types is attached
+        assert kg.metadata["id"].tolist() == [f"A_{i}" for i in range(4)] + [f"B_{i}" for i in range(4)]
+        assert kg.metadata["type"].tolist() == ["A"] * 4 + ["B"] * 4
+        assert kg.node_types.tolist() == [0, 0, 0, 0, 1, 1, 1, 1]
+
+    def test_from_hetero_data_node_types_from_edges_only(self):
+        # No x / num_nodes: node types and counts are inferred from the edge_index
+        data = HeteroData()
+        data["X", "r", "Y"].edge_index = torch.tensor([[0, 1], [1, 2]])
+
+        kg = KnowledgeGraph.from_hetero_data(data)
+        assert kg.node_count == 5  # X: 2 nodes, Y: 3 nodes
+        assert set(kg.node_type_to_index) == {"X", "Y"}
+        assert kg[0].tolist() == [0, 3, 0, 0]  # (X_0, Y_1, r, type 0)
+        assert kg[1].tolist() == [1, 4, 0, 0]  # (X_1, Y_2, r, type 0)
+
+    def test_from_hetero_data_shared_relation_name(self):
+        # Two PyG edge types sharing a relation name map to a single KGATE edge
+        data = HeteroData()
+        data["A"].x = torch.randn(2, 4)
+        data["B"].x = torch.randn(2, 4)
+        data["C"].x = torch.randn(2, 4)
+        data["A", "knows", "B"].edge_index = torch.tensor([[0, 1], [0, 1]])
+        data["A", "knows", "C"].edge_index = torch.tensor([[1, 0], [1, 0]])
+
+        kg = KnowledgeGraph.from_hetero_data(data)
+        assert kg.edge_count == 1
+        assert kg.edge_to_index == {"knows": 0}
+        assert kg.triplet_types == [("A", "knows", "B"), ("A", "knows", "C")]
+        assert len(kg) == 4
+        assert kg.node_count == 6
+
+    def test_from_hetero_data_invalid_input(self):
+        with pytest.raises(TypeError):
+            KnowledgeGraph.from_hetero_data(pd.DataFrame())
+        # No node and no edge
+        with pytest.raises(ValueError):
+            KnowledgeGraph.from_hetero_data(HeteroData())
+        # Nodes but no edge
+        data = HeteroData()
+        data["A"].x = torch.randn(2, 4)
+        with pytest.raises(ValueError):
+            KnowledgeGraph.from_hetero_data(data)
 
     def _make_torchkge_kg(self):
         # torchkge.KnowledgeGraph expects the columns "from", "to" and "rel"
