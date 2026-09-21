@@ -1,19 +1,5 @@
 """
 Tests for kgate.inference (Inference_KG, EdgeInference, NodeInference).
-
-Known bugs (documented in fixes/inference.py.txt and exposed with
-xfail(strict=True)):
-- ``EdgeInference.evaluate`` / ``NodeInference.evaluate`` call
-  ``decoder.inference_score(...)`` with positional arguments, but every
-  decoder's ``inference_score`` is keyword-only -> TypeError.
-- The encoder branches of both methods are broken independently:
-  ``encoder.n_layers`` (should be ``layer_count``),
-  ``input.mapping`` (should be ``input.node_mapping``) and a positional
-  call to the keyword-only ``KnowledgeGraph.get_encoder_input``.
-- ``EdgeInference.evaluate`` also ends with a two-argument index on a
-  2D scores tensor: ``scores[i * batch_size, (i + 1) * batch_size]``.
-- ``NodeInference.evaluate`` allocates ``scores`` as an integer tensor
-  (``torch.empty(...).long()``), silently truncating float scores.
 """
 
 import pytest
@@ -21,7 +7,17 @@ import torch
 import torch.nn as nn
 
 from kgate.decoders import TransE
+from kgate.encoders import GATEncoder
 from kgate.inference import EdgeInference, Inference_KG, NodeInference
+
+
+def _make_encoder():
+    return GATEncoder(
+        edge_types=[("Node", "E1", "Node"), ("Node", "E2", "Node")],
+        embedding_dimensions=4,
+        gat_layer_count=2,
+        device="cpu",
+    )
 
 
 class TestInferenceKG:
@@ -52,17 +48,6 @@ class TestEdgeInference:
         inference = EdgeInference(kg)
         assert inference.kg is kg
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`EdgeInference.evaluate` calls `decoder.inference_score` "
-               "with positional arguments although it is keyword-only "
-               "(TypeError); the encoder branch also uses `encoder.n_layers` "
-               "instead of `layer_count`, `input.mapping` instead of "
-               "`input.node_mapping`, calls the keyword-only "
-               "`get_encoder_input` positionally and finally indexes the "
-               "2D scores tensor with two scalar indices. "
-               "See fixes/inference.py.txt.",
-    )
     def test_evaluate_without_encoder(self, kg):
         node_embeddings = nn.ParameterList([nn.Parameter(torch.randn(8, 4))])
         edge_embeddings = nn.Parameter(torch.randn(2, 4))
@@ -79,23 +64,85 @@ class TestEdgeInference:
             verbose=False,
         )
         assert predictions.shape == (2, 2)
+        assert scores.shape == (2, 2)
+        assert predictions.dtype == torch.long
+        assert scores.dtype == torch.float
+        # Valid edge indices, ranked from best to worst score
+        assert ((predictions >= 0) & (predictions < kg.edge_count)).all()
+        assert (scores[:, 0] >= scores[:, 1]).all()
+
+    def test_evaluate_with_encoder(self, kg):
+        torch.manual_seed(0)
+        encoder = _make_encoder()
+        node_embeddings = nn.ParameterList([nn.Parameter(torch.randn(8, 4))])
+        edge_embeddings = nn.Parameter(torch.randn(2, 4))
+        # The encoder path reads the embeddings from the knowledge graph itself.
+        kg.embeddings = node_embeddings, edge_embeddings
+        inference = EdgeInference(kg)
+        predictions, scores = inference.evaluate(
+            torch.tensor([0, 1]),
+            torch.tensor([2, 3]),
+            top_k=2,
+            batch_size=2,
+            encoder=encoder,
+            decoder=TransE(),
+            node_embeddings=node_embeddings,
+            edge_embeddings=edge_embeddings,
+            verbose=False,
+        )
+        assert predictions.shape == (2, 2)
+        assert scores.shape == (2, 2)
+        assert ((predictions >= 0) & (predictions < kg.edge_count)).all()
+        assert (scores[:, 0] >= scores[:, 1]).all()
+
+    def test_evaluate_hetero_kg(self, hetero_kg):
+        # Two node types: the node embeddings must be flattened over all types,
+        # so that global node indices and the node candidates work.
+        kg = hetero_kg
+        kg.generate_masks(split_proportions=(0.5, 0.25, 0.25), sizes=(4, 2, 2))
+        node_embeddings = nn.ParameterList(
+            nn.Parameter(torch.randn(len(ids), 4)) for ids in kg.node_type_to_global.values()
+        )
+        edge_embeddings = nn.Parameter(torch.randn(kg.edge_count, 4))
+        inference = EdgeInference(kg)
+        predictions, scores = inference.evaluate(
+            torch.tensor([0, 1]),
+            torch.tensor([4, 5]),
+            top_k=2,
+            batch_size=2,
+            encoder=None,
+            decoder=TransE(),
+            node_embeddings=node_embeddings,
+            edge_embeddings=edge_embeddings,
+            verbose=False,
+        )
+        assert predictions.shape == (2, 2)
+        assert scores.shape == (2, 2)
+        assert ((predictions >= 0) & (predictions < kg.edge_count)).all()
+
+    def test_top_k_larger_than_edge_count_raises(self, kg):
+        node_embeddings = nn.ParameterList([nn.Parameter(torch.randn(8, 4))])
+        edge_embeddings = nn.Parameter(torch.randn(2, 4))
+        inference = EdgeInference(kg)
+        with pytest.raises(AssertionError, match="top_k"):
+            inference.evaluate(
+                torch.tensor([0, 1]),
+                torch.tensor([2, 3]),
+                top_k=3,
+                batch_size=2,
+                encoder=None,
+                decoder=TransE(),
+                node_embeddings=node_embeddings,
+                edge_embeddings=edge_embeddings,
+                verbose=False,
+            )
 
 
 class TestNodeInference:
     def test_init(self, kg):
         inference = NodeInference(kg)
-        assert inference.kg is kg
+        assert inference.knowledge_graph is kg
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`NodeInference.evaluate` calls `decoder.inference_score` "
-               "with positional arguments although it is keyword-only "
-               "(TypeError); it also stores scores in an integer tensor "
-               "(`.long()`), truncating float values, and its encoder "
-               "branch has the same `n_layers`/`mapping` bugs as "
-               "`EdgeInference.evaluate`. "
-               "See fixes/inference.py.txt.",
-    )
     def test_evaluate_missing_tail_without_encoder(self, kg):
         node_embeddings = nn.ParameterList([nn.Parameter(torch.randn(8, 4))])
         edge_embeddings = nn.Parameter(torch.randn(2, 4))
@@ -113,3 +160,77 @@ class TestNodeInference:
             verbose=False,
         )
         assert predictions.shape == (2, 2)
+        assert scores.shape == (2, 2)
+        assert predictions.dtype == torch.long
+        assert scores.dtype == torch.float
+        # Valid node indices, ranked from best to worst score
+        assert ((predictions >= 0) & (predictions < kg.node_count)).all()
+        assert (scores[:, 0] >= scores[:, 1]).all()
+
+    def test_evaluate_missing_head_without_encoder(self, kg):
+        node_embeddings = nn.ParameterList([nn.Parameter(torch.randn(8, 4))])
+        edge_embeddings = nn.Parameter(torch.randn(2, 4))
+        inference = NodeInference(kg)
+        predictions, scores = inference.evaluate(
+            torch.tensor([2, 3]),
+            torch.tensor([0, 1]),
+            top_k=2,
+            missing_triplet_part="head",
+            batch_size=2,
+            encoder=None,
+            decoder=TransE(),
+            node_embeddings=node_embeddings,
+            edge_embeddings=edge_embeddings,
+            verbose=False,
+        )
+        assert predictions.shape == (2, 2)
+        assert scores.shape == (2, 2)
+        assert ((predictions >= 0) & (predictions < kg.node_count)).all()
+        assert (scores[:, 0] >= scores[:, 1]).all()
+
+    def test_evaluate_with_encoder(self, kg):
+        torch.manual_seed(0)
+        encoder = _make_encoder()
+        node_embeddings = nn.ParameterList([nn.Parameter(torch.randn(8, 4))])
+        edge_embeddings = nn.Parameter(torch.randn(2, 4))
+        # The encoder path reads the embeddings from the knowledge graph itself.
+        kg.embeddings = node_embeddings, edge_embeddings
+        inference = NodeInference(kg)
+        predictions, scores = inference.evaluate(
+            torch.tensor([0, 1]),
+            torch.tensor([0, 1]),
+            top_k=2,
+            missing_triplet_part="tail",
+            batch_size=2,
+            encoder=encoder,
+            decoder=TransE(),
+            node_embeddings=node_embeddings,
+            edge_embeddings=edge_embeddings,
+            verbose=False,
+        )
+        assert predictions.shape == (2, 2)
+        assert scores.shape == (2, 2)
+        assert ((predictions >= 0) & (predictions < kg.node_count)).all()
+        assert (scores[:, 0] >= scores[:, 1]).all()
+
+    def test_last_smaller_batch(self, kg):
+        # A batch count that doesn't divide the input length: the last batch
+        # is smaller and must still be written at the correct position.
+        node_embeddings = nn.ParameterList([nn.Parameter(torch.randn(8, 4))])
+        edge_embeddings = nn.Parameter(torch.randn(2, 4))
+        inference = NodeInference(kg)
+        predictions, scores = inference.evaluate(
+            torch.tensor([0, 1, 2, 3, 4]),
+            torch.tensor([0, 1, 0, 1, 0]),
+            top_k=2,
+            missing_triplet_part="tail",
+            batch_size=2,
+            encoder=None,
+            decoder=TransE(),
+            node_embeddings=node_embeddings,
+            edge_embeddings=edge_embeddings,
+            verbose=False,
+        )
+        assert predictions.shape == (5, 2)
+        assert scores.shape == (5, 2)
+        assert torch.isfinite(scores).all()
