@@ -61,6 +61,108 @@ class TestPredictions:
         assert "MRR" in message
         assert "Mean Rank" in message
 
+    def test_median_rank(self):
+        predictions = Predictions(
+            torch.tensor([1., 3., 5., 7.]),
+            torch.tensor([1., 2., 3., 4.]),
+        )
+        median, filtered_median = predictions.median_rank
+        # torch.median picks the lower of the two middle values for even counts:
+        # ranks [1,3,5,7] -> 3; [1,2,3,4] -> 2
+        assert median == pytest.approx(3.0)
+        assert filtered_median == pytest.approx(2.0)
+
+    def test_mean_reciprocal_rank_at_k(self):
+        # ranks: 1, 2, 4, 8  ->  for k=3: only 1 and 2 count (1/1, 1/2)
+        # filtered: 1, 1, 2, 8 -> for k=3: 1, 1, 1/2 count
+        predictions = Predictions(
+            torch.tensor([1, 2, 4, 8]),
+            torch.tensor([1, 1, 2, 8]),
+        )
+        mrr3, filtered_mrr3 = predictions.mean_reciprocal_rank_at_k(3)
+        assert mrr3 == pytest.approx((1 + 0.5 + 0 + 0) / 4)
+        assert filtered_mrr3 == pytest.approx((1 + 1 + 0.5 + 0) / 4)
+        # For k >= max rank, MRR@k equals plain MRR
+        mrr10, filtered_mrr10 = predictions.mean_reciprocal_rank_at_k(10)
+        assert mrr10 == pytest.approx(predictions.mrr[0])
+        assert filtered_mrr10 == pytest.approx(predictions.mrr[1])
+
+    def test_score_gap(self):
+        predictions = Predictions(
+            torch.tensor([1, 2, 3]),
+            torch.tensor([1, 1, 2]),
+        )
+        true_scores = torch.tensor([10.0, 20.0, 30.0])
+        best_other_unfiltered = torch.tensor([9.0, 8.0, 25.0])
+        best_other_filtered = torch.tensor([5.0, 6.0, 20.0])
+        gap, filtered_gap = predictions.score_gap(
+            true_scores, best_other_unfiltered, best_other_filtered)
+        assert gap == pytest.approx(((10 - 9) + (20 - 8) + (30 - 25)) / 3)
+        assert filtered_gap == pytest.approx(((10 - 5) + (20 - 6) + (30 - 20)) / 3)
+
+    def test_score_gap_shape_mismatch(self):
+        predictions = Predictions(
+            torch.tensor([1, 2, 3]),
+            torch.tensor([1, 1, 2]),
+        )
+        with pytest.raises(ValueError):
+            predictions.score_gap(
+                torch.tensor([1.0, 2.0, 3.0]),
+                torch.tensor([1.0]),
+                torch.tensor([1.0, 2.0, 3.0]),
+            )
+
+    def test_relative_rank(self):
+        predictions = Predictions(
+            torch.tensor([1, 2, 4]),
+            torch.tensor([1, 1, 2]),
+        )
+        rel, filtered_rel = predictions.relative_rank(10)
+        assert rel == pytest.approx((0.1 + 0.2 + 0.4) / 3)
+        assert filtered_rel == pytest.approx((0.1 + 0.1 + 0.2) / 3)
+        with pytest.raises(ValueError):
+            predictions.relative_rank(0)
+
+    def test_to_dict(self):
+        predictions = Predictions(
+            torch.tensor([1, 2, 4]),
+            torch.tensor([1, 1, 2]),
+        )
+        true_scores = torch.tensor([1.0, 2.0, 3.0])
+        best_other_u = torch.tensor([0.5, 1.0, 2.0])
+        best_other_f = torch.tensor([0.2, 0.8, 1.5])
+        d = predictions.to_dict(
+            k_values=(1, 3, 10),
+            true_scores=true_scores,
+            best_other_unfiltered=best_other_u,
+            best_other_filtered=best_other_f,
+            candidate_count=10,
+        )
+        # All expected keys present
+        for key in ("mean_rank", "filtered_mean_rank", "median_rank",
+                    "mrr", "filtered_mrr", "hit_at_1", "hit_at_3", "hit_at_10",
+                    "mrr_at_1", "mrr_at_3", "mrr_at_10",
+                    "score_gap", "filtered_score_gap",
+                    "relative_rank", "filtered_relative_rank"):
+            assert key in d, f"missing key {key}"
+        # Values are plain floats
+        assert all(isinstance(v, float) for v in d.values())
+        # spot-check a couple of values
+        assert d["mrr"] == pytest.approx(predictions.mrr[0])
+        assert d["relative_rank"] == pytest.approx(predictions.relative_rank(10)[0])
+
+    def test_to_dict_without_optional_metrics(self):
+        predictions = Predictions(
+            torch.tensor([1, 2, 4]),
+            torch.tensor([1, 1, 2]),
+        )
+        d = predictions.to_dict()
+        assert "mean_rank" in d
+        assert "mrr" in d
+        # optional metrics should be absent
+        assert "score_gap" not in d
+        assert "relative_rank" not in d
+
 
 class TestLinkPredictionEvaluator:
     def test_init(self, kg):

@@ -42,7 +42,9 @@ class Predictions:
         Object holding the predictions output of an Evaluator.
 
         Predictions are stored as rank tensors and can be accessed through 
-        builtin methods to get specific metrics (e.g. `mrr`, `mean_rank`, `hit_at_k`).
+        builtin methods to get specific metrics (e.g. `mrr`, `mean_rank`, `hit_at_k`,
+        `median_rank`, `mean_reciprocal_rank_at_k`, `score_gap`, `relative_rank`),
+        or flattened at once into a dictionary with `to_dict`.
 
         Arguments
         ---------
@@ -68,6 +70,28 @@ class Predictions:
 
         self.true_predictions_rank = true_predictions_rank
         self.filtered_true_predictions_rank = filtered_true_predictions_rank
+
+
+    @staticmethod
+    def _mean_reciprocal_rank(rank: Tensor) -> float:
+        """
+        Mean reciprocal rank of a 1-D rank tensor (1-indexed ranks),
+        computed with a single tensor mean (no intermediate `.item()` calls).
+
+        Arguments
+        ---------
+
+        **rank** *(torch.Tensor, dtype: torch.long or torch.float, shape: [triplet_count])*
+        : Ranks of the true predictions.
+
+        Returns
+        -------
+
+        **mrr** *(float)*
+        : Mean of the reciprocals of the ranks. Perfect score is 1.
+
+        """
+        return (rank.float() ** (-1)).mean().item()
     
     
     def __str__(self):
@@ -159,10 +183,253 @@ class Predictions:
         : True triplets that are not the target of the prediction are filtered out.
         
         """
-        mrr = (self.true_predictions_rank.float()**(-1)).mean().item()
-        filtered_mrr = (self.filtered_true_predictions_rank.float()**(-1)).mean().item()
+        mrr = self._mean_reciprocal_rank(self.true_predictions_rank)
+        filtered_mrr = self._mean_reciprocal_rank(self.filtered_true_predictions_rank)
 
         return mrr, filtered_mrr
+
+
+    @property
+    def median_rank(self) -> Tuple[float, float]:
+        """
+        Median rank of the true predictions, both unfiltered and filtered.
+
+        The median rank is a robust summary of the rank distribution: unlike
+        the mean rank, it is not skewed by a small number of very badly ranked
+        triplets.
+
+        Returns
+        -------
+
+        **median_rank** *(float)*
+        : Median rank of the predictions
+
+        **filtered_median_rank** *(float)*
+        : Median rank filtered to remove predictions of true triplets.
+
+        """
+        median_rank = self.true_predictions_rank.float().median().item()
+        filtered_median_rank = self.filtered_true_predictions_rank.float().median().item()
+
+        return median_rank, filtered_median_rank
+
+
+    def mean_reciprocal_rank_at_k(self,
+                                  k: int = 10
+                                  ) -> Tuple[float, float]:
+        """
+        Mean reciprocal rank at k (MRR@k), both unfiltered and filtered.
+
+        MRR@k is the mean of 1/rank when the true prediction lies within the
+        top-k candidates, and 0 otherwise.
+
+        Arguments
+        ---------
+
+        **k** *(int, default to 10)*
+        : Maximum rank taken into account; true predictions ranked beyond k
+        contribute 0 to the mean.
+
+        Returns
+        -------
+
+        **mrr_at_k** *(float)*
+        : Mean of the reciprocal ranks of the true predictions, where true
+        predictions ranked beyond k contribute 0.
+
+        **filtered_mrr_at_k** *(float)*
+        : Same, when ranking among filtered triplets.
+        : True triplets that are not the target of the prediction are filtered out.
+
+        """
+        def _mrr_at_k(rank: Tensor) -> float:
+            reciprocal = torch.where(rank <= k, rank.float() ** (-1), torch.zeros_like(rank.float()))
+            return reciprocal.mean().item()
+
+        mrr_at_k = _mrr_at_k(self.true_predictions_rank)
+        filtered_mrr_at_k = _mrr_at_k(self.filtered_true_predictions_rank)
+
+        return mrr_at_k, filtered_mrr_at_k
+
+
+    def score_gap(self,
+                  true_scores: Tensor,
+                  best_other_unfiltered: Tensor,
+                  best_other_filtered: Tensor
+                  ) -> Tuple[float, float]:
+        """
+        Mean score gap between the true prediction and the best-ranked
+        incorrect candidate, both unfiltered and filtered.
+
+        For each evaluated triplet, the gap is
+
+            ``gap = score(true) - max score among all other candidates``
+
+        (unfiltered: other candidates include true triplets that are not the
+        prediction target; filtered: those are masked out before taking the
+        maximum). A larger positive gap means the model is more confident in the true
+        triplet relative to the best wrong one.
+
+        Arguments
+        ---------
+
+        **true_scores** *(torch.Tensor, dtype: torch.float, shape: [triplet_count])*
+        : Score of the true triplet for each evaluated triplet.
+
+        **best_other_unfiltered** *(torch.Tensor, dtype: torch.float, shape: [triplet_count])*
+        : Score of the highest-scoring *other* candidate triplet for each
+        evaluated triplet (unfiltered and filtered, in that order)
+
+        Returns
+        -------
+
+        **score_gap** *(float)*
+        : Mean of the (true - best incorrect candidate) score gaps,
+        : without filtering of true non-target triplets.
+
+        **filtered_score_gap** *(float)*
+        : Mean of the (true - best incorrect candidate) score gaps,
+        : where the maximum is taken after filtering out true non-target triplets.
+
+        """
+        true_scores = true_scores.detach().float()
+        best_other_unfiltered = best_other_unfiltered.detach().float()
+        best_other_filtered = best_other_filtered.detach().float()
+
+        if best_other_unfiltered.shape[0] != true_scores.shape[0] or best_other_filtered.shape[0] != true_scores.shape[0]:
+            raise ValueError(f"`true_scores` ({true_scores.shape[0]}), `best_other_unfiltered` ({best_other_unfiltered.shape[0]}) and `best_other_filtered` ({best_other_filtered.shape[0]}) must all have the same number of triplets.")
+
+        score_gap = (true_scores - best_other_unfiltered).mean().item()
+        filtered_score_gap = (true_scores - best_other_filtered).mean().item()
+
+        return score_gap, filtered_score_gap
+
+
+    def relative_rank(self,
+                      candidate_count: int
+                      ) -> Tuple[float, float]:
+        """
+        Relative rank: ranks normalized by the number of candidates.
+
+        The relative rank of a true prediction is
+
+            ``rank / candidate_count``
+
+        in ``[1/candidate_count, 1]`` (1-indexed ranks), so it is comparable
+        across datasets of very different size, while raw ranks (mean rank, median
+        rank) are not. It is the standard normalization used to compare
+        KGE results across benchmarks, and it is also the natural companion
+        of `hit_at_k` when k is expressed as a fraction of the candidate pool.
+
+        Arguments
+        ---------
+
+        **candidate_count** *(int)*
+        : Number of candidates each true prediction was ranked among
+        : (the node count for head/tail link prediction).
+
+        Raises
+        ------
+
+        **ValueError**
+        : If `candidate_count` is less than 1.
+
+        Returns
+        -------
+
+        **relative_rank** *(float)*
+        : Mean of `true_predictions_rank / candidate_count`.
+
+        **filtered_relative_rank** *(float)*
+        : Mean of `filtered_true_predictions_rank / candidate_count`.
+
+        """
+        if candidate_count < 1:
+            raise ValueError(f"`candidate_count` must be >= 1, got {candidate_count}.")
+
+        relative_rank = (self.true_predictions_rank.float() / candidate_count).mean().item()
+        filtered_relative_rank = (self.filtered_true_predictions_rank.float() / candidate_count).mean().item()
+
+        return relative_rank, filtered_relative_rank
+
+
+    def to_dict(self,
+                k_values: Tuple[int, ...] = (1, 3, 10),
+                true_scores: Tensor | None = None,
+                best_other_unfiltered: Tensor | None = None,
+                best_other_filtered: Tensor | None = None,
+                candidate_count: int | None = None
+                ) -> Dict[str, float]:
+        """
+        Flatten all metrics of this `Predictions` object into a single
+        dictionary.
+
+        Optional metrics (`score_gap`, `relative_rank`) are only included
+        when their extra arguments are given.
+
+        Arguments
+        ---------
+
+        **k_values** *(Tuple[int, ...], default to (1, 3, 10))*
+        : The k values used for `hit_at_k` and `mean_reciprocal_rank_at_k`.
+
+        **true_scores** *(torch.Tensor, optional)*
+        : If given (with `best_other_unfiltered` and `best_other_filtered`),
+        : include the `score_gap` metrics. See `score_gap` for the expected shape.
+
+        **best_other_unfiltered** *(torch.Tensor, optional)*
+        : If given (with `true_scores`), include the `score_gap` metrics.
+        : See `score_gap` for the expected shape.
+
+        **best_other_filtered** *(torch.Tensor, optional)*
+        : If given (with `true_scores`), include the `score_gap` metrics.
+        : See `score_gap` for the expected shape.
+
+        **candidate_count** *(int, optional)*
+        : If given, include the `relative_rank` metrics.
+        : See `relative_rank` for the expected meaning.
+
+        Returns
+        -------
+
+        **metrics** *(Dict[str, float])*
+        : Dictionary of metric names to values.
+
+        """
+        metrics: Dict[str, float] = {}
+
+        mean_rank, filtered_mean_rank = self.mean_rank
+        metrics["mean_rank"] = mean_rank
+        metrics["filtered_mean_rank"] = filtered_mean_rank
+
+        median_rank, filtered_median_rank = self.median_rank
+        metrics["median_rank"] = median_rank
+        metrics["filtered_median_rank"] = filtered_median_rank
+
+        mrr, filtered_mrr = self.mrr
+        metrics["mrr"] = mrr
+        metrics["filtered_mrr"] = filtered_mrr
+
+        for k in k_values:
+            hit, filtered_hit = self.hit_at_k(k)
+            metrics[f"hit_at_{k}"] = hit
+            metrics[f"filtered_hit_at_{k}"] = filtered_hit
+
+            mrr_at_k, filtered_mrr_at_k = self.mean_reciprocal_rank_at_k(k)
+            metrics[f"mrr_at_{k}"] = mrr_at_k
+            metrics[f"filtered_mrr_at_{k}"] = filtered_mrr_at_k
+
+        if (true_scores is not None and best_other_unfiltered is not None and best_other_filtered is not None):
+            score_gap, filtered_score_gap = self.score_gap(true_scores, best_other_unfiltered, best_other_filtered)
+            metrics["score_gap"] = score_gap
+            metrics["filtered_score_gap"] = filtered_score_gap
+
+        if candidate_count is not None:
+            relative_rank, filtered_relative_rank = self.relative_rank(candidate_count)
+            metrics["relative_rank"] = relative_rank
+            metrics["filtered_relative_rank"] = filtered_relative_rank
+
+        return metrics
 
 
 
@@ -328,6 +595,14 @@ class LinkPredictionEvaluator:
         
         **tail_predictions** *(Predictions)*
         : Predictions for tails.
+
+        Notes
+        -----
+
+        The returned `Predictions` also carry `true_scores`,
+        `best_other_unfiltered` and `best_other_filtered` tensors
+        (see `Predictions.score_gap`), so the score gap metric and the
+        full `Predictions.to_dict` report are available out of the box.
         
         """
         with torch.no_grad():
@@ -341,6 +616,16 @@ class LinkPredictionEvaluator:
             self.rank_true_tails = empty(size = (len(evaluated_subset),)).long().to(device)
             self.filtered_rank_true_heads = empty(size = (len(evaluated_subset),)).long().to(device)
             self.filtered_rank_true_tails = empty(size = (len(evaluated_subset),)).long().to(device)
+
+            # Per-triplet scores of the true prediction and of the best
+            # (incorrect) other candidate, for the `score_gap` metric of
+            # `Predictions` (see `Predictions.score_gap` for the convention).
+            self.true_score_heads = empty(size = (len(evaluated_subset),), dtype = torch.float).to(device)
+            self.true_score_tails = empty(size = (len(evaluated_subset),), dtype = torch.float).to(device)
+            self.best_other_score_heads_unfiltered = empty(size = (len(evaluated_subset),), dtype = torch.float).to(device)
+            self.best_other_score_heads_filtered = empty(size = (len(evaluated_subset),), dtype = torch.float).to(device)
+            self.best_other_score_tails_unfiltered = empty(size = (len(evaluated_subset),), dtype = torch.float).to(device)
+            self.best_other_score_tails_filtered = empty(size = (len(evaluated_subset),), dtype = torch.float).to(device)
 
             dataloader = DataLoader(evaluated_subset, batch_size = batch_size)
             if decoder is not None and hasattr(decoder,"embedding_spaces"):
@@ -387,6 +672,17 @@ class LinkPredictionEvaluator:
                 self.rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(scores, tail_index).detach()
                 self.filtered_rank_true_tails[i * batch_size: (i + 1) * batch_size] = get_rank(filtered_scores, tail_index).detach()
 
+                # Score gap: true score minus best other (unfiltered) candidate
+                true_scores_batch = scores[torch.arange(batch_size, device = device), tail_index].detach()
+                masked_scores = scores.clone()
+                masked_scores[torch.arange(batch_size, device = device), tail_index] = - float('Inf')
+                top_other_scores = masked_scores.max(dim = 1).values.detach()
+                batch_start = i * batch_size
+                batch_end = (i + 1) * batch_size
+                self.true_score_tails[batch_start: batch_end] = true_scores_batch
+                self.best_other_score_tails_unfiltered[batch_start: batch_end] = top_other_scores
+                self.best_other_score_tails_filtered[batch_start: batch_end] = filtered_scores.max(dim = 1).values.detach()
+
                 scores = decoder.inference_score(
                     head_embeddings = candidates,
                     tail_embeddings = tail_embeddings,
@@ -402,10 +698,28 @@ class LinkPredictionEvaluator:
                 self.rank_true_heads[i * batch_size: (i + 1) * batch_size] = get_rank(scores, head_index).detach()
                 self.filtered_rank_true_heads[i * batch_size: (i + 1) * batch_size] = get_rank(filtered_scores, head_index).detach()
 
+                # Score gap: true score minus best other (unfiltered) candidate
+                true_scores_batch = scores[torch.arange(batch_size, device = device), head_index].detach()
+                masked_scores = scores.clone()
+                masked_scores[torch.arange(batch_size, device = device), head_index] = - float('Inf')
+                top_other_scores = masked_scores.max(dim = 1).values.detach()
+                self.true_score_heads[batch_start: batch_end] = true_scores_batch
+                self.best_other_score_heads_unfiltered[batch_start: batch_end] = top_other_scores
+                self.best_other_score_heads_filtered[batch_start: batch_end] = filtered_scores.max(dim = 1).values.detach()
+
             self.evaluated = True
 
             head_predictions = Predictions(self.rank_true_heads.cpu(), self.filtered_rank_true_heads.cpu())
             tail_predictions = Predictions(self.rank_true_tails.cpu(), self.filtered_rank_true_tails.cpu())
+
+            # Attach the per-triplet scores so that `Predictions.score_gap`
+            # and `Predictions.to_dict` can report the confidence margin.
+            head_predictions.true_scores = self.true_score_heads.cpu()
+            head_predictions.best_other_unfiltered = self.best_other_score_heads_unfiltered.cpu()
+            head_predictions.best_other_filtered = self.best_other_score_heads_filtered.cpu()
+            tail_predictions.true_scores = self.true_score_tails.cpu()
+            tail_predictions.best_other_unfiltered = self.best_other_score_tails_unfiltered.cpu()
+            tail_predictions.best_other_filtered = self.best_other_score_tails_filtered.cpu()
 
             return head_predictions, tail_predictions
 
