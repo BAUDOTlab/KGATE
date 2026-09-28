@@ -1,14 +1,9 @@
 """
 Tests for kgate.evaluators.
 
-`Predictions` and `LinkPredictionEvaluator` are fully tested.
-`TripletClassificationEvaluator` is broken in several ways (boolean
-`device`, undefined `self.is_cuda`, nonexistent `corrupt_kg` method,
-Subset passed where a KnowledgeGraph is expected). These bugs are
-exposed with xfail(strict=True) and documented in fixes/evaluators.txt.
+`Predictions`, `LinkPredictionEvaluator` and `TripletClassificationEvaluator`
+are fully tested.
 """
-
-import types
 
 import pytest
 import torch
@@ -21,6 +16,7 @@ from kgate.evaluators import (
     Predictions,
     LinkPredictionEvaluator,
     TripletClassificationEvaluator,
+    TripletClassificationResults,
 )
 from kgate.samplers import PositionalNegativeSampler
 
@@ -239,61 +235,179 @@ class TestLinkPredictionEvaluator:
         assert (evaluator.filtered_rank_true_heads <= evaluator.rank_true_heads).all()
 
 
+class TestTripletClassificationResults:
+    def _make(self, pc=None, pi=None, nc=None, ni=None, n=4):
+        return TripletClassificationResults(
+            positive_correct=pc if pc is not None else torch.tensor([True, True, True, True]),
+            positive_incorrect=pi if pi is not None else torch.tensor([False, False, False, False]),
+            negative_correct=nc if nc is not None else torch.tensor([True, True, False, False]),
+            negative_incorrect=ni if ni is not None else torch.tensor([False, False, True, True]),
+        )
+
+    def test_perfect_classification(self):
+        r = self._make(
+            pc=torch.tensor([True, True, True, True]),
+            pi=torch.tensor([False, False, False, False]),
+            nc=torch.tensor([True, True, True, True]),
+            ni=torch.tensor([False, False, False, False]),
+        )
+        assert r.accuracy == pytest.approx(1.0)
+        assert r.precision == pytest.approx(1.0)
+        assert r.recall == pytest.approx(1.0)
+        assert r.specificity == pytest.approx(1.0)
+        assert r.f1 == pytest.approx(1.0)
+        assert r.balanced_accuracy == pytest.approx(1.0)
+        assert r.false_positive_rate == pytest.approx(0.0)
+        assert r.false_negative_rate == pytest.approx(0.0)
+
+    def test_perfect_rejection(self):
+        # All rejected: 0 accepted, 0 true positives, all negative rejected
+        r = self._make(
+            pc=torch.tensor([False, False, False, False]),
+            pi=torch.tensor([True, True, True, True]),
+            nc=torch.tensor([True, True, True, True]),
+            ni=torch.tensor([False, False, False, False]),
+        )
+        assert r.recall == pytest.approx(0.0)
+        assert r.specificity == pytest.approx(1.0)
+        assert r.precision == 0.0  # no accepted
+        assert r.f1 == 0.0
+
+    def test_mixed(self):
+        # 4 pos: 3 correct, 1 incorrect
+        # 4 neg: 2 correct, 2 incorrect
+        r = self._make(
+            pc=torch.tensor([True, True, True, False]),
+            pi=torch.tensor([False, False, False, True]),
+            nc=torch.tensor([True, True, False, False]),
+            ni=torch.tensor([False, False, True, True]),
+        )
+        # accuracy = (3+2)/(4+4) = 0.625
+        assert r.accuracy == pytest.approx(0.625)
+        # precision = 3/(3+2) = 0.6
+        assert r.precision == pytest.approx(3/5)
+        # recall = 3/4
+        assert r.recall == pytest.approx(0.75)
+        # specificity = 2/4 = 0.5
+        assert r.specificity == pytest.approx(0.5)
+        # f1 = 2*(0.6*0.75)/(0.6+0.75)
+        expected_f1 = 2 * (3/5) * 0.75 / ((3/5) + 0.75)
+        assert r.f1 == pytest.approx(expected_f1)
+        # balanced accuracy = (0.75 + 0.5)/2 = 0.625
+        assert r.balanced_accuracy == pytest.approx(0.625)
+        # FPR = 1 - 0.5 = 0.5
+        assert r.false_positive_rate == pytest.approx(0.5)
+        # FNR = 1 - 0.75 = 0.25
+        assert r.false_negative_rate == pytest.approx(0.25)
+        # counts
+        assert r.positive_count == 4
+        assert r.negative_count == 4
+
+    def test_to_dict(self):
+        r = self._make()
+        d = r.to_dict()
+        for key in ("accuracy", "precision", "recall", "specificity",
+                    "f1", "balanced_accuracy", "false_positive_rate",
+                    "false_negative_rate", "positive_count", "negative_count"):
+            assert key in d
+        assert all(isinstance(v, (float, int)) for v in d.values())
+
+    def test_str(self):
+        r = self._make()
+        s = str(r)
+        assert "Accuracy" in s
+        assert "Precision" in s
+        assert "F1" in s
+
+    def test_empty(self):
+        r = TripletClassificationResults(
+            positive_correct=torch.tensor([], dtype=torch.bool),
+            positive_incorrect=torch.tensor([], dtype=torch.bool),
+            negative_correct=torch.tensor([], dtype=torch.bool),
+            negative_incorrect=torch.tensor([], dtype=torch.bool),
+        )
+        assert r.accuracy == 0.0
+        assert r.precision == 0.0
+        assert r.recall == 0.0
+        assert r.f1 == 0.0
+
+
 class TestTripletClassificationEvaluator:
     @pytest.fixture
-    def mock_architect(self):
-        return types.SimpleNamespace(device=torch.device("cpu"))
+    def tc_evaluator(self, kg):
+        """Evaluator with embeddings and a TransE decoder, no encoder."""
+        torch.manual_seed(42)
+        from conftest import add_embeddings
+        add_embeddings(kg)
+        decoder = TransE(dissimilarity_type="L2")
+        return TripletClassificationEvaluator(
+            knowledge_graph=kg,
+            decoder=decoder,
+        )
 
-    def test_init(self, kg, mock_architect):
-        evaluator = TripletClassificationEvaluator(mock_architect, kg)
-        assert evaluator.evaluated is False
-        assert evaluator.thresholds is None
-        assert isinstance(evaluator.sampler, PositionalNegativeSampler)
+    def test_init(self, tc_evaluator, kg):
+        assert tc_evaluator.evaluated is False
+        assert tc_evaluator.thresholds is None
+        assert isinstance(tc_evaluator.sampler, PositionalNegativeSampler)
+        assert tc_evaluator.device == torch.device("cpu")
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`self.device` is set to the boolean "
-               "`self.architect.device.type == 'cuda'` instead of the device "
-               "itself. See fixes/evaluators.txt.",
-    )
-    def test_init_device_attribute(self, kg, mock_architect):
-        evaluator = TripletClassificationEvaluator(mock_architect, kg)
-        assert evaluator.device == mock_architect.device
+    def test_init_without_decoder(self, kg):
+        ev = TripletClassificationEvaluator(knowledge_graph=kg)
+        assert ev.decoder is None
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`self.is_cuda` is never defined (AttributeError) in "
-               "`get_scores`. See fixes/evaluators.txt.",
-    )
-    def test_get_scores(self, kg, mock_architect):
-        evaluator = TripletClassificationEvaluator(mock_architect, kg)
+    def test_reset(self, tc_evaluator):
+        tc_evaluator.evaluated = True
+        tc_evaluator._cached_node_embeddings = torch.zeros(1, 4)
+        tc_evaluator.reset()
+        assert tc_evaluator.evaluated is False
+        assert tc_evaluator._cached_node_embeddings is None
+
+    def test_evaluate_computes_thresholds(self, tc_evaluator, kg):
+        kg.generate_masks(split_proportions=(0.5, 0.25, 0.25), sizes=(8, 4, 4))
+        validation_subset = Subset(kg, kg.validation_mask.nonzero(as_tuple=True)[0])
+        tc_evaluator.evaluate(batch_size=2, knowledge_graph_subset=validation_subset)
+        assert tc_evaluator.evaluated is True
+        assert tc_evaluator.thresholds is not None
+        assert tc_evaluator.thresholds.shape == (kg.edge_count,)
+
+    def test_accuracy_before_evaluate_raises(self, tc_evaluator, kg):
+        subset = Subset(kg, list(range(4)))
+        with pytest.raises(RuntimeError, match="has not been evaluated"):
+            tc_evaluator.accuracy(batch_size=2, kg_to_evaluate=subset)
+
+    def test_accuracy_returns_results(self, tc_evaluator, kg):
+        kg.generate_masks(split_proportions=(0.5, 0.25, 0.25), sizes=(8, 4, 4))
+        validation_subset = Subset(kg, kg.validation_mask.nonzero(as_tuple=True)[0])
+        test_subset = Subset(kg, kg.test_mask.nonzero(as_tuple=True)[0])
+        tc_evaluator.evaluate(batch_size=2, knowledge_graph_subset=validation_subset)
+        results = tc_evaluator.accuracy(batch_size=2, kg_to_evaluate=test_subset)
+        assert isinstance(results, TripletClassificationResults)
+        # All metrics in valid range
+        assert 0.0 <= results.accuracy <= 1.0
+        assert 0.0 <= results.precision <= 1.0
+        assert 0.0 <= results.recall <= 1.0
+        assert 0.0 <= results.specificity <= 1.0
+        assert 0.0 <= results.f1 <= 1.0
+        # Consistency: F1 = 2*P*R/(P+R) when P+R > 0
+        if results.precision + results.recall > 0:
+            expected_f1 = 2 * results.precision * results.recall / (results.precision + results.recall)
+            assert results.f1 == pytest.approx(expected_f1)
+
+    def test_score_triplets(self, tc_evaluator, kg):
         heads = kg.graphindices[0, :4]
         tails = kg.graphindices[1, :4]
         edges = kg.graphindices[2, :4]
-        scores = evaluator.get_scores(heads, tails, edges, batch_size=2)
+        scores = tc_evaluator._score_triplets(heads, tails, edges, batch_size=2)
         assert scores.shape == (4,)
+        assert scores.dtype == torch.float
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`evaluate` passes a Subset to PositionalNegativeSampler "
-               "(which expects a KnowledgeGraph) and calls the nonexistent "
-               "`sampler.corrupt_kg`. See fixes/evaluators.txt.",
-    )
-    def test_evaluate(self, kg, mock_architect):
-        evaluator = TripletClassificationEvaluator(mock_architect, kg)
-        subset = Subset(kg, list(range(4)))
-        evaluator.evaluate(batch_size=2, knowledge_graph_subset=subset)
-        assert evaluator.evaluated is True
-        assert evaluator.thresholds.shape == (2,)
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`accuracy` relies on the broken `evaluate` path "
-               "(undefined `self.is_cuda`, nonexistent `corrupt_kg`). "
-               "See fixes/evaluators.txt.",
-    )
-    def test_accuracy(self, kg, mock_architect):
-        evaluator = TripletClassificationEvaluator(mock_architect, kg)
-        subset = Subset(kg, list(range(4)))
-        accuracy = evaluator.accuracy(batch_size=2, kg_to_evaluate=subset)
-        assert 0.0 <= accuracy <= 1.0
+    def test_cache(self, tc_evaluator, kg):
+        heads = kg.graphindices[0, :2]
+        tails = kg.graphindices[1, :2]
+        edges = kg.graphindices[2, :2]
+        s1 = tc_evaluator._score_triplets(heads, tails, edges, batch_size=1)
+        cached = tc_evaluator._cached_node_embeddings
+        s2 = tc_evaluator._score_triplets(heads, tails, edges, batch_size=1)
+        # Cache is reused
+        assert tc_evaluator._cached_node_embeddings is cached
+        torch.testing.assert_close(s1, s2)

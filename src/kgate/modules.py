@@ -35,6 +35,7 @@ from .config import (
 from .decoders import (
     BilinearDecoder,
     ConvKB,
+    ConvE,
     ConvolutionalDecoder,
     ComplEx,
     DistMult,
@@ -180,11 +181,13 @@ def initialize_encoder(configuration: Encoder_Configuration,
 
     edge_types = knowledge_graph.triplet_types
 
+    device: torch.device | str = "cuda" if torch.cuda.is_available() else "cpu"
+
     match encoder_name:
         case "GCN": 
-            encoder = GCNEncoder(edge_types, encoder_node_embedding_dimensions, gnn_layers)
+            encoder = GCNEncoder(edge_types, encoder_node_embedding_dimensions, gnn_layers, device=device)
         case "GAT":
-            encoder = GATEncoder(edge_types, encoder_node_embedding_dimensions, gnn_layers)
+            encoder = GATEncoder(edge_types, encoder_node_embedding_dimensions, gnn_layers, device=device)
         case _:
             encoder = None
             logging.warning(f"Unrecognized encoder {encoder_name}, will not use any.")
@@ -315,6 +318,12 @@ def initialize_decoder(configuration: Decoder_Configuration,
                             filter_count = filter_count, 
                             node_count = knowledge_graph.node_count, 
                             edge_count = knowledge_graph.edge_count)
+        case "ConvE":
+            decoder = ConvE(node_count = knowledge_graph.node_count,
+                            edge_count = knowledge_graph.edge_count,
+                            embedding_dimensions = node_embedding_dimensions,
+                            filter_count = filter_count,
+                            device = device)
         case _:
             raise NotImplementedError(f"The requested decoder {decoder_name} is not implemented.")
 
@@ -691,9 +700,17 @@ def initialize_evaluator(configuration: Evaluation_Configuration,
         case "Link Prediction":
             evaluator = LinkPredictionEvaluator(graphindices = knowledge_graph.graphindices, embedding_dimensions = node_embedding_dimensions)
         case "Triplet Classification":
-            if architect is None:
-                raise ValueError("The Triplet Classification evaluator needs the Architect instance (it uses its device and scoring_function). Please provide it as the `architect` argument.")
-            evaluator = TripletClassificationEvaluator(architect = architect, knowledge_graph = knowledge_graph)
+            if architect is not None:
+                evaluator = TripletClassificationEvaluator(
+                    knowledge_graph = knowledge_graph,
+                    encoder = architect.encoder,
+                    decoder = architect.decoder,
+                    normalizer = architect.normalizer,
+                )
+            else:
+                evaluator = TripletClassificationEvaluator(
+                    knowledge_graph = knowledge_graph,
+                )
         case _:
             raise NotImplementedError(f"The requested evaluator {configuration.objective} is not implemented.")
     

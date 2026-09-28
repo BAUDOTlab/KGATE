@@ -25,7 +25,8 @@ SUPPORTED_DECODERS = [
     "RESCAL",
     "DistMult",
     "ComplEx",
-    "ConvKB"
+    "ConvKB",
+    "ConvE"
 ]
 
 SUPPORTED_LOSSES = [

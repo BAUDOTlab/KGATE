@@ -36,7 +36,7 @@ from .datasets import load_FB15k_237, load_PrimeKG, load_WN18RR
 from .decoders import *
 from .encoders import *
 from .loss import KGE_Loss, MarginLoss, BinaryCrossEntropyLoss
-from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator
+from .evaluators import LinkPredictionEvaluator, TripletClassificationEvaluator, TripletClassificationResults
 from .inference import EdgeInference, NodeInference
 from .initializers import *
 from .knowledgegraph import KnowledgeGraph
@@ -1677,7 +1677,7 @@ class Architect(Module):
         return test_mrr
     
     
-    def triplet_classification(self) -> float:
+    def triplet_classification(self) -> TripletClassificationResults:
         """
         Triplet Classification evaluation.
 
@@ -1691,8 +1691,9 @@ class Architect(Module):
         Returns
         -------
         
-        **accuracy** *(float)*
-        : Accuracy of the triplet classification.
+        **results** *(TripletClassificationResults)*
+        : Object containing all classification metrics (accuracy, precision,
+        : recall, specificity, F1, balanced accuracy, FPR, FNR). 
         
         """
         if not isinstance(self.evaluator, TripletClassificationEvaluator):
@@ -1705,7 +1706,7 @@ class Architect(Module):
                                 knowledge_graph_subset = validation_subset)
         
         return self.evaluator.accuracy( batch_size = self.evaluation_batch_size,
-                                        kg_to_evaluate = test_subset) # TO REWORK
+                                        kg_to_evaluate = test_subset)
 
 #TODO
     # def run_data_leakage(self, attributes: Dict[str, pd.DataFrame] = {}):
