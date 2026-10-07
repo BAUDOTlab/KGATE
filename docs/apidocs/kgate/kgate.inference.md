@@ -32,7 +32,7 @@
 
 ### API
 
-`````{py:class} Inference_KG(first_index_tensor: torch.Tensor, second_index_tensor: torch.Tensor)
+`````{py:class} Inference_KG(first_tensor_index: torch.Tensor, second_tensor_index: torch.Tensor)
 :canonical: kgate.inference.Inference_KG
 
 Bases: {py:obj}`torch.utils.data.Dataset`
