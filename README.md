@@ -52,9 +52,33 @@ poetry install
 
 KGATE is meant to be a self-sufficient training environment for knowledge graph embedding that requires very little code to work but can easily be expanded or modified. Everything stems from the **Architect** class, which holds all the necessary attributes and methods to fully train and test a KGE model following the autoencoder architecture, as well as run inference.
 
+### Command line
+
+After installation, the `kgate` command trains and tests a model in a single step (or use `python -m kgate`):
+
+```bash
+# The most common case: a CSV file and an output directory. That's enough.
+kgate my_kg.csv --output runs/my_run
+
+# Tweak the model: a different decoder, embedding size, training budget
+kgate my_kg.csv --output runs/my_run --decoder ComplEx --dim 50 --epochs 30
+
+# Start from a configuration file and override a few options on the command line
+kgate config.toml --lr 0.0005 --batch-size 4096
+
+# Check that a setup is valid without training
+kgate my_kg.csv --output runs/my_run --dry-run
+```
+
+- The first argument can be either a TOML configuration file or directly the knowledge graph CSV (equivalent to `--kg-csv`). Command line options always override the configuration file values.
+- Every option of the configuration [template](src/kgate/config_template.toml) is available as a command line option; run `kgate --help` for the full list with plain-language explanations, allowed values and defaults.
+- Results (checkpoints, metrics, learning curves) are written to the output directory, and the resolved configuration is saved there as `kgate_config.toml` for reproducibility.
+
+### Python API
+
 The configuration file lets you iterate quickly without changing your code. See the [template](src/kgate/config_template.toml) to learn what the different options do.
 
-At the very least, KGATE expects the Knowledge Graph to be given as a pandas dataframe or a CSV file with the columns "from", "to" and "rel", corresponding respectively to the head nodes, tail nodes and relation typesof the triplets, with one triplet per row. Any extra columns are ignored. In addition, a metadata dataframe can be submitted (can also be a CSV) to map each node with their type, requiring the columns "id" and "type". Extra columns are likewise ignored. 
+At the very least, KGATE expects the Knowledge Graph to be given as a pandas dataframe or a CSV file with the columns "head", "tail" and "edge", corresponding respectively to the head nodes, tail nodes and relation types of the triplets, with one triplet per row. Any extra columns are ignored. In addition, a metadata dataframe can be submitted (can also be a CSV) to map each node with their type, requiring the columns "id" and "type". Extra columns are likewise ignored. 
 
 ```python
 from kgate import Architect

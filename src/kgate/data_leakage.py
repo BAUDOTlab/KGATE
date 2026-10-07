@@ -21,24 +21,35 @@ def permute_tails(kg: KnowledgeGraph,
 
     Arguments
     ---------
-    kg: KnowledgeGraph
-        Knowledge graph on which the permutation will be done.
-    edge_type: str
-        The name of the edge type for which `tails` should be permuted.
-    preserve_node_degree: bool, optional, default to True
-        Whether or not the permuted tails should keep the same node degree.
+    
+    **kg** *(KnowledgeGraph)*
+    : Knowledge graph on which the permutation will be done.
+    
+    **edge_type** *(str)*
+    : The name of the edge type for which `tails` should be permuted.
+    
+    **preserve_node_degree** *(bool, optional, default to True)*
+    : Whether or not the permuted tails should keep the same node degree.
+      When False, every tail is drawn uniformly at random from the full node
+      set instead (node degrees are not preserved).
 
     Raises
     ------
-    AssertionError #1
-        The tails node degree is not conserved after permutation.
-    AssertionError #2
-        Self-loops introduced after permutation.
+    
+    **AssertionError #1**
+    : (only when `preserve_node_degree` is True) The tails node degree is not
+      conserved after permutation.
+    
+    **AssertionError #2**
+    : (only when `preserve_node_degree` is True) Self-loops remain after
+      permutation.
     
     Returns
     -------
-    KnowledgeGraph
-        A new instance of KnowledgeGraph with the `tails` permuted.
+    
+    **kg** *(KnowledgeGraph)*
+    : The same knowledge graph instance, modified in place (the tails of the
+      given edge type are permuted).
     
     """
     node_types = kg.node_types

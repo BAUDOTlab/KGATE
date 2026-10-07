@@ -13,11 +13,12 @@ output_directory = ""
 
 verbose = true
 
-# If the knowledge graph has not been preprocessed by KGATE before,
-# it is highly recommended to set this option as true.
-run_kg_preprocessing = true
 
 [preprocessing]
+
+# If the knowledge graph has not been preprocessed by KGATE before,
+# it is highly recommended to set this option as true.
+run_preprocessing = true
 
 remove_duplicate_triplets = true
 
@@ -25,7 +26,11 @@ remove_duplicate_triplets = true
 make_directed = true
 make_directed_edges = []
 
+# Whether to control for near duplicate and near reverse duplicate edges.
 flag_near_duplicate_edges = true
+
+# Whether to control for cartesian product edges.
+flag_cartesian_edges = true
 
 # Remove all flagged edges from the train set
 clean_train_set = true
@@ -35,8 +40,7 @@ clean_train_set = true
 # and third value is test set.
 split = [0.8, 0.1, 0.1] 
 
-[preprocessing.params]
-theta = 0.8
+theta_cartesian = 0.8
 theta_first_edge_type = 0.8
 theta_second_edge_type = 0.8
 
@@ -47,17 +51,45 @@ theta_second_edge_type = 0.8
 node_embedding_dimensions = 256
 edge_embedding_dimensions = -1
 
-[model.encoder]
-# The encoder transforms the nodes and edges into embedding vectors
-# of size model.emb_dim and model.rel_emb_dim respectively.
-# Read the documentation for more information about the different encoders.
+[model.initializer]
+# The initializer generates the initial embeddings for nodes and edges.
+# Depending on the initializer used, the dimensions of the initial embeddings
+# may not be the same as model.node_embedding_dimension and model.edge_embedding_dimension,
+# in which case using an encoder is mandatory
 # Supported options are:
-# - Default: a simple lookup table, similar to a random initialization.
+# - Random: all nodes and edges have random initial embeddings based on a xavier uniform function.
+# - Feature: the initial embeddings will be supplied by the user as node and edge features. If a node type doesn't have a feature, it will be randomly initialized as above.
+# - Node2Vec: use the Node2Vec random walk algorithm to initialize embeddings.
+name = "Random"
+
+# Random distribution to use when generating the initial embeddings
+random_distribution = "xavier_uniform"
+
+# The following parameters are only used with Node2Vec
+walk_length = 10
+context_size = 8
+
+[model.encoder]
+# The encoder aggregates the information from the initial embedding vectors
+# and outputs a new representation of size model.node_embedding_dimension and model.edge_embedding_dimension.
+# Read the documentation for more information about the different encoders.
+# For a more fine-tuned encoder, create your own model and plug it in KGATE
+# Supported options are:
 # - GCN: Graph Convolutional Network proposed by Kipf & Welling 2017
 # - GAT: Graph Attention Network improvment proposed by Brody et al. 2021
-name = "Default" #Lookup table
+name = "None" #Lookup table
 gnn_layer_number = 1
 
+# How the encoder aggregates the node information
+# Supported options are:
+# sum: sum the embeddings (may lead to very large embeddings)
+# mean: average the embeddings
+gnn_aggregation_mode = "mean"
+
+# Which activation function is used between the convolution layers
+# of the encoder.
+# Supports any PyToch activation function
+gnn_activation_function = "ReLU"
 
 [model.decoder]
 # The decoder learns from the embedding to reconstruct the graph.
@@ -74,10 +106,6 @@ gnn_layer_number = 1
 # - DistMult: Bilinear model proposed by Yang et al. 2014
 # - ComplEx: Bilinear model proposed by Trouillon et al. 2016
 name = "TransE"
-
-# Translational decoders use a Margin Loss, which needs a margin parameter.
-# This is ignored for non-translational decoders.
-margin = 1
 
 # Type of dissimilarity used in the loss function. L1 or L2.
 dissimilarity = "L2"
@@ -96,7 +124,63 @@ sphere_embeddings = false
 sphere_alpha = 0.1
 sphere_beta = 0.0
 
-[sampler]
+[model.regularizer]
+# Regularization function applied to the parameters selected by `params` below.
+# It is applied by the trainer at the end of every epoch and before an evaluation.
+# This is the module that gathers what the decoders used to do in their own
+# `normalize_parameters` method (e.g. L2-normalizing their node embeddings).
+# Supported options are:
+# - None: no regularization (default).
+# - L1: row-wise L1 normalization of each parameter.
+# - L2: row-wise L2 normalization of each parameter (what TransE, RESCAL and DistMult
+#       used to do to their node embeddings).
+name = "None"
+
+# Which parameters to regularize:
+# - node: only the node embeddings
+# - edge: only the edge embeddings
+# - all: both
+params = "node"
+
+[model.normalizer]
+# Normalization function applied to the embeddings selected by `params` below.
+# It is applied by the Architect between the encoder and the decoder step, so
+# Supported options are:
+# - None: no normalization.
+# - L1: row-wise L1 normalization of each embedding.
+# - L2: row-wise L2 normalization of each embedding (default; what RESCAL,
+#       DistMult, TransE, TransH, TransR and TransD used to do to their head
+#       and tail embeddings in their `score` method).
+initial_normalization = "L2"
+
+training_normalization = "L2"
+
+# Which embeddings to normalize after the initializer run:
+# - node: only the node embeddings (head and tail)
+# - edge: only the edge embeddings
+# - all: both
+initial_parameters = "all"
+
+# Same as above, but during the training loop.
+training_parameters = "all"
+
+[model.loss]
+# The name of the loss function to use
+# Supported options are:
+# - Margin: a pairwise margin ranking loss which encourages the scores of positive triplets
+# to exceed the scores of negative triplets.
+# - BCE: a binary cross-entropy loss that treats link prediction as a binary classification problem.
+name = "Margin"
+
+# How the loss of each elements is aggregated into a single value.
+# Options are `mean` or `sum`
+reduction = "mean"
+
+# Only for Margin Loss, the value by which the positive scores must exceed the 
+# negative scores.
+margin = 1
+
+[negative_sampler]
 # Type of negative sampler to generate false triplets during the training.
 # Supported options are:
 # - Positional: proposed by Socher et al. 2011, replaces either the head or tail of a triplet by another node in the same place with the same edge.
@@ -123,7 +207,7 @@ weight_decay = 0.001
 
 # This is the initial learning rate, which might be modified by a learning rate scheduler (see below)
 # The name must rename unchanged, as it is directly called by PyTorch
-lr = 0.001
+learning_rate = 0.001
 
 [learning_rate_scheduler]
 # The Learning Rate Scheduler is an optional module that alters the learning rate throughout the training.
@@ -142,7 +226,7 @@ lr = 0.001
 #             see the documentation for Architect.initialize_scheduler() and give the function name as argument.
 # - OneCycleLR: Increases the learning rate to a maximum learning rate before reducing it to a minimum.
 # - CyclicLR: Cycles the learning rate between two boundaries with a constant frequency.
-type = ""
+name = ""
 
 [learning_rate_scheduler.params]
 
@@ -166,6 +250,10 @@ evaluation_batch_size = 32
 # Number of epochs after which a checkpoint is saved to retain the training state of a model.
 save_interval = 5
 
+# How many checkpoints should be kept. KGATE automatically deletes the most ancient training checkpoint to preserve space.
+# Set to -1 to keep all checkpoints. Note that this might take up a lot of space.
+keep_n_checkpoints = 2
+
 # Either the absolute path towards a pretrained checkpoint, or "auto" to let KGATE find automatically the latest
 # Embeddings in the output_directory.
 pretrained_embeddings = "auto"
@@ -177,9 +265,8 @@ pretrained_embeddings = "auto"
 # - Triplet Classification: Discriminates between true and false triplets
 objective = "Link Prediction"
 
-made_directed_edges = []
-target_edges = [] 
-thresholds = [10]
+# Name of the edges of interest to isolate them during evaluation.
+target_edges = []
 
 [data_leakage]
 # Set of options to run data leakage examination

@@ -1,6 +1,6 @@
 [project]
 name = "KGATE"
-version = "0.3.0"
+version = "0.4.0"
 
 description = "Knowledge Graph Autoencoder Training Environment, bridging PyG encoders and TorchKGE decoders."
 authors = [
@@ -29,10 +29,16 @@ requires-python = ">=3.10"
 repository = "https://github.com/BAUDOTlab/KGATE"
 issues = "https://github.com/BAUDOTlab/KGATE/issues"
 
+[project.scripts]
+kgate = "kgate.cli:main"
+
 [tool.poetry]
 include = [
     { path = "config_template.toml", format = ["sdist","wheel"] }
 ]
+
+[tool.poetry.scripts]
+kgate = "kgate.cli:main"
 
 [tool.poetry.dependencies]
 python = ">=3.10"

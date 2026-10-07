@@ -1,0 +1,1662 @@
+from kgate.constants import SUPPORTED_INITIALIZERS
+from torch.distributed import new_subgroups
+from typing import Any
+import os
+from typing import Sequence, List, Literal, Tuple
+import logging
+
+from pathlib import Path
+import tomllib
+import tomli_w
+from importlib.resources import open_binary
+
+from .constants import SUPPORTED_ENCODERS, SUPPORTED_DECODERS, SUPPORTED_SAMPLERS, SUPPORTED_LOSSES, SUPPORTED_REGULARIZERS, SUPPORTED_REGULARIZER_PARAMS, SUPPORTED_NORMALIZERS, SUPPORTED_NORMALIZER_PARAMS
+from .utils import set_random_seeds
+
+import torch
+
+logging_level = logging.INFO
+logging.basicConfig(
+    level = logging_level,  
+    format = "%(asctime)s - %(levelname)s - %(message)s" 
+)
+
+
+class Configuration:
+    def __init__(self, *, config_path: os.PathLike = "", config_dict: dict  = {}):
+        self._configuration = Configuration.parse(config_path, config_dict)
+
+        self.preprocessing = Preprocessing_Configuration(self._configuration["preprocessing"])
+        self.initializer = Initializer_Configuration(self._configuration["model"]["initializer"])
+        self.encoder = Encoder_Configuration(self._configuration["model"]["encoder"])
+        self.decoder = Decoder_Configuration(self._configuration["model"]["decoder"])
+        self.regularizer = Regularizer_Configuration(self._configuration["model"]["regularizer"])
+        self.normalizer = Normalizer_Configuration(self._configuration["model"]["normalizer"])
+        self.loss = Loss_Configuration(self._configuration["model"]["loss"])
+        self.negative_sampler = Sampler_Configuration(self._configuration["negative_sampler"])
+        self.optimizer = Optimizer_Configuration(self._configuration["optimizer"])
+        self.learning_rate_scheduler = Learning_Rate_Scheduler_Configuration(self._configuration["learning_rate_scheduler"])
+        self.training = Training_Configuration(self._configuration["training"])
+        self.evaluation = Evaluation_Configuration(self._configuration["evaluation"])
+
+    def __repr__(self):
+        base_config = "\n".join([f"{key}: {value}" for key, value in self._configuration.items() if not isinstance(value, dict)])
+        return base_config + "\n" + "\n".join([str(sub_config) for sub_config in list(self.__dict__.values())[1:]])
+
+
+    @staticmethod
+    def parse(config_path: os.PathLike, config_dictionnary: dict):
+        """
+        Parse the configuration file and integrates it with the default and inline configurations.
+        
+        For each parameter, the final parsed configuration will include in priority order: inline 
+        configuration, configuration file, default configuration.
+        
+        Top-level parameters that do not exist in the default configuration are silently ignored, 
+        though additional parameters given within an existing section are kept and passed as-is.
+
+        Some elements of the model may use additional parameters not included in the KGATE configuration.
+        In that case, you can use the Config.[element]_kwargs dictionary that will be fed to the initialization
+        of the element.
+        
+        Arguments
+        ---------
+        config_path: str
+            The complete path to the configuration file. If one already exists, it will be overwritten.
+        config_dictionnary: dict, optional
+            The parsed configuration as a python dictionnary.
+            
+        Raises
+        ------
+        FileNotFoundError
+            The configuration file is not found at the indicated path.
+            Check that you gave the correct path, and that it is a str.
+            If you give a relative path, it must be relative to the run script path.
+        
+        Returns
+        -------
+        config: dict
+            The final parsed configuration as a python dictionnary.
+            Using priority orders: inline configuration, configuration file, default configuration
+        """
+        if config_path != "" and not Path(config_path).exists():
+            raise FileNotFoundError(f"Configuration file {config_path} not found.")
+        
+        with open_binary("kgate", "config_template.toml") as f:
+            default_config = tomllib.load(f)
+
+        configuration = {}
+
+        if config_path != "":
+            logging.info(f"Loading parameters from {config_path}")
+            with open(config_path, "rb") as f:
+                configuration = tomllib.load(f)
+
+        # Make the final configuration, using priority orders:
+        # 1. Inline configuration (config_dictionnary)
+        # 2. Configuration file (config)
+        # 3. Default configuration (default_config)
+        # If a default value is None, consider it required and not defaultable
+        configuration = {  key: Configuration.set_config_key(key, default_config, configuration, config_dictionnary)
+                    for key
+                    in default_config}
+
+        return configuration
+
+    @staticmethod
+    def set_config_key( key: str,
+                        default: dict,
+                        config: dict | None = None,
+                        inline: dict | None = None
+                        ) -> str | int | bool | list | dict:
+        """
+        For a specific parameter, a 'key', compare default, inline and user-made configurations to give
+        the key value with priority order: inline configuration, configuration file, default configuration.
+
+        Arguments
+        ---------
+        default: dict
+            The default parsed configuration as a python dictionnary.
+        config: dict, optional
+            The configuration parsed from the config file.
+        inline: dict, optional
+            The inline parsed configuration as a python dictionnary.
+
+        Raises
+        ------
+        ValueError
+            A parameter without a default value is required but not set.
+
+        Returns
+        -------
+        Return one of the following values:
+            inline_value: str or int or float or List or dict or None
+                Value of the key given by the user in command line.
+                Can only be of types dict and List within the recursive call.
+            config_value: str or int or float or List or dict or None
+                Value of the key from the configuration file.
+                Can only be of types dict and List within the recursive call.
+            default[key]: str or int or float or List or dict or None
+                Value of the key from the default configuration file.
+                Can only be of types dict and List within the recursive call.
+        
+        """
+        if inline is not None and key in inline:
+            inline_value = inline[key]
+        else:
+            inline_value = None
+
+        if config is not None and key in config:
+            config_value = config[key]
+        else: 
+            config_value = None
+
+        # If the value is a dict, recursively call this function on each of its keys
+        if key in default and isinstance(default[key], dict):
+            new_value = {}
+            # The keys are taken from default
+            keys = list(default[key].keys())
+            if config_value is not None:
+                # If they exist, keys are taken from the config file
+                keys += (list(config_value.keys()))
+            if inline_value is not None:
+                # If they exist, keys are taken from inline inputs
+                keys += (list(inline_value.keys()))
+            for child_key in set(keys):
+                new_value.update({child_key: Configuration.set_config_key(child_key, default[key], config_value, inline_value)})
+            return new_value
+        
+        # Return the key value in priority from: inline, config, default
+        if inline_value is not None:
+            return inline_value
+        elif config_value is not None:
+            return config_value
+        elif default[key] is not None:
+            logging.info(f"No value set for parameter {key}. Defaulting to {default[key]}")
+            return default[key]
+        else:
+            raise ValueError(f"Parameter {key} is required but not set without a default value.")
+
+    def save(self,
+            filename: Path | None = None):
+        """
+        Saves the configuration as a TOML file.
+        
+        If no filename is given, it will be created as config.output_directory/kgate_config.toml.
+        
+        Arguments
+        ---------
+        filename: Path, optional
+            The complete path to the configuration file. If one already exists, it will be overwritten.
+        """
+        config_path = filename or Path(self.output_directory).joinpath("kgate_config.toml")
+
+        with open(config_path, "wb") as f:
+            tomli_w.dump(self._configuration, f)
+
+    @property
+    def seed(self) -> int:
+        """
+        Seed used for random number generation, used for reproducibility.
+
+        To ensure that all part of the library have a common seed, it is set for the following libraries:
+        - The standard library `random`
+        - `numpy`
+        - `torch`
+        - `torch.cuda`
+
+        Default to 42.
+        """
+        return self._configuration["seed"]
+    
+    @seed.setter
+    def seed(self, new_seed: int):
+        if new_seed != self.seed:
+            logging.warn("The seed has changed in the configuration! All random generators reset according to the new seed.")
+            set_random_seeds(new_seed)
+
+        self._configuration["seed"] = new_seed
+
+
+    @property
+    def knowledge_graph_csv_file(self) -> Path:
+        """
+        Path to the lnowledge graph in CSV format with at least 3 columns named 
+        "heads", "tails" and "edges". Additionnal columns are not regarded.
+        """
+        return Path(self._configuration["kg_csv"])
+
+    @knowledge_graph_csv_file.setter
+    def knowledge_graph_csv_file(self, path: os.PathLike):
+        if path != "" and not Path(path).exists():
+            raise FileNotFoundError(f"The knowledge graph file has not been found at path {path}.")
+
+        self._configuration["kg_csv"] = path
+
+    @property
+    def knowledge_graph_pickle_file(self) -> Path:
+        """
+        Path to the knowledge graph in pickle format.
+        """
+        return self._configuration["kg_pkl"]
+
+    @knowledge_graph_pickle_file.setter
+    def knowledge_graph_pickle_file(self, path: os.PathLike):
+        if path != "" and not Path(path).exists():
+            raise FileNotFoundError(f"The knowledge graph file has not been found at path {path}.")
+
+        self._configuration["kg_pkl"] = path
+
+    @property
+    def metadata_path(self) -> Path:
+        """
+        Path to the CSV mapping nodes to their metadata.
+
+        The CSV file must have at least the columns 'id' (must be the same 
+        as the KG node identifier) and 'type', representing the node type.
+        Additionnal columns may contain more metadata that may be used to identify nodes.
+        """
+        return Path(self._configuration["metadata_csv"])
+    
+    @metadata_path.setter
+    def metadata_path(self, path: os.PathLike):
+        if path != "" and not Path(path).exists():
+            raise FileNotFoundError(f"The metadata file has not been found at path {path}.")
+
+        self._configuration["metadata_csv"] = path
+
+    @property
+    def output_directory(self) -> Path:
+        """
+        Path to the output directory for all KGATE files.
+        """
+        return Path(self._configuration["output_directory"])
+
+    @output_directory.setter
+    def output_directory(self, path: os.PathLike):
+        Path(path).mkdir(parents = True, exist_ok = True)
+        self._configuration["output_directory"] = path
+
+    @property
+    def verbose(self) -> bool:
+        """
+        Whether to get the full information output from the library.
+
+        Default to True.
+        """
+        return self._configuration["verbose"]
+    
+    @verbose.setter
+    def verbose(self, verbose: bool):
+        self._configuration["verbose"] = verbose
+
+    @property
+    def node_embedding_dimensions(self) -> int:
+        """
+        The dimension of the embedding vectors for nodes.
+
+        This is the dimension of the latent space, which means the input
+        features can have a different dimension if there is an encoder able
+        to work with different dimensions. With only a decoder, the input features
+        must match this parameter.
+
+        Default to 256.
+        """
+        return self._configuration["model"]["node_embedding_dimensions"]
+
+    @node_embedding_dimensions.setter
+    def node_embedding_dimensions(self, dimensions: int):
+        assert dimensions > 0 and isinstance(dimensions, int), f"The node embedding dimension must be a positive integer, but got {dimensions}"
+
+        self._configuration["model"]["node_embedding_dimensions"] = dimensions
+
+    @property
+    def edge_embedding_dimensions(self) -> int:
+        """
+        The dimension of the embedding vectors for edges.
+
+        Some models need to have the same dimensions for node and edge vectors.
+        To ensure that this is the case, a value of -1 for this property will
+        make the edge embedding vectors to have the same dimension as the node embedding
+        vector.
+
+        Default to -1.
+        """
+        return self._configuration["model"]["edge_embedding_dimensions"]
+
+    @edge_embedding_dimensions.setter
+    def edge_embedding_dimensions(self, dimensions: int):
+        assert (dimensions > 0 or dimensions == -1) and isinstance(dimensions, int), f"The edge embedding dimension must be a positive integer or -1, but got {dimensions}"
+
+        self._configuration["model"]["edge_embedding_dimensions"] = dimensions
+
+class Preprocessing_Configuration:
+    """
+    Preprocessing part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    preprocessing_configuration: dict
+        Dictionary containing only the preprocessing configuration.
+    """
+    def __init__(self, preprocessing_configuration: dict):
+        self._configuration = preprocessing_configuration 
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def run(self) -> bool:
+        """
+        Whether or not to run the preprocessing procedure on the knowledge graph.
+        
+        If set to False, all preprocessing parameters are ignored.
+
+        Defaults to True.
+        """
+        return self._configuration["run_preprocessing"]
+
+    @run.setter
+    def run(self, run_preprocessing: bool):
+        self._configuration["run_preprocessing"] = run_preprocessing
+    
+    @property
+    def remove_duplicate_triplets(self) -> bool:
+        """
+        Whether or not duplicate triplets should be removed in the knowledge graph.
+        
+        Defaults to True.
+        """
+        return self._configuration["remove_duplicate_triplets"]
+
+    @remove_duplicate_triplets.setter
+    def remove_duplicate_triplets(self, remove_duplicate_triplets: bool):
+        self._configuration["remove_duplicate_triplets"] = remove_duplicate_triplets
+
+    @property
+    def make_directed(self) -> List[str] | Literal["all"]:
+        """
+        List of undirected edges to make directed.
+
+        In the case of an undirected graph, this parameter can be set to "all" instead of
+        a list to make all edges directed.
+
+        For example, if we have an undirected edge (A)-[edge]-(B), to make it directed we will
+        make it direct (A)-[edge]->(B) and create its reverse (A)<-[edge_reverse]-(B).
+        """
+        return self._configuration["make_directed_edges"]
+
+    @make_directed.setter
+    def make_directed(self, edges_to_direct: List[str] | Literal["all"]):
+        if isinstance(edges_to_direct, str):
+            assert edges_to_direct == "all", "The edges to make directed must be either a list of edges or \"all\" to make the whole graph directed."
+
+        self._configuration["make_directed_edges"] = edges_to_direct
+
+    @property
+    def flag_near_duplicate_edges(self) -> bool:
+        """
+        Whether or not to flag edges that are almost duplicates of each others.
+
+        This helps identify edges with different names but nearly the same semantic
+        meaning, which may introduce data leakage should they be spread out in different sets.
+
+        The identification of near duplicates is done through the procedure described in
+        Akrami et al. (2020) [1]_ and further developed in Brière et al. (2025) [2]_.
+
+        Defaults to True.
+
+        References
+        ----------
+        .. [1] Farahnaz Akrami, Mohammed Samiul Saeef, Quingheng Zhang.
+        `Realistic Re-evaluation of Knowledge Graph Completion Methods:
+        An Experimental Study.`
+        <https://arxiv.org/pdf/2003.08001.pdf>
+        SIGMOD’20, June 14–19, 2020, Portland, OR, USA
+        .. [2] Brière, Galadriel, Thomas Stosskopf, Benjamin Loire, and Anaïs Baudot. 
+        “Benchmarking Data Leakage on Link Prediction in Biomedical Knowledge Graph Embeddings.” 
+        <https://doi.org/10.1101/2025.01.23.634511>
+        Preprint, bioRxiv, January 26, 2025.
+        """
+        return self._configuration["flag_near_duplicate_edges"]
+
+    @flag_near_duplicate_edges.setter
+    def flag_near_duplicate_edges(self, flag: bool):
+        self._configuration["flag_near_duplicate_edges"] = flag
+
+    @property
+    def theta_first_edge_type(self) -> float:
+        """
+        The threshold value for the first edge type when scanning for duplicates.
+
+        When considering a pair of edge types, it sets the threshold over which 
+        the first edge is considered a duplicate of the second.
+
+        For example, with a theta value of 0.8, if more than 80% of the edges of the first type
+        are duplicates of the second edge type, the whole edge type is considered to be a duplicate.
+
+        See the paper by Akrami et al. (2020) [1]_ for full reference.
+
+        Defaults to 0.8.
+
+        References
+        ----------
+        .. [1] Farahnaz Akrami, Mohammed Samiul Saeef, Quingheng Zhang.
+        `Realistic Re-evaluation of Knowledge Graph Completion Methods:
+        An Experimental Study.`
+        <https://arxiv.org/pdf/2003.08001.pdf>
+        SIGMOD’20, June 14–19, 2020, Portland, OR, USA
+        """
+        return self._configuration["theta_first_edge_type"]
+
+    @theta_first_edge_type.setter
+    def theta_first_edge_type(self, theta: float):
+        assert theta >= 0 and theta <= 1, f"Theta value must be between 0 and 1, got {theta}"
+
+        self._configuration["theta_first_edge_type"] = theta
+
+    @property
+    def theta_second_edge_type(self) -> float:
+        """
+        The threshold value for the second edge type when scanning for duplicates.
+
+        When considering a pair of edge types, it sets the threshold over which 
+        the second edge is considered a duplicate of the first.
+
+        For example, with a theta value of 0.8, if more than 80% of the edges of the second type
+        are duplicates of the first edge type, the whole edge type is considered to be a duplicate.
+
+        See the paper by Akrami et al. (2020) [1]_ for full reference.
+
+        Defaults to 0.8.
+
+        References
+        ----------
+        .. [1] Farahnaz Akrami, Mohammed Samiul Saeef, Quingheng Zhang.
+        `Realistic Re-evaluation of Knowledge Graph Completion Methods:
+        An Experimental Study.`
+        <https://arxiv.org/pdf/2003.08001.pdf>
+        SIGMOD’20, June 14–19, 2020, Portland, OR, USA
+        """
+        return self._configuration["theta_second_edge_type"]
+
+    @theta_second_edge_type.setter
+    def theta_second_edge_type(self, theta: float):
+        assert theta >= 0 and theta <= 1, f"Theta value must be between 0 and 1, got {theta}"
+
+        self._configuration["theta_second_edge_type"] = theta
+    
+    @property
+    def flag_cartesian_edges(self) -> bool:
+        """
+        Whether or not to flag edges that are form a cartesian product.
+
+        This helps identify edges with different names but nearly the same semantic
+        meaning, which may introduce data leakage should they be spread out in different sets.
+
+        The identification of near duplicates is done through the procedure described in
+        Akrami et al. (2020) [1]_ and further developed in Brière et al. (2025) [2]_.
+
+        Defaults to True.
+
+        References
+        ----------
+        .. [1] Farahnaz Akrami, Mohammed Samiul Saeef, Quingheng Zhang.
+        `Realistic Re-evaluation of Knowledge Graph Completion Methods:
+        An Experimental Study.`
+        <https://arxiv.org/pdf/2003.08001.pdf>
+        SIGMOD’20, June 14–19, 2020, Portland, OR, USA
+        .. [2] Brière, Galadriel, Thomas Stosskopf, Benjamin Loire, and Anaïs Baudot. 
+        “Benchmarking Data Leakage on Link Prediction in Biomedical Knowledge Graph Embeddings.” 
+        <https://doi.org/10.1101/2025.01.23.634511>
+        Preprint, bioRxiv, January 26, 2025.
+        """
+
+    @property
+    def clean_train_set(self) -> bool:
+        """
+        Whether or not to remove all flagged edges from the train set.
+
+        These edges are completely removed from the dataset (not moved to the validation
+        or test set), but still retained as truth for the evaluation.
+
+        Defaults to True.
+        """
+        return self._configuration["clean_train_set"]
+    
+    @clean_train_set.setter
+    def clean_train_set(self, clean: bool):
+        self._configuration["clean_train_set"] = clean
+
+    @property
+    def split_proportions(self) -> Tuple[int, int, int]:
+        """
+        How the knowledge graph should be split between 'train', 
+        'validation' and 'test'.
+        
+        First value is train set proportion, second is validation set,
+        and third value is test set. The three values must sum to 1.
+        """
+        return self._configuration["split"]
+    
+    @split_proportions.setter
+    def split_proportions(self, proportions: Sequence[float]):
+        assert sum(proportions) == 1, f"The sum of all proportions must be 1 but got {sum(proportions)}."
+
+        self._configuration["split"] = proportions
+
+class Initializer_Configuration:
+    """
+    Initializer part of the main configuration
+
+    The initializer generates the initial embeddings for nodes and edges.
+    Depending on the initializer used, the dimensions of the initial embeddings
+    may not be the same as node_embedding_dimension and edge_embedding_dimension,
+    in which case using an encoder is mandatory
+
+    Arguments
+    ---------
+    initializer_configuration: dict
+        Dictionary containing only the initializer configuration.
+    """
+    def __init__(self, initializer_config):
+        self._configuration = initializer_config
+        self.supported_initializer = SUPPORTED_INITIALIZERS
+
+        # If we load a configuration with an unsupported initializer name, 
+        # assume it is correct but warn the user.
+        if initializer_config["name"] not in SUPPORTED_INITIALIZERS:
+            logging.warn(f"Initializer name {initializer_config["name"]} is not a builtin KGATE initializer. It will be considered a custom initializer.")
+            self.register_name(initializer_config["name"])
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the initializer.
+
+        When using builtin KGATE initializers, possible values are:
+        - `Random`: all nodes and edges have random initial embeddings based on a xavier uniform function.
+        - `Feature`: the initial embeddings will be supplied by the user as node and edge features. If a node type doesn't have a feature, it will be randomly initialized as above.
+        - `Node2Vec`: use the Node2Vec random walk algorithm to initialize embeddings.
+
+        It is also possible to add your own custom initializer to the configuration, in
+        which case you should call :func:`~Config.initializer.register_name` to make sure
+        it is acknowledged as a valid initializer name.
+
+        Defaults to Random.
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def name(self, name: str):
+        assert name in self.supported_initializers, f"Unsupported initializer given. KGATE supports {', '.join(SUPPORTED_INITIALIZERS)} but got {name}. If you want to register a custom initializer name, use Config.initializer.register_name()"
+
+        self._configuration["name"] = name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid initializer.
+
+        Adds the given name to the list of supported initializers and set it
+        as the current initializer name in the configuration.
+
+        KGATE has a limited set of builtin initializers and validates inputs
+        against this list. To make sure your custom initializer pass the
+        sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the initializer to register.
+        """
+        self.supported_initializers.append(name)
+
+        self.name = name
+
+    @property
+    def walk_length(self) -> int:
+        """
+        Node2Vec parameter
+        """
+        return self._configuration["walk_length"]
+    
+    @walk_length.setter
+    def walk_length(self, new_walk_length: int):
+        self._configuration["walk_length"] = new_walk_length
+
+    @property
+    def context_size(self) -> int:
+        """
+        Node2Vec parameter
+        """
+        return self._configuration["context_size"]
+
+    @context_size.setter
+    def context_size(self, new_size: int):
+        self._configuration["context_size"] = new_size
+
+
+class Encoder_Configuration:
+    """
+    Encoder part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    encoder_configuration: dict
+        Dictionary containing only the encoder configuration.
+    """
+
+    def __init__(self, encoder_config):
+        self._configuration = encoder_config
+        self.supported_encoders = SUPPORTED_ENCODERS
+
+        # If we load a configuration with an unsupported encoder name, 
+        # assume it is correct but warn the user.
+        if encoder_config["name"] not in SUPPORTED_ENCODERS:
+            logging.warn(f"Encoder name {encoder_config["name"]} is not a builtin KGATE encoder. It will be considered a custom encoder.")
+            self.register_name(encoder_config["name"])
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the encoder.
+
+        When using builtin KGATE encoders, possible values are:
+        - `Default`: not a proper encoder but randomly initialized vectors.
+        - `GCN`: GNN encoder from :class:`~torch_geometric.nn.SAGEConv`.
+        - `GAT`: GNN encoder from :class:`~torch_geometric.nn.GATv2Con`.
+
+        It is also possible to add your own custom encoder to the configuration, in
+        which case you should call :func:`~Config.encoder.register_name` to make sure
+        it is acknowledged as a valid encoder name.
+
+        Defaults to Default.
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def name(self, name: str):
+        assert name in self.supported_encoders, f"Unsupported encoder given. KGATE supports {', '.join(SUPPORTED_ENCODERS)} but got {name}. If you want to register a custom encoder name, use Config.encoder.register_name()"
+
+        self._configuration["name"] = name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid encoder.
+
+        Adds the given name to the list of supported encoders and set it
+        as the current encoder name in the configuration.
+
+        KGATE has a limited set of builtin encoders and validates inputs
+        against this list. To make sure your custom encoder pass the
+        sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the encoder to register.
+        """
+        self.supported_encoders.append(name)
+
+        self.name = name
+
+    @property
+    def gnn_layers(self) -> int:
+        """
+        The number of GNN layers to build.
+
+        With the builtin encoders, the same encoder is used in all layers,
+        but it is possible to build a custom encoder with multiple encoders for each layer.
+
+        Default to 1.
+        """
+        return self._configuration["gnn_layer_number"]
+
+    @gnn_layers.setter
+    def gnn_layers(self, gnn_layers: int):
+        assert gnn_layers >= 0 and isinstance(gnn_layers, int), f"GNN layers must be 0 or a positive integer, but got {gnn_layers}"
+
+        self._configuration["gnn_layer_number"] = gnn_layers
+
+class Decoder_Configuration:
+    """
+    Decoder part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    decoder_configuration: dict
+        Dictionary containing only the decoder configuration.
+    """
+
+    def __init__(self, decoder_config):
+        self._configuration = decoder_config
+        self.supported_decoders = SUPPORTED_DECODERS
+
+        # If we load a configuration with an unsupported decoder name, 
+        # assume it is correct but warn the user.
+        if decoder_config["name"] not in SUPPORTED_DECODERS:
+            logging.warn(f"decoder name {decoder_config["name"]} is not a builtin KGATE decoder. It will be considered a custom decoder.")
+            self.register_name(decoder_config["name"])
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the decoder.
+
+        When using builtin KGATE decoders, possible values are:
+        - :class:`~kgate.decoder.TransE`: Translational model proposed by Bordes et al. 2013
+        - :class:`~kgate.decoder.TransH`: Translational model proposed by Wang et al. 2014
+        - :class:`~kgate.decoder.TransR`: Translational model proposed by Lin et al. 2015
+        - :class:`~kgate.decoder.TransD`: Translational model proposed by Ji et al. 2015
+        - :class:`~kgate.decoder.TorusE`: Translational model proposed by Ebisu and Ichise 2017
+        - :class:`~kgate.decoder.RESCAL`: Bilinear model proposed by Nickel et al. 2011
+        - :class:`~kgate.decoder.DistMult`: Bilinear model proposed by Yang et al. 2014
+        - :class:`~kgate.decoder.ComplEx`: Bilinear model proposed by Trouillon et al. 2016
+        - :class:`~kgate.decoder.ConvKB`: Convolutional model proposed by Nguyen et al. 2018
+
+        It is also possible to add your own custom decoder to the configuration, in
+        which case you should call :func:`~Config.decoder.register_name` to make sure
+        it is acknowledged as a valid decoder name.
+
+        Defaults to TransE.
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def name(self, name: str):
+        assert name in self.supported_decoders, f"Unsupported decoder given. KGATE supports {', '.join(SUPPORTED_DECODERS)} but got {name}. If you want to register a custom decoder name, use Config.decoder.register_name()"
+
+        self._configuration["name"] = name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid decoder.
+
+        Adds the given name to the list of supported decoders and set it
+        as the current decoder name in the configuration.
+
+        KGATE has a limited set of builtin decoders and validates inputs
+        against this list. To make sure your custom decoder pass the
+        sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the decoder to register.
+        """
+         
+        self.supported_decoders.append(name)
+
+        self.name = name
+
+    @property
+    def dissimilarity(self) -> str:
+        """
+        Type of dissimilarity used in the loss function.
+
+        Almost all decoders use L1 or L2 dissimilarity. L1 dissimilarity 
+        computes the Manhattan distance between the prediction and the target,
+        while L2 dissimilarity computes the Euclidian distance.
+
+        TorusE has three additionnal dissimilarities that are used only for it.
+
+        Default is L2
+        """
+        return self._configuration["dissimilarity"]
+    
+    @dissimilarity.setter
+    def dissimilarity(self, dissimilarity: str):
+        if "torus" in dissimilarity.lower() and not self.name != "TorusE":
+            raise ValueError(f"Only the TorusE decoder can be used with torus-specific dissimilarities. The current decoder is {self.name}.")
+        self._configuration["dissimilarity"] = dissimilarity
+
+    @property
+    def filter_count(self) -> int:
+        """
+        Number of convolutional filters used by convolutional decoders.
+
+        This property is only used with convolutional decoders, and ignored otherwise.
+
+        Default is 3.
+        """
+        return self._configuration["filter_count"]
+
+    @filter_count.setter
+    def filter_count(self, filter_count: int):
+        assert filter_count >= 1, "Cannot use less than one filter."
+        self._configuration["filter_count"] = filter_count
+
+
+class Regularizer_Configuration:
+    """
+    Regularizer part of the main configuration.
+
+    The regularizer is a model component initialized by the Architect after the
+    decoder. It is given a set of parameters to regularize and the function to
+    apply to them, and is applied through the trainer hooks (see
+    `kgate.modules.initialize_regularizer` and `Architect.apply_regularizer`).
+    It gathers what the decoders used to do in their `normalize_parameters`
+    method (e.g. L2-normalizing their node embeddings).
+
+    This class is not meant to be used as a standalone, but to make access to
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    regularizer_configuration: dict
+        Dictionary containing only the regularizer configuration.
+    """
+
+    def __init__(self, regularizer_configuration: dict):
+        self._configuration = regularizer_configuration
+        self.supported_regularizers = SUPPORTED_REGULARIZERS
+
+        # "None" means no regularizer. Any other name must be a supported
+        # regularizer function, or it is considered a custom function name.
+        if regularizer_configuration["name"] != "None" and regularizer_configuration["name"] not in self.supported_regularizers:
+            logging.warn(f"regularizer name {regularizer_configuration["name"]} is not a builtin KGATE regularizer function. It will be considered a custom function name.")
+            self.register_name(regularizer_configuration["name"])
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the regularizer function to apply.
+
+        When using builtin KGATE regularizer functions, possible values are:
+        - `L1`: row-wise L1 normalization of each parameter.
+        - `L2`: row-wise L2 normalization of each parameter (what TransE, RESCAL
+          and DistMult used to do in their `normalize_parameters` method).
+
+        `None` means no regularizer is initialized (default).
+
+        It is also possible to add your own custom regularizer function to the
+        configuration, in which case you should call
+        :func:`~Config.regularizer.register_name` to make sure it is
+        acknowledged as a valid regularizer name.
+
+        Defaults to None.
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def name(self, name: str):
+        if name != "None":
+            assert name in self.supported_regularizers, f"Unsupported regularizer given. KGATE supports {', '.join(SUPPORTED_REGULARIZERS)} (or None) but got {name}. If you want to register a custom regularizer name, use Config.regularizer.register_name()"
+        self._configuration["name"] = name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid regularizer function.
+
+        Adds the given name to the list of supported regularizer functions and
+        sets it as the current regularizer name in the configuration.
+
+        KGATE has a limited set of builtin regularizer functions and validates
+        inputs against this list. To make sure your custom regularizer passes
+        the sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the regularizer function to register.
+        """
+        self.supported_regularizers.append(name)
+
+        self.name = name
+
+    @property
+    def params(self) -> str:
+        """
+        Which parameters to regularize.
+
+        Possible values are:
+        - `node`: only the node embeddings
+        - `edge`: only the edge embeddings
+        - `all`: both
+
+        Defaults to `node`.
+        """
+        return self._configuration["params"]
+
+    @params.setter
+    def params(self, params: str):
+        assert params in SUPPORTED_REGULARIZER_PARAMS, f"Unsupported regularizer parameters given. KGATE supports {', '.join(SUPPORTED_REGULARIZER_PARAMS)} but got {params}."
+        self._configuration["params"] = params
+
+
+class Normalizer_Configuration:
+    """
+    Normalizer part of the main configuration.
+
+    The normalizer is a model component initialized by the Architect after the
+    decoder. It is applied to the embeddings between the encoder and the
+    decoder step: batchwise during the training loop when there is an encoder,
+    and once, over the whole graph, after the initializer runs and at the
+    beginning of each epoch otherwise (see `kgate.normalizers` and
+    `Architect.apply_normalizer`). It gathers what the decoders used to do in
+    their `score` method (e.g. L2-normalizing their head and tail embeddings).
+
+    Two normalizer functions are configured, each with its own embedding
+    selection:
+    - `initial_normalization` (applied to the `initial_parameters` embeddings)
+      is the function applied to the embeddings right after the initializer
+      runs.
+    - `training_normalization` (applied to the `training_parameters`
+      embeddings) is the function applied to the embeddings during the
+      training loop.
+
+    This class is not meant to be used as a standalone, but to make access to
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    normalizer_configuration: dict
+        Dictionary containing only the normalizer configuration.
+    """
+
+    def __init__(self, normalizer_configuration: dict):
+        self._configuration = normalizer_configuration
+        self.supported_normalizers = SUPPORTED_NORMALIZERS
+
+        # "None" means no normalization in that scope. Any other name must be
+        # a supported normalizer function, or it is considered a custom
+        # function name.
+        for key in ("initial_normalization", "training_normalization"):
+            name = normalizer_configuration[key]
+            if name != "None" and name not in self.supported_normalizers:
+                logging.warn(f"normalizer {key} {name} is not a builtin KGATE normalizer function. It will be considered a custom function name.")
+                self.register_name(name)
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def initial_normalization(self) -> str:
+        """
+        The name of the normalizer function to apply to the
+        `initial_parameters` embeddings, right after the initializer runs.
+
+        When using builtin KGATE normalizer functions, possible values are:
+        - `L1`: row-wise L1 normalization of each embedding.
+        - `L2`: row-wise L2 normalization of each embedding (what RESCAL,
+          DistMult, TransE, TransH, TransR and TransD used to do in their
+          `score` method).
+
+        `None` means no initial normalization: the initial embeddings are left
+        as-is.
+
+        It is also possible to add your own custom normalizer function to the
+        configuration, in which case you should call
+        :func:`~Config.normalizer.register_name` to make sure it is
+        acknowledged as a valid normalizer name.
+
+        Defaults to L2, which matches the historical behavior of the decoders
+        that used to normalize in their own `score` method (RESCAL, DistMult,
+        TransE, TransH, TransR and TransD L2-normalizing their head and tail
+        embeddings).
+        """
+        return self._configuration["initial_normalization"]
+
+    @initial_normalization.setter
+    def initial_normalization(self, name: str):
+        Normalizer_Configuration.validate_normalization_name(name, self.supported_normalizers)
+
+        self._configuration["initial_normalization"] = name
+
+    @property
+    def training_normalization(self) -> str:
+        """
+        The name of the normalizer function to apply to the
+        `training_parameters` embeddings, during the training loop.
+
+        Same possible values as `initial_normalization` (`L1`, `L2`, `None`
+        or a registered custom function name).
+
+        `None` means no normalization during the training loop: the decoder
+        sees the raw embeddings (the encoder output when there is an encoder,
+        or the node and edge embeddings themselves otherwise).
+
+        Defaults to L2 normalization.
+        """
+        return self._configuration["training_normalization"]
+
+    @training_normalization.setter
+    def training_normalization(self, name: str):
+        Normalizer_Configuration.validate_normalization_name(name, self.supported_normalizers)
+
+        self._configuration["training_normalization"] = name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid normalizer function.
+
+        Adds the given name to the list of supported normalizer functions.
+
+        KGATE has a limited set of builtin normalizer functions and validates
+        inputs against this list. To make sure your custom normalizer function
+        passes the sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the normalizer function to register.
+        """
+        if name not in self.supported_normalizers:
+            self.supported_normalizers.append(name)
+
+    @property
+    def initial_parameters(self) -> str:
+        """
+        Which embeddings to normalize after the initializer runs.
+
+        Possible values are:
+        - `node`: only the node embeddings (head and tail)
+        - `edge`: only the edge embeddings
+        - `all`: both
+
+        Defaults to `all`.
+        """
+        return self._configuration["initial_parameters"]
+
+    @initial_parameters.setter
+    def initial_parameters(self, params: str):
+        Normalizer_Configuration.validate_params(params)
+        self._configuration["initial_parameters"] = params
+
+    @property
+    def training_parameters(self) -> str:
+        """
+        Which embeddings to normalize during the training loop.
+
+        Same possible values as `initial_parameters`.
+
+        Defaults to `all`.
+        """
+        return self._configuration["training_parameters"]
+
+    @training_parameters.setter
+    def training_parameters(self, params: str):
+        Normalizer_Configuration.validate_params(params)
+        self._configuration["training_parameters"] = params
+
+    @staticmethod
+    def validate_params(params: str):
+        """
+        Check that the given embedding selection is a valid normalizer
+        parameter (`node`, `edge` or `all`).
+
+        Arguments
+        ---------
+        params: str
+            The embedding selection to validate.
+
+        Raises
+        ------
+        AssertionError
+            If the selection is not supported.
+        """
+        assert params in SUPPORTED_NORMALIZER_PARAMS, f"Unsupported normalizer parameters given. KGATE supports {', '.join(SUPPORTED_NORMALIZER_PARAMS)} but got {params}."
+
+    @staticmethod
+    def validate_normalization_name(name: str, supported_normalizers: List[str]):
+        """
+        Check that the given normalizer function name is valid (`None` or one
+        of the supported normalizer functions).
+
+        Arguments
+        ---------
+        name: str
+            The normalizer function name to validate.
+        supported_normalizers: list of str
+            The list of supported normalizer function names to check against.
+
+        Raises
+        ------
+        AssertionError
+            If the name is not supported.
+        """
+        if name != "None":
+            assert name in supported_normalizers, f"Unsupported normalizer given. KGATE supports {', '.join(supported_normalizers)} (or None) but got {name}. If you want to register a custom normalizer name, use Config.normalizer.register_name()"
+
+
+class Loss_Configuration:
+    """
+    Loss part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    loss_configuration: dict
+        Dictionary containing only the loss configuration.
+    """
+    def __init__(self, loss_configuration: dict):
+        self._configuration = loss_configuration 
+
+        self.supported_losses = SUPPORTED_LOSSES
+
+        # If we load a configuration with an unsupported loss name, 
+        # assume it is correct but warn the user.
+        if loss_configuration["name"] not in SUPPORTED_LOSSES:
+            logging.warn(f"Sampler name {loss_configuration["name"]} is not a builtin KGATE loss. It will be considered a custom loss.")
+            self.register_name(loss_configuration["name"])
+
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def name(self) -> bool:
+        """
+        The name of the loss function to use
+        
+        Supported options are:
+        - Margin: a pairwise margin ranking loss which encourages the scores of positive triplets
+        to exceed the scores of negative triplets.
+        - BCE: a binary cross-entropy loss that treats link prediction as a binary classification problem.
+
+        Defaults to Margin
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def name(self, new_name: str):
+        assert new_name in self.supported_losses, f"Unsupported loss given. KGATE supports {', '.join(SUPPORTED_SAMPLERS)} but got {new_name}. If you want to register a custom loss name, use Config.loss.register_name()"
+
+        self._configuration["name"] = new_name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid loss.
+
+        Adds the given name to the list of supported losss and set it
+        as the current loss name in the configuration.
+
+        KGATE has a limited set of builtin losses and validates inputs
+        against this list. To make sure your custom loss pass the
+        sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the loss to register.
+        """
+         
+        self.supported_losses.append(name)
+
+        self.name = name
+
+    @property
+    def margin(self) -> int:
+        """
+        Margin value when using a Margin Loss.
+
+        The margin loss is only used with translational decoders.
+        This is ignored for non-translational decoders.
+
+        Default is 1.
+        """
+        return self._configuration["margin"]
+
+    @margin.setter
+    def margin(self, margin: int) -> int:
+        self._configuration["margin"] = margin
+
+    @property
+    def reduction(self) -> str:
+        """
+        How the loss of each elements is aggregated into a single value.
+
+        Options are `mean` or `sum`
+        """
+        return self._configuration["reduction"]
+
+    @reduction.setter
+    def reduction(self, new_reduction: str):
+        assert new_reduction in ["mean", "sum"], "Reduction must be one of mean or sum."
+
+        self._configuration["reduction"] = new_reduction
+
+class Sampler_Configuration:
+    """
+    Sampler part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    sampler_configuration: dict
+        Dictionary containing only the sampler configuration.
+    """
+    def __init__(self, sampler_configuration):
+        self._configuration = sampler_configuration
+
+        self.supported_samplers = SUPPORTED_SAMPLERS
+
+        # If we load a configuration with an unsupported sampler name, 
+        # assume it is correct but warn the user.
+        if sampler_configuration["name"] not in SUPPORTED_SAMPLERS:
+            logging.warn(f"Sampler name {sampler_configuration["name"]} is not a builtin KGATE negative sampler. It will be considered a custom negative sampler.")
+            self.register_name(sampler_configuration["name"])
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+    @property
+    def name(self) -> str:
+        """
+        The type of negative sampler that will generate false triplets during
+        the training.
+
+        Supported options are:
+         - Positional: proposed by Socher et al. 2011, replaces either the head or tail of a triplet by another node in the same place with the same edge.
+         - Uniform: proposed by Bordes et al. 2013, replaces either the head or tail by another node at random following an uniform distribution.
+         - Bernoulli: proposed by Wang et al. 2014, replaces either the head or tail using probabilities taking edges into account.
+         - Mixed: proposed by Brière et al. 2025, combines the three negative samplers above, sampling negative_triplet_count negative samples for each triplet.
+        """
+        return self._configuration["name"]
+    
+    @name.setter
+    def name(self, new_name):
+        assert new_name in self.supported_samplers, f"Unsupported negative sampler given. KGATE supports {', '.join(SUPPORTED_SAMPLERS)} but got {new_name}. If you want to register a custom negative sampler name, use Config.sampler.register_name()"
+
+        self._configuration["name"] = new_name
+
+    def register_name(self, name: str):
+        """
+        Register this name as a valid negative sampler.
+
+        Adds the given name to the list of supported negative samplers and set it
+        as the current negative sampler name in the configuration.
+
+        KGATE has a limited set of builtin negative samplers and validates inputs
+        against this list. To make sure your custom negative sampler pass the
+        sanitization checks, it needs to be registered as valid.
+
+        Arguments
+        ---------
+            name: str
+                The name of the negative sampler to register.
+        """
+         
+        self.supported_samplers.append(name)
+
+        self.name = name
+
+    @property
+    def negative_triplet_count(self) -> int:
+        """
+        The number of negative samples that will be generated for each triplet.
+        """
+        return self._configuration["negative_triplet_count"]
+
+    @negative_triplet_count.setter
+    def negative_triplet_count(self, new_count: int):
+        assert new_count > 0, f"KGE models need at least 1 negative triplet per true triplet to be trained, but got {new_count}"
+
+        self._configuration["negative_triplet_count"] = new_count
+
+class Optimizer_Configuration:
+    """
+    Optimizer part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    optimizer_configuration: dict
+        Dictionary containing only the optimizer configuration.
+    """
+    def __init__(self, optimizer_configuration):
+        self._configuration = optimizer_configuration
+        self._other_parameters = {}
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the PyTorch optimizer used to guide training.
+
+        It is identical to the name of the algorithms in torch.optim.
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def name(self, new_name: str):
+        assert new_name in dir(torch.optim), f"The optimizer name {new_name} is not a valid PyTorch optimizer."
+
+        self._configuration["name"] = new_name
+
+    @property
+    def weight_decay(self) -> float:
+        """
+        Weight reduction at each epoch.
+
+        See PyTorch documentation for details.
+        """
+        return self._configuration["params"]["weight_decay"]
+
+    @weight_decay.setter
+    def weight_decay(self, new_decay: float):
+        assert 0 <= new_decay <= 1, f"weight_decay must be between 0 and 1, but got {new_decay}"
+
+        self._configuration["params"]["weight_decay"] = new_decay
+
+    @property
+    def learning_rate(self) -> float:
+        """
+        The initial learning rate.
+
+        It may evolve during training if a learning rate scheduler is set up.
+        """
+        return self._configuration["params"]["learning_rate"]
+
+    @learning_rate.setter
+    def learning_rate(self, new_learning_rate):
+        assert 0 <= new_learning_rate <= 1, f"learning_rate must be between 0 and 1, but got {new_learning_rate}"
+
+        self._configuration["params"]["learning_rate"] = new_learning_rate
+
+    @property
+    def other_parameters(self) -> dict:
+        """
+        A dictionary containing optimizer parameters not included in KGATE default configuration.
+        """
+        return self._other_parameters
+
+    @other_parameters.setter
+    def other_parameters(self, parameters: dict):
+        self._other_parameters = parameters
+
+    def set_parameter(self, name: str, value: Any):
+        self._other_parameters[name] = value
+
+    @property
+    def parameters(self) -> dict:
+        """
+        The optimizer parameter dictionary, formatted to be directly passed to the PyTorch optimizer constructor.
+        """
+        return {
+            "weight_decay": self.weight_decay,
+            "lr": self.learning_rate,
+            **self.other_parameters
+        }
+    
+class Learning_Rate_Scheduler_Configuration:
+    """
+    Learning rate scheduler part of the main configuration.
+
+    The Learning Rate Scheduler is an optional module that alters the learning rate throughout the training.
+    They follow different patterns following the type of LR scheduler and parameters.
+    learning_rate_scheduler.params are the parameters passed to the LR scheduler. The name of the parameters must be the same
+    as those found in Pytorch's torch.optim.lr_scheduler documentation.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    lr_scheduler_configuration: dict
+        Dictionary containing only the optimizer configuration.
+    """
+    def __init__(self, lr_scheduler_configuration):
+        self._configuration = lr_scheduler_configuration
+        self._parameters = {}
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the PyTorch learning rate scheduler used to guide training.
+
+        It is identical to the name of the algorithms in torch.optim.lr_scheduler.
+        """
+        return self._configuration["name"]
+
+    @name.setter
+    def name(self, new_name: str):
+        assert new_name in dir(torch.optim.lr_scheduler), f"The learning rate scheduler name {new_name} is not a valid PyTorch learning rate scheduler."
+
+        self._configuration["name"] = new_name
+
+    @property
+    def parameters(self) -> dict:
+        """
+        A dictionary containing optimizer parameters not included in KGATE default configuration.
+        """
+        return self._parameters
+
+    @parameters.setter
+    def parameters(self, parameters: dict):
+        self._parameters = parameters
+
+    def set_parameter(self, name: str, value: Any):
+        self._parameters[name] = value
+
+class Training_Configuration:
+    """
+    Training part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    training_configuration: dict
+        Dictionary containing only the optimizer configuration.
+    """
+    def __init__(self, training_configuration):
+        self._configuration = training_configuration
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def max_epochs(self) -> int:
+        """
+        Maximum number of training epochs. 
+
+        The training may stop before, but will at most do this many epochs.
+        """
+        return self._configuration["max_epochs"]
+
+    @max_epochs.setter
+    def max_epochs(self, max_epochs: int):
+        assert max_epochs > 0, f"The maximum epoch must be a positive integer, but got {max_epochs}"
+
+        self._configuration["max_epochs"] = max_epochs
+
+    @property
+    def patience(self) -> int:
+        """
+        Number of evaluations with no significant loss improvement before the training is stopped early.
+        """
+        return self._configuration["patience"]
+
+    @patience.setter
+    def patience(self, patience: int):
+        assert patience > 0, f"You must wait at least 1 evaluation step to compare the results, but got {patience}"
+
+        self._configuration["patience"] = patience
+
+    @property
+    def train_batch_size(self) -> int:
+        """
+        Size of a training batch. The higher it is, the faster the training goes, within reasons.
+        """
+        return self._configuration["train_batch_size"]
+
+    @train_batch_size.setter
+    def train_batch_size(self, new_batch_size: int):
+        assert new_batch_size > 0, f"Train batch size must be at least 1, but got {new_batch_size}"
+
+        self._configuration["train_batch_size"] = new_batch_size
+
+    @property
+    def evaluation_batch_size(self) -> int:
+        """
+        Size of an evaluation batch. The higher it is, the faster the evaluation goes, within reasons.
+        """
+        return self._configuration["evaluation_batch_size"]
+
+    @evaluation_batch_size.setter
+    def evaluation_batch_size(self, new_batch_size: int):
+        assert new_batch_size > 0, f"Evaluation batch size must be at least 1, but got {new_batch_size}"
+
+        self._configuration["evaluation_batch_size"] = new_batch_size
+
+    @property
+    def evaluation_interval(self) -> int:
+        """
+        Number of epochs between two evaluations of the model on the validation set.
+        """
+        return self._configuration["evaluation_interval"]
+
+    @evaluation_interval.setter
+    def evaluation_interval(self, new_interval: int):
+        assert new_interval > 0, f"Evaluation interval must be at least 1, but got {new_interval}"
+
+        self._configuration["evaluation_interval"]
+    
+    @property
+    def save_interval(self) -> int:
+        """
+        Number of epochs after which a checkpoint is saved to retain the training state of a model.
+        """
+        return self._configuration["save_interval"]
+
+    @save_interval.setter
+    def save_interval(self, new_interval: int):
+        assert new_interval > 0, f"Save interval must be at least 1, but got {new_interval}"
+
+        self._configuration["save_interval"]
+
+    @property
+    def keep_n_checkpoints(self) -> int:
+        """
+        Number of checkpoint files on disk for a training. 
+        
+        KGATE automatically deletes the most ancient training checkpoint to preserve space.
+        
+        0 disables checkpointing.
+        -1 keep all checkpoints. Note that this might take up a lot of space.
+        """
+        return self._configuration["keep_n_checkpoints"]
+    
+    @keep_n_checkpoints.setter
+    def keep_n_checkpoints(self, new_number: int):
+        assert new_number == -1 or new_number >= 0, f"Cannot save a negative number of checkpoints."
+
+        if new_number == -1:
+            logging.warning("Keeping all checkpoint files. Be warned that it may use up a lot of disk space.")
+        elif new_number == 0:
+            logging.warning("Checkpointing is disabled.")
+        
+        self._configuration["keep_n_checkpoints"] = new_number
+
+    @property
+    def pretrained_embeddings(self) -> str:
+        """
+        Either the absolute path towards a pretrained checkpoint, or "auto" to let KGATE find automatically the latest
+        Embeddings in the output_directory.
+        """
+        return self._configuration["pretrained_embeddings"]
+
+    @pretrained_embeddings.setter
+    def pretrained_embeddings(self, embedding_path: os.PathLike | str):
+        assert Path(embedding_path).exists() or embedding_path == "auto", "Pretrained embeddings must be either a path to a checkpoint, or auto to let KGATE infer the path."
+
+        self._configuration["pretrained_embeddings"] = str(embedding_path)
+
+class Evaluation_Configuration:
+    """
+    Evaluation part of the main configuration.
+
+    This class is not meant to be used as a standalone, but to make access to 
+    configuration parameter easier.
+
+    Arguments
+    ---------
+    evaluation_configuration: dict
+        Dictionary containing only the optimizer configuration.
+    """
+    def __init__(self, evaluation_configuration):
+        self._configuration = evaluation_configuration
+
+    def __repr__(self):
+        config_repr = "\n".join([f"{key}: {value}" for key, value in self._configuration.items()])
+        return f"{self.__class__.__name__}\n{config_repr}\n"
+
+
+    @property
+    def objective(self) -> Literal["Link Prediction", "Triplet Classification"]:
+        """# Types of evaluation to be run on the validation and testing set.
+        Supported options are:
+        - Link Prediction: Predicts plausible edges between two nodes of the graph
+        - Triplet Classification: Discriminates between true and false triplets
+        """
+        return self._configuration["objective"]
+    
+    @objective.setter
+    def objective(self, new_objective: Literal["Link Prediction", "Triplet Classification"]):
+        assert new_objective in ["Link Prediction", "Triplet Classification"], f"Evaluation objective must be one of 'Link Prediction' or 'Triplet Classification', but got {new_objective}"
+
+        self._configuration["objective"] = new_objective
+    
+    @property
+    def target_edges(self) -> list[str]:
+        """Name of the edges of interest to isolate them during evaluation."""
+        return self._configuration["target_edges"]
+    
+    @target_edges.setter
+    def target_edges(self, new_targets: list[str]):
+        self._configuration["target_edges"] = new_targets
