@@ -863,7 +863,7 @@ class LinkPredictionEvaluator:
                 )
                 batch_start = i * batch_size
                 actual_batch_size = head_index.shape[0]
-                batch_end = batch_size + actual_batch_size
+                batch_end = batch_start + actual_batch_size
 
                 self.rank_true_tails[batch_start: batch_end] = get_rank(scores, tail_index).detach()
                 self.filtered_rank_true_tails[batch_start: batch_end] = get_rank(filtered_scores, tail_index).detach()

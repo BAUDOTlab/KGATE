@@ -62,6 +62,9 @@ edge_embedding_dimensions = -1
 # - Node2Vec: use the Node2Vec random walk algorithm to initialize embeddings.
 name = "Random"
 
+# Random distribution to use when generating the initial embeddings
+random_distribution = "xavier_uniform"
+
 # The following parameters are only used with Node2Vec
 walk_length = 10
 context_size = 8
@@ -70,12 +73,23 @@ context_size = 8
 # The encoder aggregates the information from the initial embedding vectors
 # and outputs a new representation of size model.node_embedding_dimension and model.edge_embedding_dimension.
 # Read the documentation for more information about the different encoders.
+# For a more fine-tuned encoder, create your own model and plug it in KGATE
 # Supported options are:
 # - GCN: Graph Convolutional Network proposed by Kipf & Welling 2017
 # - GAT: Graph Attention Network improvment proposed by Brody et al. 2021
 name = "None" #Lookup table
 gnn_layer_number = 1
 
+# How the encoder aggregates the node information
+# Supported options are:
+# sum: sum the embeddings (may lead to very large embeddings)
+# mean: average the embeddings
+gnn_aggregation_mode = "mean"
+
+# Which activation function is used between the convolution layers
+# of the encoder.
+# Supports any PyToch activation function
+gnn_activation_function = "ReLU"
 
 [model.decoder]
 # The decoder learns from the embedding to reconstruct the graph.
@@ -119,31 +133,12 @@ params = "node"
 [model.normalizer]
 # Normalization function applied to the embeddings selected by `params` below.
 # It is applied by the Architect between the encoder and the decoder step, so
-# it is done batchwise: the function is applied to the (encoder output)
-# embeddings of each batch before they are scored by the decoder.
-# When there is no encoder, the embeddings passed to the decoder are the node
-# and edge embeddings themselves; normalizing them batchwise would recompute
-# the same whole-graph normalization on every batch, so they are normalized
-# once, over the whole graph, at the beginning of each epoch (in place, on
-# the parameters). Note that between two epoch-start normalizations the
-# optimizer keeps updating the embeddings, so the decoder may see embeddings
-# whose norms are not exactly unit anymore: this small approximation is the
-# trade-off of not recomputing the same whole-graph normalization on every
-# batch.
-# This is the module that gathers what the decoders used to do in their own
-# `score` method (e.g. L2-normalizing their head and tail embeddings).
 # Supported options are:
 # - None: no normalization.
 # - L1: row-wise L1 normalization of each embedding.
 # - L2: row-wise L2 normalization of each embedding (default; what RESCAL,
 #       DistMult, TransE, TransH, TransR and TransD used to do to their head
 #       and tail embeddings in their `score` method).
-# Note: this default matches the historical behavior of the decoders that
-# used to normalize in their own `score` method. To restore the historical
-# behavior of the decoders that did not (ComplEx, TorusE, ConvKB), set
-# `name = "None"`; to restore the historical behavior of TransD (which also
-# normalized its edge embeddings), set `params = "all"` (or `"edge"` on top
-# of `"node"`).
 initial_normalization = "L2"
 
 training_normalization = "L2"
