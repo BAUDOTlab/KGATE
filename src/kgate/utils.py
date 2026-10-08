@@ -45,7 +45,7 @@ def load_knowledge_graph(pickle_filename: Path
     Returns
     -------
     knowledge_graph: KnowledgeGraph
-        Train split from the knowledge graph, directly loaded from the pickle file.
+        The knowledge graph object loaded from the pickle file.
     """
     logging.info(f"Will not run the preparation step. Using knowledge graph stored in: {pickle_filename}")
     with open(pickle_filename, "rb") as file:
@@ -118,18 +118,22 @@ def find_best_model(directory: Path) -> Path | None:
     """
     Find all files having a model and compare their `validation_metrics` score 
     to return the path to the file with the best result.
+
+    If no best model checkpoint is found, falls back to the latest checkpoint 
+    (the one with the highest epoch number in its name).
     
     Arguments
     ---------
     
-    **dir** *(Path)*
+    **directory** *(Path)*
     : Path to the directory containing the model files.
     
     Returns
     -------
     
-    **best_model_path** *(path)*
-    : Path to the file with the best model
+    **best_model_path** *(Path)*
+    : Name of the file with the best model (relative to `directory`), or the latest checkpoint as a fallback.
+    : None if no model file is found in the directory.
 
     """
     
@@ -212,8 +216,8 @@ def plot_learning_curves(train_metrics_file: Path,
     : Path to the directory where to save the plot files.
     
     **validation_metric_value** *(str)*
-    : *Missing documentation*
-    % TODO.What_that_argument_is_or_does
+    : Name of the validation metric to plot, expected as a column named 
+    "Validation {validation_metric_value}" in the training metrics file.
     
     """
     output_directory = Path(output_directory)
@@ -311,63 +315,6 @@ def filter_scores(  scores: Tensor,
 
     return filtered_scores
 
-
-def merge_kg(kg_list: List["KnowledgeGraph"],
-            complete_graphindices: bool = False
-            ) -> "KnowledgeGraph":
-    """
-    Merge multiple KnowledgeGraph objects into a unique one.
-    
-    Arguments
-    ---------
-    
-    **kg_list** *(List[KnowledgeGraph])*
-    : The list of all knowledge graphs to be merged.
-    
-    **complete_graphindices** *(bool, default to False)*
-    : Whether or not the removed_triplets tensor should be integrated into the final KG's graphindices.
-
-    Raises
-    ------
-    
-    **AssertionError #1**
-    : Knowledge graphs in `kg_list` must have the same `node_to_index`.
-    
-    **AssertionError #2**
-    : Knowledge graphs in `kg_list` must have the same `edge_to_index`.
-    
-    **AssertionError #3**
-    : Knowledge graphs in `kg_list` must have the same `node_type_to_index`.
-    
-    **AssertionError #4**
-    : Knowledge graphs in `kg_list` must have the same `triplet_types`.
-    
-    Returns
-    -------
-    
-    **merged_kg** *(KnowledgeGraph)*
-    : The merged KnowledgeGraph object.
-        
-    """
-    first_kg = kg_list[0]
-    for kg in kg_list:
-        kg.clean()
-    assert all(first_kg.node_to_index == kg.node_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_to_index."
-    assert all(first_kg.edge_to_index == kg.edge_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different edge_to_index."
-    assert all(first_kg.node_type_to_index == kg.node_type_to_index for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different node_type_to_index."
-    assert all(first_kg.triplet_types == kg.triplet_types for kg in kg_list[1:]), "Cannot merge KnowledgeGraph with different triplet_types."
-
-    new_graphindices = cat([kg.graphindices for kg in kg_list], dim = 1)
-    
-    merged_kg = first_kg.__class__(
-        graphindices = new_graphindices,
-        node_to_index = first_kg.node_to_index,
-        edge_to_index = first_kg.edge_to_index,
-        node_type_to_index = first_kg.node_type_to_index,
-        triplet_types = first_kg.triplet_types
-        )
-    
-    return merged_kg
 
 
 def get_dictionary_mapping( dataframe: pd.DataFrame,

@@ -25,12 +25,39 @@ SUPPORTED_DECODERS = [
     "RESCAL",
     "DistMult",
     "ComplEx",
-    "ConvKB"
+    "ConvKB",
+    "ConvE"
 ]
 
 SUPPORTED_LOSSES = [
     "Margin",
     "BCE"
+]
+
+# Builtin KGATE regularizer functions (see `kgate.regularizers.REGULARIZER_FUNCTIONS`)
+SUPPORTED_REGULARIZERS = [
+    "L1",
+    "L2"
+]
+
+# Which parameters a regularizer can be applied to (see `kgate.modules.initialize_regularizer`)
+SUPPORTED_REGULARIZER_PARAMS = [
+    "node",
+    "edge",
+    "all"
+]
+
+# Builtin KGATE normalizer functions (see `kgate.normalizers.NORMALIZER_FUNCTIONS`)
+SUPPORTED_NORMALIZERS = [
+    "L1",
+    "L2"
+]
+
+# Which embeddings a normalizer can be applied to (see `kgate.modules.initialize_normalizer`)
+SUPPORTED_NORMALIZER_PARAMS = [
+    "node",
+    "edge",
+    "all"
 ]
 
 # Builtin KGATE negative samplers

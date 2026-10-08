@@ -173,10 +173,6 @@ class KnowledgeGraph(Dataset):
         **node_type_to_index** *(Dict[str, int], default to None)*
         : Dictionary mapping the node type to their index in the knowledge graph.
 
-        **removed_triplets** *(torch.Tensor, shape: [4, removed_triplet_count], default to None)*
-        : `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
-        : They are kept in memory as they still represent ground truth.
-
         Attributes
         ----------
 
@@ -205,10 +201,6 @@ class KnowledgeGraph(Dataset):
         **node_type_to_index** *(Dict[str, int], default to None)*
         : Dictionary mapping the node type to their index in the knowledge graph.
 
-        **removed_triplets** *(torch.Tensor, shape: [4, removed_triplet_count], default to None)*
-        : `graphindices`-like tensor of triplets removed from the knowledge graph, usually during the data leakage control procedure.
-        : They are kept in memory as they still represent ground truth.
-
         **triplet_count** *(int)*
         : Total number of triplets in the knowledge graph.
 
@@ -218,17 +210,15 @@ class KnowledgeGraph(Dataset):
         **edge_count** *(int)*
         : Total number of edges in the knowledge graph.
 
-        **node_types** *(torch.Tensor)*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        **node_types** *(torch.Tensor, shape: [node_count], dtype: torch.long)*
+        : The type index (see `node_type_to_index`) of each node in the knowledge graph.
 
-        **node_type_to_global** *(Dict[str, int])*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        **node_type_to_global** *(Dict[str, Tensor])*
+        : Mapping of each node type to the tensor of global indices of the nodes of that type.
 
-        **global_to_local_indices** *(Dict[str, int])*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        **global_to_local_indices** *(torch.Tensor, shape: [node_count], dtype: torch.long)*
+        : For each node (global index), its local index within the nodes of its node type.
+        : Nodes without a type are mapped to -1.
 
         **train_mask** *(torch.Tensor, shape: [triplet_count], dtype: torch.bool)*
         : Boolean mask with the indices of triplets belonging to the training set.
@@ -243,14 +233,11 @@ class KnowledgeGraph(Dataset):
         Raises
         ------
 
-        **ValueError**
+        **AssertionError #1**
         : If `dataframe` is not given, `graphindices`, `triplet_types`, `node_to_index`, `edge_to_index` and `node_type_to_index` must be provided.
 
-        **ValueError**
+        **AssertionError #2**
         : The `graphindices` parameter must be a 2D tensor of shape [4, triplet_count].
-
-        **ValueError**
-        : The `removed_triplets` parameter must be a 2D tensor of shape [4, triplet_count].
 
         """
         
@@ -277,6 +264,7 @@ class KnowledgeGraph(Dataset):
         self.metadata = None
         if metadata is not None:
             self.add_metadata(metadata)
+            self._identity = "id" # private attribute, for more info refer to identity property
 
         if dataframe is None:
             # The mapping is done on the absolute index of nodes. However, subgraphs don't have all the nodes
@@ -307,7 +295,6 @@ class KnowledgeGraph(Dataset):
 
                 dataframe_node_types = list(set(mapping_dataframe['head_type'].unique()).union(set(mapping_dataframe['tail_type'].unique())))
                 self.node_type_to_index = {node_type: i for i, node_type in enumerate(sorted(dataframe_node_types))}
-                self._identity = "id" # private attribute, for more info refer to identity property
             else:
                 mapping_dataframe = dataframe
 
@@ -381,7 +368,6 @@ class KnowledgeGraph(Dataset):
     
     def __getitem__(self, index) -> Tensor:
         return self.graphindices[:, index]
-    
     
     @property
     def embeddings(self) -> KnowledgeGraphEmbeddings:
@@ -537,9 +523,9 @@ class KnowledgeGraph(Dataset):
         return max(self.edge_to_index.values()) + 1
 
     @property
-    def identity(self) -> pd.DataFrame:
+    def identity(self) -> pd.Series:
         """
-        Get the DataFrame containing all the identity of the knowledge graph nodes.
+        Get the Series containing all the identity of the knowledge graph nodes.
         
         The default identity is the node ID, but different values can be set using the `set_identity` method.
         
@@ -547,7 +533,7 @@ class KnowledgeGraph(Dataset):
         if self.metadata is not None:
             return self.metadata[self._identity]
         else:
-            return pd.DataFrame([])
+            return pd.Series([])
 
 
     def set_identity(self, new_identity: str) -> None:
@@ -652,9 +638,9 @@ class KnowledgeGraph(Dataset):
 
         if include_splits:
             dataframe["split"] = "ground_truth"
-            dataframe["split"][self.train_mask] = "train"
-            dataframe["split"][self.validation_mask] = "validation"
-            dataframe["split"][self.test_mask] = "test"
+            dataframe.loc[self.train_mask, "split"] = "train"
+            dataframe.loc[self.validation_mask, "split"] = "validation"
+            dataframe.loc[self.test_mask, "split"] = "test"
 
         return dataframe
     
@@ -685,12 +671,6 @@ class KnowledgeGraph(Dataset):
         **AssertionError #2**
         : The sum of provided shares (`split_proportions`) must be equal to 1.
 
-        Returns
-        -------
-        
-        **kgs** *(Tuple[Self, Self, Self])*
-        : 3 new instances of KnowledgeGraph: train, validation, test.
-            
         """
         if sizes is not None:
             assert sum(sizes) == self.triplet_count, "The sum of provided sizes must match the number of triplets."
@@ -752,7 +732,7 @@ class KnowledgeGraph(Dataset):
         """
         Return the proper train, validation and test masks with proportion of each triplet type corresponding to the given values.
         
-        This method is called by the `split_kg` method.
+        This method is called by the `generate_masks` method.
 
         Arguments
         ---------
@@ -829,19 +809,21 @@ class KnowledgeGraph(Dataset):
         **indices_to_delete** *(List[int] or torch.Tensor)*
         : Indices of triplets to delete from the knowledge graph.
         """
-        self.graphindices[indices_to_delete] = -1
-        self.graphindices = self.graphindices[self.graphindices != -1]
+        mask = torch.ones(self.graphindices.size(1), dtype=bool)
+        mask[indices_to_delete] = False
+        self.graphindices = self.graphindices[mask]
 
     def remove_triplets_from_training(self,
                         indices_to_remove: List[int] | torch.Tensor
                         ) -> None:
         """
-        Removes specified triplets from the knowledge graph during training. 
+        Removes specified triplets from all splits (train, validation and test) of the knowledge graph.
+        The triplets remain part of the ground truth, but are no longer used during training or evaluation.
 
         Arguments
         ---------
         **indices_to_remove** *(List[int] or torch.Tensor)*
-        : Indices of triplets to remove from the knowledge graph.
+        : Indices of the triplets to remove from the splits.
         """
         self.train_mask[indices_to_remove] = False
         self.validation_mask[indices_to_remove] = False
@@ -875,7 +857,7 @@ class KnowledgeGraph(Dataset):
         : The maximum node index must not be superior to the number of nodes.
         
         **ValueError #2**
-        : The maximum triplet index must not be superior to the number of edges.
+        : The maximum triplet type index must not be superior to the number of triplet types.
         
         """
         assert new_triplets.dim() == 2 and new_triplets.size(0) == 4, "new_triplets must have shape [4, n]"
@@ -905,8 +887,8 @@ class KnowledgeGraph(Dataset):
         """
         Adds reverse triplets for the specified undirected edges in the knowledge graph.
         
-        Updates `head_index`, `tail_index`, `edges` with the reverse triplets, and updates the dictionaries to include 
-        both original and reverse triplets in all directions.
+        Adds the reverse triplets of the given undirected edge types to the ground truth, so that both 
+        (A, edge, B) and (B, edge, A) as well as the reversed variants (A, edge_rev, B) and (B, edge_rev, A) are represented.
 
         Arguments
         ----------
@@ -917,8 +899,8 @@ class KnowledgeGraph(Dataset):
         Returns
         -------
         
-        **reverse_list** *(List[int])*
-        : List of all original and reverse triplets, in all directions.
+        **reverse_list** *(List[Tuple[int, int]])* 
+        : One (original edge index, reverse edge index) pair for each undirected edge processed.
         
         """
         index_to_edge = {value: key for key, value in self.edge_to_index.items()}
@@ -1029,8 +1011,10 @@ class KnowledgeGraph(Dataset):
             # Logging duplicate information
             if len(pairs) - len(unique_triplets) > 0:
                 logging.info(f"{len(pairs) - len(unique_triplets)} duplicates found. Keeping {len(unique_triplets)} unique triplets for edge {edge_type_index}")
-
-        self.remove_triplets_from_training(~indices_to_keep)
+        
+        keep = torch.zeros(self.triplet_count, dtype=torch.bool)
+        keep[indices_to_keep] = True
+        self.remove_triplets_from_training(~keep)
 
 
     def get_pairs(  self,
@@ -1052,19 +1036,14 @@ class KnowledgeGraph(Dataset):
         : Index of the edge type to get the node pair of.
         
         **split** *("train", "validation" or "test", optional)*
-        : Format the node is given back as, either head then tail or tail then head.
-
-        Raises
-        ------
-        
-        **AssertionError #1**
-        : If the type is not "head_tail" then it must be "tail_head".
+        : If given, only the triplets belonging to this split are considered.
 
         Returns
         -------
         
-        **node_pair** *(Set[Tuple[Number, Number])*
-        : The head/tail or tail/head pair associated to the given edge.
+        **node_pair** *(torch.Tensor, shape: [2, n])*
+        : The head and tail indices of the triplets with the given edge type,
+        : the first row being the head indices and the second the tail indices.
         
         """
         if split is not None:
@@ -1256,13 +1235,6 @@ class KnowledgeGraph(Dataset):
         **mask** *(torch.Tensor, dtype: bool, size: [triplet_count], optional)*
         : Mask to limit the subgraph to a given sample of the original KG.
 
-        Raises
-        ------
-        
-        **AssertionError**
-        : *Missing documentation*
-        % TODO: what that means, causes, and fixes if easy
-
         Returns
         -------
         
@@ -1286,15 +1258,17 @@ class KnowledgeGraph(Dataset):
 
         subgraph = graphindices[:, edge_mask]
 
-        # All seed nodes not present in the subgraph are put in this dictionary 
-        # to be used in the self-loop addition at the end of this function        
-        missing_nodes_indices: Dict[str, Tensor] = defaultdict(lambda: torch.empty(0, dtype=torch.long)) # key : node type, value: isolated node indices
-        uniques, counts = torch.cat((subgraph[:2].unique(), seed_nodes)).unique(return_counts=True)
-        index_to_node_type = {v: k for k,v in self.node_type_to_index.items()}
+        # Isolated seeds: seed nodes that appear in no triplet of the subgraph.
+        # k_hop_subgraph keeps them in `subset`, but with no edges they are absent
+        # from the subgraph, so they would get no x_dict row and no representation after the encoder pass.
+        all_subgraph_nodes = subgraph[:2].unique()
+        isolated_seeds = seed_nodes[~torch.isin(seed_nodes, all_subgraph_nodes)].unique()
 
-        for missing_node in uniques[counts == 1]:
-            node_type = index_to_node_type[self.node_types[missing_node].item()]
-            missing_nodes_indices[node_type] = torch.cat([missing_nodes_indices[node_type], missing_node.reshape(1)])
+        missing_nodes_indices: Dict[str, Tensor] = defaultdict(lambda: torch.empty(0, dtype=torch.long))  # key: node type, value: isolated seed indices
+        for node_type, node_type_index in self.node_type_to_index.items():
+            sel = isolated_seeds[self.node_types[isolated_seeds] == node_type_index]
+            if sel.numel() > 0:
+                missing_nodes_indices[node_type] = sel
 
         triplet_type_indices = subgraph[3].unique()
         # Create empty tensor to preallocate memory with the correct dtype and device 
@@ -1303,8 +1277,6 @@ class KnowledgeGraph(Dataset):
 
         pyg_edge_index = {}
         x_dict = {}
-
-        all_subgraph_nodes = torch.cat([subgraph[0], subgraph[1]]).unique()
 
         for node_type, node_type_index in self.node_type_to_index.items():
             mask = self.node_types[all_subgraph_nodes] == node_type_index
@@ -1376,24 +1348,14 @@ class KnowledgeGraph(Dataset):
 
     def flatten_embeddings(self) -> Tensor:
         """
-        *Missing documentation*
-        
-        % TODO.What_the_function_does_about_globally
-
-        Arguments
-        ---------
-        
-        **node_embeddings** *(nn.ParameterList, keyword-only)*
-        : A list containing all embeddings for each node type.
-        : keys: node type index
-        : values: tensors of shape (node_count, embedding_dimensions)
+        Flatten the node embeddings of all node types into a single tensor.
 
         Returns
         -------
         
         embeddings: torch.Tensor
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        : Tensor of shape [node_count, embedding_dimensions] containing the embedding of each node,
+        : gathered in the order of their global index in the knowledge graph.
         
         """
         embeddings: torch.Tensor = torch.zeros((self.node_count, self.node_embeddings[0].size(1)),
@@ -1418,7 +1380,20 @@ class KnowledgeGraph(Dataset):
     def from_hetero_data(cls, hetero_data: HeteroData) -> "KnowledgeGraph":
         """
         Create a new KGATE KnowledgeGraph instance from the PyTorch Geometric HeteroData object.
-        
+
+        The conversion follows the standard PyG conventions for heterogeneous graphs:
+
+        * Each node type of the HeteroData becomes a KGATE node type.
+        * Each edge type (source_type, relation, target_type) becomes a KGATE triplet type,
+          with its `edge_index` providing the head and tail local indices of the triplets.
+        * The relation name is the KGATE edge: edge types that share the same relation name
+          (with different node types) share a single edge index, as in the dataframe-based construction.
+
+        Since PyG nodes are only identified by their local index within their node type, nodes are
+        assigned the deterministic identifier "<node_type>_<local_index>" (e.g. "A_0", "B_3").
+        Global node indices are assigned contiguously, node type by node type, in the order of
+        `hetero_data.node_types`; node types that only appear in edge types are appended afterwards.
+
         Arguments
         ---------
         **hetero_data** *(HeteroData)*
@@ -1428,10 +1403,110 @@ class KnowledgeGraph(Dataset):
         -------
         **KnowledgeGraph**
         : The knowledge graph as a KGATE KnowledgeGraph object.
-            
+
+        Raises
+        ------
+        **TypeError**
+        : If `hetero_data` is not a PyTorch Geometric HeteroData object.
+
+        **ValueError #1**
+        : If the HeteroData contains no node, i.e. no node type with an `x` or `num_nodes`
+          attribute and no `edge_index`.
+
+        **ValueError #2**
+        : If the HeteroData contains no edge, i.e. no edge type with a non-empty `edge_index`.
         """
-        # TODO for PyTorch Geometric compatibility
-        pass
+        if not isinstance(hetero_data, HeteroData):
+            raise TypeError(f"Expected a torch_geometric.data.HeteroData object, but got {type(hetero_data)}.")
+
+        edge_types = list(hetero_data.edge_types)
+
+        # Node types: the declared node types first, then the node types that only appear in edge types
+        node_types = list(hetero_data.node_types)
+        for source_type, _, target_type in edge_types:
+            for node_type in (source_type, target_type):
+                if node_type not in node_types:
+                    node_types.append(node_type)
+
+        # Number of nodes per node type, inferred from the node storage
+        node_counts: Dict[str, int] = {node_type: 0 for node_type in node_types}
+        for node_type in node_types:
+            store = hetero_data[node_type]
+            if len(store) > 0:
+                num_nodes = store.num_nodes
+                if num_nodes is not None:
+                    node_counts[node_type] = int(num_nodes)
+            x = store.get("x")
+            if x is not None and x.dim() >= 1:
+                node_counts[node_type] = max(node_counts[node_type], int(x.size(0)))
+
+        # Collect the non-empty edge types, extending the node counts with the referenced local indices
+        edge_data: List[Tuple[Tuple[str, str, str], Tensor]] = []
+        for source_type, relation, target_type in edge_types:
+            edge_index = hetero_data[(source_type, relation, target_type)].get("edge_index")
+            if edge_index is None or edge_index.size(1) == 0:
+                continue
+            edge_index = edge_index.long()
+            node_counts[source_type] = max(node_counts[source_type], int(edge_index[0].max()) + 1)
+            node_counts[target_type] = max(node_counts[target_type], int(edge_index[1].max()) + 1)
+            edge_data.append(((source_type, relation, target_type), edge_index))
+
+        # Global index of the first node of each node type (contiguous blocks per node type)
+        type_offsets: Dict[str, int] = {}
+        offset = 0
+        for node_type in node_types:
+            type_offsets[node_type] = offset
+            offset += node_counts[node_type]
+
+        # Node identifiers and global indices: contiguous blocks per node type
+        node_to_index: Dict[str, int] = {}
+        for node_type in node_types:
+            for local_index in range(node_counts[node_type]):
+                node_to_index[f"{node_type}_{local_index}"] = type_offsets[node_type] + local_index
+
+        if not node_to_index:
+            raise ValueError("The HeteroData object contains no node: at least one node type must have an `x` or `num_nodes` attribute, or an edge with an `edge_index`.")
+        if not edge_data:
+            raise ValueError("The HeteroData object contains no edge: at least one edge type must have a non-empty `edge_index`.")
+
+        # Edge indices: one KGATE edge per relation name
+        edge_to_index: Dict[str, int] = {}
+        for triplet_type, _ in edge_data:
+            if triplet_type[1] not in edge_to_index:
+                edge_to_index[triplet_type[1]] = len(edge_to_index)
+
+        # Build the [4, triplet_count] tensor and the list of triplet types.
+        # Note: PyG edge_index uses local indices within each node type, so they are
+        # remapped to the global node indices of the knowledge graph here.
+        triplet_types: List[Tuple[str, str, str]] = []
+        graphindices = []
+        for (source_type, relation, target_type), edge_index in edge_data:
+            edge_index_row = torch.full((edge_index.size(1),), edge_to_index[relation], dtype = torch.long, device = edge_index.device)
+            triplet_type_row = torch.full((edge_index.size(1),), len(triplet_types), dtype = torch.long, device = edge_index.device)
+            graphindices.append(torch.stack([
+                edge_index[0] + type_offsets[source_type],
+                edge_index[1] + type_offsets[target_type],
+                edge_index_row,
+                triplet_type_row
+            ], dim = 0))
+            triplet_types.append((source_type, relation, target_type))
+
+        graphindices = torch.cat(graphindices, dim = 1)
+
+        # Metadata so that node identities and types stay accessible
+        metadata = pd.DataFrame({
+            "id": list(node_to_index.keys()),
+            "type": [node_type for node_type in node_types for _ in range(node_counts[node_type])]
+        })
+
+        return cls(
+            graphindices = graphindices,
+            metadata = metadata,
+            triplet_types = triplet_types,
+            node_to_index = node_to_index,
+            edge_to_index = edge_to_index,
+            node_type_to_index = {node_type: index for index, node_type in enumerate(node_types)}
+        )
 
     @classmethod
     def from_torchkge(  cls,
@@ -1468,7 +1543,7 @@ class KnowledgeGraph(Dataset):
                             for edge
                             in torchkge_kg.rel2ix]
             
-            new_kg = KnowledgeGraph(graphindices = graphindices,
+            new_kg = cls(graphindices = graphindices,
                                     triplet_types = triplet_types,
                                     node_to_index = torchkge_kg.ent2ix,
                                     edge_to_index = torchkge_kg.rel2ix,
@@ -1476,7 +1551,10 @@ class KnowledgeGraph(Dataset):
             return new_kg
         
         else:
-            new_kg = KnowledgeGraph(dataframe = torchkge_kg.get_df(),
+            dataframe = torchkge_kg.get_df().rename(
+                columns={"from": "head", "to": "tail", "rel": "edge"})
+
+            new_kg = cls(dataframe = dataframe,
                                     metadata = metadata,
                                     node_to_index = torchkge_kg.ent2ix,
                                     edge_to_index = torchkge_kg.rel2ix)

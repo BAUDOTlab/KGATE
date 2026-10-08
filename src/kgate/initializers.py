@@ -15,7 +15,7 @@ class Initializer:
     def initialize_embedding(self, 
                             sample_count: int,
                             embedding_dimensions: int,
-                            device: torch.device | str) -> nn.Parameter:
+                            device: torch.device | str = "cpu") -> nn.Parameter:
         """
         Initialize embeddings with number of nodes/edges and embedding dimensions.
         
@@ -34,8 +34,9 @@ class Initializer:
             
         Returns
         -------
-        **embedding** *(nn.Embedding)*
-            Embedding object with given parameters.
+        **embedding** *(nn.Parameter)*
+            Embedding tensor of shape [sample_count, embedding_dimensions],
+            initialized with a Xavier uniform distribution.
         
         """
         embedding = nn.Parameter(torch.empty((sample_count, embedding_dimensions), device = device))
@@ -103,7 +104,7 @@ class FeatureInitializer(Initializer):
                                 features: torch.Tensor,
                                 knowledge_graph: KnowledgeGraph,
                                 node_type: str,
-                                device: torch.device | str) -> nn.Parameter:
+                                device: torch.device | str = "cpu") -> nn.Parameter:
         """
         Initialize the embeddings of a node type given a set of input features.
 
@@ -186,7 +187,7 @@ class FeatureInitializer(Initializer):
             if node_type in self.node_features:
                 current_feature: pd.DataFrame = self.node_features[node_type]
                 
-                node_type_embeddings = self.initialize_embeddings(current_feature, knowledge_graph, node_type, device = device)
+                node_type_embeddings = self.initialize_embedding(current_feature, knowledge_graph, node_type, device = device)
                 
                 node_embeddings.append(nn.Parameter(node_type_embeddings))
             else:
@@ -260,12 +261,10 @@ class Node2VecInitializer(Initializer):
         : Node2Vec documentation: <https://pytorch-geometric.readthedocs.io/en/2.5.1/generated/torch_geometric.nn.models.Node2Vec.html>
         
         **loader** *(torch.utils.data.DataLoader)*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        : DataLoader yielding batches of (positive, negative) random walks used to train the model.
         
         **optimizer** *(torch.optim.SparseAdam)*
-        : *Missing documentation*
-        % TODO.What_that_variable_is_or_does
+        : Optimizer used to train the Node2Vec model (sparse Adam on the model parameters).
 
         """
     def __init__(self,

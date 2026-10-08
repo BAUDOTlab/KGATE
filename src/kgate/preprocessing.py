@@ -186,20 +186,20 @@ def clean_knowledge_graph(  configuration: Configuration,
     
     if configuration.preprocessing.flag_near_duplicate_edges:
         logging.info("Checking for near duplicates edges...")
-        theta_first_edge_type = configuration.preprocessing.params.theta_first_edge_type
-        theta_second_edge_type = configuration.preprocessing.params.theta_second_edge_type
+        theta_first_edge_type = configuration.preprocessing.theta_first_edge_type
+        theta_second_edge_type = configuration.preprocessing.theta_second_edge_type
         duplicate_edges, reverse_duplicate_edges = knowledge_graph.duplicates(theta_first_edge_type = theta_first_edge_type,
                                                                 theta_second_edge_type = theta_second_edge_type)
         if duplicate_edges:
-            logging.info(f"Adding {len(duplicate_edges)} synonymous edges ({[index_to_edge_name[edge] for duplicate_pair in duplicate_edges for edge in duplicate_pair]}) to the list of known duplicated edges.")
+            logging.info(f"Adding {len(duplicate_edges)} duplicate edges ({[index_to_edge_name[edge] for duplicate_pair in duplicate_edges for edge in duplicate_pair]}) to the list of known duplicated edges.")
             duplicated_edges_list.extend(duplicate_edges)
         if reverse_duplicate_edges:
-            logging.info(f"Adding {len(reverse_duplicate_edges)} anti-synonymous edges ({[index_to_edge_name[edge] for reverse_duplicate_pair in reverse_duplicate_edges for edge in reverse_duplicate_pair]}) to the list of known duplicated edges.")
+            logging.info(f"Adding {len(reverse_duplicate_edges)} reverse duplicate edges ({[index_to_edge_name[edge] for reverse_duplicate_pair in reverse_duplicate_edges for edge in reverse_duplicate_pair]}) to the list of known duplicated edges.")
             duplicated_edges_list.extend(reverse_duplicate_edges)
     
     if configuration.preprocessing.flag_cartesian_edges:
         logging.info("Checking for cartesian edges...")
-        cartesian_edges = knowledge_graph.cartesian_product_edges(configuration.preprocessing.params.theta_cartesian)
+        cartesian_edges = knowledge_graph.cartesian_product_edges(configuration.preprocessing.theta_cartesian)
 
     if configuration.preprocessing.make_directed:
         undirected_edges_names = configuration.preprocessing.make_directed_edges
@@ -215,7 +215,7 @@ def clean_knowledge_graph(  configuration: Configuration,
 
     # Split the knowledge graph into 3 datasets: train, validation, set
     logging.info("Splitting the dataset into train, validation and test sets...")
-    knowledge_graph.generate_masks(split_proportions = configuration.preprocessing.split)
+    knowledge_graph.generate_masks(split_proportions = configuration.preprocessing.split_proportions)
 
     # Verify the node coverage
     knowledge_graph_ok, _ = verify_node_coverage(knowledge_graph)
@@ -227,7 +227,6 @@ def clean_knowledge_graph(  configuration: Configuration,
     # Clean the dataset if set as TRUE in the config file
     if configuration.preprocessing.clean_train_set:
         logging.info("Cleaning the train set to avoid data leakage...")
-        logging.info("Step 1: with respect to validation set.")
         clean_datasets(knowledge_graph, known_reverses = duplicated_edges_list)
 
         clean_cartesians(knowledge_graph, known_cartesian = cartesian_edges)
@@ -334,26 +333,21 @@ def clean_datasets( knowledge_graph: KnowledgeGraph,
                     known_reverses: List[Tuple[int, int]]
                     ) -> None:
     """
-    Clean the train knowledge graph by removing reverse duplicate triplets contained 
-    in the second knowledge graph (test or validation).
+    Clean the training set by removing reverse duplicate triplets: for each pair
+    of known reverse edges, triplets of one edge whose (head, tail) pair appears
+    in the validation or test set with the reverse edge are removed from the
+    training set (and vice versa), in place.
 
     Arguments
     ---------
     
-    **kg_train** *(KnowledgeGraph)*
-    : The training knowledge graph subset.
-    
-    **kg_second** *(KnowledgeGraph)*
-    : The second knowledge graph subset, test or validation.
+    **knowledge_graph** *(KnowledgeGraph)*
+    : The knowledge graph with train, validation and test masks already
+      generated; the training set is cleaned in place.
     
     **known_reverses** *(List[Tuple[int, int]])*
-    : Each tuple contains two edges (first_edge_type, second_edge_type) that are known reverse edges.
-
-    Returns
-    -------
-    
-    **kg_train** *(KnowledgeGraph)*
-    : The cleaned train knowledge graph subset.
+    : Each tuple contains two edges (first_edge_type, second_edge_type) that are
+      known reverse edges.
     
     """
     logging.info("Cleaning knowledge graph by removing duplicated edges...")
@@ -404,6 +398,7 @@ def clean_datasets( knowledge_graph: KnowledgeGraph,
         edge_mask = knowledge_graph.edge_indices == first_edge_type
         indices_to_remove_from_train = torch.nonzero(pair_mask & edge_mask & knowledge_graph.train_mask).squeeze(1)
 
+        knowledge_graph.remove_triplets_from_training(indices_to_remove_from_train)
         logging.info(f"Found {len(indices_to_remove_from_train)} reverse triplets to remove for edge {first_edge_type} with reverse {second_edge_type}.")
     
 
@@ -435,6 +430,7 @@ def clean_cartesians(
     
     validation_test_mask = knowledge_graph.validation_mask | knowledge_graph.test_mask
     train_set = knowledge_graph.train_set
+    global_train_positions = knowledge_graph.train_mask.nonzero(as_tuple=False)[:, 0]
 
     for edge_index in known_cartesian:
         # Find all nodes in test set that participate in the cartesian edge
@@ -461,6 +457,7 @@ def clean_cartesians(
                 all_triplet_indices_to_move.extend(triplet_indices.tolist())
             
         if all_triplet_indices_to_move:
+            all_triplet_indices_to_move = global_train_positions[all_triplet_indices_to_move]
             knowledge_graph.remove_triplets_from_training(all_triplet_indices_to_move)
 
 

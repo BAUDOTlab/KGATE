@@ -40,7 +40,6 @@ clean_train_set = true
 # and third value is test set.
 split = [0.8, 0.1, 0.1] 
 
-[preprocessing.params]
 theta_cartesian = 0.8
 theta_first_edge_type = 0.8
 theta_second_edge_type = 0.8
@@ -63,6 +62,9 @@ edge_embedding_dimensions = -1
 # - Node2Vec: use the Node2Vec random walk algorithm to initialize embeddings.
 name = "Random"
 
+# Random distribution to use when generating the initial embeddings
+random_distribution = "xavier_uniform"
+
 # The following parameters are only used with Node2Vec
 walk_length = 10
 context_size = 8
@@ -71,12 +73,23 @@ context_size = 8
 # The encoder aggregates the information from the initial embedding vectors
 # and outputs a new representation of size model.node_embedding_dimension and model.edge_embedding_dimension.
 # Read the documentation for more information about the different encoders.
+# For a more fine-tuned encoder, create your own model and plug it in KGATE
 # Supported options are:
 # - GCN: Graph Convolutional Network proposed by Kipf & Welling 2017
 # - GAT: Graph Attention Network improvment proposed by Brody et al. 2021
 name = "None" #Lookup table
 gnn_layer_number = 1
 
+# How the encoder aggregates the node information
+# Supported options are:
+# sum: sum the embeddings (may lead to very large embeddings)
+# mean: average the embeddings
+gnn_aggregation_mode = "mean"
+
+# Which activation function is used between the convolution layers
+# of the encoder.
+# Supports any PyToch activation function
+gnn_activation_function = "ReLU"
 
 [model.decoder]
 # The decoder learns from the embedding to reconstruct the graph.
@@ -98,6 +111,46 @@ dissimilarity = "L2"
 
 # Number of convolutional filter used by ConvKB
 filter_count = 3
+
+[model.regularizer]
+# Regularization function applied to the parameters selected by `params` below.
+# It is applied by the trainer at the end of every epoch and before an evaluation.
+# This is the module that gathers what the decoders used to do in their own
+# `normalize_parameters` method (e.g. L2-normalizing their node embeddings).
+# Supported options are:
+# - None: no regularization (default).
+# - L1: row-wise L1 normalization of each parameter.
+# - L2: row-wise L2 normalization of each parameter (what TransE, RESCAL and DistMult
+#       used to do to their node embeddings).
+name = "None"
+
+# Which parameters to regularize:
+# - node: only the node embeddings
+# - edge: only the edge embeddings
+# - all: both
+params = "node"
+
+[model.normalizer]
+# Normalization function applied to the embeddings selected by `params` below.
+# It is applied by the Architect between the encoder and the decoder step, so
+# Supported options are:
+# - None: no normalization.
+# - L1: row-wise L1 normalization of each embedding.
+# - L2: row-wise L2 normalization of each embedding (default; what RESCAL,
+#       DistMult, TransE, TransH, TransR and TransD used to do to their head
+#       and tail embeddings in their `score` method).
+initial_normalization = "L2"
+
+training_normalization = "L2"
+
+# Which embeddings to normalize after the initializer run:
+# - node: only the node embeddings (head and tail)
+# - edge: only the edge embeddings
+# - all: both
+initial_parameters = "all"
+
+# Same as above, but during the training loop.
+training_parameters = "all"
 
 [model.loss]
 # The name of the loss function to use
