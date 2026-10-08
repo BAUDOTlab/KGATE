@@ -312,20 +312,23 @@ class BernoulliNegativeSampler(NegativeSampler):
 
         Arguments
         ---------
-        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the integer key of heads, tails, edges and triplets
-            of the edges in the current batch.
-            Here, batch_size is batch.shape[1].
-        negative_triplet_count: int, optional, default to None
-            Number of negative samples to create from each triplet.
+        
+        **batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
+        : Tensor containing the integer key of heads, tails, edges and triplets
+        : of the edges in the current batch.
+        : Here, batch_size is batch.shape[1].
+        
+        **negative_triplet_count** *(int, optional, default to None)*
+        : Number of negative samples to create from each triplet.
 
         Returns
         -------
-        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, negative_triplet_count * batch_size]
-            Tensor containing the integer key of negatively sampled triplets of
-            the edges in the current batch.
-            Here, batch_size is batch.shape[1].
-            
+        
+        **negative_triplets_batch** *(torch.Tensor, dtype: torch.long, shape: [4, negative_triplet_count * batch_size])*
+        : Tensor containing the integer key of negatively sampled triplets of
+        : the edges in the current batch.
+        : Here, batch_size is batch.shape[1].
+        
         """
         device = batch.device
         batch_size = batch.shape[1]
@@ -784,27 +787,27 @@ class MixedNegativeSampler(NegativeSampler):
         ---------
 
         **knowledge_graph** *(KnowledgeGraph)*
-            Main knowledge graph (usually training one).
+         : Main knowledge graph (usually training one).
 
         **negative_triplet_count** *(int, optional, default to 1)*
-            Number of negative samples to create from each triplet with the Uniform and Bernoulli samplers.
-            Since the Positional sampler always adds one negative sample per triplet, the total number of
-            negative samples per triplet is 2 * negative_triplet_count + 1.
+         : Number of negative samples to create from each triplet with the Uniform and Bernoulli samplers.
+         : Since the Positional sampler always adds one negative sample per triplet, the total number of
+         : negative samples per triplet is 2 * negative_triplet_count + 1.
 
         Attributes
         ----------
 
         **negative_triplet_count** *(int)*
-            Number of negative samples to create from each triplet with the Uniform and Bernoulli samplers.
+         : Number of negative samples to create from each triplet with the Uniform and Bernoulli samplers.
 
         **uniform_sampler** *(UniformNegativeSampler)*
-            Initialization of the UniformNegativeSampler class as an attribute.
+         : Initialization of the UniformNegativeSampler class as an attribute.
 
         **bernoulli_sampler** *(BernoulliNegativeSampler)*
-            Initialization of the BernoulliNegativeSampler class as an attribute.
+         : Initialization of the BernoulliNegativeSampler class as an attribute.
 
         **positional_sampler** *(PositionalNegativeSampler)*
-            Initialization of the PositionalNegativeSampler class as an attribute.
+         : Initialization of the PositionalNegativeSampler class as an attribute.
 
         Notes
         -----
@@ -837,16 +840,17 @@ class MixedNegativeSampler(NegativeSampler):
         Arguments
         ---------
         
-        batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
+        **batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
         : Tensor containing the integer key of heads, tails, edges and triplets of the edges in the current batch.
         : Here, batch_size is batch.shape[1].
-        negative_triplet_count: int, optional, default to 1
+        
+        **negative_triplet_count** *(int, optional, default to 1)*
         : Number of negative samples to create from each triplet.
 
         Returns
         -------
         
-        combined_negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, 2 * negative_triplet_count * batch_size + batch_size]
+        **combined_negative_triplets_batch** *(torch.Tensor, dtype: torch.long, shape: [4, 2 * negative_triplet_count * batch_size + batch_size])*
         : Tensor containing the integer key of negatively sampled heads and tails from both samplers.
         : Here, batch_size is batch.shape[1].
         

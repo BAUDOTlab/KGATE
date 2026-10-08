@@ -57,12 +57,10 @@ class Predictions:
         : Among the ranking of all filtered predictions, the rank of the true result.
         : True triplets that are not the target of the prediction are filtered out.
 
-        **sphere_head_predictions** *(torch.Tensor, optional, keyword only)*
-        : Head predictions when `sphere_embeddings` hyperparameter is true.
+        **sphere_predictions** *(torch.Tensor, optional, keyword only)*
+        : Global indices of the triplets predicted positive when `sphere_embeddings` is True
+        : (per-triplet booleans, see `LinkPredictionEvaluator.evaluate`), instead of ranks.
         
-        **sphere_tail_predictions** *(torch.Tensor, optional, keyword only)*
-        : Head predictions when `sphere_embeddings` hyperparameter is true.
-            
         Attributes
         ----------
         
@@ -73,11 +71,8 @@ class Predictions:
         : Among the ranking of all filtered predictions, the rank of the true result.
         : True triplets that are not the target of the prediction are filtered out.
 
-        **sphere_head_predictions** *(torch.Tensor, optional, keyword only)*
-        : Head predictions when `sphere_embeddings` hyperparameter is true.
-        
-        **sphere_tail_predictions** *(torch.Tensor, optional, keyword only)*
-        : Head predictions when `sphere_embeddings` hyperparameter is true.
+        **sphere_predictions** *(torch.Tensor)*
+        : Global indices of the triplets predicted positive when `sphere_embeddings` is True.
         """
 
         self.true_predictions_rank = true_predictions_rank
@@ -815,7 +810,12 @@ class LinkPredictionEvaluator:
         : A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
         
         **sphere_embeddings** *(bool, optional, default to False)*
-        : If the given score was calculated from `spheric_score`.
+        : If `True`, the decoder uses sphere embeddings (SpherE, Li et al. 2024),
+        : and the returned `Predictions` are per-triplet positive predictions
+        : (global indices of the triplets whose spheric score, computed by the
+        : decoder's `sphere_score` on the true candidate, is >= 0), instead of
+        : ranks. The decoder must be TransR or RotatE (with `sphere_embeddings`
+        : enabled), as they are the only ones implementing `sphere_score`.
 
         **verbose** *(bool, default = True)*
         : Indicate whether a progress bar should be displayed during
@@ -868,8 +868,10 @@ class LinkPredictionEvaluator:
                 encoder_node_embedding_dimensions: int = self.embedding_dimensions
 
             if sphere_embeddings:
-                # SpherE: per-batch lists of triplet indices with at least one
-                # positive (>= 0) candidate score, accumulated over all batches.
+                # SpherE (Li et al. 2024): per-triplet positive predictions — the
+                # decoder's spheric score of the true candidate is >= 0 (i.e. the
+                # translated sphere of the head and the sphere of the tail
+                # overlap). Global triplet indices accumulated over all batches.
                 sphere_positive_heads = []
                 sphere_positive_tails = []
 
@@ -903,9 +905,11 @@ class LinkPredictionEvaluator:
                     )
 
                 if sphere_embeddings:
-                    # SpherE: triplets with at least one positive (>= 0) candidate score
-                    # (offset to global triplet indices, accumulated over batches)
-                    sphere_positive_tails.append(((scores >= 0).nonzero()[:, 0] + i * batch_size).cpu())
+                    arange = torch.arange(head_index.shape[0], device = device)
+                    batch_sphere_score = decoder.sphere_score(head_indices = head_index,
+                                                              tail_indices = tail_index,
+                                                              dissimilarity_score = -scores[arange, tail_index])
+                    sphere_positive_tails.append((arange[batch_sphere_score >= 0] + i * batch_size).cpu())
 
                 filtered_scores = filter_scores(
                     scores = scores, 
@@ -938,9 +942,11 @@ class LinkPredictionEvaluator:
                     edge_embeddings = inference_edge_embeddings)
 
                 if sphere_embeddings:
-                    # SpherE: triplets with at least one positive (>= 0) candidate score
-                    # (offset to global triplet indices, accumulated over batches)
-                    sphere_positive_heads.append(((scores >= 0).nonzero()[:, 0] + i * batch_size).cpu())
+                    arange = torch.arange(head_index.shape[0], device = device)
+                    batch_sphere_score = decoder.sphere_score(head_indices = head_index,
+                                                              tail_indices = tail_index,
+                                                              dissimilarity_score = -scores[arange, head_index])
+                    sphere_positive_heads.append((arange[batch_sphere_score >= 0] + i * batch_size).cpu())
 
                 filtered_scores = filter_scores(
                     scores = scores, 
@@ -965,10 +971,10 @@ class LinkPredictionEvaluator:
             self.evaluated = True
 
             if sphere_embeddings:
-                # For sphere embeddings: predictions are unranked booleans, so the
-                # rank-based Predictions fields stay None (see `Predictions.__str__`).
+                # For sphere embeddings: predictions are per-triplet booleans, so
+                # the rank-based Predictions fields stay None (see `Predictions.__str__`).
                 # `head_predictions` / `tail_predictions` hold the global indices of
-                # the triplets with at least one positive (>= 0) candidate score.
+                # the triplets predicted positive (spheric score of the true candidate >= 0).
                 tail_predictions = torch.cat(sphere_positive_tails) if sphere_positive_tails else torch.empty(0).long().to(device)
                 head_predictions = torch.cat(sphere_positive_heads) if sphere_positive_heads else torch.empty(0).long().to(device)
 

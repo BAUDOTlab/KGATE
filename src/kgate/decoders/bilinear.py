@@ -414,22 +414,22 @@ class RESCAL(BilinearDecoder):
         ---------
         
         **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float)*
-            The node embedding as a ParameterList containing one Parameter per node type,
-            each of shape [node_count for the node type, embedding_dimensions],
-            or only one if there is no node type.
+         : The node embedding as a ParameterList containing one Parameter per node type,
+         : each of shape [node_count for the node type, embedding_dimensions],
+         : or only one if there is no node type.
         
         **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float)*
-            The edge embedding.
+         : The edge embedding.
             : Note: not used by the RESCAL normalization; returned unchanged.
         
         Returns
         -------
         
         **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float)*
-            The normalized node embedding object (row-wise L2 normalization in place).
+         : The normalized node embedding object (row-wise L2 normalization in place).
         
         **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float)*
-            The unchanged edge embedding object.
+         : The unchanged edge embedding object.
         
         """
         for embedding in node_embeddings:
@@ -472,36 +472,36 @@ class RESCAL(BilinearDecoder):
         ---------
         
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, embedding_dimensions], keyword-only)*
-            Embeddings of all nodes.
+         : Embeddings of all nodes.
         
         **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
-            The indices of the head nodes (from KG).
+         : The indices of the head nodes (from KG).
         
         **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
-            The indices of the tail nodes (from KG).
+         : The indices of the tail nodes (from KG).
         
         **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
-            The indices of the edges (from KG).
+         : The indices of the edges (from KG).
         
         **node_inference** *(bool, optional, default to True, keyword-only)*
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+         : If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
         
         **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
-            Head node embeddings.
+         : Head node embeddings.
         
         **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
-            Tail node embeddings.
+         : Tail node embeddings.
         
         **edge_embeddings_inferred** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions, embedding_dimensions])*
-            Edge projection matrices.
+         : Edge projection matrices.
         
         **candidates** *(torch.Tensor)*
-            Candidate embeddings: shape [batch_size, node_count, embedding_dimensions]
-            when inferring nodes, [batch_size, edge_count, embedding_dimensions, embedding_dimensions]
-            when inferring edges.
+         : Candidate embeddings: shape [batch_size, node_count, embedding_dimensions]
+         : when inferring nodes, [batch_size, edge_count, embedding_dimensions, embedding_dimensions]
+         : when inferring edges.
 
         """
         batch_size = head_indices.shape[0]

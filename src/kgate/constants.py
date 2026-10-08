@@ -22,6 +22,7 @@ SUPPORTED_DECODERS = [
     "TransR",
     "TransD",
     "TorusE",
+    "RotatE",
     "RESCAL",
     "DistMult",
     "ComplEx",

@@ -189,8 +189,12 @@ class EdgeInference:
         : A tensor containing one embedding by edge type, of shape (edge_count, embedding_dimensions).
         
         **sphere_embeddings** *(bool, default to False, keyword-only)*
-        : If `True`, the decoder uses sphere embeddings and the predictions
-        : are booleans indicating whether the predicted edge score is non-negative.
+        : If `True`, the decoder uses sphere embeddings (SpherE, Li et al. 2024):
+        : the score of each candidate edge is the overlap of the two node spheres,
+        : `-max(d - r_head - r_tail, -alpha*r_head - beta*r_tail)`, the candidates
+        : are ranked by that score, and known (true) candidates are not filtered
+        : out (set retrieval keeps them in the predicted set).
+        : The decoder must be TransR or RotatE (with `sphere_embeddings` enabled).
         
         **verbose** *(bool, default to True, keyword-only)*
         : Indicate whether a progress bar should be displayed during evaluation.
@@ -204,6 +208,8 @@ class EdgeInference:
         
         **scores** *(torch.Tensor, shape: [len(head_indices), top_k], dtype: torch.float)*
         : The scores of the predicted edges, with known (true) edges filtered out.
+        : If `sphere_embeddings` is True, these are SpherE scores and the known
+        : edges are not filtered out.
         
         """
         assert top_k <= self.knowledge_graph.edge_count, f"top_k cannot be larger than the number of edges of the knowledge graph ({self.knowledge_graph.edge_count})."
@@ -243,20 +249,20 @@ class EdgeInference:
                                                        tail_embeddings = tail_embeddings,
                                                        edge_embeddings = candidates)
 
-                if not sphere_embeddings:
+                if sphere_embeddings:
+                    head_radius = decoder.node_radii[head_indices, 0]
+                    tail_radius = decoder.node_radii[tail_indices, 0]
+                    batch_scores = -torch.max(  -batch_scores - (head_radius + tail_radius).unsqueeze(1),
+                                                (-decoder.alpha * head_radius - decoder.beta * tail_radius).unsqueeze(1))
+                else:
+                    # Known (true) edges are filtered out, except in sphere mode
+                    # (set retrieval keeps them in the predicted set).
                     batch_scores = filter_scores(batch_scores, self.knowledge_graph.graphindices.to(device), "edge", head_indices, tail_indices, None)
 
-                    batch_scores, indices = batch_scores.sort(descending = True)
+                batch_scores, indices = batch_scores.sort(descending = True)
 
-                    predictions[i * batch_size: i * batch_size + batch_len] = indices[:, :top_k]
-                    scores[i * batch_size: i * batch_size + batch_len] = batch_scores[:, :top_k]
-                
-                if sphere_embeddings:
-                    # TODO: check if 'i' is the correct index to put here
-                    if batch_scores[i] >= 0:
-                        predictions[i] = True
-                    else:
-                        predictions[i] = False
+                predictions[i * batch_size: i * batch_size + batch_len] = indices[:, :top_k]
+                scores[i * batch_size: i * batch_size + batch_len] = batch_scores[:, :top_k]
 
             return predictions.cpu(), scores.cpu()
 
@@ -336,8 +342,13 @@ class NodeInference:
         : of shape (edge_count, embedding_dimensions).
         
         **sphere_embeddings** *(bool, default to False, keyword-only)*
-        : If `True`, the decoder uses sphere embeddings and the predictions
-        : are booleans indicating whether the predicted node score is non-negative.
+        : If `True`, the decoder uses sphere embeddings (SpherE, Li et al. 2024):
+        : the score of each candidate node is the overlap of the sphere of the
+        : known node and the sphere of the candidate,
+        : `-max(d - r_known - r_candidate, -alpha*r_known - beta*r_candidate)`, the
+        : candidates are ranked by that score, and known (true) candidates are not
+        : filtered out (set retrieval keeps them in the predicted set).
+        : The decoder must be TransR or RotatE (with `sphere_embeddings` enabled).
         
         **verbose** *(bool, default to True, keyword-only)*
         : Indicate whether a progress bar should be displayed during evaluation.
@@ -352,6 +363,8 @@ class NodeInference:
         **scores** *(torch.Tensor, shape: [len(node_indices), top_k], dtype: torch.float)*
         : The scores of the predicted nodes, with known (true) nodes filtered out
         : (set to -Inf) by `filter_scores`.
+        : If `sphere_embeddings` is True, these are SpherE scores and the known
+        : nodes are not filtered out.
         
         """
         assert top_k <= self.knowledge_graph.node_count, f"top_k cannot be larger than the number of nodes of the knowledge graph ({self.knowledge_graph.node_count})."
@@ -407,7 +420,14 @@ class NodeInference:
                                                            tail_embeddings = candidates,
                                                            edge_embeddings = edge_embeddings_inferred)
 
-                if not sphere_embeddings:
+                if sphere_embeddings:
+                    known_radius = decoder.node_radii[known_nodes, 0]
+                    candidate_radius = decoder.node_radii[:, 0]
+                    batch_scores = -torch.max(  -batch_scores - known_radius.unsqueeze(1) - candidate_radius.unsqueeze(0),
+                                                -decoder.alpha * known_radius.unsqueeze(1) - decoder.beta * candidate_radius.unsqueeze(0))
+                else:
+                    # Known (true) nodes are filtered out, except in sphere mode
+                    # (set retrieval keeps them in the predicted set).
                     batch_scores = filter_scores(batch_scores,
                                                 self.knowledge_graph.graphindices.to(device),
                                                 missing_triplet_part,
@@ -415,16 +435,9 @@ class NodeInference:
                                                 known_edges,
                                                 None)
 
-                    batch_scores, indices = batch_scores.sort(descending = True)
+                batch_scores, indices = batch_scores.sort(descending = True)
 
-                    predictions[i * batch_size: i * batch_size + batch_len] = indices[:, :top_k]
-                    scores[i * batch_size: i * batch_size + batch_len] = batch_scores[:, :top_k]
-                
-                if sphere_embeddings:
-                    # TODO: check if 'i' is the correct index to put here
-                    if batch_scores[i] >= 0:
-                        predictions[i] = True
-                    else:
-                        predictions[i] = False
+                predictions[i * batch_size: i * batch_size + batch_len] = indices[:, :top_k]
+                scores[i * batch_size: i * batch_size + batch_len] = batch_scores[:, :top_k]
 
             return predictions.cpu(), scores.cpu()

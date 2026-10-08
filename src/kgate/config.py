@@ -207,7 +207,7 @@ class Configuration:
 
         Default to 42.
         """
-        return self._configuration["seed"]
+        return self._configuration.get("seed", 42)
     
     @seed.setter
     def seed(self, new_seed: int):
@@ -284,7 +284,7 @@ class Configuration:
 
         Default to True.
         """
-        return self._configuration["verbose"]
+        return self._configuration.get("verbose", True)
     
     @verbose.setter
     def verbose(self, verbose: bool):
@@ -302,7 +302,7 @@ class Configuration:
 
         Default to 256.
         """
-        return self._configuration["model"]["node_embedding_dimensions"]
+        return self._configuration["model"].get("node_embedding_dimensions", 256)
 
     @node_embedding_dimensions.setter
     def node_embedding_dimensions(self, dimensions: int):
@@ -320,9 +320,9 @@ class Configuration:
         make the edge embedding vectors to have the same dimension as the node embedding
         vector.
 
-        Default to -1.
+        Default to node_embedding_dimensions.
         """
-        return self._configuration["model"]["edge_embedding_dimensions"]
+        return self._configuration["model"].get("edge_embedding_dimensions", self.node_embedding_dimensions)
 
     @edge_embedding_dimensions.setter
     def edge_embedding_dimensions(self, dimensions: int):
@@ -359,7 +359,7 @@ class Preprocessing_Configuration:
 
         Defaults to True.
         """
-        return self._configuration["run_preprocessing"]
+        return self._configuration.get("run_preprocessing", True)
 
     @run.setter
     def run(self, run_preprocessing: bool):
@@ -372,7 +372,7 @@ class Preprocessing_Configuration:
         
         Defaults to True.
         """
-        return self._configuration["remove_duplicate_triplets"]
+        return self._configuration.get("remove_duplicate_triplets", True)
 
     @remove_duplicate_triplets.setter
     def remove_duplicate_triplets(self, remove_duplicate_triplets: bool):
@@ -423,7 +423,7 @@ class Preprocessing_Configuration:
         <https://doi.org/10.1101/2025.01.23.634511>
         Preprint, bioRxiv, January 26, 2025.
         """
-        return self._configuration["flag_near_duplicate_edges"]
+        return self._configuration.get("flag_near_duplicate_edges", True)
 
     @flag_near_duplicate_edges.setter
     def flag_near_duplicate_edges(self, flag: bool):
@@ -452,7 +452,7 @@ class Preprocessing_Configuration:
         <https://arxiv.org/pdf/2003.08001.pdf>
         SIGMOD’20, June 14–19, 2020, Portland, OR, USA
         """
-        return self._configuration["theta_first_edge_type"]
+        return self._configuration.get("theta_first_edge_type", 0.8)
 
     @theta_first_edge_type.setter
     def theta_first_edge_type(self, theta: float):
@@ -483,7 +483,7 @@ class Preprocessing_Configuration:
         <https://arxiv.org/pdf/2003.08001.pdf>
         SIGMOD’20, June 14–19, 2020, Portland, OR, USA
         """
-        return self._configuration["theta_second_edge_type"]
+        return self._configuration.get("theta_second_edge_type", 0.8)
 
     @theta_second_edge_type.setter
     def theta_second_edge_type(self, theta: float):
@@ -527,8 +527,8 @@ class Preprocessing_Configuration:
 
         Defaults to True.
         """
-        return self._configuration["clean_train_set"]
-    
+        return self._configuration.get("clean_train_set", True)
+
     @clean_train_set.setter
     def clean_train_set(self, clean: bool):
         self._configuration["clean_train_set"] = clean
@@ -594,7 +594,7 @@ class Initializer_Configuration:
 
         Defaults to Random.
         """
-        return self._configuration["name"]
+        return self._configuration.get("name", "Random")
 
     @name.setter
     def name(self, name: str):
@@ -689,7 +689,7 @@ class Encoder_Configuration:
 
         Defaults to Default.
         """
-        return self._configuration["name"]
+        return self._configuration.get("name", "None")
 
     @name.setter
     def name(self, name: str):
@@ -727,7 +727,7 @@ class Encoder_Configuration:
 
         Default to 1.
         """
-        return self._configuration["gnn_layer_number"]
+        return self._configuration.get("gnn_layer_number", 1)
 
     @gnn_layers.setter
     def gnn_layers(self, gnn_layers: int):
@@ -775,6 +775,7 @@ class Decoder_Configuration:
         - :class:`~kgate.decoder.TransR`: Translational model proposed by Lin et al. 2015
         - :class:`~kgate.decoder.TransD`: Translational model proposed by Ji et al. 2015
         - :class:`~kgate.decoder.TorusE`: Translational model proposed by Ebisu and Ichise 2017
+        - :class:`~kgate.decoder.RotatE`: Rotational model proposed by Sun et al. 2019
         - :class:`~kgate.decoder.RESCAL`: Bilinear model proposed by Nickel et al. 2011
         - :class:`~kgate.decoder.DistMult`: Bilinear model proposed by Yang et al. 2014
         - :class:`~kgate.decoder.ComplEx`: Bilinear model proposed by Trouillon et al. 2016
@@ -786,7 +787,7 @@ class Decoder_Configuration:
 
         Defaults to TransE.
         """
-        return self._configuration["name"]
+        return self._configuration.get("name", "TransE")
 
     @name.setter
     def name(self, name: str):
@@ -828,7 +829,7 @@ class Decoder_Configuration:
 
         Default is L2
         """
-        return self._configuration["dissimilarity"]
+        return self._configuration.get("dissimilarity", "L2")
     
     @dissimilarity.setter
     def dissimilarity(self, dissimilarity: str):
@@ -845,12 +846,63 @@ class Decoder_Configuration:
 
         Default is 3.
         """
-        return self._configuration["filter_count"]
+        return self._configuration.get("filter_count", 3)
 
     @filter_count.setter
     def filter_count(self, filter_count: int):
         assert filter_count >= 1, "Cannot use less than one filter."
         self._configuration["filter_count"] = filter_count
+
+    @property
+    def sphere_embeddings(self) -> bool:
+        """
+        If node embeddings should be considered as spheres.
+        Adaptation of SpherE (Li et al. 2024).
+
+        Only the translational decoders TransR and RotatE support sphere
+        embeddings; it is ignored by the others. MRR is currently
+        incompatible with sphere embeddings, due to the absence of ranks.
+
+        Default is False.
+        """
+        return self._configuration.get("sphere_embeddings", False)
+
+    @sphere_embeddings.setter
+    def sphere_embeddings(self, sphere_embeddings: bool):
+        assert isinstance(sphere_embeddings, bool), "sphere_embeddings must be a boolean."
+        self._configuration["sphere_embeddings"] = sphere_embeddings
+
+    @property
+    def sphere_alpha(self) -> float:
+        """
+        Hyperparameter of the SpherE score function (radius penalty weight on the head).
+
+        Only used if `sphere_embeddings` is True and the decoder is TransR or RotatE.
+
+        Default is -1.
+        """
+        return self._configuration.get("sphere_alpha", 0.1)
+
+    @sphere_alpha.setter
+    def sphere_alpha(self, sphere_alpha: float):
+        assert isinstance(sphere_alpha, (int, float)), "sphere_alpha must be a number."
+        self._configuration["sphere_alpha"] = sphere_alpha
+
+    @property
+    def sphere_beta(self) -> float:
+        """
+        Hyperparameter of the SpherE score function (radius penalty weight on the tail).
+
+        Only used if `sphere_embeddings` is True and the decoder is TransR or RotatE.
+
+        Default is -1.
+        """
+        return self._configuration.get("sphere_beta", 0.0)
+
+    @sphere_beta.setter
+    def sphere_beta(self, sphere_beta: float):
+        assert isinstance(sphere_beta, (int, float)), "sphere_beta must be a number."
+        self._configuration["sphere_beta"] = sphere_beta
 
 
 class Regularizer_Configuration:
@@ -907,7 +959,7 @@ class Regularizer_Configuration:
 
         Defaults to None.
         """
-        return self._configuration["name"]
+        return self._configuration.get("name", "None")
 
     @name.setter
     def name(self, name: str):
@@ -947,7 +999,7 @@ class Regularizer_Configuration:
 
         Defaults to `node`.
         """
-        return self._configuration["params"]
+        return self._configuration.get("params", "node")
 
     @params.setter
     def params(self, params: str):
@@ -1028,7 +1080,7 @@ class Normalizer_Configuration:
         TransE, TransH, TransR and TransD L2-normalizing their head and tail
         embeddings).
         """
-        return self._configuration["initial_normalization"]
+        return self._configuration.get("initial_normalization", "L2")
 
     @initial_normalization.setter
     def initial_normalization(self, name: str):
@@ -1051,7 +1103,7 @@ class Normalizer_Configuration:
 
         Defaults to L2 normalization.
         """
-        return self._configuration["training_normalization"]
+        return self._configuration.get("training_normalization", "L2")
 
     @training_normalization.setter
     def training_normalization(self, name: str):
@@ -1089,7 +1141,7 @@ class Normalizer_Configuration:
 
         Defaults to `all`.
         """
-        return self._configuration["initial_parameters"]
+        return self._configuration.get("initial_parameters", "all")
 
     @initial_parameters.setter
     def initial_parameters(self, params: str):
@@ -1105,7 +1157,7 @@ class Normalizer_Configuration:
 
         Defaults to `all`.
         """
-        return self._configuration["training_parameters"]
+        return self._configuration.get("training_parameters", "all")
 
     @training_parameters.setter
     def training_parameters(self, params: str):
@@ -1193,7 +1245,7 @@ class Loss_Configuration:
 
         Defaults to Margin
         """
-        return self._configuration["name"]
+        return self._configuration.get("name", "Margin")
 
     @name.setter
     def name(self, new_name: str):
@@ -1232,7 +1284,7 @@ class Loss_Configuration:
 
         Default is 1.
         """
-        return self._configuration["margin"]
+        return self._configuration.get("margin", 1)
 
     @margin.setter
     def margin(self, margin: int) -> int:

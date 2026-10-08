@@ -209,16 +209,16 @@ class ConvolutionalDecoder(Module):
         -------
         
         **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions])*
-            Head node embeddings.
+         : Head node embeddings.
         
         **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, node_embedding_dimensions])*
-            Tail node embeddings.
+         : Tail node embeddings.
         
         **edge_embeddings_inferred** *(torch.Tensor, dtype: torch.float, shape: [edge_count, edge_embedding_dimensions])*
-            Edge embeddings.
+         : Edge embeddings.
         
         **candidates** *(torch.Tensor)*
-            Candidate embeddings for nodes or edges.
+         : Candidate embeddings for nodes or edges.
         
         """    
         raise NotImplementedError("The inference_prepare_candidates method must be implemented by the convolutional decoder.")

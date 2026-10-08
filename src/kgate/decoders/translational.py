@@ -908,6 +908,15 @@ class TransR(TranslationalDecoder):
             https://doi.org/10.1609/aaai.v29i1.9571
         
             In Twenty-Ninth AAAI Conference on Artificial Intelligence, February 2015
+        
+        * Zihao Li, Yuyi Ao, Jingrui He.
+        
+            `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval.`
+        
+            https://arxiv.org/abs/2404.19130
+        
+            ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR 2024), July 14–18, 2024, Washington, DC, USA.
+            (Reference for the optional `sphere_embeddings` adaptation.)
 
         Arguments
         ---------
@@ -1069,7 +1078,7 @@ class TransR(TranslationalDecoder):
         batch_score = - self.dissimilarity( self.project(head_embeddings, projection_matrix) + edge_embeddings,
                                             self.project(tail_embeddings, projection_matrix))
         
-        # Apply spheric embeddings
+        # Apply spheric embeddings (SpherE, Li et al. 2024)
         if self.sphere_embeddings:
             if head_indices is None or tail_indices is None:
                 raise ValueError(
@@ -1077,7 +1086,7 @@ class TransR(TranslationalDecoder):
                     "(they are used to look up the node radii).")
             batch_score = self.sphere_score(head_indices = head_indices,
                                             tail_indices = tail_indices,
-                                            dissimilarity_score = batch_score)
+                                            dissimilarity_score = -batch_score)
         
         return batch_score
     
@@ -1292,53 +1301,68 @@ class TransR(TranslationalDecoder):
                     dissimilarity_score: Tensor
                     )-> Tensor:
         """
-        Adaptation of SpherE model detailed in the paper referenced below.
+        SpherE (Li et al. 2024) score function.
         
-        Only used - in `score` - if the config parameter `sphere_embeddings` is set to true.
+        Each node is represented by a center and a radius (`node_radii`); the
+        edge is a translation applied to the head. A triplet is positive when
+        the translated sphere of the head and the sphere of the tail overlap,
+        i.e. when `dissimilarity_score - radius_head - radius_tail <= 0`.
+
+        Only used in `score` if `sphere_embeddings` is True.
 
         References
         ----------
+        
         Zihao Li, Yuyi Ao, Jingrui He.
-        `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval`
-        https://arxiv.org/pdf/2404.19130
-        Journal_period_date
+        
+        `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval.`
+        
+        ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR 2024), July 14–18, 2024, Washington, DC, USA.
+        
+        https://arxiv.org/abs/2404.19130
 
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes for the current batch.
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes for the current batch.
-        dissimilarity_score: torch.Tensor, keyword-only
-            Dissimilarity score, output of the `decoder.score` function.
-
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes for the current batch.
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes for the current batch.
+        
+        **dissimilarity_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only)*
+        : The raw dissimilarity (distance) of each triplet, i.e. the negated
+        : output of the non-spheric `score` function.
+        
         Returns
         -------
-        score: torch.Tensor
-            The score of each triplet as a tensor, using SpherE formula.
-            Score is positive for a positive triplet. Score is negative for a negative triplet.
-            
+        
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
+        : The score of each triplet: `-max(d - r_head - r_tail, -alpha*r_head - beta*r_tail)`.
+        : Positive for a positive triplet (overlapping spheres), negative otherwise.
+        
         Notes
         -----
-        Only return score values. Architect handles interpreting these values as booleans - yes for positive
-        and no for negative - and creating the list of results, as it does hit@k ranked lists.
+        Only returns score values. The Architect (or the caller) interprets
+        these values as booleans — yes for positive and no for negative —
+        and builds the list of results, as it does for hit@k ranked lists.
         
         """
-        # Creation of node radii
-        head_radius = self.node_radii[head_indices]
-        tail_radius = self.node_radii[tail_indices]
+        # Radius of the head and tail nodes of each triplet
+        # (`[:, 0]` keeps the radii 1-D so they broadcast against the [batch] scores)
+        head_radius = self.node_radii[head_indices, 0]
+        tail_radius = self.node_radii[tail_indices, 0]
         
-        # TODO: check why stack like this, opposed to the original formula
-        # Loss function from SpherE article
-        spheric_score = torch.stack(dissimilarity_score - head_radius - tail_radius,
-                                    - self.alpha * head_radius - self.beta * tail_radius)
+        # SpherE score: the first row is the overlap of the two spheres
+        # (negative when they overlap, i.e. when the triplet is positive);
+        # the second row is the radius penalty of the SpherE regularizer.
+        # The best of the two rows is kept (maximum), and the result is
+        # negated so that positive scores correspond to positive triplets.
+        spheric_score = torch.stack([dissimilarity_score - head_radius - tail_radius,
+                                    - self.alpha * head_radius - self.beta * tail_radius], dim = 0)
         
-        # We take the highest score for each triplet
-        # The value is the negative of the mathematical score function result
-        opposite_score, _ = torch.max(spheric_score, 0)
+        opposite_score, _ = torch.max(spheric_score, dim = 0)
         
-        # Score must be positive for a positive triplet
-        # Score must be negative for a negative triplet
         score = - opposite_score
         
         return score
@@ -1951,74 +1975,118 @@ class TorusE(TranslationalDecoder):
 
 class RotatE(TranslationalDecoder):
     """
-    Implementation of RotatE model detailed in the paper referenced below.
-    
-    This class inherits from the TranslationDecoder interface. It inherites its attributes as well.
+    Implementation of the RotatE model (Sun et al. 2019), with an optional
+    SpherE (Li et al. 2024) adaptation.
+
+    RotatE represents each relation as a rotation in the complex space: each
+    node embedding is split in a real part and an imaginary part (see
+    `embedding_spaces`), the edge embedding is mapped to a rotation phase,
+    and the score of a triplet is the negated L1 distance between the head and
+    the rotated tail.
+
+    When `sphere_embeddings` is enabled, each node additionally carries a
+    radius (`node_radii`), and the score is computed with the SpherE formula
+    (see `sphere_score`): a triplet is positive when the (translated) sphere
+    of the head and the sphere of the tail overlap.
+
+    This class inherits from the TranslationalDecoder interface, whose
+    interface methods it implements.
 
     References
     ----------
-    Zhiqing Sun, Zhihong Deng, Jian-Yun Nie and Jian Tang.
+    
+    Zhiqing Sun, Zhihong Deng, Jian-Yun Nie, Jian Tang.
+    
     `RotatE: Knowledge Graph Embedding by Relational Rotation in Complex Space.`
-    https://arxiv.org/pdf/1902.10197
-    In ArXiv, volume abs/1902.10197, 2018.
+    
+    International Conference on Learning Representations (ICLR 2019).
+    
+    https://arxiv.org/abs/1902.10197
+    
+    Zihao Li, Yuyi Ao, Jingrui He.
+    
+    `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval.`
+    
+    ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR 2024), July 14–18, 2024, Washington, DC, USA.
+    
+    https://arxiv.org/abs/2404.19130
 
     Arguments
     ---------
-    TODO: check as this is just a copy-paste from TransR
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
-    node_embedding_dimensions: int
-        Dimensions of node embeddings.
-    edge_embedding_dimensions: int
-        Dimensions of edge embeddings.
-    sphere_embeddings: bool, optional, default to False
-        If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
-        Adaptation of SpherE.
-    alpha: float, optional, default to -1
-        Hyperparameter used for spheric scoring.
-    beta: float, optional, default to -1
-        Hyperparameter used for spheric scoring.
+    
+    **node_count** *(int)*
+    : Number of nodes in the knowledge graph.
+    
+    **edge_count** *(int)*
+    : Number of edges in the knowledge graph.
+    
+    **embedding_dimensions** *(int)*
+    : Dimensions of the (real) node and edge embeddings. Node embeddings are
+    : stored with `2 * embedding_dimensions` columns (real and imaginary parts).
+    
+    **device** *(torch.device)*
+    : The device of the decoder-specific embeddings (`node_radii`). Must be the
+    : same as the knowledge graph embeddings.
+    
+    **sphere_embeddings** *(bool, default to False)*
+    : If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
+    : Adaptation of SpherE.
+    
+    **alpha** *(float, default to -1)*
+    : Hyperparameter used for spheric scoring (radius penalty weight on the head).
+    : Only used if `sphere_embeddings` is True.
+    
+    **beta** *(float, default to -1)*
+    : Hyperparameter used for spheric scoring (radius penalty weight on the tail).
+    : Only used if `sphere_embeddings` is True.
 
     Attributes
     ----------
-    TODO: check as this is just a copy-paste from TransR
-    node_count: int
-        Number of nodes in the knowledge graph.
-    edge_count: int
-        Number of edges in the knowledge graph.
-    node_embedding_dimensions: int
-        Dimensions of node embeddings.
-    edge_embedding_dimensions: int
-        Dimensions of edge embeddings.
-    projection_matrix: torch.nn.Embedding, shape: [edge_count, edge_embedding_dimensions * node_embedding_dimensions]
-        Edge-specific projection matrices. See paper for more details.
-    dissimilarity: function described in `torchkge.utils.dissimilarities`
-        The dissimilarity function used to compare translated head embeddings 
-        to tail embeddings.
-        See details from torchkge here: https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities
-    evaluated_projections: bool
-        Indicates whether `projected_nodes` has been computed.
-        This should be set to True every time a backward pass is done in train mode.
-    projected_nodes: torch.nn.Parameter, shape: [edge_count, node_count, edge_embedding_dimensions]
-        Contains the projection of each node in each edge-specific sub-space.
-    sphere_embeddings: bool, optional, default to False
-        If node embeddings should be considered as spheres, and edge embeddings as a translation to apply.
-        Adaptation of SpherE.
-    alpha: float, optional, default to -1
-        Hyperparameter used for spheric scoring.
-    beta: float, optional, default to -1
-        Hyperparameter used for spheric scoring.
+    
+    **node_count** *(int)*
+    : Number of nodes in the knowledge graph.
+    
+    **edge_count** *(int)*
+    : Number of edges in the knowledge graph.
+    
+    **embedding_dimensions** *(int)*
+    : Dimensions of the (real) node and edge embeddings.
+    
+    **embedding_spaces** *(int)*
+    : Number of "spaces" the node embeddings are split in (2 for the real and
+    : imaginary parts of the complex space).
+    
+    **embedding_range** *(float)*
+    : Range of the edge embeddings, assumed in [-embedding_range, embedding_range];
+    : they are mapped to rotation phases in [-pi, pi] in `score`.
+    
+    **dissimilarity** *(function described in `torchkge.utils.dissimilarities`)*
+    : The dissimilarity function used to compare translated head embeddings
+    : to tail embeddings (L1 for RotatE).
+    : See details from torchkge here: https://torchkge.readthedocs.io/en/latest/reference/utils.html#dissimilarities
+    
+    **sphere_embeddings** *(bool)*
+    : If node embeddings should be considered as spheres (SpherE adaptation).
+    
+    **node_radii** *(torch.nn.Parameter, shape: [node_count, 1])*
+    : Radius of each node (SpherE adaptation).
+    : Used only if `sphere_embeddings` is True.
+    
+    **alpha** *(float)*
+    : Hyperparameter used for spheric scoring (radius penalty weight on the head).
+    
+    **beta** *(float)*
+    : Hyperparameter used for spheric scoring (radius penalty weight on the tail).
     
     """
     def __init__(self,
                 node_count: int,
                 edge_count: int,
                 embedding_dimensions: int,
-                sphere_embeddings: bool,
-                alpha: float,
-                beta: float):
+                device: torch.device,
+                sphere_embeddings: bool = False,
+                alpha: float = -1.0,
+                beta: float = -1.0):
         super().__init__()
 
         self.node_count = node_count
@@ -2026,14 +2094,18 @@ class RotatE(TranslationalDecoder):
         self.embedding_dimensions = embedding_dimensions
         
         self.embedding_spaces = 2
-        self.embedding_range = None # TODO
-        self.gamma = None # TODO
+        
+        # The edge embeddings are assumed to live in [-1, 1] (the Xavier uniform
+        # initialization used by `Initializer` keeps them in this range for the
+        # typical embedding dimensions), and are mapped to rotation phases in
+        # [-pi, pi] in `score`.
+        self.embedding_range = 1.0
 
         self.dissimilarity = l1_dissimilarity
         
-        # For SpherE
+        # For SpherE (Li et al. 2024)
         self.sphere_embeddings = sphere_embeddings
-        self.node_radii = Initializer().initialize_embedding(self.node_count, 1)	# 1 for the sphere radius
+        self.node_radii = Initializer().initialize_embedding(self.node_count, 1, device)	# 1 for the sphere radius
         self.alpha = alpha
         self.beta = beta
 
@@ -2043,45 +2115,80 @@ class RotatE(TranslationalDecoder):
                 head_embeddings: Tensor,
                 tail_embeddings: Tensor,
                 edge_embeddings: Tensor,
+                head_indices: Tensor = None,
+                tail_indices: Tensor = None,
                 **_) -> Tensor:
         """
         Compute the score function for the triplets given as argument.
         
+        Each node embedding is split in a real part and an imaginary part;
+        the edge embedding is mapped to a rotation phase (see
+        `embedding_range`), and the score is the negated L1 distance between
+        the head and the rotated tail in the complex space.
+
         See referenced paper for more details on the score:
-        https://www.aaai.org/ocs/index.php/AAAI/AAAI15/paper/view/9571/9523
+        https://arxiv.org/abs/1902.10197
 
         Arguments
         ---------
-        head_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph.
-        tail_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph.
-        edge_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            The edge embeddings, of shape [edge_count, edge_embedding_dimensions]
+        
+        **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, 2 * embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        : Real part followed by imaginary part.
+        
+        **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, 2 * embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        : Real part followed by imaginary part.
+        
+        **edge_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : The edge embeddings.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only, optional)*
+        : The indices of the head nodes (from KG).
+        : Required if `sphere_embeddings` is `True` (used to look up the node radii).
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only, optional)*
+        : The indices of the tail nodes (from KG).
+        : Required if `sphere_embeddings` is `True` (used to look up the node radii).
 
         Returns
         -------
-        score: torch.Tensor, dtype: torch.float, shape: [batch_size]
-            The score of each triplet as a tensor.        
+        
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
+        : The score of each triplet as a tensor (negated L1 dissimilarity, or
+        : the SpherE score if `sphere_embeddings` is True).
+        
         """
-        real_head_embedddings, imaginary_head_embeddings = tensor_split(head_embeddings, 2, dim = 1)
-        real_tail_embedddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim = 1)
-        real_edge_embedddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim = 1)
+        real_head_embeddings, imaginary_head_embeddings = tensor_split(head_embeddings, 2, dim = 1)
+        real_tail_embeddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim = 1)
         
-        # TODO: create attribute self.embedding_range
-        # Make phases of edges uniformly distributed in [-pi, pi]
-        phase_edge = edge_embeddings / (self.embedding_range.item() / pi)
+        # Map the edge embeddings (assumed in [-embedding_range, embedding_range])
+        # to rotation phases uniformly distributed in [-pi, pi]
+        phase_edge = edge_embeddings / (self.embedding_range / pi)
         
-        real_edge_embedddings = torch.cos(phase_edge)
+        real_edge_embeddings = torch.cos(phase_edge)
         imaginary_edge_embeddings = torch.sin(phase_edge)
         
-        real_score = (real_edge_embedddings * real_tail_embedddings + imaginary_edge_embeddings * imaginary_tail_embeddings) - real_head_embedddings
-        imaginary_score = (real_edge_embedddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embedddings) - imaginary_head_embeddings
+        real_score = (real_edge_embeddings * real_tail_embeddings + imaginary_edge_embeddings * imaginary_tail_embeddings) - real_head_embeddings
+        imaginary_score = (real_edge_embeddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embeddings) - imaginary_head_embeddings
         
+        # Per-dimension complex distance (norm of the 2-vector [real, imaginary])
         score = stack([real_score, imaginary_score], dim = 0)
         score = score.norm(dim = 0)
         
-        score = self.gamma.item() - score.sum(dim = 1)
+        # L1 dissimilarity, negated (the margin is applied by the loss function)
+        score = - score.sum(dim = 1)
+        
+        # Apply spheric embeddings (SpherE, Li et al. 2024)
+        if self.sphere_embeddings:
+            if head_indices is None or tail_indices is None:
+                raise ValueError(
+                    "`head_indices` and `tail_indices` are required by `RotatE.score` when `sphere_embeddings` is True "
+                    "(they are used to look up the node radii).")
+            # `score` holds -dissimilarity; `sphere_score` expects the raw dissimilarity.
+            score = self.sphere_score(head_indices = head_indices,
+                                      tail_indices = tail_indices,
+                                      dissimilarity_score = -score)
         
         return score
     
@@ -2089,7 +2196,7 @@ class RotatE(TranslationalDecoder):
     def inference_prepare_candidates(self,
                                     *,
                                     node_embeddings: Tensor,
-                                    edge_embeddings: nn.Embedding,
+                                    edge_embeddings: nn.Parameter,
                                     head_indices: Tensor,
                                     tail_indices: Tensor,
                                     edge_indices: Tensor,
@@ -2100,48 +2207,57 @@ class RotatE(TranslationalDecoder):
                                         Tuple[Tensor, Tensor],
                                         Tuple[Tensor, Tensor]]:
         """
-        TODO: check if it follows the original implementation
         Link prediction evaluation helper function. Get node embeddings
         and edge embeddings. The output will be fed to the
-        `inference_score_function` method.
+        `inference_score` method.
 
         Arguments
         ---------
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [batch_size, node_embedding_dimensions], keyword-only
-            Embeddings of all nodes.
-        edge_embeddings: torch.nn.Embedding, dtype: torch.float, shape: [batch_size, edge_embedding_dimensions], keyword-only
-            Embeddings of all edges.
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes (from KG).
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes (from KG).
-        edge_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the edges (from KG).
-        node_inference: bool, optional, default to True, keyword-only
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, 2 * embedding_dimensions], keyword-only)*
+        : Embeddings of all nodes (real part followed by imaginary part).
+        
+        **edge_embeddings** *(nn.Parameter, dtype: torch.float, shape: [edge_count, embedding_dimensions], keyword-only)*
+        : Embeddings of all edges.
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes (from KG).
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes (from KG).
+        
+        **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the edges (from KG).
+        
+        **node_inference** *(bool, optional, default to True, keyword-only)*
+        : If True, prepare candidate nodes; otherwise, prepare candidate edges.
         
         Returns
         -------
-        (real_head_embeddings, imaginary_head_embeddings): Tuple[Tensor, Tensor]
-            Head node embeddings, both the real and the imaginary ones.
-        (real_tail_embeddings, imaginary_tail_embeddings): Tuple[Tensor, Tensor]
-            Tail node embeddings, both the real and the imaginary ones.
-        (real_edge_embeddings, imaginary_edge_embeddings): Tuple[Tensor, Tensor]
-            Edge embeddings, both the real and the imaginary ones.
-        (real_candidates, imaginary_candidates): Tuple[Tensor, Tensor]
-            Candidate embeddings for nodes or edges, both the real and the imaginary ones.
+        
+        **(real_head_embeddings, imaginary_head_embeddings)** *(Tuple[Tensor, Tensor])*
+        : Head node embeddings, both the real and the imaginary ones.
+        
+        **(real_tail_embeddings, imaginary_tail_embeddings)** *(Tuple[Tensor, Tensor])*
+        : Tail node embeddings, both the real and the imaginary ones.
+        
+        **(real_edge_embeddings, imaginary_edge_embeddings)** *(Tuple[Tensor, Tensor])*
+        : Edge embeddings, both the real and the imaginary ones.
+        
+        **(real_candidates, imaginary_candidates)** *(Tuple[Tensor, Tensor])*
+        : Candidate embeddings for nodes or edges, both the real and the imaginary ones.
 
         """
         batch_size = head_indices.shape[0]
 
         real_head_embeddings, imaginary_head_embeddings = tensor_split(node_embeddings[head_indices], 2, dim = 1)
         real_tail_embeddings, imaginary_tail_embeddings = tensor_split(node_embeddings[tail_indices], 2, dim = 1)
-        real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings(edge_indices), 2, dim = 1)
+        real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings[edge_indices], 2, dim = 1)
 
         if node_inference:
             real_candidates, imaginary_candidates = tensor_split(node_embeddings, 2, dim = 1)
         else:
-            real_candidates, imaginary_candidates = tensor_split(edge_embeddings.weight.data, 2, dim = 1)
+            real_candidates, imaginary_candidates = tensor_split(edge_embeddings.data, 2, dim = 1)
         
         real_candidates = real_candidates.unsqueeze(0).expand(batch_size, -1, -1)
         imaginary_candidates = imaginary_candidates.unsqueeze(0).expand(batch_size, -1, -1)
@@ -2159,37 +2275,41 @@ class RotatE(TranslationalDecoder):
                         edge_embeddings: Tuple[Tensor, Tensor]
                         ) -> Tensor:
         """
-        TODO: check if it follows the original implementation, as this is just a copy-paste from ComplEx
         Link prediction evaluation helper function. Compute the scores
         of (head, candidate, edge) or (candidate, tail, edge) for any candidate.
         The arguments should match the ones of `inference_prepare_candidates`.
 
         Arguments
         ---------
-        head_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the head nodes in the knowledge graph. 
-            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
-        tail_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the tail nodes in the knowledge graph. 
-            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
-        edge_embeddings: Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only
-            Embeddings of the edges in the knowledge graph. 
-            The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings
+        
+        **head_embeddings** *(Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the head nodes in the knowledge graph.
+        : The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings.
+        
+        **tail_embeddings** *(Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the tail nodes in the knowledge graph.
+        : The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings.
+        
+        **edge_embeddings** *(Tuple[torch.Tensor, torch.Tensor], dtype: torch.float, shape: [batch_size, embedding_dimensions], keyword-only)*
+        : Embeddings of the edges in the knowledge graph.
+        : The first tensor corresponds to the real embeddings, the second one to the imaginary embeddings.
 
         Raises
         ------
-        ValueError
-            If none of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.
+        
+        **ValueError**
+        : If none of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.
 
         Returns
         -------
-        score: torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count]
-            Tensor of score values.
-            First dimension: incomplete triplets tested
-            Second dimension: candidate indices
-            For example, if the function is called to infer the score of tails:
-            First dimension: (head_indices, edge_indices)
-            Second dimension: tail_indices
+        
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size, candidate_count])*
+        : Tensor of score values.
+        : First dimension: incomplete triplets tested.
+        : Second dimension: candidate indices.
+        : For example, if the function is called to infer the score of tails:
+        : First dimension: (head_indices, edge_indices)
+        : Second dimension: tail_indices
         
         """
         real_head_embeddings, imaginary_head_embeddings = head_embeddings
@@ -2261,53 +2381,68 @@ class RotatE(TranslationalDecoder):
                     dissimilarity_score: Tensor
                     )-> Tensor:
         """
-        Adaptation of SpherE model detailed in the paper referenced below.
+        SpherE (Li et al. 2024) score function.
         
-        Only used - in `score` - if the config parameter `sphere_embeddings` is set to true.
+        Each node is represented by a center and a radius (`node_radii`); the
+        edge is a rotation applied to the head. A triplet is positive when
+        the rotated sphere of the head and the sphere of the tail overlap,
+        i.e. when `dissimilarity_score - radius_head - radius_tail <= 0`.
+
+        Only used in `score` if `sphere_embeddings` is True.
 
         References
         ----------
+        
         Zihao Li, Yuyi Ao, Jingrui He.
-        `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval`
-        https://arxiv.org/pdf/2404.19130
-        SIGIR ’24, July 14–18, 2024, Washington, DC, USA
+        
+        `SpherE: Expressive and Interpretable Knowledge Graph Embedding for Set Retrieval.`
+        
+        ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR 2024), July 14–18, 2024, Washington, DC, USA.
+        
+        https://arxiv.org/abs/2404.19130
 
         Arguments
         ---------
-        head_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the head nodes for the current batch.
-        tail_indices: torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only
-            The indices of the tail nodes for the current batch.
-        dissimilarity_score: torch.Tensor, keyword-only
-            Dissimilarity score, output of the `decoder.score` function.
-
+        
+        **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the head nodes for the current batch.
+        
+        **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
+        : The indices of the tail nodes for the current batch.
+        
+        **dissimilarity_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size], keyword-only)*
+        : The raw dissimilarity (distance) of each triplet, i.e. the negated
+        : output of the non-spheric `score` function.
+        
         Returns
         -------
-        score: torch.Tensor
-            The score of each triplet as a tensor, using SpherE formula.
-            Score is positive for a positive triplet. Score is negative for a negative triplet.
-            
+        
+        **score** *(torch.Tensor, dtype: torch.float, shape: [batch_size])*
+        : The score of each triplet: `-max(d - r_head - r_tail, -alpha*r_head - beta*r_tail)`.
+        : Positive for a positive triplet (overlapping spheres), negative otherwise.
+        
         Notes
         -----
-        Only return score values. Architect handles interpreting these values as booleans - yes for positive
-        and no for negative - and creating the list of results, as it does hit@k ranked lists.
+        Only returns score values. The Architect (or the caller) interprets
+        these values as booleans — yes for positive and no for negative —
+        and builds the list of results, as it does for hit@k ranked lists.
         
         """
-        # Creation of node radii
-        head_radius = self.node_radii[head_indices]
-        tail_radius = self.node_radii[tail_indices]
+        # Radius of the head and tail nodes of each triplet
+        # (`[:, 0]` keeps the radii 1-D so they broadcast against the [batch] scores)
+        head_radius = self.node_radii[head_indices, 0]
+        tail_radius = self.node_radii[tail_indices, 0]
         
-        # TODO: check why stack like this, opposed to the original formula
-        # Loss function from SpherE article
-        spheric_score = torch.stack(dissimilarity_score - head_radius - tail_radius,
-                                    - self.alpha * head_radius - self.beta * tail_radius)
+        # SpherE score: the first row is the overlap of the two spheres
+        # (negative when they overlap, i.e. when the triplet is positive);
+        # the second row is the radius penalty of the SpherE regularizer.
+        # The best of the two rows is kept (maximum), and the result is
+        # negated so that positive scores correspond to positive triplets.
+        spheric_score = torch.stack([dissimilarity_score - head_radius - tail_radius,
+                                    - self.alpha * head_radius - self.beta * tail_radius], dim = 0)
         
-        # We take the highest score for each triplet
-        # The value is the negative of the mathematical score function result
-        opposite_score, _ = torch.max(spheric_score, 0)
+        opposite_score, _ = torch.max(spheric_score, dim = 0)
         
-        # Score must be positive for a positive triplet
-        # Score must be negative for a negative triplet
         score = - opposite_score
         
         return score
