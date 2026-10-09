@@ -657,6 +657,441 @@ class TripletClassificationResults:
         }
 
 
+    @property
+    def median_rank(self) -> Tuple[float, float]:
+        """
+        Median rank of the true predictions, both unfiltered and filtered.
+
+        The median rank is a robust summary of the rank distribution: unlike
+        the mean rank, it is not skewed by a small number of very badly ranked
+        triplets.
+
+        Returns
+        -------
+
+        **median_rank** *(float)*
+        : Median rank of the predictions
+
+        **filtered_median_rank** *(float)*
+        : Median rank filtered to remove predictions of true triplets.
+
+        """
+        median_rank = self.true_predictions_rank.float().median().item()
+        filtered_median_rank = self.filtered_true_predictions_rank.float().median().item()
+
+        return median_rank, filtered_median_rank
+
+
+    def mean_reciprocal_rank_at_k(self,
+                                  k: int = 10
+                                  ) -> Tuple[float, float]:
+        """
+        Mean reciprocal rank at k (MRR@k), both unfiltered and filtered.
+
+        MRR@k is the mean of 1/rank when the true prediction lies within the
+        top-k candidates, and 0 otherwise.
+
+        Arguments
+        ---------
+
+        **k** *(int, default to 10)*
+        : Maximum rank taken into account; true predictions ranked beyond k
+        contribute 0 to the mean.
+
+        Returns
+        -------
+
+        **mrr_at_k** *(float)*
+        : Mean of the reciprocal ranks of the true predictions, where true
+        predictions ranked beyond k contribute 0.
+
+        **filtered_mrr_at_k** *(float)*
+        : Same, when ranking among filtered triplets.
+        : True triplets that are not the target of the prediction are filtered out.
+
+        """
+        def _mrr_at_k(rank: Tensor) -> float:
+            reciprocal = torch.where(rank <= k, rank.float() ** (-1), torch.zeros_like(rank.float()))
+            return reciprocal.mean().item()
+
+        mrr_at_k = _mrr_at_k(self.true_predictions_rank)
+        filtered_mrr_at_k = _mrr_at_k(self.filtered_true_predictions_rank)
+
+        return mrr_at_k, filtered_mrr_at_k
+
+
+    def score_gap(self,
+                  true_scores: Tensor,
+                  best_other_unfiltered: Tensor,
+                  best_other_filtered: Tensor
+                  ) -> Tuple[float, float]:
+        """
+        Mean score gap between the true prediction and the best-ranked
+        incorrect candidate, both unfiltered and filtered.
+
+        For each evaluated triplet, the gap is
+
+            ``gap = score(true) - max score among all other candidates``
+
+        (unfiltered: other candidates include true triplets that are not the
+        prediction target; filtered: those are masked out before taking the
+        maximum). A larger positive gap means the model is more confident in the true
+        triplet relative to the best wrong one.
+
+        Arguments
+        ---------
+
+        **true_scores** *(torch.Tensor, dtype: torch.float, shape: [triplet_count])*
+        : Score of the true triplet for each evaluated triplet.
+
+        **best_other_unfiltered** *(torch.Tensor, dtype: torch.float, shape: [triplet_count])*
+        : Score of the highest-scoring *other* candidate triplet for each
+        evaluated triplet (unfiltered and filtered, in that order)
+
+        Returns
+        -------
+
+        **score_gap** *(float)*
+        : Mean of the (true - best incorrect candidate) score gaps,
+        : without filtering of true non-target triplets.
+
+        **filtered_score_gap** *(float)*
+        : Mean of the (true - best incorrect candidate) score gaps,
+        : where the maximum is taken after filtering out true non-target triplets.
+
+        """
+        true_scores = true_scores.detach().float()
+        best_other_unfiltered = best_other_unfiltered.detach().float()
+        best_other_filtered = best_other_filtered.detach().float()
+
+        if best_other_unfiltered.shape[0] != true_scores.shape[0] or best_other_filtered.shape[0] != true_scores.shape[0]:
+            raise ValueError(f"`true_scores` ({true_scores.shape[0]}), `best_other_unfiltered` ({best_other_unfiltered.shape[0]}) and `best_other_filtered` ({best_other_filtered.shape[0]}) must all have the same number of triplets.")
+
+        score_gap = (true_scores - best_other_unfiltered).mean().item()
+        filtered_score_gap = (true_scores - best_other_filtered).mean().item()
+
+        return score_gap, filtered_score_gap
+
+
+    def relative_rank(self,
+                      candidate_count: int
+                      ) -> Tuple[float, float]:
+        """
+        Relative rank: ranks normalized by the number of candidates.
+
+        The relative rank of a true prediction is
+
+            ``rank / candidate_count``
+
+        in ``[1/candidate_count, 1]`` (1-indexed ranks), so it is comparable
+        across datasets of very different size, while raw ranks (mean rank, median
+        rank) are not. It is the standard normalization used to compare
+        KGE results across benchmarks, and it is also the natural companion
+        of `hit_at_k` when k is expressed as a fraction of the candidate pool.
+
+        Arguments
+        ---------
+
+        **candidate_count** *(int)*
+        : Number of candidates each true prediction was ranked among
+        : (the node count for head/tail link prediction).
+
+        Raises
+        ------
+
+        **ValueError**
+        : If `candidate_count` is less than 1.
+
+        Returns
+        -------
+
+        **relative_rank** *(float)*
+        : Mean of `true_predictions_rank / candidate_count`.
+
+        **filtered_relative_rank** *(float)*
+        : Mean of `filtered_true_predictions_rank / candidate_count`.
+
+        """
+        if candidate_count < 1:
+            raise ValueError(f"`candidate_count` must be >= 1, got {candidate_count}.")
+
+        relative_rank = (self.true_predictions_rank.float() / candidate_count).mean().item()
+        filtered_relative_rank = (self.filtered_true_predictions_rank.float() / candidate_count).mean().item()
+
+        return relative_rank, filtered_relative_rank
+
+
+    def to_dict(self,
+                k_values: Tuple[int, ...] = (1, 3, 10),
+                true_scores: Tensor | None = None,
+                best_other_unfiltered: Tensor | None = None,
+                best_other_filtered: Tensor | None = None,
+                candidate_count: int | None = None
+                ) -> Dict[str, float]:
+        """
+        Flatten all metrics of this `Predictions` object into a single
+        dictionary.
+
+        Optional metrics (`score_gap`, `relative_rank`) are only included
+        when their extra arguments are given.
+
+        Arguments
+        ---------
+
+        **k_values** *(Tuple[int, ...], default to (1, 3, 10))*
+        : The k values used for `hit_at_k` and `mean_reciprocal_rank_at_k`.
+
+        **true_scores** *(torch.Tensor, optional)*
+        : If given (with `best_other_unfiltered` and `best_other_filtered`),
+        : include the `score_gap` metrics. See `score_gap` for the expected shape.
+
+        **best_other_unfiltered** *(torch.Tensor, optional)*
+        : If given (with `true_scores`), include the `score_gap` metrics.
+        : See `score_gap` for the expected shape.
+
+        **best_other_filtered** *(torch.Tensor, optional)*
+        : If given (with `true_scores`), include the `score_gap` metrics.
+        : See `score_gap` for the expected shape.
+
+        **candidate_count** *(int, optional)*
+        : If given, include the `relative_rank` metrics.
+        : See `relative_rank` for the expected meaning.
+
+        Returns
+        -------
+
+        **metrics** *(Dict[str, float])*
+        : Dictionary of metric names to values.
+
+        """
+        metrics: Dict[str, float] = {}
+
+        mean_rank, filtered_mean_rank = self.mean_rank
+        metrics["mean_rank"] = mean_rank
+        metrics["filtered_mean_rank"] = filtered_mean_rank
+
+        median_rank, filtered_median_rank = self.median_rank
+        metrics["median_rank"] = median_rank
+        metrics["filtered_median_rank"] = filtered_median_rank
+
+        mrr, filtered_mrr = self.mrr
+        metrics["mrr"] = mrr
+        metrics["filtered_mrr"] = filtered_mrr
+
+        for k in k_values:
+            hit, filtered_hit = self.hit_at_k(k)
+            metrics[f"hit_at_{k}"] = hit
+            metrics[f"filtered_hit_at_{k}"] = filtered_hit
+
+            mrr_at_k, filtered_mrr_at_k = self.mean_reciprocal_rank_at_k(k)
+            metrics[f"mrr_at_{k}"] = mrr_at_k
+            metrics[f"filtered_mrr_at_{k}"] = filtered_mrr_at_k
+
+        if (true_scores is not None and best_other_unfiltered is not None and best_other_filtered is not None):
+            score_gap, filtered_score_gap = self.score_gap(true_scores, best_other_unfiltered, best_other_filtered)
+            metrics["score_gap"] = score_gap
+            metrics["filtered_score_gap"] = filtered_score_gap
+
+        if candidate_count is not None:
+            relative_rank, filtered_relative_rank = self.relative_rank(candidate_count)
+            metrics["relative_rank"] = relative_rank
+            metrics["filtered_relative_rank"] = filtered_relative_rank
+
+        return metrics
+
+
+
+class TripletClassificationResults:
+    """
+    Object holding the results of a `TripletClassificationEvaluator.accuracy` call.
+
+    Provides individual metric accessors (each returning a float in [0, 1])
+    and a `to_dict` method for reporting.
+
+    All metrics are computed from the per-triplet boolean classification
+    outcomes:
+    
+    - **positive_correct** *(Tensor[bool])* : true triplets correctly accepted
+    - **positive_incorrect** *(Tensor[bool])* : true triplets incorrectly rejected
+    - **negative_correct** *(Tensor[bool])* : negative triplets correctly rejected
+    - **negative_incorrect** *(Tensor[bool])* : negative triplets incorrectly accepted
+
+    Arguments
+    ---------
+
+    **positive_correct** *(torch.Tensor, dtype: torch.bool, shape: [triplet_count])*
+    : Boolean mask of true triplets that were correctly accepted.
+
+    **positive_incorrect** *(torch.Tensor, dtype: torch.bool, shape: [triplet_count])*
+    : Boolean mask of true triplets that were incorrectly rejected.
+
+    **negative_correct** *(torch.Tensor, dtype: torch.bool, shape: [triplet_count])*
+    : Boolean mask of negative triplets that were correctly rejected.
+
+    **negative_incorrect** *(torch.Tensor, dtype: torch.bool, shape: [triplet_count])*
+    : Boolean mask of negative triplets that were incorrectly accepted.
+
+    """
+
+    def __init__(self,
+                positive_correct: Tensor,
+                positive_incorrect: Tensor,
+                negative_correct: Tensor,
+                negative_incorrect: Tensor):
+        self.positive_correct = positive_correct
+        self.positive_incorrect = positive_incorrect
+        self.negative_correct = negative_correct
+        self.negative_incorrect = negative_incorrect
+
+    # ---- basic counts ----
+
+    @property
+    def positive_count(self) -> int:
+        """Total number of true triplets evaluated."""
+        return int(self.positive_correct.numel())
+
+    @property
+    def negative_count(self) -> int:
+        """Total number of negative triplets evaluated."""
+        return int(self.negative_correct.numel())
+
+    # ---- core metrics ----
+
+    @property
+    def accuracy(self) -> float:
+        """
+        Overall accuracy: proportion of all triplets (true + negative)
+        correctly classified.
+        """
+        total = self.positive_count + self.negative_count
+        if total == 0:
+            return 0.0
+        correct = int(self.positive_correct.sum().item() + self.negative_correct.sum().item())
+        return correct / total
+
+    @property
+    def precision(self) -> float:
+        """
+        Precision: of all triplets the model accepted (score > threshold),
+        what proportion are actually true?
+
+        Accepted = true triplets accepted (positive_correct) + negative
+        triplets accepted (negative_incorrect).
+        """
+        accepted = int(self.positive_correct.sum().item() + self.negative_incorrect.sum().item())
+        if accepted == 0:
+            return 0.0
+        return int(self.positive_correct.sum().item()) / accepted
+
+    @property
+    def recall(self) -> float:
+        """
+        Recall (sensitivity / true positive rate): of all true triplets,
+        what proportion did the model accept?
+        """
+        if self.positive_count == 0:
+            return 0.0
+        return int(self.positive_correct.sum().item()) / self.positive_count
+
+    @property
+    def specificity(self) -> float:
+        """
+        Specificity (true negative rate): of all negative triplets,
+        what proportion did the model correctly reject?
+        """
+        if self.negative_count == 0:
+            return 0.0
+        return int(self.negative_correct.sum().item()) / self.negative_count
+
+    @property
+    def f1(self) -> float:
+        """
+        F1 score: harmonic mean of precision and recall.
+        """
+        p, r = self.precision, self.recall
+        if p + r == 0:
+            return 0.0
+        return 2 * p * r / (p + r)
+
+    @property
+    def false_positive_rate(self) -> float:
+        """
+        False positive rate (1 - specificity): proportion of negative
+        triplets incorrectly accepted.
+        """
+        return 1.0 - self.specificity
+
+    @property
+    def false_negative_rate(self) -> float:
+        """
+        False negative rate (1 - recall): proportion of true triplets
+        incorrectly rejected.
+        """
+        return 1.0 - self.recall
+
+    @property
+    def balanced_accuracy(self) -> float:
+        """
+        Balanced accuracy: mean of recall (TPR) and specificity (TNR).
+        Robust to class imbalance between true and negative triplets.
+        """
+        return (self.recall + self.specificity) / 2
+
+    @property
+    def accuracy_positive(self) -> float:
+        """
+        Proportion of true triplets correctly accepted (= recall).
+        Provided as a separate name for clarity in reports.
+        """
+        return self.recall
+
+    @property
+    def accuracy_negative(self) -> float:
+        """
+        Proportion of negative triplets correctly rejected (= specificity).
+        Provided as a separate name for clarity in reports.
+        """
+        return self.specificity
+
+    # ---- reporting ----
+
+    def __str__(self) -> str:
+        return (
+            f"Accuracy: {self.accuracy:.4f}  "
+            f"Precision: {self.precision:.4f}  "
+            f"Recall: {self.recall:.4f}  "
+            f"Specificity: {self.specificity:.4f}  "
+            f"F1: {self.f1:.4f}  "
+            f"Balanced Acc: {self.balanced_accuracy:.4f}  "
+            f"FPR: {self.false_positive_rate:.4f}  "
+            f"FNR: {self.false_negative_rate:.4f}  "
+            f"({self.positive_count} positive, {self.negative_count} negative)"
+        )
+
+    def to_dict(self) -> Dict[str, float]:
+        """
+        Flatten all metrics into a dictionary for reporting or serialization.
+
+        Returns
+        -------
+
+        **metrics** *(Dict[str, float])*
+        : Dictionary of metric names to values.
+        """
+        return {
+            "accuracy": self.accuracy,
+            "precision": self.precision,
+            "recall": self.recall,
+            "specificity": self.specificity,
+            "f1": self.f1,
+            "balanced_accuracy": self.balanced_accuracy,
+            "false_positive_rate": self.false_positive_rate,
+            "false_negative_rate": self.false_negative_rate,
+            "positive_count": self.positive_count,
+            "negative_count": self.negative_count,
+        }
+
+
 
 class LinkPredictionEvaluator:
     def __init__(self, graphindices: Tensor, embedding_dimensions: int):

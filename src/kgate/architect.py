@@ -764,10 +764,6 @@ class Architect(Module):
         : - "target_edges": (only if target edges are configured) "Global_metrics" and "Individual_metrics" for the target edges.
         : - "target_edges_by_frequency": reserved key, currently empty.
         
-        Notes
-        -----
-        This function is user-facing.
-        
         """
         torch.cuda.empty_cache()
         gc.collect()
@@ -1309,10 +1305,6 @@ class Architect(Module):
             - "edges": the embeddings of all edge types (shape [edge_count, edge_embedding_dimensions]);
             - "edge_mapping": mapping of edge indices to edge names;
             - "decoder": decoder-specific embeddings, if the decoder has any.
-
-        Notes
-        -----
-        This function is user-facing.
 
         """
         self.normalize_parameters()
