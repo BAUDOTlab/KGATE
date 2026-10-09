@@ -25,18 +25,18 @@ class Initializer:
         Arguments
         ---------
         **sample_count** *(int)*
-            Number of nodes/edges in the embedding.
+         : Number of nodes/edges in the embedding.
         **embedding_dimensions** *(int)*
-            Dimensions of embeddings.
+         : Dimensions of embeddings.
         **device** *(torch.device or str, default = "cpu")*
-            Indicate if data should be sent to GPU or CPU.
-            GPU is referenced to as Cuda.
+         : Indicate if data should be sent to GPU or CPU.
+         : GPU is referenced to as Cuda.
             
         Returns
         -------
         **embedding** *(nn.Parameter)*
-            Embedding tensor of shape [sample_count, embedding_dimensions],
-            initialized with a Xavier uniform distribution.
+         : Embedding tensor of shape [sample_count, embedding_dimensions],
+         : initialized with a Xavier uniform distribution.
         
         """
         embedding = nn.Parameter(torch.empty((sample_count, embedding_dimensions), device = device))
@@ -60,23 +60,23 @@ class Initializer:
         Arguments
         ---------
         **knowledge_graph** *(KnowledgeGraph)*
-            The knowledge graph for which the embeddings are initialized.
+         : The knowledge graph for which the embeddings are initialized.
         **node_embedding_dimensions** *(int)*
-            The embedding dimensions of the nodes.
+         : The embedding dimensions of the nodes.
         **edge_embedding_dimensions** *(int)*
-            The embedding dimensions of the edges. For most models, this is the same as above.
+         : The embedding dimensions of the edges. For most models, this is the same as above.
         **device** *(torch.device or str, optional, defaults = "cpu")*
-            The PyTorch device where the embeddings should be created in.
+         : The PyTorch device where the embeddings should be created in.
         **inplace** *(bool, optional, defaults = False)*
-            Whether the embeddings should be returned or directly applied to the knowledge graph.
+         : Whether the embeddings should be returned or directly applied to the knowledge graph.
 
         Returns
         -------
         Only if inplace = False
         **node_embeddings** *(nn.ParameterList)*
-            The generated node embeddings
+         : The generated node embeddings
         **edge_embeddings** *(nn.Parameter)*
-            The generated edge embeddings
+         : The generated edge embeddings
         """
         node_embeddings = nn.ParameterList()
         for node_type in knowledge_graph.node_type_to_global:
@@ -161,23 +161,23 @@ class FeatureInitializer(Initializer):
         Arguments
         ---------
         **knowledge_graph** *(KnowledgeGraph)*
-            The knowledge graph for which the embeddings are initialized.
+         : The knowledge graph for which the embeddings are initialized.
         **node_embedding_dimensions** *(int)*
-            The embedding dimensions of the nodes.
+         : The embedding dimensions of the nodes.
         **edge_embedding_dimensions** *(int)*
-            The embedding dimensions of the edges. For most models, this is the same as above.
+         : The embedding dimensions of the edges. For most models, this is the same as above.
         **device** *(torch.device or str, optional, defaults = "cpu")*
-            The PyTorch device where the embeddings should be created in.
+         : The PyTorch device where the embeddings should be created in.
         **inplace** *(bool, optional, defaults = False)*
-            Whether the embeddings should be returned or directly applied to the knowledge graph.
+         : Whether the embeddings should be returned or directly applied to the knowledge graph.
 
         Returns
         -------
         Only if inplace = False
         **node_embeddings** *(nn.ParameterList)*
-            The generated node embeddings
+         : The generated node embeddings
         **edge_embeddings** *(nn.Parameter)*
-            The generated edge embeddings
+         : The generated edge embeddings
         """
         node_embeddings = nn.ParameterList()
         

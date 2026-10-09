@@ -414,22 +414,22 @@ class RESCAL(BilinearDecoder):
         ---------
         
         **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float)*
-            The node embedding as a ParameterList containing one Parameter per node type,
-            each of shape [node_count for the node type, embedding_dimensions],
-            or only one if there is no node type.
+         : The node embedding as a ParameterList containing one Parameter per node type,
+         : each of shape [node_count for the node type, embedding_dimensions],
+         : or only one if there is no node type.
         
         **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float)*
-            The edge embedding.
+         : The edge embedding.
             : Note: not used by the RESCAL normalization; returned unchanged.
         
         Returns
         -------
         
         **node_embeddings** *(torch.nn.ParameterList, dtype: torch.float)*
-            The normalized node embedding object (row-wise L2 normalization in place).
+         : The normalized node embedding object (row-wise L2 normalization in place).
         
         **edge_embeddings** *(torch.nn.Parameter, dtype: torch.float)*
-            The unchanged edge embedding object.
+         : The unchanged edge embedding object.
         
         """
         for embedding in node_embeddings:
@@ -472,36 +472,36 @@ class RESCAL(BilinearDecoder):
         ---------
         
         **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, embedding_dimensions], keyword-only)*
-            Embeddings of all nodes.
+         : Embeddings of all nodes.
         
         **head_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
-            The indices of the head nodes (from KG).
+         : The indices of the head nodes (from KG).
         
         **tail_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
-            The indices of the tail nodes (from KG).
+         : The indices of the tail nodes (from KG).
         
         **edge_indices** *(torch.Tensor, dtype: torch.long, shape: [batch_size], keyword-only)*
-            The indices of the edges (from KG).
+         : The indices of the edges (from KG).
         
         **node_inference** *(bool, optional, default to True, keyword-only)*
-            If True, prepare candidate nodes; otherwise, prepare candidate edges.
+         : If True, prepare candidate nodes; otherwise, prepare candidate edges.
 
         Returns
         -------
         
         **head_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
-            Head node embeddings.
+         : Head node embeddings.
         
         **tail_embeddings** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions])*
-            Tail node embeddings.
+         : Tail node embeddings.
         
         **edge_embeddings_inferred** *(torch.Tensor, dtype: torch.float, shape: [batch_size, embedding_dimensions, embedding_dimensions])*
-            Edge projection matrices.
+         : Edge projection matrices.
         
         **candidates** *(torch.Tensor)*
-            Candidate embeddings: shape [batch_size, node_count, embedding_dimensions]
-            when inferring nodes, [batch_size, edge_count, embedding_dimensions, embedding_dimensions]
-            when inferring edges.
+         : Candidate embeddings: shape [batch_size, node_count, embedding_dimensions]
+         : when inferring nodes, [batch_size, edge_count, embedding_dimensions, embedding_dimensions]
+         : when inferring edges.
 
         """
         batch_size = head_indices.shape[0]
@@ -982,8 +982,15 @@ class ComplEx(BilinearDecoder):
         real_tail_embedddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim = 1)
         real_edge_embedddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim = 1)
         
-        return (real_head_embedddings * (real_edge_embedddings * real_tail_embedddings + imaginary_edge_embeddings * imaginary_tail_embeddings) + 
-                imaginary_head_embeddings * (real_edge_embedddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embedddings)).sum(dim = 1)
+        score = (
+                real_head_embedddings
+                * (real_edge_embedddings * real_tail_embedddings + imaginary_edge_embeddings * imaginary_tail_embeddings)
+                +
+                imaginary_head_embeddings
+                * (real_edge_embedddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embedddings)
+                ).sum(dim = 1)
+        
+        return score
     
     
     def inference_prepare_candidates(self,
@@ -1090,16 +1097,6 @@ class ComplEx(BilinearDecoder):
 
         Raises
         ------
-        
-        **AssertionError #1**
-        : When inferring heads, the tensors tail_embeddings and edge_embeddings must have 2 dimensions.
-        
-        **AssertionError #2**
-        : When inferring tails, the tensors head_embeddings and edge_embeddings must have 2 dimensions.
-        
-        **AssertionError #3**
-        : When inferring edges, the tensors head_embeddings and tail_embeddings must have 2 dimensions.
-        
         **ValueError**
         : If none of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.
 
@@ -1119,12 +1116,28 @@ class ComplEx(BilinearDecoder):
         real_edge_embeddings, imaginary_edge_embeddings = edge_embeddings
         
         batch_size = real_head_embeddings.shape[0]
+        
+        real_head_embeddings_shape = len(real_head_embeddings.shape)
+        real_tail_embeddings_shape = len(real_tail_embeddings.shape)
+        real_edge_embeddings_shape = len(real_edge_embeddings.shape)
+        # Simplifying cases of inference
+        if real_head_embeddings_shape == 3 and \
+            real_tail_embeddings_shape == 2 and \
+            real_edge_embeddings_shape == 2:
+                inference_target = "heads"
+        elif real_head_embeddings_shape == 2 and \
+            real_tail_embeddings_shape == 3 and \
+            real_edge_embeddings_shape == 2:
+                inference_target = "tails"
+        elif real_head_embeddings_shape == 2 and \
+            real_tail_embeddings_shape == 2 and \
+            real_edge_embeddings_shape == 3:
+                inference_target = "edges"
+        else:
+            raise ValueError("Mismatch in the shapes of the embeddings. To properly infer tails, heads or edges, the corresponding tensor must be of length 3 and the other two of length 2.")
 
-        if len(real_head_embeddings.shape) == 3:
-            assert (len(real_tail_embeddings.shape) == 2) and (len(real_edge_embeddings.shape) == 2), \
-                "When inferring heads, the tensors `tail_embeddings` and `edge_embeddings` must have 2 dimensions."
-            
-            return (real_head_embeddings * 
+        if inference_target == "heads":
+            score = (real_head_embeddings * 
                         (real_edge_embeddings * real_tail_embeddings 
                          + imaginary_edge_embeddings * imaginary_tail_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
@@ -1133,12 +1146,10 @@ class ComplEx(BilinearDecoder):
                         - imaginary_edge_embeddings * real_tail_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
                     ).sum(dim = 2)
-
-        elif len(real_tail_embeddings.shape) == 3:
-            assert (len(real_head_embeddings.shape) == 2) and (len(real_edge_embeddings.shape) == 2), \
-                "When inferring tails, the tensors `head_embeddings` and `edge_embeddings` must have 2 dimensions."
-            
-            return ((real_head_embeddings * real_edge_embeddings
+            return score
+        
+        elif inference_target == "tails":
+            score = ((real_head_embeddings * real_edge_embeddings
                         - imaginary_head_embeddings * imaginary_edge_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * real_tail_embeddings
@@ -1147,12 +1158,10 @@ class ComplEx(BilinearDecoder):
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * imaginary_tail_embeddings
                     ).sum(dim = 2)
-
-        elif len(real_edge_embeddings.shape) == 3:
-            assert (len(real_head_embeddings.shape) == 2) and (len(real_tail_embeddings.shape) == 2), \
-                "When inferring edges, the tensors `head_embeddings` and `tail_embeddings` must have 2 dimensions."
-            
-            return ((real_head_embeddings * real_tail_embeddings
+            return score
+        
+        elif inference_target == "edges":
+            score = ((real_head_embeddings * real_tail_embeddings
                         + imaginary_head_embeddings * imaginary_tail_embeddings
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * real_edge_embeddings
@@ -1161,6 +1170,4 @@ class ComplEx(BilinearDecoder):
                         ).view(batch_size, 1, self.embedding_dimensions)
                     * imaginary_edge_embeddings
                     ).sum(dim = 2)
-        
-        else:
-            raise ValueError("None of the embeddings have a shape adapted to be inferred. Shapes must be of 3 for `head_embeddings`, `tail_embeddings` and `edge_embeddings`.")
+            return score

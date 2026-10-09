@@ -431,7 +431,7 @@ class Architect(Module):
             case None:
                 return
             case _:
-                raise TypeError(f"Metadata can only be given as a pandas DataFrame or a path to a CSV file, but got {type(metadata)}")
+                return
             
         if self.metadata is not None and hasattr(self, "knowledge_graph"):
             # If the knowledge graph does not exist yet (e.g. during __init__),
@@ -866,6 +866,10 @@ class Architect(Module):
         **predictions** *(pd.DataFrame)*
         : A DataFrame containing the prediction alongside their score.
         
+        Notes
+        -----
+        This function is user-facing.
+        
         """
         if not sum([len(arr) > 0 for arr in [heads, edges, tails]]) == 2:
             raise ValueError("To infer missing elements, exactly 2 lists must be given between heads, tails or edges.")
@@ -901,7 +905,11 @@ class Architect(Module):
             missing_triplet_part = missing_triplet_part,
             batch_size = self.evaluation_batch_size,
             node_embeddings = self.knowledge_graph.node_embeddings,   
-            edge_embeddings = self.knowledge_graph.edge_embeddings
+            edge_embeddings = self.knowledge_graph.edge_embeddings,
+            # SpherE (Li et al. 2024): if the decoder uses sphere embeddings,
+            # candidates are ranked by their SpherE score and the known
+            # (true) candidates are not filtered out (set retrieval).
+            sphere_embeddings = self.configuration.decoder.sphere_embeddings,
         )
 
         index_to_node = {value: key for key, value in self.knowledge_graph.node_to_index.items()}
@@ -1188,21 +1196,26 @@ class Architect(Module):
 
         Arguments
         ---------
-        positive_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size]
-            Tensor containing the integer keys (head, tail, edge, triplet type) of the true triplets
-            in the current batch.
-        negative_triplets_batch: torch.Tensor, dtype: torch.long, shape: [4, batch_size * negative_triplet_count]
-            Tensor containing the integer keys of the negatively sampled triplets of the same batch.
-        node_embeddings: torch.Tensor, dtype: torch.float, shape: [node_count, embedding_dimensions]
-            Embeddings of the nodes of the knowledge graph.
+        
+        **positive_triplets_batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size])*
+        : Tensor containing the integer keys (head, tail, edge, triplet type) of the true triplets
+        : in the current batch.
+        
+        **negative_triplets_batch** *(torch.Tensor, dtype: torch.long, shape: [4, batch_size * negative_triplet_count])*
+        : Tensor containing the integer keys of the negatively sampled triplets of the same batch.
+        
+        **node_embeddings** *(torch.Tensor, dtype: torch.float, shape: [node_count, embedding_dimensions])*
+        : Embeddings of the nodes of the knowledge graph.
 
         Returns
         -------
-        positive_score: torch.Tensor, dtype: torch.float, shape: [batch_size * negative_triplet_count]
-            Tensor containing the score of each true triplet within the batch, repeated to match
-            the number of negative samples.
-        negative_score: torch.Tensor, dtype: torch.float, shape: [batch_size * negative_triplet_count]
-            Tensor containing the score of each negative triplet within the batch.
+        
+        **positive_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size * negative_triplet_count])*
+        : Tensor containing the score of each true triplet within the batch, repeated to match
+        : the number of negative samples.
+        
+        **negative_score** *(torch.Tensor, dtype: torch.float, shape: [batch_size * negative_triplet_count])*
+        : Tensor containing the score of each negative triplet within the batch.
         
         """
         positive_score: Tensor = self.scoring_function(positive_triplets_batch, node_embeddings)
@@ -1489,7 +1502,7 @@ class Architect(Module):
         ---------
         
         **engine** *(Engine)*
-            Runner managing the training.
+         : Runner managing the training.
 
         Returns
         -------
@@ -1658,11 +1671,20 @@ class Architect(Module):
         -------
         **test_mrr** (*float)*
         : The filtered MRR resulting from the evaluation on given knowledge graph.
+        : If the decoder uses sphere embeddings (SpherE, Li et al. 2024), there are
+        : no ranks, hence no MRR: returns instead the fraction of the evaluated
+        : (true) triplets predicted positive, averaged over the head and tail
+        : directions.
         
         """
         # Test MRR measure
         if not isinstance(self.evaluator, LinkPredictionEvaluator):
             raise ValueError(f"Wrong evaluator called. Calling Link Prediction method for {type(self.evaluator)} evaluator.")
+
+        # SpherE (Li et al. 2024): the decoder may use sphere embeddings, in
+        # which case the evaluation returns per-triplet positive predictions
+        # instead of ranks (see `LinkPredictionEvaluator.evaluate`).
+        sphere_embeddings = self.configuration.decoder.sphere_embeddings
 
         head_predictions, tail_predictions = self.evaluator.evaluate(batch_size = self.evaluation_batch_size,
                                 encoder = self.encoder,
@@ -1670,7 +1692,19 @@ class Architect(Module):
                                 evaluated_subset = knowledge_graph_subset,
                                 node_embeddings = self.knowledge_graph.node_embeddings, 
                                 edge_embeddings = self.knowledge_graph.edge_embeddings,
-                                verbose = True)
+                                verbose = True,
+                                sphere_embeddings = sphere_embeddings)
+        
+        if sphere_embeddings:
+            # No ranks, hence no MRR: the scalar metric used by the training loop
+            # is the fraction of the evaluated (true) triplets predicted positive,
+            # averaged over the head and tail directions.
+            triplet_count = len(knowledge_graph_subset)
+            if triplet_count == 0:
+                return 0.0
+            head_positive = head_predictions.sphere_predictions.numel()
+            tail_positive = tail_predictions.sphere_predictions.numel()
+            return (head_positive + tail_positive) / (2 * triplet_count)
         
         test_mrr = (head_predictions.mrr[1] + tail_predictions.mrr[1]) / 2
         

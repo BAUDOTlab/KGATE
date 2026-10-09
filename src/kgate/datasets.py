@@ -48,7 +48,7 @@ def load_FB15k_237(data_directory: os.PathLike = None, keep_split: bool = False)
     Returns
     -------
     **knowledge_graph** *(KnowledgeGraph)*
-    The FB15k-237 knowledge graph.
+    : The FB15k-237 knowledge graph.
     """
     logging.info("Loading FB15k-237 dataset into memory...")
     output_directory: Path = data_directory or get_data_root_directory().joinpath("FB15k-237")
@@ -101,7 +101,7 @@ def load_WN18RR(data_directory: os.PathLike = None, keep_split: bool = False) ->
     Returns
     -------
     **knowledge_graph** *(KnowledgeGraph)*
-    The WN18RR knowledge graph.
+    : The WN18RR knowledge graph.
     """
     logging.info("Loading WN18RR dataset into memory...")
     output_directory: Path = data_directory or get_data_root_directory().joinpath("WN18RR")
@@ -150,7 +150,7 @@ def load_PrimeKG(data_directory: os.PathLike = None) -> KnowledgeGraph:
     Returns
     -------
     **knowledge_graph** *(KnowledgeGraph)*
-    The PrimeKG knowledge graph, with its metadata and the `node_name` column
+    : The PrimeKG knowledge graph, with its metadata and the `node_name` column
     set as identity.
     """
     primekg_url = "https://dataverse.harvard.edu/api/access/datafile/6180620"

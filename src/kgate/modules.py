@@ -40,6 +40,7 @@ from .decoders import (
     ComplEx,
     DistMult,
     RESCAL,
+    RotatE,
     TransD,
     TransE,
     TransH,
@@ -170,7 +171,7 @@ def initialize_encoder(configuration: Encoder_Configuration,
     Returns
     -------
     **encoder** *(GCNEncoder or GATEncoder or None)*
-        The encoder object, or None if there is no encoder.
+     : The encoder object, or None if there is no encoder.
     
     """
     if encoder_name == "":
@@ -203,17 +204,14 @@ def initialize_decoder(configuration: Decoder_Configuration,
                        decoder_name: str = "",
                        dissimilarity: Literal["L1", "L2", "torus_L1", "torus_L2", "torus_eL2", ""] = "",
                        filter_count: int = None
-                       ) -> Tuple[
-                                   BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
-                                   MarginLoss | BinaryCrossEntropyLoss
-                                   ]:
+                       ) -> BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder:
     """
     Create and initialize the decoder object according to the configuration or arguments.
 
     The decoders are adapted and inherit from torchKGE decoders to be able to handle heterogeneous data. 
     Not all torchKGE decoders are already implemented, but all of them and more will eventually be. Currently, 
     the available decoders are **TransE** [1]_, **TransH** [2]_, **TransR** [3]_, **TransD** [4]_, **TorusE** [5]_, 
-    **RESCAL** [6]_, **DistMult** [7]_, **ComplEx** [8]_ and **ConvKB** [9]_. See the description of decoder classes for details about 
+    **RotatE** [6]_, **RESCAL** [7]_, **DistMult** [8]_, **ComplEx** [9]_ and **ConvKB** [10]_. See the description of decoder classes for details about 
     their implementation, or read their original papers.
 
 
@@ -227,10 +225,11 @@ def initialize_decoder(configuration: Decoder_Configuration,
     .. [3] Lin, Yankai et al. “Learning Entity and Relation Embeddings for Knowledge Graph Completion.” AAAI Conference on Artificial Intelligence (2015).
     .. [4] Ji, Guoliang et al. “Knowledge Graph Embedding via Dynamic Mapping Matrix.” Annual Meeting of the Association for Computational Linguistics (2015).
     .. [5] Ebisu, Takuma and Ryutaro Ichise. “TorusE: Knowledge Graph Embedding on a Lie Group.” AAAI Conference on Artificial Intelligence (2018).
-    .. [6] Nickel, Maximilian et al. “A Three-Way Model for Collective Learning on Multi-Relational Data.” International Conference on Machine Learning (2011).
-    .. [7] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2015).
-    .. [8] Trouillon, Théo et al. “Complex Embeddings for Simple Link Prediction.” International Conference on Machine Learning (2016).
-    .. [9] Nguyen, Dai Quoc et al. “A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network.” North American Chapter of the Association for Computational Linguistics (2017).
+    .. [6] Sun, Zhiqing et al. “RotatE: Knowledge Graph Embedding by Relational Rotation in Complex Space.” International Conference on Learning Representations (2019).
+    .. [7] Nickel, Maximilian et al. “A Three-Way Model for Collective Learning on Multi-Relational Data.” International Conference on Machine Learning (2011).
+    .. [8] Yang, Bishan et al. “Embedding Entities and Relations for Learning and Inference in Knowledge Bases.” International Conference on Learning Representations (2015).
+    .. [9] Trouillon, Théo et al. “Complex Embeddings for Simple Link Prediction.” International Conference on Machine Learning (2016).
+    .. [10] Nguyen, Dai Quoc et al. “A Novel Embedding Model for Knowledge Base Completion Based on Convolutional Neural Network.” North American Chapter of the Association for Computational Linguistics (2017).
     
     Arguments
     ----------
@@ -278,6 +277,11 @@ def initialize_decoder(configuration: Decoder_Configuration,
         dissimilarity = configuration.dissimilarity
     if filter_count == 0:
         filter_count = configuration.filter_count
+    # SpherE (Li et al. 2024) sphere-embedding parameters, only used by the
+    # TransR and RotatE decoders (ignored by the others).
+    sphere_embeddings = configuration.sphere_embeddings
+    sphere_alpha = configuration.sphere_alpha
+    sphere_beta = configuration.sphere_beta
 
     # Translational models
     match decoder_name:
@@ -293,7 +297,10 @@ def initialize_decoder(configuration: Decoder_Configuration,
                             edge_embedding_dimensions = edge_embedding_dimensions, 
                             node_count = knowledge_graph.node_count, 
                             edge_count = knowledge_graph.edge_count,
-                            device = device)
+                            device = device,
+                            sphere_embeddings = sphere_embeddings,
+                            alpha = sphere_alpha,
+                            beta = sphere_beta)
         case "TransD":
             decoder = TransD(node_embedding_dimensions = node_embedding_dimensions,
                             edge_embedding_dimensions = edge_embedding_dimensions, 
@@ -302,6 +309,14 @@ def initialize_decoder(configuration: Decoder_Configuration,
                             device = device)
         case "TorusE":
             decoder = TorusE(dissimilarity_type = dissimilarity)
+        case "RotatE":
+            decoder = RotatE(node_count = knowledge_graph.node_count,
+                            edge_count = knowledge_graph.edge_count,
+                            embedding_dimensions = node_embedding_dimensions,
+                            device = device,
+                            sphere_embeddings = sphere_embeddings,
+                            alpha = sphere_alpha,
+                            beta = sphere_beta)
         case "RESCAL":
             decoder = RESCAL(embedding_dimensions = node_embedding_dimensions,
                             node_count = knowledge_graph.node_count,

@@ -141,11 +141,11 @@ class Normalizer:
         Arguments
         ---------
         **node_embeddings** *(torch.nn.Parameter or iterable of torch.nn.Parameter, shape: [node_count, dimensions])*
-        The graph node embeddings: either a single embedding table, or one
-        embedding table per node type.
+        : The graph node embeddings: either a single embedding table, or one
+        : embedding table per node type.
 
         **edge_embeddings** *(torch.nn.Parameter, shape: [edge_count, dimensions])*
-        The graph edge embeddings
+        : The graph edge embeddings
 
         Returns
         -------

@@ -344,14 +344,21 @@ def get_dictionary_mapping( dataframe: pd.DataFrame,
     
     This function is adapted from the `torchkge.utils.operations.get_dictionaries()` from the TorchKGE package.
     
+    The identifiers are **sorted** before being assigned their indices, so that the
+    mapping is deterministic across runs and platforms (the iteration order of a
+    Python `set` of strings is randomized by hash seeding, and pandas `.unique()`
+    depends on the order of appearance in the dataframe). Deterministic indices
+    matter for example to save and reload a knowledge graph, or to compare indices
+    across processes.
+    
     """
     if nodes:
-        unique_nodes = list(set(dataframe["head"].unique()).union(set(dataframe["tail"])))
-        return {node: index for index, node in enumerate(sorted(unique_nodes))}
+        unique_nodes = sorted(set(dataframe["head"].unique()).union(set(dataframe["tail"])))
+        return {node: index for index, node in enumerate(unique_nodes)}
     
     else:
-        unique_edges = list(dataframe["edge"].unique())
-        return {edge: index for index, edge in enumerate(sorted(unique_edges))}
+        unique_edges = sorted(set(dataframe["edge"].unique()))
+        return {edge: index for index, edge in enumerate(unique_edges)}
 
 
 def get_average_heads_per_tail( graphindices: Tensor
