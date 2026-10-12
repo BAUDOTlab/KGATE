@@ -353,7 +353,7 @@ def get_dictionary_mapping( dataframe: pd.DataFrame,
     
     """
     if nodes:
-        unique_nodes = sorted(set(dataframe["head"].unique()).union(set(dataframe["tail"])))
+        unique_nodes = sorted(set(dataframe["head"].astype(str)).union(set(dataframe["tail"].astype(str))))
         return {node: index for index, node in enumerate(unique_nodes)}
     
     else:

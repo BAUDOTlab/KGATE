@@ -12,6 +12,93 @@ from tqdm import tqdm
 
 class Initializer:
     """Base class for initializing node and edge embedding."""
+
+    def initialize_all_embeddings(self,
+                                    knowledge_graph: KnowledgeGraph,
+                                    *,
+                                    node_embedding_dimensions: int,
+                                    edge_embedding_dimensions: int,
+                                    device: torch.device | str = "cpu",
+                                    inplace: bool = False,
+                                    decoder: Any = None
+                                ) -> Tuple[nn.ParameterList, nn.Parameter] | None:
+        """Initialize all node and edge embeddings.
+
+        This is a generic function that calls the initializer.initialize_embedding(). Refer to the
+        initializer's `initialize_embedding` method for the actual initialization logic.
+
+        If a decoder is given and it uses several embedding spaces (e.g. RotatE and ComplEx,
+        with a real and an imaginary part), the node and edge embeddings are initialized with
+        `embedding_spaces * dimensions` columns so that they match what the decoder expects.
+
+        Arguments
+        ---------
+        **knowledge_graph** *(KnowledgeGraph)*
+         : The knowledge graph for which the embeddings should be initialized.
+
+        **node_embedding_dimensions** *(int)*
+         : The embedding dimensions of the nodes.
+
+        **edge_embedding_dimensions** *(int)*
+         : The embedding dimensions of the edges. For most models, this is the same as above.
+
+        **device** *(torch.device, optional, defaults = "cpu")*
+         : The PyTorch device on which the embeddings should be created.
+
+        **inplace** *(bool, optional, defaults = False)*
+         : Whether the embeddings should be returned or directly applied to the knowledge graph.
+
+        **decoder** *(Any, optional, default to None)*
+         : The decoder associated to the knowledge graph, if any.
+         : Only its `embedding_spaces` attribute is used, if present.
+
+        Returns
+        -------
+        Only if inplace = False
+        **node_embeddings** *(nn.ParameterList)*
+         : The generated node embeddings
+
+        **edge_embeddings** *(nn.Parameter)*
+         : The generated edge embeddings
+        """
+        node_embeddings = nn.ParameterList()
+        for node_type in knowledge_graph.node_type_to_global:
+            node_count = knowledge_graph.node_type_to_global[node_type].size(0)
+
+            node_embeddings.append(self.initialize_embedding(node_count, node_embedding_dimensions, device))
+
+        edge_embeddings = self.initialize_embedding(knowledge_graph.edge_count, edge_embedding_dimensions, device)
+
+        # Decoders that use several embedding spaces (e.g. RotatE and ComplEx,
+        # with a real and an imaginary part) expect node embeddings of
+        # `embedding_spaces * node_embedding_dimensions` columns and edge
+        # embeddings of `embedding_spaces * edge_embedding_dimensions` columns.
+        # The decoder's own parameters (e.g. the SpherE node radii) are created
+        # with the full dimensions in the decoder's __init__, so only the KG
+        # embeddings must be matched here.
+        if decoder is not None and hasattr(decoder, "embedding_spaces"):
+            node_embeddings = nn.ParameterList(
+                nn.Parameter(
+                    torch.empty(len(embedding),
+                                int(embedding.shape[1] * decoder.embedding_spaces),
+                                device = device)
+                )
+                for embedding in node_embeddings
+            )
+            for embedding in node_embeddings:
+                nn.init.xavier_uniform_(embedding.data)
+
+            edge_embeddings = nn.Parameter(
+                torch.empty(len(edge_embeddings),
+                            int(edge_embeddings.shape[1] * decoder.embedding_spaces),
+                            device = device))
+            nn.init.xavier_uniform_(edge_embeddings.data)
+
+        if inplace:
+            knowledge_graph.embeddings = node_embeddings, edge_embeddings
+        else:
+            return node_embeddings, edge_embeddings
+
     def initialize_embedding(self, 
                             sample_count: int,
                             embedding_dimensions: int,
@@ -50,12 +137,17 @@ class Initializer:
                                     node_embedding_dimensions: int, 
                                     edge_embedding_dimensions: int,
                                     device: torch.device | str = "cpu",
-                                    inplace: bool = False
+                                    inplace: bool = False,
+                                    decoder: Any = None
                                 ) -> Tuple[nn.ParameterList, nn.Parameter] | None:
         """Initialize all node and edge embeddings.
 
         This is a generic function that calls the initializer.initialize_embedding(). Refer to the 
         initializer's `initialize_embedding` method for the actual initialization logic.
+
+        If a decoder is given and it uses several embedding spaces (e.g. RotatE and ComplEx,
+        with a real and an imaginary part), the node and edge embeddings are initialized with
+        `embedding_spaces * dimensions` columns so that they match what the decoder expects.
 
         Arguments
         ---------
@@ -78,12 +170,16 @@ class Initializer:
         **edge_embeddings** *(nn.Parameter)*
          : The generated edge embeddings
         """
+        if hasattr(decoder, "embedding_spaces"):
+            node_embedding_dimensions = node_embedding_dimensions * decoder.embedding_spaces
+            edge_embedding_dimensions = edge_embedding_dimensions * decoder.embedding_spaces
+
         node_embeddings = nn.ParameterList()
         for node_type in knowledge_graph.node_type_to_global:
             node_count = knowledge_graph.node_type_to_global[node_type].size(0)
 
             node_embeddings.append(self.initialize_embedding(node_count, node_embedding_dimensions, device))
-    
+
         edge_embeddings = self.initialize_embedding(knowledge_graph.edge_count, edge_embedding_dimensions, device)
 
         if inplace:

@@ -24,6 +24,7 @@ from kgate.decoders import (
     TransR,
     TransD,
     TorusE,
+    RotatE,
     RESCAL,
     DistMult,
     ComplEx,
@@ -252,6 +253,34 @@ class TestTranslationalDecoders:
         e = torch.randn(2, 3)
         scores = decoder.score(head_embeddings=h, tail_embeddings=t, edge_embeddings=e)
         assert scores.shape == (2,)
+
+    def test_rotatE_init_and_score(self):
+        # RotatE works on 2 * embedding_dimensions dimensions for nodes and edges.
+        # With embedding_dimensions=2, node/edge embeddings have shape [batch, 4].
+        decoder = RotatE(node_count=4, edge_count=2, embedding_dimensions=2,
+                         device=torch.device("cpu"))
+        h = torch.randn(3, 4)
+        t = torch.randn(3, 4)
+        e = torch.randn(3, 4)
+        scores = decoder.score(head_embeddings=h, tail_embeddings=t, edge_embeddings=e)
+        assert scores.shape == (3,)
+        assert torch.isfinite(scores).all()
+
+    def test_rotatE_sphere_init_and_score(self):
+        decoder = RotatE(node_count=4, edge_count=2, embedding_dimensions=2,
+                         device=torch.device("cpu"),
+                         sphere_embeddings=True, alpha=0.0, beta=0.1)
+        h = torch.randn(3, 4)
+        t = torch.randn(3, 4)
+        e = torch.randn(3, 4)
+        head_indices = torch.randint(0, 4, (3,))
+        tail_indices = torch.randint(0, 4, (3,))
+        scores = decoder.score(head_embeddings=h, tail_embeddings=t,
+                               edge_embeddings=e,
+                               head_indices=head_indices,
+                               tail_indices=tail_indices)
+        assert scores.shape == (3,)
+        assert torch.isfinite(scores).all()
 
 
 class TestBilinearDecoders:

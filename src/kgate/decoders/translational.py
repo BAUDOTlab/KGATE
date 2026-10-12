@@ -2162,12 +2162,20 @@ class RotatE(TranslationalDecoder):
         real_head_embeddings, imaginary_head_embeddings = tensor_split(head_embeddings, 2, dim = 1)
         real_tail_embeddings, imaginary_tail_embeddings = tensor_split(tail_embeddings, 2, dim = 1)
         
-        # Map the edge embeddings (assumed in [-embedding_range, embedding_range])
-        # to rotation phases uniformly distributed in [-pi, pi]
-        phase_edge = edge_embeddings / (self.embedding_range / pi)
-        
-        real_edge_embeddings = torch.cos(phase_edge)
-        imaginary_edge_embeddings = torch.sin(phase_edge)
+        # If the edge embeddings have the same dimension as the node embeddings
+        # (i.e. `2 * embedding_dimensions`), they are stored as [cos(phase), sin(phase)]
+        # pairs and the rotation is applied via complex multiplication.
+        # Otherwise, the edge embeddings are the raw phases in [-embedding_range, embedding_range]
+        # and must be mapped to [-pi, pi] first.
+        if edge_embeddings.shape[-1] == head_embeddings.shape[-1]:
+            # Edge embeddings are already [cos, sin] pairs; use them directly.
+            real_edge_embeddings, imaginary_edge_embeddings = tensor_split(edge_embeddings, 2, dim = 1)
+        else:
+            # Map the edge embeddings (assumed in [-embedding_range, embedding_range])
+            # to rotation phases uniformly distributed in [-pi, pi]
+            phase_edge = edge_embeddings / (self.embedding_range / pi)
+            real_edge_embeddings = torch.cos(phase_edge)
+            imaginary_edge_embeddings = torch.sin(phase_edge)
         
         real_score = (real_edge_embeddings * real_tail_embeddings + imaginary_edge_embeddings * imaginary_tail_embeddings) - real_head_embeddings
         imaginary_score = (real_edge_embeddings * imaginary_tail_embeddings - imaginary_edge_embeddings * real_tail_embeddings) - imaginary_head_embeddings
