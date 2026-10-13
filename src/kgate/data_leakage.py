@@ -106,7 +106,7 @@ def permute_tails(kg: KnowledgeGraph,
             # Add it if it doesn't already exist
             if not permuted_triplet in triplets_types:
                 triplets_types.append(permuted_triplet)
-                triplet = len(triplets_types)
+                triplet = len(triplets_types) - 1
             else:
                 triplet = triplets_types.index(permuted_triplet)
             triplets.append(triplet)

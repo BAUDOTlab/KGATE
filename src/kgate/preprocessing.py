@@ -124,7 +124,9 @@ def save_knowledge_graph(configuration: Configuration,
     if configuration.knowledge_graph_pickle_file == "":
         pickle_filename = Path(configuration.output_directory, "kg.pkl")
     else:
-        pickle_filename = configuration.knowledge_graph_pickle_file
+        pickle_filename = Path(configuration.knowledge_graph_pickle_file)
+
+    pickle_filename.parent.mkdir(parents = True, exist_ok = True)
 
     with open(pickle_filename, "wb") as file:
         pickle.dump(knowledge_graph, file)

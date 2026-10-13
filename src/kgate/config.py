@@ -516,6 +516,40 @@ class Preprocessing_Configuration:
         <https://doi.org/10.1101/2025.01.23.634511>
         Preprint, bioRxiv, January 26, 2025.
         """
+        return self._configuration.get("flag_cartesian_edges", True)
+
+    @flag_cartesian_edges.setter
+    def flag_cartesian_edges(self, flag: bool):
+        self._configuration["flag_cartesian_edges"] = flag
+
+    @property
+    def theta_cartesian(self) -> float:
+        """
+        The threshold value over which an edge is considered a cartesian product edge
+        when scanning for cartesian edges.
+
+        For example, with a theta value of 0.8, if more than 80% of the edges of a pair of
+        edge types form a cartesian product, the edge types are flagged.
+
+        See the paper by Akrami et al. (2020) [1]_ for full reference.
+
+        Defaults to 0.8.
+
+        References
+        ----------
+        .. [1] Farahnaz Akrami, Mohammed Samiul Saeef, Quingheng Zhang.
+        `Realistic Re-evaluation of Knowledge Graph Completion Methods:
+        An Experimental Study.`
+        <https://arxiv.org/pdf/2003.08001.pdf>
+        SIGMOD’20, June 14–19, 2020, Portland, OR, USA
+        """
+        return self._configuration.get("theta_cartesian", 0.8)
+
+    @theta_cartesian.setter
+    def theta_cartesian(self, theta: float):
+        assert theta >= 0 and theta <= 1, f"Theta value must be between 0 and 1, got {theta}"
+
+        self._configuration["theta_cartesian"] = theta
 
     @property
     def clean_train_set(self) -> bool:

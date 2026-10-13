@@ -307,6 +307,11 @@ class Architect(Module):
             else:
                 self.knowledge_graph = knowledge_graph
 
+        # If the knowledge graph was not built with the metadata (e.g. it was
+        # given as an object, or loaded from a pickle), apply it now.
+        if self.metadata is not None and self.knowledge_graph.metadata is None:
+            self.knowledge_graph.add_metadata(self.metadata)
+
         # Initialize attributes
         self.initializer: Initializer = None
         self.encoder: GNN | None = None
@@ -1288,9 +1293,9 @@ class Architect(Module):
         embedding_dictionnary: Dict[str, Tensor | Dict[str, str]]
             Dictionary containing:
             - "nodes": the embeddings of all nodes (shape [node_count, embedding_dimensions]);
-            - "node_mapping": mapping of node indices to node identifiers;
+            - "node_mapping": mapping of node identifiers to node indices;
             - "edges": the embeddings of all edge types (shape [edge_count, edge_embedding_dimensions]);
-            - "edge_mapping": mapping of edge indices to edge names;
+            - "edge_mapping": mapping of edge names to edge indices;
             - "decoder": decoder-specific embeddings, if the decoder has any.
 
         """        
@@ -1321,12 +1326,12 @@ class Architect(Module):
 
         edge_embeddings = self.knowledge_graph.edge_embeddings.data.cpu()
 
-        decoder_embeddings = self.decoder.get_embeddings()
+        decoder_embeddings = self.decoder.get_embeddings() if self.decoder is not None else None
 
         embedding_dictionnary = {"nodes": node_embeddings, 
-                                 "node_mapping": {v: k for k,v in self.knowledge_graph.node_to_index.items()},
+                                 "node_mapping": self.knowledge_graph.node_to_index,
                                  "edges": edge_embeddings,
-                                 "edge_mapping": {v: k for k,v in self.knowledge_graph.edge_to_index.items()}}
+                                 "edge_mapping": self.knowledge_graph.edge_to_index}
 
         if decoder_embeddings is not None:
             embedding_dictionnary.update({"decoder": decoder_embeddings})

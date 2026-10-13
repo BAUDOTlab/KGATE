@@ -291,7 +291,7 @@ class FeatureInitializer(Initializer):
                 embeddings: nn.Parameter = super().initialize_embedding(node_count, node_embedding_dimensions, device)
                 node_embeddings.append(embeddings)
 
-        if self.edge_features is not None:
+        if self.edge_features is not None and len(self.edge_features) > 0:
             assert self.edge_features.shape[0] == knowledge_graph.edge_count, f"The length of the edge features ({self.edge_features.shape[0]}) must match the number of edges in the graph ({knowledge_graph.edge_count})."
             edge_embeddings = torch.empty((knowledge_graph.edge_count, self.edge_features.shape[1]), dtype = torch.float, device = device)
 
@@ -299,7 +299,7 @@ class FeatureInitializer(Initializer):
                 edge_index = knowledge_graph.edge_to_index[edge]
                 edge_embeddings[edge_index] = torch.tensor(self.edge_features.loc[edge], dtype = torch.float, device = device)
         else:
-            edge_embeddings: nn.Parameter = self.initialize_embedding(knowledge_graph.edge_count, edge_embedding_dimensions, device)
+            edge_embeddings: nn.Parameter = super().initialize_embedding(knowledge_graph.edge_count, edge_embedding_dimensions, device)
         if inplace:
             knowledge_graph.embeddings = node_embeddings, edge_embeddings
         else:

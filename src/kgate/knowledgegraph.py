@@ -585,12 +585,16 @@ class KnowledgeGraph(Dataset):
         If there is already a metadata dataframe associated with the knowledge graph, the new one must have an identical "id" column to be valid. 
         If there is no metadata, then the given dataframe must contain at least the columns "id" and "type".
 
+        If the node types of the knowledge graph have already been computed (i.e. the graph is fully
+        built) and the metadata contains a "type" column, the node types (and the triplet types that
+        depend on them) are recomputed from the updated metadata.
+
         Arguments
         ---------
         
         **metadata** *(pd.DataFrame)*
         : The metadata dataframe to associate to the knowledge graph.
-        
+
         Raises
         ------
         
@@ -611,6 +615,63 @@ class KnowledgeGraph(Dataset):
         else:
             assert "id" in metadata.columns and (metadata["id"] == self.metadata["id"]).all(), "The metadata dataframe must have an `id` column identical to the existing metadata."
             self.metadata = pd.merge(self.metadata, metadata, on = "id")
+
+        # The graph is only considered built once `node_types` exists (it is
+        # created in the constructor, after this method is called for the
+        # initial metadata). In that case, the node types derived from the
+        # metadata must be recomputed.
+        if "type" in self.metadata.columns and getattr(self, "node_types", None) is not None:
+            self._recompute_node_types()
+
+
+    def _recompute_node_types(self) -> None:
+        """
+        Recompute the node types from the metadata dataframe, along with the
+        triplet types that depend on them.
+
+        This is meant to be called on a fully built knowledge graph (see
+        `add_metadata`) after its metadata has been updated.
+        """
+        node_type_by_index = {
+            self.node_to_index[node_id]: node_type
+            for node_id, node_type in zip(self.metadata["id"], self.metadata["type"])
+        }
+
+        self.node_type_to_index = {
+            node_type: index for index, node_type in enumerate(sorted(node_type_by_index.values()))
+        }
+        self.node_types = torch.empty(self.node_count, dtype = torch.long, device = self.graphindices.device)
+        for node_index, node_type in node_type_by_index.items():
+            self.node_types[node_index] = self.node_type_to_index[node_type]
+
+        self.node_type_to_global = {}
+        self.global_to_local_indices = torch.ones(self.node_count, dtype = torch.long).neg()
+        for node_type, type_index in self.node_type_to_index.items():
+            global_index = (self.node_types == type_index).nonzero(as_tuple = True)[0]
+            self.node_type_to_global[node_type] = global_index
+            self.global_to_local_indices[global_index] = torch.arange(global_index.size(0))
+
+        index_to_edge_name = {value: key for key, value in self.edge_to_index.items()}
+        new_triplet_types: List[Tuple[str, str, str]] = []
+        new_triplet_type_to_index: Dict[Tuple[int, int, int], int] = {}
+        new_triplet_indices: List[int] = []
+        for head, tail, edge in zip(
+            self.head_indices.tolist(), self.tail_indices.tolist(), self.edge_indices.tolist()
+        ):
+            triplet_type = (node_type_by_index[head], index_to_edge_name[edge], node_type_by_index[tail])
+            key = (
+                self.node_type_to_index[triplet_type[0]],
+                self.edge_to_index[triplet_type[1]],
+                self.node_type_to_index[triplet_type[2]],
+            )
+            if key not in new_triplet_type_to_index:
+                new_triplet_types.append(triplet_type)
+                new_triplet_type_to_index[key] = len(new_triplet_types) - 1
+            new_triplet_indices.append(new_triplet_type_to_index[key])
+
+        self.triplet_types = new_triplet_types
+        self.triplet_type_to_index = new_triplet_type_to_index
+        self.graphindices[3] = torch.tensor(new_triplet_indices, dtype = self.graphindices.dtype, device = self.graphindices.device)
 
 
     def get_dataframe(self, include_splits: bool = False) -> pd.DataFrame:
@@ -638,9 +699,11 @@ class KnowledgeGraph(Dataset):
 
         if include_splits:
             dataframe["split"] = "ground_truth"
-            dataframe.loc[self.train_mask, "split"] = "train"
-            dataframe.loc[self.validation_mask, "split"] = "validation"
-            dataframe.loc[self.test_mask, "split"] = "test"
+            # Boolean masks must be numpy arrays for pandas `.loc` (torch tensors
+            # are interpreted as a list of labels, not as a mask).
+            dataframe.loc[self.train_mask.numpy(), "split"] = "train"
+            dataframe.loc[self.validation_mask.numpy(), "split"] = "validation"
+            dataframe.loc[self.test_mask.numpy(), "split"] = "test"
 
         return dataframe
     
@@ -811,7 +874,7 @@ class KnowledgeGraph(Dataset):
         """
         mask = torch.ones(self.graphindices.size(1), dtype=bool)
         mask[indices_to_delete] = False
-        self.graphindices = self.graphindices[mask]
+        self.graphindices = self.graphindices[:, mask]
 
     def remove_triplets_from_training(self,
                         indices_to_remove: List[int] | torch.Tensor
