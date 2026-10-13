@@ -7,7 +7,7 @@ TransD L2-normalizing their head and tail embeddings). It is initialized by
 the Architect after the decoder (see `kgate.modules.initialize_normalizer`)
 and is applied:
 - to the initial embeddings, in place, right after the initializer runs
-  (`Architect.initialize_model` and `Normalizer.initialize`);
+  (`Architect.initialize_model` and `Normalizer.normalize`);
 - batchwise to the (encoder output) embeddings between the encoder and the
   decoder step during the training loop, when there is an encoder
   (`Architect.scoring_function`);
@@ -110,7 +110,7 @@ class TestNormalizer:
         edge_embeddings = nn.Parameter(torch.randn(6, 4))
 
         normalizer = Normalizer(initial_normalization=l2_normalize, initial_targets="all")
-        returned_nodes, returned_edges = normalizer.initialize(node_embeddings, edge_embeddings)
+        returned_nodes, returned_edges = normalizer.normalize(node_embeddings, edge_embeddings, mode="initial")
 
         assert returned_nodes is node_embeddings  # Normalized in place, same object
         assert returned_edges is edge_embeddings
@@ -123,7 +123,7 @@ class TestNormalizer:
         edge_embeddings = nn.Parameter(torch.randn(6, 4))
 
         normalizer = Normalizer(initial_normalization=l2_normalize, initial_targets="all")
-        normalizer.initialize(node_embeddings, edge_embeddings)
+        normalizer.normalize(node_embeddings, edge_embeddings, mode="initial")
 
         assert torch.allclose(node_embeddings[0].norm(dim=1), torch.ones(4))
         assert torch.allclose(node_embeddings[1].norm(dim=1), torch.ones(3))
@@ -135,7 +135,7 @@ class TestNormalizer:
         original_edge = edge_embeddings.clone()
 
         normalizer = Normalizer(initial_normalization=l2_normalize, initial_targets="node")
-        normalizer.initialize(node_embeddings, edge_embeddings)
+        normalizer.normalize(node_embeddings, edge_embeddings, mode="initial")
 
         assert torch.allclose(node_embeddings.norm(dim=1), torch.ones(10))
         assert torch.allclose(edge_embeddings, original_edge)  # Edges left untouched
@@ -146,7 +146,7 @@ class TestNormalizer:
         original_node = node_embeddings.clone()
 
         normalizer = Normalizer(initial_normalization=l2_normalize, initial_targets="edge")
-        normalizer.initialize(node_embeddings, edge_embeddings)
+        normalizer.normalize(node_embeddings, edge_embeddings, mode="initial")
 
         assert torch.allclose(node_embeddings, original_node)  # Nodes left untouched
         assert torch.allclose(edge_embeddings.norm(dim=1), torch.ones(6))
@@ -330,7 +330,7 @@ class TestModules:
         h, t, e = normalizer(head_embeddings=x, tail_embeddings=x, edge_embeddings=x)
         assert h is x and t is x and e is x
 
-    def test_initial_none_falls_back_to_training(self, embedded_kg):
+    def test_initial_none_is_noop(self, embedded_kg):
         config = Configuration(
             config_dict = {
                 "model": {
@@ -344,7 +344,11 @@ class TestModules:
 
         normalizer = initialize_normalizer(config, embedded_kg)
 
-        assert normalizer.initial_normalization is l2_normalize
+        # "None" means no normalization in that scope (see
+        # Normalizer_Configuration.initial_normalization): the initial
+        # function is the identity, independently of the training one
+        x = torch.randn(3, 4)
+        assert torch.equal(normalizer.initial_normalization(x), x)
         assert normalizer.training_normalization is l2_normalize
 
     def test_unknown_name_raises(self, embedded_kg):
@@ -511,48 +515,6 @@ class TestArchitectWiring:
         scores = architect.scoring_function(batch, node_embeddings)
 
         torch.testing.assert_close(scores, raw_score)
-
-    def test_normalize_parameters(self, embedded_kg, tmp_path):
-        architect = Architect(
-            knowledge_graph=embedded_kg,
-            output_directory=str(tmp_path / "out"),
-            preprocessing = {"run_preprocessing": False},
-        )
-        architect.initialize_model()
-
-        # Perturb the parameters
-        node_embeddings = embedded_kg.node_embeddings[0]
-        edge_embeddings = embedded_kg.edge_embeddings
-        node_embeddings.data.add_(torch.randn_like(node_embeddings.data) * 0.1)
-        edge_embeddings.data.add_(torch.randn_like(edge_embeddings.data) * 0.1)
-
-        # `normalize_parameters` is called before training and before an export
-        architect.normalize_parameters()
-
-        assert torch.allclose(node_embeddings.norm(dim=1), torch.ones(node_embeddings.shape[0]))
-        assert torch.allclose(edge_embeddings.norm(dim=1), torch.ones(edge_embeddings.shape[0]))
-
-    def test_normalize_parameters_noop_with_encoder(self, embedded_kg, tmp_path):
-        architect = Architect(
-            knowledge_graph=embedded_kg,
-            output_directory=str(tmp_path / "out"),
-            preprocessing = {"run_preprocessing": False},
-            model = {"encoder": {"name": "GCN", "gnn_layer_number": 1}},
-        )
-        architect.initialize_model()
-
-        node_embeddings = embedded_kg.node_embeddings[0]
-        edge_embeddings = embedded_kg.edge_embeddings
-        node_embeddings.data.add_(torch.randn_like(node_embeddings.data) * 0.1)
-        edge_embeddings.data.add_(torch.randn_like(edge_embeddings.data) * 0.1)
-        perturbed_node = node_embeddings.clone()
-        perturbed_edge = edge_embeddings.clone()
-
-        architect.normalize_parameters()
-
-        assert torch.allclose(node_embeddings, perturbed_node)
-        assert torch.allclose(edge_embeddings, perturbed_edge)
-
 
 class TestDecoderConsolidation:
     def test_distmult_no_longer_normalizes(self):

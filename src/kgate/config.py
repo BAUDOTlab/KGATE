@@ -234,7 +234,7 @@ class Configuration:
         self._configuration["kg_csv"] = path
 
     @property
-    def knowledge_graph_pickle_file(self) -> Path:
+    def knowledge_graph_pickle_file(self) -> str:
         """
         Path to the knowledge graph in pickle format.
         """
@@ -245,7 +245,7 @@ class Configuration:
         if path != "" and not Path(path).exists():
             raise FileNotFoundError(f"The knowledge graph file has not been found at path {path}.")
 
-        self._configuration["kg_pkl"] = path
+        self._configuration["kg_pkl"] = str(path)
 
     @property
     def metadata_path(self) -> Path:

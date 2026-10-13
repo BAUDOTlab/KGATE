@@ -37,9 +37,9 @@ class TestGNN:
         with pytest.raises(ValueError, match="Aggregation must be within"):
             GNN(_edge_types(), aggregation="product")
 
-    def test_default_aggregation_is_sum(self):
+    def test_default_aggregation_is_mean(self):
         gnn = GNN(_edge_types())
-        assert gnn.aggregation == "sum"
+        assert gnn.aggregation == "mean"
 
     def test_aggregation_none_is_allowed(self):
         gnn = GNN(_edge_types(), aggregation=None)

@@ -1,17 +1,6 @@
 """
 Tests for kgate.preprocessing.
 
-Known bugs (documented in fixes/preprocessing.py.txt and exposed with
-xfail(strict=True)):
-- `save_knowledge_graph` with the default pickle path: the
-  `knowledge_graph_pickle_file` property returns a Path, so the
-  `== ""` check never matches and `Path(".")` is used as filename
-  (IsADirectoryError).
-- `clean_knowledge_graph` references the nonexistent configuration
-  attribute `preprocessing.split` (should be `split_proportions`)
-  -> AttributeError, breaking `prepare_knowledge_graph`.
-- The second direction of `clean_datasets` computes the triplets to
-  remove but never removes them (only logs them).
 """
 
 from pathlib import Path
@@ -44,13 +33,6 @@ def make_three_node_kg():
 
 
 class TestSaveLoadKnowledgeGraph:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`knowledge_graph_pickle_file` returns a Path, so the "
-               "`== ''` check never matches and `Path('.')` is used as the "
-               "pickle filename (IsADirectoryError). "
-               "See fixes/preprocessing.py.txt.",
-    )
     def test_save_default_path(self, small_config, kg):
         save_knowledge_graph(small_config, kg)
         expected = Path(small_config.output_directory) / "kg.pkl"
@@ -143,22 +125,15 @@ class TestCleanDatasets:
         clean_datasets(leaking_kg, known_reverses=[(0, 1)])
         train_triplets = leaking_kg.graphindices[:3,
                                                  leaking_kg.train_mask].T.tolist()
-        # (a, b, E1) is removed from training (node order a=0, b=1, c=2)
+        # Both leaks are removed from training (node order a=0, b=1, c=2):
+        # - (a, b, E1) matches the validation pair (a, b)
+        # - (c, a, E0) matches the test pair (c, a) in the reverse direction
         assert [0, 1, 1] not in train_triplets
-        # The reverse-direction leak (c, a, E0) stays in training (see the
-        # xfail test below for the missing removal)
-        assert [2, 0, 0] in train_triplets
+        assert [2, 0, 0] not in train_triplets
         # Other splits are untouched
         assert leaking_kg.validation_mask.tolist() == [True, False, False, False]
         assert leaking_kg.test_mask.tolist() == [False, False, False, True]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="The second direction of `clean_datasets` computes the "
-               "triplets to remove but never calls "
-               "`remove_triplets_from_training` (it only logs them). "
-               "See fixes/preprocessing.py.txt.",
-    )
     def test_removes_reverse_leaking_triplets(self, leaking_kg):
         clean_datasets(leaking_kg, known_reverses=[(0, 1)])
         # t2 (c, a, E0) should also be removed from training
@@ -170,16 +145,6 @@ class TestCleanDatasets:
 
 
 class TestCleanCartesians:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="clean_cartesians computes the indices of the train triplets "
-               "to remove relative to `train_set` (the filtered columns), but "
-               "passes them to remove_triplets_from_training, which interprets "
-               "them as GLOBAL graphindices positions. When the training set "
-               "does not occupy the first global positions, the wrong "
-               "triplets are removed (or nothing at all). "
-               "See fixes/preprocessing.py.txt.",
-    )
     def test_head_position(self):
         df = pd.DataFrame({
             "head": ["a", "a", "b"],
@@ -199,11 +164,6 @@ class TestCleanCartesians:
         # The test split is untouched
         assert kg.test_mask.tolist() == [True, False, False]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Same local-vs-global index bug as test_head_position. "
-               "See fixes/preprocessing.py.txt.",
-    )
     def test_tail_position(self):
         df = pd.DataFrame({
             "head": ["x", "y", "w"],
@@ -250,13 +210,6 @@ class TestCleanCartesians:
 
 
 class TestPrepareKnowledgeGraph:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`clean_knowledge_graph` references the nonexistent "
-               "configuration attribute `preprocessing.split` (should be "
-               "`split_proportions`) -> AttributeError. "
-               "See fixes/preprocessing.py.txt.",
-    )
     def test_prepare_from_dataframe(self, small_config, kg_dataframe):
         knowledge_graph = prepare_knowledge_graph(small_config, dataframe=kg_dataframe)
         assert isinstance(knowledge_graph, KnowledgeGraph)
@@ -264,12 +217,6 @@ class TestPrepareKnowledgeGraph:
         assert knowledge_graph.validation_mask.sum() > 0
         assert knowledge_graph.test_mask.sum() > 0
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`clean_knowledge_graph` crashes with AttributeError on the "
-               "nonexistent `preprocessing.split` attribute. "
-               "See fixes/preprocessing.py.txt.",
-    )
     def test_clean_knowledge_graph(self, small_config, kg):
         clean_knowledge_graph(small_config, kg)
         assert kg.train_mask.sum() > 0

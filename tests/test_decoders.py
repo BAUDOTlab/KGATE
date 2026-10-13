@@ -199,13 +199,6 @@ class TestTranslationalDecoders:
         assert scores.shape == (4,)
         assert torch.isfinite(scores).all()
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`TransR.__init__` initializes `projection_matrix` with "
-               "`node_count` rows instead of `edge_count` rows, although "
-               "`score` indexes it per edge (see fixes/translational.txt). "
-               "The bug is silent whenever edge_count <= node_count.",
-    )
     def test_transR_projection_matrix_shape(self):
         decoder = TransR(node_count=5, edge_count=2,
                          node_embedding_dimensions=3, edge_embedding_dimensions=3,
@@ -342,13 +335,6 @@ class TestConvolutionalDecoders:
         assert decoder.node_count == 4
         assert decoder.embedding_dimensions == 3
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="ConvKB stores the edge count under the misspelled "
-               "attribute `edge_cont`; the documented `edge_count` "
-               "attribute does not exist (AttributeError). "
-               "See fixes/convolutional.txt.",
-    )
     def test_convkb_edge_count_attribute(self):
         decoder = ConvKB(node_count=4, edge_count=2, embedding_dimensions=3,
                          filter_count=2)

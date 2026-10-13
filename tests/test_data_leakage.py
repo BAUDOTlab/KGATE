@@ -1,9 +1,5 @@
 """
 Tests for kgate.data_leakage.
-
-`permute_tails` mutates the knowledge graph in place and returns it.
-The multi-node-type path contains a known off-by-one bug, exposed with
-xfail(strict=True) and documented in fixes/data_leakage.txt.
 """
 
 import random
@@ -91,13 +87,6 @@ class TestPermuteTails:
         assert (result.graphindices[3] >= 0).all()
         assert (result.graphindices[3] < len(result.triplet_types)).all()
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Off-by-one: newly created triplet types are indexed with "
-               "`len(triplets_types)` after the `append` instead of "
-               "`len(triplets_types) - 1`, producing out-of-range triplet "
-               "type indices. See fixes/data_leakage.txt.",
-    )
     def test_multi_type_new_combination_off_by_one(self):
         kg = self._make_multi_type_kg()
         assert kg.triplet_types == [("A", "E1", "B"), ("C", "E1", "D")]

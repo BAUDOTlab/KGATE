@@ -522,7 +522,7 @@ class Architect(Module):
         self.normalizer = self.normalizer or initialize_normalizer(self.configuration.normalizer, self.knowledge_graph)
         # Run the first normalization of the parameters. This operation not yet tracked by the 
         # optimizer
-        self.normalizer.initialize(self.knowledge_graph.node_embeddings, self.knowledge_graph.edge_embeddings)
+        self.normalizer.normalize(self.knowledge_graph.node_embeddings, self.knowledge_graph.edge_embeddings, mode = "initial")
         logging.info(f"Normalized the initial parameters")
 
         logging.info("Initializing optimizer...")
@@ -562,8 +562,6 @@ class Architect(Module):
             * Application of the training normalizer at the
               beginning of each epoch.
             * Application of the regularizer at the end of each epoch
-              (see `initialize_regularizer` and `apply_regularizer`; a no-op if
-              no regularizer is configured).
 
 
         Arguments
@@ -632,13 +630,6 @@ class Architect(Module):
         logging.info(f"Number of training batches: {len(data_loader)}")
 
         trainer: Engine = Engine(self.process_batch)
-        # Per-batch running average of the loss (same alpha = 0.98 as the previous
-        # ignite RunningAverage, same "loss_running_average" metric key, same float
-        # value at epoch end). It is computed on the loss's own device: the standard
-        # `ignite.metrics.RunningAverage` calls `loss.detach().to("cpu", copy=True)` on
-        # every batch, which forces a GPU->CPU synchronization that serializes the CPU
-        # and GPU pipelines (measured cost: ~8-10 ms per batch on the FB15k-237
-        # benchmark setup, i.e. ~80-100 s over 100 epochs).
         trainer.add_event_handler(Events.EPOCH_STARTED, self._reset_loss_running_average)
         trainer.add_event_handler(Events.ITERATION_COMPLETED, self._update_loss_running_average)
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self._finalize_loss_running_average)
@@ -663,6 +654,9 @@ class Architect(Module):
         elif self.checkpoints_directory.exists() and len(os.listdir(self.checkpoints_directory)) > 0:
             shutil.rmtree(self.checkpoints_directory)
 
+        # Apply the configured normalizer at the beginning of each epoch if there is no encoder
+        if self.encoder == None:
+            trainer.add_event_handler(Events.EPOCH_STARTED, self.apply_normalizer)
         # Apply the configured regularizer at the end of every epoch 
         trainer.add_event_handler(Events.EPOCH_COMPLETED, self.apply_regularizer)
         #trainer.add_event_handler(Events.EPOCH_COMPLETED, self.clean_memory)
@@ -744,7 +738,7 @@ class Architect(Module):
                     trainer.run(data_loader, max_epochs = self.max_epochs)
         else:
             if not dry_run:
-                self.normalize_parameters()
+                self.apply_normalizer()
                 trainer.run(data_loader, max_epochs = self.max_epochs)
     
 
@@ -1271,14 +1265,7 @@ class Architect(Module):
         tail_embeddings = node_embeddings[tail_indices]
 
         # Apply the configured normalizer, between the encoder and the decoder
-        # step. This is the batchwise application of the normalizer: the
-        # function is applied to the (encoder output) embeddings of the
-        # current batch, and the new embeddings are returned (the parameters
-        # are left untouched, so the gradients flow through the
-        # normalization). Without an encoder, this step is skipped: the
-        # embeddings between the encoder and the decoder are the node and edge
-        # embeddings themselves, so they are normalized once, over the whole
-        # graph, at the beginning of each epoch (see `apply_normalizer`).
+        # step.
         if self.normalizer is not None and self.encoder is not None:
             head_embeddings, tail_embeddings, edge_embeddings = self.normalizer(  head_embeddings = head_embeddings,
                                                                                   tail_embeddings = tail_embeddings,
@@ -1306,9 +1293,7 @@ class Architect(Module):
             - "edge_mapping": mapping of edge indices to edge names;
             - "decoder": decoder-specific embeddings, if the decoder has any.
 
-        """
-        self.normalize_parameters()
-        
+        """        
         if self.encoder is not None:
             node_embeddings: torch.Tensor = torch.zeros((self.knowledge_graph.node_count, self.encoder_node_embedding_dimensions), device="cpu", dtype=torch.float)
 
@@ -1374,43 +1359,15 @@ class Architect(Module):
     def apply_normalizer(self):
         """
         Apply the configured normalizer to the whole-graph embeddings, in place.
+
+        If there is an encoder, this function does nothing.
         """
-        if self.normalizer is None:
+        if self.normalizer is None or self.encoder is not None:
             return
 
-        self.normalizer.initialize(self.knowledge_graph.node_embeddings, self.knowledge_graph.edge_embeddings)
+        self.normalizer.normalize(self.knowledge_graph.node_embeddings, self.knowledge_graph.edge_embeddings, mode="training")
 
         logging.debug(f"Applied normalizer to the configured parameters.")
-
-
-    def normalize_parameters(self):
-        """
-        Normalize all parameters of the model.
-
-        Kept for backward compatibility: the normalization routines that used
-        to be implemented in each decoder's `normalize_parameters` method
-        (e.g. TransE, RESCAL and DistMult L2-normalizing their node embeddings)
-        are now gathered in the `Regularizer` module (see
-        `kgate.regularizers`), selected through the configuration
-        (`[model.regularizer]`) and applied by the trainer hooks. The
-        normalization routines that used to be applied to the head and tail
-        embeddings in each decoder's `score` method (e.g. RESCAL, DistMult,
-        TransE, TransH, TransR and TransD L2-normalizing their head and tail
-        embeddings) are now gathered in the `Normalizer` module (see
-        `kgate.normalizers`), selected through the configuration
-        (`[model.normalizer]`) and applied by the Architect between the
-        encoder and the decoder step.
-
-        This function therefore applies the configured regularizer (a no-op
-        if no regularizer is configured, which is the default), and the
-        configured normalizer if there is no encoder (a no-op if no normalizer
-        is configured).
-        """
-        self.apply_regularizer()
-        self.apply_normalizer()
-        
-        logging.debug(f"Normalized all embeddings.")
-
 
 
     def log_metrics_to_csv(self, engine: Engine):

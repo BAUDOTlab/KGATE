@@ -14,6 +14,7 @@ import torch.nn as nn
 
 from kgate.architect import Architect
 from kgate.config import Configuration
+from kgate.modules import initialize_regularizer
 from kgate.regularizers import REGULARIZER_FUNCTIONS, Regularizer, l1_normalize, l2_normalize
 
 
@@ -124,7 +125,7 @@ class TestArchitectWiring:
             output_directory=str(tmp_path / "out"),
             preprocessing={"run_preprocessing": False},
         )
-        assert architect.initialize_regularizer() is None
+        assert initialize_regularizer(architect.configuration.regularizer, embedded_kg) is None
         architect.regularizer = None
         architect.apply_regularizer()  # no-op, no error
 
@@ -135,7 +136,7 @@ class TestArchitectWiring:
             preprocessing={"run_preprocessing": False},
             model={"regularizer": {"name": "L2", "params": "node"}},
         )
-        regularizer = architect.initialize_regularizer()
+        regularizer = initialize_regularizer(architect.configuration.regularizer, embedded_kg)
         assert isinstance(regularizer, Regularizer)
         # Only the node embeddings are regularized
         assert len(regularizer.params) == 1
@@ -151,23 +152,8 @@ class TestArchitectWiring:
             preprocessing={"run_preprocessing": False},
             model={"regularizer": {"name": "L1", "params": "edge"}},
         )
-        regularizer = architect.initialize_regularizer()
+        regularizer = initialize_regularizer(architect.configuration.regularizer, embedded_kg)
         assert len(regularizer.params) == 1
         assert regularizer.params[0] is embedded_kg.edge_embeddings
         regularizer()
         torch.testing.assert_close(torch.norm(embedded_kg.edge_embeddings.data, p=1, dim=1), torch.ones(embedded_kg.edge_embeddings.data.shape[0]))
-
-    def test_normalize_parameters_delegates(self, embedded_kg, tmp_path):
-        architect = Architect(
-            knowledge_graph=embedded_kg,
-            output_directory=str(tmp_path / "out"),
-            preprocessing={"run_preprocessing": False},
-            model={"regularizer": {"name": "L2", "params": "all"}},
-        )
-        architect.initialize_model()
-        assert isinstance(architect.regularizer, Regularizer)
-        assert len(architect.regularizer.params) == 2  # node + edge
-        architect.normalize_parameters()
-        for param in architect.regularizer.params:
-            expected = torch.ones(param.data.shape[0], device = param.data.device)
-            torch.testing.assert_close(torch.norm(param.data, dim = 1), expected)

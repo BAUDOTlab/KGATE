@@ -159,43 +159,11 @@ class TestFilterScores:
         torch.testing.assert_close(filtered, scores)
 
 
-class TestMergeKg:
-    @pytest.fixture
-    def shared_mappings(self):
-        return {
-            "node_to_index": {"A": 0, "B": 1, "C": 2, "D": 3},
-            "edge_to_index": {"E1": 0},
-            "node_type_to_index": {"Node": 0},
-            "triplet_types": [("Node", "E1", "Node")],
-        }
-
-    def test_merge_two_kgs(self, shared_mappings):
-        kg1 = KnowledgeGraph(
-            graphindices=torch.tensor([[0, 1], [1, 2], [0, 0], [0, 0]]),
-            **shared_mappings
-        )
-        kg2 = KnowledgeGraph(
-            graphindices=torch.tensor([[2, 3], [3, 0], [0, 0], [0, 0]]),
-            **shared_mappings
-        )
-        merged = utils.merge_kg([kg1, kg2])
-        assert merged.triplet_count == 4
-        assert merged.node_to_index == shared_mappings["node_to_index"]
-        assert merged.edge_to_index == shared_mappings["edge_to_index"]
-
-    def test_merge_asserts_same_node_mapping(self, shared_mappings):
-        kg1 = KnowledgeGraph(
-            graphindices=torch.tensor([[0, 1], [1, 2], [0, 0], [0, 0]]),
-            **shared_mappings
-        )
-        other_mappings = dict(shared_mappings)
-        other_mappings["node_to_index"] = {"A": 0, "B": 1, "C": 2, "X": 3}
-        kg2 = KnowledgeGraph(
-            graphindices=torch.tensor([[2, 3], [3, 0], [0, 0], [0, 0]]),
-            **other_mappings
-        )
-        with pytest.raises(AssertionError):
-            utils.merge_kg([kg1, kg2])
+# NOTE: `merge_kg` was removed from `kgate.utils` (commit 11be843) along with
+# the disabled `Architect.run_data_leakage` procedure, whose only call site is
+# commented out (architect.py). The mask-based split design
+# (`KnowledgeGraph.generate_masks`) superseded merging split KGs back together,
+# so the former `TestMergeKg` tests were dropped with the function.
 
 
 class TestGetDictionaryMapping:

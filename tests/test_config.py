@@ -75,12 +75,6 @@ class TestParsing:
         config = Configuration()
         assert "seed" in repr(config)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="The `flag_cartesian_edges` getter only has a docstring "
-               "(no return statement), so it always returns None instead of "
-               "the configured value. See fixes/config.py.txt.",
-    )
     def test_flag_cartesian_edges_default(self):
         config = Configuration()
         assert config.preprocessing.flag_cartesian_edges is True
@@ -170,8 +164,8 @@ class TestPropertySetters:
         pkl_file = tmp_path / "kg.pkl"
         pkl_file.write_bytes(b"")
         config = Configuration()
-        config.knowledge_graph_pickle_file = str(pkl_file)
-        assert config.knowledge_graph_pickle_file == pkl_file
+        config.knowledge_graph_pickle_file = pkl_file
+        assert config.knowledge_graph_pickle_file == str(pkl_file)
 
     def test_split_proportions_setter(self):
         config = Configuration()

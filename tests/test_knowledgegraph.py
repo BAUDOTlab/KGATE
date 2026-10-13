@@ -141,13 +141,6 @@ class TestConstruction:
         assert kg.edge_count == 2
         assert set(kg.node_type_to_index) == {"Node"}
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="from_torchkge with metadata passes torchkge's `get_df()` "
-               "(columns 'from'/'to'/'rel') directly to the KnowledgeGraph "
-               "constructor, which requires 'head'/'tail'/'edge' columns "
-               "(KeyError: 'head'). See fixes/knowledgegraph.py.txt.",
-    )
     def test_from_torchkge_with_metadata(self):
         tk_kg = self._make_torchkge_kg()
         metadata = pd.DataFrame({"id": ["a", "b", "c"], "type": ["X", "Y", "X"]})
@@ -206,14 +199,6 @@ class TestMasks:
 
 
 class TestEdgeManipulation:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="remove_duplicate_triplets passes `~indices_to_keep` to "
-               "remove_triplets_from_training. `indices_to_keep` is a long tensor of "
-               "index values, so `~` is a bitwise NOT producing negative long values "
-               "(-1, -2, ...) that are interpreted as (negative) triplet positions "
-               "instead of a boolean mask. See fixes/knowledgegraph.py.txt.",
-    )
     def test_remove_duplicate_triplets(self):
         rows = [
             {"head": "n0", "tail": "n1", "edge": "E1"},
@@ -332,14 +317,6 @@ class TestMetadataAndIdentity:
         assert list(dataframe.columns) == ["head", "tail", "edge"]
         assert len(dataframe) == 16
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="get_dataframe(include_splits=True) uses chained assignment "
-               "`dataframe['split'][self.train_mask] = 'train'` with a raw torch "
-               "boolean tensor, which modern pandas rejects (KeyError). The "
-               "assignment should use `dataframe.loc[mask, 'split']`. "
-               "See fixes/knowledgegraph.py.txt.",
-    )
     def test_get_dataframe_with_splits(self, kg):
         kg.generate_masks(split_proportions=(0.5, 0.25, 0.25))
         dataframe = kg.get_dataframe(include_splits=True)
@@ -348,13 +325,6 @@ class TestMetadataAndIdentity:
 
 
 class TestTripletModification:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="delete_triplets applies the boolean mask `graphindices != -1` "
-               "(shape [4, n]) to the 2-D graphindices tensor, collapsing it to a "
-               "1-D tensor. Any subsequent `len(kg)` call raises IndexError. "
-               "See fixes/knowledgegraph.py.txt.",
-    )
     def test_delete_triplets(self, kg):
         kg.generate_masks((1, 0, 0))
         original = len(kg)
@@ -395,8 +365,11 @@ class TestEncoderInput:
         kg = embedded_kg
         input = kg.get_encoder_input(seed_nodes=torch.tensor([0, 1]), hop_count=1)
         assert "Node" in input.x_dict
-        # All 8 nodes are reachable in 1 hop (both rings are connected)
-        assert input.x_dict["Node"].shape[0] == 8
+        # Each node has exactly two incoming edges (one per relation), so one
+        # hop from the two seeds covers at most the seeds plus their two
+        # in-neighbours each: `k_hop_subgraph` collects the in-neighborhood,
+        # which here is {0, 1} U {7, 5} (into 0) U {6, 0} (into 1) = 5 nodes.
+        assert input.x_dict["Node"].shape[0] == 5
 
     def test_get_encoder_input_requires_embeddings(self, kg):
         with pytest.raises((AssertionError, AttributeError, IndexError)):

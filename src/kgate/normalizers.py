@@ -1,33 +1,6 @@
 """
 Embedding normalization module for KGATE.
 
-The `Normalizer` is a model component, initialized by the Architect after the
-decoder (as soon as the embeddings it normalizes exist). It is given a set of
-embeddings to normalize and the function to apply to them. It is applied
-between the encoder and the decoder step, so it is done batchwise: the
-function is applied to the (encoder output) embeddings of the current batch
-before they are scored by the decoder (see `Architect.scoring_function`), as
-a differentiable part of the forward pass.
-
-When there is no encoder, the embeddings between the encoder and the decoder
-are the node and edge embeddings themselves. Normalizing them batchwise would
-recompute the same whole-graph normalization on every batch, so in that case
-the embeddings are normalized once, over the whole graph, at the beginning of
-each epoch (see the `EPOCH_STARTED` trainer hook and
-`Architect.apply_normalizer`), and again before an evaluation or an export of
-the embeddings (see `Architect.get_embeddings`). Note that, between two
-epoch-start normalizations, the optimizer keeps updating the embeddings, so
-the decoder may see embeddings whose norms are not exactly unit anymore: this
-is the (small) approximation made in exchange for not recomputing the same
-whole-graph normalization on every batch.
-
-This module gathers what the decoders used to do on their own in their `score`
-method (e.g. RESCAL, DistMult, TransE, TransH, TransR and TransD
-L2-normalizing their head and tail embeddings): the same operations are now
-available as normalizer functions, selected through the configuration
-(`[model.normalizer]`) and applied by the Architect instead of being
-hardcoded in each decoder.
-
 @author: Benjamin Loire <benjamin.loire@univ-amu.fr>
 """
 import torch
@@ -132,11 +105,12 @@ class Normalizer:
 
         return head_embeddings, tail_embeddings, edge_embeddings
 
-    def initialize(self,
-                   node_embeddings: Parameter | Iterable[Parameter],
-                   edge_embeddings: Parameter
-                   ) -> tuple[Parameter | Iterable[Parameter], Parameter]:
-        """Apply the initial normalizer function to the initial targets, in place.
+    def normalize(self, 
+                    node_embeddings: Parameter | Iterable[Parameter],
+                    edge_embeddings: Parameter,
+                    mode: Literal["initial","training"] = "training"
+                    ) -> tuple[Parameter | Iterable[Parameter], Parameter]:
+        """Apply the training normalizer function to the training targets.
         
         Arguments
         ---------
@@ -147,21 +121,32 @@ class Normalizer:
         **edge_embeddings** *(torch.nn.Parameter, shape: [edge_count, dimensions])*
         : The graph edge embeddings
 
+        **mode** *("initial" or "training", defaults to "training")
+        The mode to consider for full-graph normalisation: either on the initial targets, or the training targets.
+
         Returns
         -------
-        **node_embeddings, edge_embeddings** *(tuple[torch.nn.Parameter, torch.nn.Parameter])*
+        **node_embeddings, edge_embeddings** *(tuple[torch.nn.Parameter or iterable of torch.nn.Parameter, torch.nn.Parameter])*
         : The same embeddings, normalized where the normalizer is configured,
         : and left unchanged otherwise.
         """
-        if self.initial_targets in ["node", "all"]:
+        match mode:
+            case "training":
+                targets = self.training_targets
+                normal_func = self.training_normalization
+            case "initial":
+                targets = self.initial_targets
+                normal_func = self.initial_normalization
+                
+        if targets in ["node", "all"]:
             node_parameters = [node_embeddings] if isinstance(node_embeddings, Parameter) else list(node_embeddings)
             for node_embedding in node_parameters:
-                node_embedding.data = self.initial_normalization(node_embedding.data)
-        if self.initial_targets in ["edge", "all"]:
-            edge_embeddings.data = self.initial_normalization(edge_embeddings.data)
+                node_embedding.data = normal_func(node_embedding.data)
+        if targets in ["edge", "all"]:
+            edge_embeddings.data = normal_func(edge_embeddings.data)
 
         return node_embeddings, edge_embeddings
-    
+
     def __repr__(self):
         return (f"{self.__class__.__name__}"
                 f"initial normalization: {getattr(self.initial_normalization, '__name__', repr(self.initial_normalization))}"

@@ -2,15 +2,6 @@
 Tests for kgate.initializers (Initializer, FeatureInitializer,
 Node2VecInitializer).
 
-Known bugs (documented in fixes/initializers.txt and exposed with
-xfail(strict=True)):
-- ``FeatureInitializer.initialize_all_embeddings`` calls
-  ``self.initialize_embeddings`` (plural) instead of
-  ``self.initialize_embedding`` (singular) -> AttributeError.
-- ``Node2VecInitializer.initialize_all_embeddings`` never returns the
-  embeddings and never sets ``knowledge_graph.embeddings`` (only a
-  ``#TODO``/``pass`` in the ``inplace`` branch).
-
 ``Node2VecInitializer.initialize_all_embeddings`` trains for a hardcoded
 100 epochs and is therefore not run in the test suite; only
 ``__init__`` is tested.
@@ -119,13 +110,6 @@ class TestFeatureInitializer:
         with pytest.raises(AssertionError, match="must match the number of nodes"):
             initializer.initialize_embedding(features, kg, "Node", "cpu")
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`initialize_all_embeddings` calls the nonexistent "
-               "`self.initialize_embeddings` (plural) instead of "
-               "`self.initialize_embedding` (singular) -> AttributeError. "
-               "See fixes/initializers.txt.",
-    )
     def test_initialize_all_embeddings_with_node_features(self, kg):
         features = pd.DataFrame(
             [[float(i)] for i in range(8)],

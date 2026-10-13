@@ -351,9 +351,11 @@ class TestTripletClassificationEvaluator:
         assert isinstance(tc_evaluator.sampler, PositionalNegativeSampler)
         assert tc_evaluator.device == torch.device("cpu")
 
-    def test_init_without_decoder(self, kg):
-        ev = TripletClassificationEvaluator(knowledge_graph=kg)
-        assert ev.decoder is None
+    def test_init_requires_decoder(self, kg):
+        # The decoder is a required argument: the evaluator scores triplets
+        # through it, so there is no decoder-less constructor anymore.
+        with pytest.raises(TypeError):
+            TripletClassificationEvaluator(knowledge_graph=kg)
 
     def test_reset(self, tc_evaluator):
         tc_evaluator.evaluated = True

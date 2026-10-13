@@ -46,7 +46,7 @@ class TestInferenceKG:
 class TestEdgeInference:
     def test_init(self, kg):
         inference = EdgeInference(kg)
-        assert inference.kg is kg
+        assert inference.knowledge_graph is kg
 
     def test_evaluate_without_encoder(self, kg):
         node_embeddings = nn.ParameterList([nn.Parameter(torch.randn(8, 4))])
