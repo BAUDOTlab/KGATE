@@ -976,8 +976,18 @@ class Architect(Module):
         If no best-model checkpoint exists (for instance because training did not reach the
         first validation evaluation), the current in-memory model is kept as-is and a warning
         is logged, so that a model just trained can still be evaluated.
-
+        
+        Raises
+        ------
+        **ValueError**
+        : No best model was found in the checkpoint directory.
+        : Make sure to run the training first and not rename checkpoint files before running evaluation.
+        
         """
+        initializer = Initializer()
+        self.decoder = self.initialize_decoder()
+        self.encoder = self.initialize_encoder()
+
         best_model = find_best_model(self.checkpoints_directory)
 
         if not best_model:
@@ -1003,6 +1013,11 @@ class Architect(Module):
         logging.info(f"Best model is {self.checkpoints_directory.joinpath(best_model)}")
         checkpoint = self.load_checkpoint(self.checkpoints_directory.joinpath(best_model))
 
+        initializer.initialize_all_embeddings(self.knowledge_graph,
+                                              node_embedding_dimensions=self.node_embedding_dimensions,
+                                              edge_embedding_dimensions=self.edge_embedding_dimensions,
+                                              device = self.device,
+                                              inplace = True)
         self.knowledge_graph.embeddings.load_state_dict(checkpoint["embeddings"])
 
         self.decoder.load_state_dict(checkpoint["decoder"], strict=False)
@@ -1545,6 +1560,7 @@ class Architect(Module):
         elif isinstance(knowledge_graph, KnowledgeGraph):
             graphindices = knowledge_graph.graphindices
             edge_to_index = knowledge_graph.edge_to_index
+            knowledge_graph = Subset(knowledge_graph, torch.arange(end = graphindices.size(1)))
 
         for edge_name in edge_indices:
             # Get triplets associated with index

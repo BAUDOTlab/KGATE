@@ -1212,7 +1212,7 @@ class LinkPredictionEvaluator:
                 batch_size: int,
                 encoder: GNN | None,
                 decoder: BilinearDecoder | ConvolutionalDecoder | TranslationalDecoder,
-                evaluated_subset: Subset[KnowledgeGraph],
+                evaluated_subset: Subset[Subset[KnowledgeGraph]],
                 node_embeddings: nn.ParameterList,
                 edge_embeddings: nn.Parameter,
                 sphere_embeddings: bool = False,
